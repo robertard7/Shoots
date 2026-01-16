@@ -1,0 +1,6 @@
+[submodule "Shoots.Runtime"]
+	path = Shoots.Runtime
+	url = https://github.com/robertard7/Shoots.Runtime.git
+[submodule "Shoots.Builder"]
+	path = Shoots.Builder
+	url = https://github.com/robertard7/Shoots.Builder.git
