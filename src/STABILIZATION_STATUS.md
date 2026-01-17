@@ -15,3 +15,7 @@
 ## X2 — Hashing rules frozen
 - Hash inputs are documented and limited to semantic plan inputs.
 - No runtime-only data flows into hashing.
+
+## X3 — Tool authority semantics frozen
+- ProviderKind ordering is authoritative when comparing plan authority to tool requirements.
+- ProviderCapabilities are treated as strict bitmasks (no implicit escalation).

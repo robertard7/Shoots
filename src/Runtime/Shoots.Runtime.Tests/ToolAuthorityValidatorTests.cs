@@ -28,7 +28,7 @@ public sealed class ToolAuthorityValidatorTests
         var plan = CreatePlan(planAuthority, toolSpec.ToolId);
         var registry = new StubToolRegistry(toolSpec);
 
-        var result = ToolAuthorityValidator.TryValidate(plan, registry, planAuthority, out var error);
+        var result = ToolAuthorityValidator.TryValidate(plan, registry, out var error);
 
         Assert.False(result);
         Assert.NotNull(error);
@@ -55,7 +55,7 @@ public sealed class ToolAuthorityValidatorTests
         var plan = CreatePlan(planAuthority, toolSpec.ToolId);
         var registry = new StubToolRegistry(toolSpec);
 
-        var result = ToolAuthorityValidator.TryValidate(plan, registry, planAuthority, out var error);
+        var result = ToolAuthorityValidator.TryValidate(plan, registry, out var error);
 
         Assert.True(result);
         Assert.Null(error);

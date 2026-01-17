@@ -1,0 +1,63 @@
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/ToolAuthorityValidator.cs b/src/Runtime/Shoots.Runtime.Abstractions/ToolAuthorityValidator.cs
+index 03e1e1a..d90d772 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/ToolAuthorityValidator.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/ToolAuthorityValidator.cs
+@@ -8,13 +8,14 @@ public static class ToolAuthorityValidator
+     public static bool TryValidate(
+         BuildPlan plan,
+         IToolRegistry registry,
+-        DelegationAuthority authority,
+         out RuntimeError? error)
+     {
+         if (plan is null)
+             throw new ArgumentNullException(nameof(plan));
+         if (registry is null)
+             throw new ArgumentNullException(nameof(registry));
++        if (plan.Authority is null)
++            throw new ArgumentException("plan authority is required", nameof(plan));
+ 
+         foreach (var step in plan.Steps)
+         {
+@@ -30,7 +31,7 @@ public static class ToolAuthorityValidator
+                 return false;
+             }
+ 
+-            if (!MeetsAuthority(authority, entry.Spec.RequiredAuthority))
++            if (!MeetsAuthority(plan.Authority, entry.Spec.RequiredAuthority))
+             {
+                 error = new RuntimeError(
+                     "tool_authority_denied",
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs b/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
+index b9a7a65..16ef3ff 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
+@@ -28,7 +28,7 @@ public sealed class ToolAuthorityValidatorTests
+         var plan = CreatePlan(planAuthority, toolSpec.ToolId);
+         var registry = new StubToolRegistry(toolSpec);
+ 
+-        var result = ToolAuthorityValidator.TryValidate(plan, registry, planAuthority, out var error);
++        var result = ToolAuthorityValidator.TryValidate(plan, registry, out var error);
+ 
+         Assert.False(result);
+         Assert.NotNull(error);
+@@ -55,7 +55,7 @@ public sealed class ToolAuthorityValidatorTests
+         var plan = CreatePlan(planAuthority, toolSpec.ToolId);
+         var registry = new StubToolRegistry(toolSpec);
+ 
+-        var result = ToolAuthorityValidator.TryValidate(plan, registry, planAuthority, out var error);
++        var result = ToolAuthorityValidator.TryValidate(plan, registry, out var error);
+ 
+         Assert.True(result);
+         Assert.Null(error);
+diff --git a/src/STABILIZATION_STATUS.md b/src/STABILIZATION_STATUS.md
+index d904f95..2509e1d 100644
+--- a/src/STABILIZATION_STATUS.md
++++ b/src/STABILIZATION_STATUS.md
+@@ -15,3 +15,7 @@
+ ## X2 — Hashing rules frozen
+ - Hash inputs are documented and limited to semantic plan inputs.
+ - No runtime-only data flows into hashing.
++
++## X3 — Tool authority semantics frozen
++- ProviderKind ordering is authoritative when comparing plan authority to tool requirements.
++- ProviderCapabilities are treated as strict bitmasks (no implicit escalation).

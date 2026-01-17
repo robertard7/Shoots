@@ -8,13 +8,14 @@ public static class ToolAuthorityValidator
     public static bool TryValidate(
         BuildPlan plan,
         IToolRegistry registry,
-        DelegationAuthority authority,
         out RuntimeError? error)
     {
         if (plan is null)
             throw new ArgumentNullException(nameof(plan));
         if (registry is null)
             throw new ArgumentNullException(nameof(registry));
+        if (plan.Authority is null)
+            throw new ArgumentException("plan authority is required", nameof(plan));
 
         foreach (var step in plan.Steps)
         {
@@ -30,7 +31,7 @@ public static class ToolAuthorityValidator
                 return false;
             }
 
-            if (!MeetsAuthority(authority, entry.Spec.RequiredAuthority))
+            if (!MeetsAuthority(plan.Authority, entry.Spec.RequiredAuthority))
             {
                 error = new RuntimeError(
                     "tool_authority_denied",
