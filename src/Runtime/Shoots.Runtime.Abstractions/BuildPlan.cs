@@ -6,11 +6,11 @@ namespace Shoots.Runtime.Abstractions;
 public sealed record BuildPlan(
     string PlanId,
     BuildRequest Request,
-    IReadOnlyList<BuildPlanStep> Steps,
+    IReadOnlyList<BuildStep> Steps,
     IReadOnlyList<BuildArtifact> Artifacts
 );
 
-public sealed record BuildPlanStep(
+public sealed record BuildStep(
     string Id,
     string Description
 );

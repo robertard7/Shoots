@@ -1,8 +1,7 @@
 using System.Text;
 using System.Text.Json;
-using Shoots.Runtime.Abstractions;
 
-namespace Shoots.Runtime.Core;
+namespace Shoots.Runtime.Abstractions;
 
 public static class BuildPlanRenderer
 {

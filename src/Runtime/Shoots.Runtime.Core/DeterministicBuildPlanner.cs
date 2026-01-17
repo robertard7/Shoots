@@ -18,7 +18,7 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         if (request is null)
             throw new ArgumentNullException(nameof(request));
 
-        var steps = new List<BuildPlanStep>
+        var steps = new List<BuildStep>
         {
             new("resolve-command", $"Resolve command '{request.CommandId}'."),
             new("execute-command", $"Execute command '{request.CommandId}'.")
@@ -27,11 +27,11 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         var spec = _services.GetCommand(request.CommandId);
         if (spec is null)
         {
-            steps.Insert(1, new BuildPlanStep("validate-command", "Fail if the command is unknown."));
+            steps.Insert(1, new BuildStep("validate-command", "Fail if the command is unknown."));
         }
         else
         {
-            steps.Insert(1, new BuildPlanStep("validate-command", $"Validate command '{spec.CommandId}' args."));
+            steps.Insert(1, new BuildStep("validate-command", $"Validate command '{spec.CommandId}' args."));
         }
 
         var artifacts = new List<BuildArtifact>

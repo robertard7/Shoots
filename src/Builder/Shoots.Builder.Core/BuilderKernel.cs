@@ -1,5 +1,4 @@
 ﻿#nullable enable
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Shoots.Runtime.Abstractions;
@@ -10,11 +9,13 @@ public sealed class BuilderKernel
 {
     private readonly IRuntimeHost _runtimeHost;
     private readonly IRuntimeServices _runtimeServices;
+    private readonly IBuildPlanner _planner;
 
-    public BuilderKernel(IRuntimeHost runtimeHost, IRuntimeServices runtimeServices)
+    public BuilderKernel(IRuntimeHost runtimeHost, IRuntimeServices runtimeServices, IBuildPlanner planner)
     {
         _runtimeHost = runtimeHost ?? throw new ArgumentNullException(nameof(runtimeHost));
         _runtimeServices = runtimeServices ?? throw new ArgumentNullException(nameof(runtimeServices));
+        _planner = planner ?? throw new ArgumentNullException(nameof(planner));
     }
 
 	private static RunState Classify(RuntimeResult result)
@@ -126,8 +127,10 @@ public sealed class BuilderKernel
         var commandId = request.CommandId.Trim();
 
         // --- Deterministic plan + hash ---
-        var planText = $"COMMAND:\n{commandId}\n";
-        var hash = Sha256Hex(planText);
+        var plan = _planner.Plan(request);
+        var hash = plan.PlanId;
+        var planText = BuildPlanRenderer.RenderText(plan);
+        var planJson = BuildPlanRenderer.RenderJson(plan);
 
         // --- Artifact root (method-scoped, authoritative) ---
         var artifactsRoot = Path.Combine(
@@ -141,6 +144,11 @@ public sealed class BuilderKernel
         File.WriteAllText(
             Path.Combine(artifactsRoot, "plan.txt"),
             planText,
+            Encoding.UTF8
+        );
+        File.WriteAllText(
+            Path.Combine(artifactsRoot, "plan.json"),
+            planJson,
             Encoding.UTF8
         );
 
@@ -196,25 +204,21 @@ public sealed class BuilderKernel
 			);
 		}
 
-		return new BuildRunResult(
-			hash,
-			artifactsRoot,
-			state,
-			result.Error?.Code
-		);
+        return new BuildRunResult(
+            hash,
+            artifactsRoot,
+            state,
+            plan,
+            result.Error?.Code
+        );
     }
 
-    private static string Sha256Hex(string input)
-    {
-        var bytes = Encoding.UTF8.GetBytes(input);
-        var hash = SHA256.HashData(bytes);
-        return Convert.ToHexString(hash).ToLowerInvariant();
-    }
 }
 
 public sealed record BuildRunResult(
     string Hash,
     string Folder,
     RunState State,
+    BuildPlan Plan,
     string? Reason = null
 );
