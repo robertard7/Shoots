@@ -12,6 +12,7 @@ namespace Shoots.Runtime.Abstractions;
 /// - authority.ProviderId, authority.Kind, authority.PolicyId, authority.AllowsDelegation
 /// - request.Args ordered by key (case-insensitive), normalized key/value tokens (including plan.graph)
 /// - steps ordered as provided (id + description, plus AI prompt/schema when present)
+/// - tool steps include tool id + normalized input bindings + declared outputs
 /// - artifacts ordered as provided (id + description)
 /// Excludes timestamps, environment/machine identifiers, absolute paths, and other non-semantic runtime state.
 /// </summary>
@@ -65,6 +66,30 @@ public static class BuildPlanHasher
             {
                 sb.Append("|ai.prompt=").Append(NormalizeTextToken(aiStep.Prompt));
                 sb.Append("|ai.schema=").Append(NormalizeTextToken(aiStep.OutputSchema));
+            }
+
+            if (step is ToolBuildStep toolStep)
+            {
+                sb.Append("|tool.id=").Append(NormalizeToken(toolStep.ToolId.Value));
+
+                foreach (var binding in toolStep.InputBindings
+                             .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    sb.Append("|tool.input=")
+                      .Append(NormalizeToken(binding.Key))
+                      .Append('=')
+                      .Append(NormalizeTextToken(binding.Value?.ToString() ?? "null"));
+                }
+
+                foreach (var output in toolStep.Outputs)
+                {
+                    sb.Append("|tool.output=")
+                      .Append(NormalizeToken(output.Name))
+                      .Append(':')
+                      .Append(NormalizeToken(output.Type))
+                      .Append('=')
+                      .Append(NormalizeTextToken(output.Description));
+                }
             }
         }
 

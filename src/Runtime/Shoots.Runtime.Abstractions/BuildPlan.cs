@@ -33,6 +33,7 @@ public sealed record BuildPlan(
 /// <param name="Description">Human-readable step description.</param>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(AiBuildStep), typeDiscriminator: "ai")]
+[JsonDerivedType(typeof(ToolBuildStep), typeDiscriminator: "tool")]
 public record BuildStep(
     string Id,
     string Description
@@ -54,4 +55,24 @@ public sealed record AiBuildStep(
     string Description,
     string Prompt,
     string OutputSchema
+) : BuildStep(Id, Description);
+
+// ⚠️ CONTRACT FREEZE
+// Any change here requires:
+// 1. New versioned type OR
+// 2. Explicit RFC + test update
+/// <summary>
+/// Deterministic step representing a tool selection and its bindings.
+/// </summary>
+/// <param name="Id">Stable step identifier.</param>
+/// <param name="Description">Human-readable step description.</param>
+/// <param name="ToolId">Selected tool identifier.</param>
+/// <param name="InputBindings">Deterministic tool input bindings.</param>
+/// <param name="Outputs">Declared tool outputs.</param>
+public sealed record ToolBuildStep(
+    string Id,
+    string Description,
+    ToolId ToolId,
+    IReadOnlyDictionary<string, object?> InputBindings,
+    IReadOnlyList<ToolOutputSpec> Outputs
 ) : BuildStep(Id, Description);

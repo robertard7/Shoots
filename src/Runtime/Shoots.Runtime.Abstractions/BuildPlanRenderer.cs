@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Linq;
 using System.Text.Json;
 
 namespace Shoots.Runtime.Abstractions;
@@ -38,6 +39,32 @@ public static class BuildPlanRenderer
             {
                 builder.Append("  prompt=").AppendLine(aiStep.Prompt);
                 builder.Append("  schema=").AppendLine(aiStep.OutputSchema);
+            }
+
+            if (step is ToolBuildStep toolStep)
+            {
+                builder.Append("  tool=").AppendLine(toolStep.ToolId.Value);
+                builder.AppendLine("  inputs:");
+                foreach (var binding in toolStep.InputBindings
+                             .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    builder.Append("    - ")
+                           .Append(binding.Key)
+                           .Append(": ")
+                           .AppendLine(binding.Value?.ToString() ?? "null");
+                }
+
+                builder.AppendLine("  outputs:");
+                foreach (var output in toolStep.Outputs)
+                {
+                    builder.Append("    - ")
+                           .Append(output.Name)
+                           .Append(": ")
+                           .Append(output.Type)
+                           .Append(" (")
+                           .Append(output.Description)
+                           .AppendLine(")");
+                }
             }
         }
 
