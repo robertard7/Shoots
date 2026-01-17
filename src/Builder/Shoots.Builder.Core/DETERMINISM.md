@@ -11,6 +11,7 @@ observing any external state.
 - No randomness
 - No network access
 - No global/static mutable state
+- Planner requires `BuildRequest.Args["plan.graph"]` Mermaid graph input and fails when missing.
 
 ## Current Planner Dependencies
 - `IRuntimeServices` for command metadata only
@@ -25,6 +26,7 @@ The plan hash must include only semantic inputs, in stable order:
 - `BuildContract.Version`
 - `DelegationAuthority` fields (provider id, kind, policy id, allows delegation)
 - `BuildRequest.Args` ordered by key (case-insensitive), normalized key/value tokens
+- `BuildRequest.Args["plan.graph"]` Mermaid graph text (normalized)
 - `BuildStep` list (id + description) in order
 - `AiBuildStep` prompt + output schema when present
 - `BuildArtifact` list (id + description) in order

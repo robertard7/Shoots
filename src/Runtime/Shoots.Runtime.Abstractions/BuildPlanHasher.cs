@@ -1,3 +1,4 @@
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -9,7 +10,7 @@ namespace Shoots.Runtime.Abstractions;
 /// - request.CommandId (normalized)
 /// - BuildContract.Version
 /// - authority.ProviderId, authority.Kind, authority.PolicyId, authority.AllowsDelegation
-/// - request.Args ordered by key (case-insensitive), normalized key/value tokens
+/// - request.Args ordered by key (case-insensitive), normalized key/value tokens (including plan.graph)
 /// - steps ordered as provided (id + description, plus AI prompt/schema when present)
 /// - artifacts ordered as provided (id + description)
 /// Excludes timestamps, environment/machine identifiers, absolute paths, and other non-semantic runtime state.
@@ -79,5 +80,19 @@ public static class BuildPlanHasher
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     }
 
-    private static string NormalizeToken(string value) => value.Trim();
+    private static string NormalizeToken(string value)
+    {
+        var normalized = value.Trim();
+        if (ContainsAbsolutePath(normalized))
+            throw new ArgumentException("absolute paths are not allowed in plan hash inputs", nameof(value));
+        return normalized;
+    }
+
+    private static bool ContainsAbsolutePath(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        return Path.IsPathRooted(value);
+    }
 }

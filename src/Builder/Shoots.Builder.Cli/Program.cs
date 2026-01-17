@@ -40,7 +40,10 @@ var engine = new RuntimeEngine(modules, narrator, helper);
 
 var buildRequest = new BuildRequest(
     CommandId: input,
-    Args: new Dictionary<string, object?>()
+    Args: new Dictionary<string, object?>
+    {
+        ["plan.graph"] = "graph TD; validate-command --> resolve-command --> execute-command"
+    }
 );
 var policy = new DefaultDelegationPolicy();
 var planner = new DeterministicBuildPlanner(engine, policy);
