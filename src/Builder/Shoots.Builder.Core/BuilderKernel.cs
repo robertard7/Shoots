@@ -113,13 +113,17 @@ public sealed class BuilderKernel
 		};
 	}
 
-    public BuildRunResult Run(string input)
+    public BuildRunResult Run(BuildRequest request)
     {
-        if (string.IsNullOrWhiteSpace(input))
-            throw new ArgumentException("input is required", nameof(input));
+        if (request is null)
+            throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(request.CommandId))
+            throw new ArgumentException("command id is required", nameof(request));
+        if (request.Args is null)
+            throw new ArgumentException("args are required", nameof(request));
 
         // --- Command resolution ---
-        var commandId = input.Trim();
+        var commandId = request.CommandId.Trim();
 
         // --- Deterministic plan + hash ---
         var planText = $"COMMAND:\n{commandId}\n";
@@ -148,14 +152,14 @@ public sealed class BuilderKernel
             Services: _runtimeServices
         );
 
-        var request = new RuntimeRequest(
+        var runtimeRequest = new RuntimeRequest(
             CommandId: commandId,
-            Args: new Dictionary<string, object?>(),
+            Args: new Dictionary<string, object?>(request.Args),
             Context: context
         );
 
         // --- Execute ---
-        var result = _runtimeHost.Execute(request);
+        var result = _runtimeHost.Execute(runtimeRequest);
 
         // --- Persist result ---
         var resultPayload = new

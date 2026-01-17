@@ -40,8 +40,21 @@ var engine = new RuntimeEngine(modules, narrator, helper);
 
 var kernel = new BuilderKernel(engine, engine);
 
+var buildRequest = new BuildRequest(
+    CommandId: input,
+    Args: new Dictionary<string, object?>()
+);
+
+var planner = new DeterministicBuildPlanner(engine);
+var plan = planner.Plan(buildRequest);
+
+Console.WriteLine("[plan:text]");
+Console.WriteLine(BuildPlanRenderer.RenderText(plan));
+Console.WriteLine("[plan:json]");
+Console.WriteLine(BuildPlanRenderer.RenderJson(plan));
+
 // Execute
-var result = kernel.Run(input);
+var result = kernel.Run(buildRequest);
 
 // Emit authoritative result
 Console.WriteLine($"state={result.State}");
