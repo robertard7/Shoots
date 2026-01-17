@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Shoots.Runtime.Abstractions;
 
-namespace Shoots.Runtime.Core;
+namespace Shoots.Builder.Core;
 
 public sealed class DeterministicBuildPlanner : IBuildPlanner
 {
@@ -99,12 +99,6 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
 
         // Delegation decision (pure)
         var decision = _policy.Decide(normalizedRequest, provisionalPlan);
-
-        if (!decision.Authority.AllowsDelegation &&
-            decision.Authority.Kind == ProviderKind.Delegated)
-        {
-            throw new InvalidOperationException("Delegation cannot be delegated without permission.");
-        }
 
         // Deterministic hash (single authority)
         var planId = BuildPlanHasher.ComputePlanId(normalizedRequest, decision.Authority);

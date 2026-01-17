@@ -1,9 +1,9 @@
 using System.Text.Json;
+using Shoots.Builder.Core;
 using Shoots.Runtime.Abstractions;
-using Shoots.Runtime.Core;
 using Xunit;
 
-namespace Shoots.Runtime.Tests;
+namespace Shoots.Builder.Tests;
 
 public sealed class PlannerSerializationTests
 {
@@ -17,7 +17,7 @@ public sealed class PlannerSerializationTests
                 Array.Empty<RuntimeArgSpec>())
         );
 
-        var planner = new DeterministicBuildPlanner(services, new DefaultDelegationPolicy());
+        var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
         var request = new BuildRequest(
             " core.ping ",
             new Dictionary<string, object?>
@@ -61,6 +61,26 @@ public sealed class PlannerSerializationTests
         {
             return _commands.FirstOrDefault(
                 command => string.Equals(command.CommandId, commandId, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private sealed class StubDelegationPolicy : IDelegationPolicy
+    {
+        public string PolicyId => "local-only";
+
+        public DelegationDecision Decide(BuildRequest request, BuildPlan plan)
+        {
+            _ = request ?? throw new ArgumentNullException(nameof(request));
+            _ = plan ?? throw new ArgumentNullException(nameof(plan));
+
+            return new DelegationDecision(
+                new DelegationAuthority(
+                    ProviderId: new ProviderId("local"),
+                    Kind: ProviderKind.Local,
+                    PolicyId: PolicyId,
+                    AllowsDelegation: false
+                )
+            );
         }
     }
 }
