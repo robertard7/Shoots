@@ -9,6 +9,8 @@ public sealed class AuthorityInvariantTests
     public void Plan_hash_includes_authority()
     {
         var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var steps = new[] { new BuildStep("s1", "step") };
+        var artifacts = new[] { new BuildArtifact("a1", "artifact") };
 
         var localHash = BuildPlanHasher.ComputePlanId(
             request,
@@ -16,7 +18,9 @@ public sealed class AuthorityInvariantTests
                 new ProviderId("local"),
                 ProviderKind.Local,
                 "local-only",
-                false));
+                false),
+            steps,
+            artifacts);
 
         var delegatedHash = BuildPlanHasher.ComputePlanId(
             request,
@@ -24,7 +28,9 @@ public sealed class AuthorityInvariantTests
                 new ProviderId("remote"),
                 ProviderKind.Delegated,
                 "local-only",
-                false));
+                false),
+            steps,
+            artifacts);
 
         Assert.NotEqual(localHash, delegatedHash);
     }
@@ -33,6 +39,8 @@ public sealed class AuthorityInvariantTests
     public void Plan_hash_changes_when_policy_changes()
     {
         var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var steps = new[] { new BuildStep("s1", "step") };
+        var artifacts = new[] { new BuildArtifact("a1", "artifact") };
 
         var localHash = BuildPlanHasher.ComputePlanId(
             request,
@@ -40,7 +48,9 @@ public sealed class AuthorityInvariantTests
                 new ProviderId("local"),
                 ProviderKind.Local,
                 "local-only",
-                false));
+                false),
+            steps,
+            artifacts);
 
         var alternateHash = BuildPlanHasher.ComputePlanId(
             request,
@@ -48,7 +58,9 @@ public sealed class AuthorityInvariantTests
                 new ProviderId("local"),
                 ProviderKind.Local,
                 "alternate-policy",
-                false));
+                false),
+            steps,
+            artifacts);
 
         Assert.NotEqual(localHash, alternateHash);
     }

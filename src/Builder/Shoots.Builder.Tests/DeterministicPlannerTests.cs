@@ -43,7 +43,7 @@ public sealed class DeterministicPlannerTests
         var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
 
         var plan = planner.Plan(request);
-        var computed = BuildPlanHasher.ComputePlanId(plan.Request, plan.Authority);
+        var computed = BuildPlanHasher.ComputePlanId(plan.Request, plan.Authority, plan.Steps, plan.Artifacts);
 
         Assert.Equal(plan.PlanId, computed);
     }

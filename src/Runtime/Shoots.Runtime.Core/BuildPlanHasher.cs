@@ -6,8 +6,10 @@ public static class BuildPlanHasher
 {
     public static string ComputePlanId(
         BuildRequest request,
-        DelegationAuthority authority)
+        DelegationAuthority authority,
+        IReadOnlyList<BuildStep> steps,
+        IReadOnlyList<BuildArtifact> artifacts)
     {
-        return Shoots.Runtime.Abstractions.BuildPlanHasher.ComputePlanId(request, authority);
+        return Shoots.Runtime.Abstractions.BuildPlanHasher.ComputePlanId(request, authority, steps, artifacts);
     }
 }

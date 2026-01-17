@@ -10,12 +10,16 @@ namespace Shoots.Runtime.Abstractions;
 /// - BuildContract.Version
 /// - authority.ProviderId, authority.Kind, authority.PolicyId, authority.AllowsDelegation
 /// - request.Args ordered by key (case-insensitive), normalized key/value tokens
+/// - steps ordered as provided (id + description)
+/// - artifacts ordered as provided (id + description)
 /// </summary>
 public static class BuildPlanHasher
 {
     public static string ComputePlanId(
         BuildRequest request,
-        DelegationAuthority authority)
+        DelegationAuthority authority,
+        IReadOnlyList<BuildStep> steps,
+        IReadOnlyList<BuildArtifact> artifacts)
     {
         if (request is null)
             throw new ArgumentNullException(nameof(request));
@@ -27,6 +31,10 @@ public static class BuildPlanHasher
             throw new ArgumentException("authority provider id is required", nameof(authority));
         if (string.IsNullOrWhiteSpace(authority.PolicyId))
             throw new ArgumentException("delegation policy id is required", nameof(authority));
+        if (steps is null)
+            throw new ArgumentNullException(nameof(steps));
+        if (artifacts is null)
+            throw new ArgumentNullException(nameof(artifacts));
 
         var sb = new StringBuilder();
         sb.Append("command=").Append(NormalizeToken(request.CommandId));
@@ -42,6 +50,22 @@ public static class BuildPlanHasher
               .Append(NormalizeToken(kvp.Key))
               .Append('=')
               .Append(NormalizeToken(kvp.Value?.ToString() ?? "null"));
+        }
+
+        foreach (var step in steps)
+        {
+            sb.Append("|step=")
+              .Append(NormalizeToken(step.Id))
+              .Append('=')
+              .Append(NormalizeToken(step.Description));
+        }
+
+        foreach (var artifact in artifacts)
+        {
+            sb.Append("|artifact=")
+              .Append(NormalizeToken(artifact.Id))
+              .Append('=')
+              .Append(NormalizeToken(artifact.Description));
         }
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());

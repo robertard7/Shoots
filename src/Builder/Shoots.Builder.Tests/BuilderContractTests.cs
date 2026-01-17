@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Shoots.Runtime.Abstractions;
 using Xunit;
 
@@ -33,11 +34,7 @@ public sealed class BuilderContractTests
     {
         var assembly = typeof(Shoots.Builder.Core.BuilderKernel).Assembly;
 
-        var referencedAssemblyNames = assembly
-            .GetReferencedAssemblies()
-            .Select(a => a.Name)
-            .Where(name => name is not null)
-            .ToArray();
+        var referencedAssemblyNames = CollectReferencedAssemblyNames(assembly);
 
         Assert.DoesNotContain("Shoots.Runtime.Core", referencedAssemblyNames);
         Assert.DoesNotContain("Shoots.Runtime.Loader", referencedAssemblyNames);
@@ -58,6 +55,37 @@ public sealed class BuilderContractTests
         Assert.DoesNotContain(typeof(ProviderId), parameterTypes);
         Assert.DoesNotContain(typeof(ProviderKind), parameterTypes);
         Assert.DoesNotContain(typeof(DelegationAuthority), parameterTypes);
+    }
+
+    private static string[] CollectReferencedAssemblyNames(Assembly rootAssembly)
+    {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<Assembly>();
+        queue.Enqueue(rootAssembly);
+
+        while (queue.Count > 0)
+        {
+            var assembly = queue.Dequeue();
+            foreach (var reference in assembly.GetReferencedAssemblies())
+            {
+                if (string.IsNullOrWhiteSpace(reference.Name))
+                    continue;
+
+                if (!visited.Add(reference.Name))
+                    continue;
+
+                try
+                {
+                    queue.Enqueue(Assembly.Load(reference));
+                }
+                catch
+                {
+                    // Ignore load failures; they are not part of the boundary check.
+                }
+            }
+        }
+
+        return visited.ToArray();
     }
 
     // ----------------------------

@@ -101,7 +101,7 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         var decision = _policy.Decide(normalizedRequest, provisionalPlan);
 
         // Deterministic hash (single authority)
-        var planId = BuildPlanHasher.ComputePlanId(normalizedRequest, decision.Authority);
+        var planId = BuildPlanHasher.ComputePlanId(normalizedRequest, decision.Authority, steps, artifacts);
 
         return new BuildPlan(
             PlanId: planId,
