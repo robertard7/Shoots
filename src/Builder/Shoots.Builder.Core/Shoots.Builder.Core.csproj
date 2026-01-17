@@ -12,5 +12,11 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../Runtime/Shoots.Runtime.Abstractions/Shoots.Runtime.Abstractions.csproj" />
+    <ProjectReference Include="../../Runtime/Shoots.Runtime.Core/Shoots.Runtime.Core.csproj" />
+  </ItemGroup>
+
 </Project>
+
 
