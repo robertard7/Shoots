@@ -1,0 +1,216 @@
+diff --git src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
+index ad5f362..be4e720 100644
+--- /src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
++++ /src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
+@@ -57,6 +57,8 @@ public sealed class BuilderContractTests
+                 Request: request,
+                 AuthorityProviderId: new ProviderId("local"),
+                 AuthorityKind: ProviderKind.Local,
++                DelegationPolicyId: "local-only",
++                AllowsDelegation: false,
+                 Steps: new[] { new BuildStep("stub-step", "Stub step.") },
+                 Artifacts: new[] { new BuildArtifact("stub-artifact", "Stub artifact.") }
+             );
+diff --git src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs
+index dc8a687..41ac90a 100644
+--- /src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs
++++ /src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs
+@@ -7,6 +7,8 @@ namespace Shoots.Runtime.Abstractions;
+ /// <param name="Request">Input request used to derive the plan.</param>
+ /// <param name="AuthorityProviderId">Authority provider identity assigned at planning time.</param>
+ /// <param name="AuthorityKind">Authority provider kind assigned at planning time.</param>
++/// <param name="DelegationPolicyId">Deterministic delegation policy identifier.</param>
++/// <param name="AllowsDelegation">True when delegation is permitted by policy.</param>
+ /// <param name="Steps">Ordered steps derived deterministically from the request.</param>
+ /// <param name="Artifacts">Ordered artifacts expected from executing the plan.</param>
+ public sealed record BuildPlan(
+@@ -14,6 +16,8 @@ public sealed record BuildPlan(
+     BuildRequest Request,
+     ProviderId AuthorityProviderId,
+     ProviderKind AuthorityKind,
++    string DelegationPolicyId,
++    bool AllowsDelegation,
+     IReadOnlyList<BuildStep> Steps,
+     IReadOnlyList<BuildArtifact> Artifacts
+ );
+diff --git src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs
+index 60fed3f..3f7df73 100644
+--- /src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs
++++ /src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs
+@@ -14,6 +14,9 @@ public static class BuildPlanRenderer
+         builder.AppendLine($"command={plan.Request.CommandId}");
+         builder.AppendLine($"authority.provider={plan.AuthorityProviderId.Value}");
+         builder.AppendLine($"authority.kind={plan.AuthorityKind}");
++        builder.AppendLine($"authority.hash={plan.PlanId}");
++        builder.AppendLine($"delegation.policy={plan.DelegationPolicyId}");
++        builder.AppendLine($"delegation.allowed={plan.AllowsDelegation}");
+         builder.AppendLine("steps:");
+         foreach (var step in plan.Steps)
+         {
+diff --git src/Runtime/Shoots.Runtime.Abstractions/DelegationDecision.cs src/Runtime/Shoots.Runtime.Abstractions/DelegationDecision.cs
+index 2d84aa6..a94fc35 100644
+--- /src/Runtime/Shoots.Runtime.Abstractions/DelegationDecision.cs
++++ /src/Runtime/Shoots.Runtime.Abstractions/DelegationDecision.cs
+@@ -14,5 +14,7 @@ public sealed record DelegationDecision(
+ /// </summary>
+ public interface IDelegationPolicy
+ {
++    string PolicyId { get; }
++
+     DelegationDecision Decide(BuildRequest request, BuildPlan plan);
+ }
+diff --git src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
+index 4ec0f5e..429ce18 100644
+--- /src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
++++ /src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
+@@ -9,7 +9,9 @@ public static class BuildPlanHasher
+     public static string ComputePlanId(
+         BuildRequest request,
+         ProviderId authorityProviderId,
+-        ProviderKind authorityKind)
++        ProviderKind authorityKind,
++        string delegationPolicyId,
++        bool allowsDelegation)
+     {
+         if (request is null)
+             throw new ArgumentNullException(nameof(request));
+@@ -17,11 +19,15 @@ public static class BuildPlanHasher
+             throw new ArgumentException("args are required", nameof(request));
+         if (string.IsNullOrWhiteSpace(authorityProviderId.Value))
+             throw new ArgumentException("authority provider id is required", nameof(authorityProviderId));
++        if (string.IsNullOrWhiteSpace(delegationPolicyId))
++            throw new ArgumentException("delegation policy id is required", nameof(delegationPolicyId));
+ 
+         var sb = new StringBuilder();
+         sb.Append("command=").Append(NormalizeToken(request.CommandId));
+         sb.Append("|authority.provider=").Append(NormalizeToken(authorityProviderId.Value));
+         sb.Append("|authority.kind=").Append(authorityKind.ToString());
++        sb.Append("|delegation.policy=").Append(NormalizeToken(delegationPolicyId));
++        sb.Append("|delegation.allowed=").Append(allowsDelegation.ToString());
+ 
+         foreach (var kvp in request.Args.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+         {
+diff --git src/Runtime/Shoots.Runtime.Core/DefaultDelegationPolicy.cs src/Runtime/Shoots.Runtime.Core/DefaultDelegationPolicy.cs
+index 48c69cb..23de9d1 100644
+--- /src/Runtime/Shoots.Runtime.Core/DefaultDelegationPolicy.cs
++++ /src/Runtime/Shoots.Runtime.Core/DefaultDelegationPolicy.cs
+@@ -5,6 +5,7 @@ namespace Shoots.Runtime.Core;
+ public sealed class DefaultDelegationPolicy : IDelegationPolicy
+ {
+     private static readonly ProviderId LocalProviderId = new("local");
++    public string PolicyId => "local-only";
+ 
+     public DelegationDecision Decide(BuildRequest request, BuildPlan plan)
+     {
+diff --git src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs
+index 87d8adb..0e0a570 100644
+--- /src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs
++++ /src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs
+@@ -50,21 +50,33 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
+             Request: normalizedRequest,
+             AuthorityProviderId: new ProviderId("local"),
+             AuthorityKind: ProviderKind.Local,
++            DelegationPolicyId: _policy.PolicyId,
++            AllowsDelegation: false,
+             Steps: steps,
+             Artifacts: artifacts
+         );
+ 
+         var decision = _policy.Decide(normalizedRequest, provisionalPlan);
++        if (!decision.AllowsDelegation && decision.AuthorityKind == ProviderKind.Delegated)
++            throw new InvalidOperationException("Delegation cannot be delegated without permission.");
++        if (string.IsNullOrWhiteSpace(_policy.PolicyId))
++            throw new InvalidOperationException("Delegation policy id is required.");
++        if (steps.Any(step => step.Id.Contains("execute:", StringComparison.OrdinalIgnoreCase)))
++            throw new InvalidOperationException("Plan steps must not embed execution metadata.");
+         var planId = BuildPlanHasher.ComputePlanId(
+             normalizedRequest,
+             decision.AuthorityProviderId,
+-            decision.AuthorityKind);
++            decision.AuthorityKind,
++            _policy.PolicyId,
++            decision.AllowsDelegation);
+ 
+         return new BuildPlan(
+             PlanId: planId,
+             Request: normalizedRequest,
+             AuthorityProviderId: decision.AuthorityProviderId,
+             AuthorityKind: decision.AuthorityKind,
++            DelegationPolicyId: _policy.PolicyId,
++            AllowsDelegation: decision.AllowsDelegation,
+             Steps: steps,
+             Artifacts: artifacts
+         );
+diff --git src/Runtime/Shoots.Runtime.Tests/AuthorityInvariantTests.cs src/Runtime/Shoots.Runtime.Tests/AuthorityInvariantTests.cs
+index 8c01b29..c457d67 100644
+--- /src/Runtime/Shoots.Runtime.Tests/AuthorityInvariantTests.cs
++++ /src/Runtime/Shoots.Runtime.Tests/AuthorityInvariantTests.cs
+@@ -14,12 +14,16 @@ public sealed class AuthorityInvariantTests
+         var localHash = BuildPlanHasher.ComputePlanId(
+             request,
+             new ProviderId("local"),
+-            ProviderKind.Local);
++            ProviderKind.Local,
++            "local-only",
++            false);
+ 
+         var delegatedHash = BuildPlanHasher.ComputePlanId(
+             request,
+             new ProviderId("remote"),
+-            ProviderKind.Delegated);
++            ProviderKind.Delegated,
++            "local-only",
++            false);
+ 
+         Assert.NotEqual(localHash, delegatedHash);
+     }
+@@ -36,11 +40,35 @@ public sealed class AuthorityInvariantTests
+         var computed = BuildPlanHasher.ComputePlanId(
+             plan.Request,
+             plan.AuthorityProviderId,
+-            plan.AuthorityKind);
++            plan.AuthorityKind,
++            plan.DelegationPolicyId,
++            plan.AllowsDelegation);
+ 
+         Assert.Equal(plan.PlanId, computed);
+     }
+ 
++    [Fact]
++    public void Plan_hash_changes_when_policy_changes()
++    {
++        var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
++
++        var localHash = BuildPlanHasher.ComputePlanId(
++            request,
++            new ProviderId("local"),
++            ProviderKind.Local,
++            "local-only",
++            false);
++
++        var alternateHash = BuildPlanHasher.ComputePlanId(
++            request,
++            new ProviderId("local"),
++            ProviderKind.Local,
++            "alternate-policy",
++            false);
++
++        Assert.NotEqual(localHash, alternateHash);
++    }
++
+     private sealed class StubRuntimeServices : IRuntimeServices
+     {
+         public IReadOnlyList<RuntimeCommandSpec> GetAllCommands() => Array.Empty<RuntimeCommandSpec>();
+diff --git src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs
+index 5779d9a..d59c33e 100644
+--- /src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs
++++ /src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs
+@@ -41,6 +41,8 @@ public sealed class PlannerSerializationTests
+         Assert.Equal("core.ping", roundTrip.Request.CommandId);
+         Assert.Equal(plan.AuthorityProviderId, roundTrip.AuthorityProviderId);
+         Assert.Equal(plan.AuthorityKind, roundTrip.AuthorityKind);
++        Assert.Equal(plan.DelegationPolicyId, roundTrip.DelegationPolicyId);
++        Assert.Equal(plan.AllowsDelegation, roundTrip.AllowsDelegation);
+ 
+         var secondPlan = planner.Plan(request);
+         Assert.Equal(plan.PlanId, secondPlan.PlanId);

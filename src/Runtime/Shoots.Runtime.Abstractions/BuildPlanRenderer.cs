@@ -14,6 +14,9 @@ public static class BuildPlanRenderer
         builder.AppendLine($"command={plan.Request.CommandId}");
         builder.AppendLine($"authority.provider={plan.AuthorityProviderId.Value}");
         builder.AppendLine($"authority.kind={plan.AuthorityKind}");
+        builder.AppendLine($"authority.hash={plan.PlanId}");
+        builder.AppendLine($"delegation.policy={plan.DelegationPolicyId}");
+        builder.AppendLine($"delegation.allowed={plan.AllowsDelegation}");
         builder.AppendLine("steps:");
         foreach (var step in plan.Steps)
         {

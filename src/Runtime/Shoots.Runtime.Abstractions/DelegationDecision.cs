@@ -14,5 +14,7 @@ public sealed record DelegationDecision(
 /// </summary>
 public interface IDelegationPolicy
 {
+    string PolicyId { get; }
+
     DelegationDecision Decide(BuildRequest request, BuildPlan plan);
 }

@@ -14,12 +14,16 @@ public sealed class AuthorityInvariantTests
         var localHash = BuildPlanHasher.ComputePlanId(
             request,
             new ProviderId("local"),
-            ProviderKind.Local);
+            ProviderKind.Local,
+            "local-only",
+            false);
 
         var delegatedHash = BuildPlanHasher.ComputePlanId(
             request,
             new ProviderId("remote"),
-            ProviderKind.Delegated);
+            ProviderKind.Delegated,
+            "local-only",
+            false);
 
         Assert.NotEqual(localHash, delegatedHash);
     }
@@ -36,9 +40,33 @@ public sealed class AuthorityInvariantTests
         var computed = BuildPlanHasher.ComputePlanId(
             plan.Request,
             plan.AuthorityProviderId,
-            plan.AuthorityKind);
+            plan.AuthorityKind,
+            plan.DelegationPolicyId,
+            plan.AllowsDelegation);
 
         Assert.Equal(plan.PlanId, computed);
+    }
+
+    [Fact]
+    public void Plan_hash_changes_when_policy_changes()
+    {
+        var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+
+        var localHash = BuildPlanHasher.ComputePlanId(
+            request,
+            new ProviderId("local"),
+            ProviderKind.Local,
+            "local-only",
+            false);
+
+        var alternateHash = BuildPlanHasher.ComputePlanId(
+            request,
+            new ProviderId("local"),
+            ProviderKind.Local,
+            "alternate-policy",
+            false);
+
+        Assert.NotEqual(localHash, alternateHash);
     }
 
     private sealed class StubRuntimeServices : IRuntimeServices

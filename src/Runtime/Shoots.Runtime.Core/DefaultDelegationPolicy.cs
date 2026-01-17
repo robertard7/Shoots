@@ -5,6 +5,7 @@ namespace Shoots.Runtime.Core;
 public sealed class DefaultDelegationPolicy : IDelegationPolicy
 {
     private static readonly ProviderId LocalProviderId = new("local");
+    public string PolicyId => "local-only";
 
     public DelegationDecision Decide(BuildRequest request, BuildPlan plan)
     {

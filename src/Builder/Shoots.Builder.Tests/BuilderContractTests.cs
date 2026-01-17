@@ -57,6 +57,8 @@ public sealed class BuilderContractTests
                 Request: request,
                 AuthorityProviderId: new ProviderId("local"),
                 AuthorityKind: ProviderKind.Local,
+                DelegationPolicyId: "local-only",
+                AllowsDelegation: false,
                 Steps: new[] { new BuildStep("stub-step", "Stub step.") },
                 Artifacts: new[] { new BuildArtifact("stub-artifact", "Stub artifact.") }
             );

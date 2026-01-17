@@ -41,6 +41,8 @@ public sealed class PlannerSerializationTests
         Assert.Equal("core.ping", roundTrip.Request.CommandId);
         Assert.Equal(plan.AuthorityProviderId, roundTrip.AuthorityProviderId);
         Assert.Equal(plan.AuthorityKind, roundTrip.AuthorityKind);
+        Assert.Equal(plan.DelegationPolicyId, roundTrip.DelegationPolicyId);
+        Assert.Equal(plan.AllowsDelegation, roundTrip.AllowsDelegation);
 
         var secondPlan = planner.Plan(request);
         Assert.Equal(plan.PlanId, secondPlan.PlanId);

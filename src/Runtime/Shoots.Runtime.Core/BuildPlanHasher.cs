@@ -9,7 +9,9 @@ public static class BuildPlanHasher
     public static string ComputePlanId(
         BuildRequest request,
         ProviderId authorityProviderId,
-        ProviderKind authorityKind)
+        ProviderKind authorityKind,
+        string delegationPolicyId,
+        bool allowsDelegation)
     {
         if (request is null)
             throw new ArgumentNullException(nameof(request));
@@ -17,11 +19,15 @@ public static class BuildPlanHasher
             throw new ArgumentException("args are required", nameof(request));
         if (string.IsNullOrWhiteSpace(authorityProviderId.Value))
             throw new ArgumentException("authority provider id is required", nameof(authorityProviderId));
+        if (string.IsNullOrWhiteSpace(delegationPolicyId))
+            throw new ArgumentException("delegation policy id is required", nameof(delegationPolicyId));
 
         var sb = new StringBuilder();
         sb.Append("command=").Append(NormalizeToken(request.CommandId));
         sb.Append("|authority.provider=").Append(NormalizeToken(authorityProviderId.Value));
         sb.Append("|authority.kind=").Append(authorityKind.ToString());
+        sb.Append("|delegation.policy=").Append(NormalizeToken(delegationPolicyId));
+        sb.Append("|delegation.allowed=").Append(allowsDelegation.ToString());
 
         foreach (var kvp in request.Args.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
         {
