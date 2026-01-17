@@ -7,6 +7,7 @@ namespace Shoots.Builder.Core;
 
 public sealed class DeterministicBuildPlanner : IBuildPlanner
 {
+    private const string GraphArgKey = MermaidPlanGraph.GraphArgKey;
     private readonly IRuntimeServices _services;
     private readonly IDelegationPolicy _policy;
 
@@ -25,6 +26,15 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         if (request.Args is null)
             throw new ArgumentException("args are required", nameof(request));
 
+        if (!request.Args.TryGetValue(GraphArgKey, out var graphValue))
+            throw new ArgumentException($"missing required '{GraphArgKey}'", nameof(request));
+
+        if (graphValue is not string graphText)
+            throw new ArgumentException($"'{GraphArgKey}' must be a string", nameof(request));
+
+        var normalizedGraph = MermaidPlanGraph.Normalize(graphText);
+        var orderedStepIds = MermaidPlanGraph.OrderStepIds(normalizedGraph);
+
         // Normalize command
         var normalizedCommandId = request.CommandId.Trim();
 
@@ -38,6 +48,8 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         foreach (var kvp in request.Args)
             normalizedArgs[kvp.Key] = kvp.Value;
 
+        normalizedArgs[GraphArgKey] = normalizedGraph;
+
         var normalizedRequest = request with
         {
             CommandId = normalizedCommandId,
@@ -45,25 +57,40 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         };
 
         // Deterministic steps
-        var steps = new List<BuildStep>();
+        var stepsById = new Dictionary<string, BuildStep>(StringComparer.Ordinal);
 
         var spec = _services.GetCommand(normalizedCommandId);
 
-        steps.Add(
+        stepsById["validate-command"] =
             spec is null
                 ? new BuildStep("validate-command", "Fail if the command is unknown.")
-                : new BuildStep("validate-command", $"Validate command '{spec.CommandId}' args.")
-        );
+                : new BuildStep("validate-command", $"Validate command '{spec.CommandId}' args.");
 
-        steps.Add(new BuildStep(
+        stepsById["resolve-command"] = new BuildStep(
             "resolve-command",
             $"Resolve command '{normalizedCommandId}'."
-        ));
+        );
 
-        steps.Add(new BuildStep(
+        stepsById["execute-command"] = new BuildStep(
             "execute-command",
             $"Execute command '{normalizedCommandId}'."
-        ));
+        );
+
+        var unknownGraphSteps = orderedStepIds
+            .Where(stepId => !stepsById.ContainsKey(stepId))
+            .ToArray();
+        if (unknownGraphSteps.Length > 0)
+            throw new InvalidOperationException($"graph references unknown steps: {string.Join(", ", unknownGraphSteps)}");
+
+        var missingGraphSteps = stepsById.Keys
+            .Where(stepId => !orderedStepIds.Contains(stepId, StringComparer.Ordinal))
+            .ToArray();
+        if (missingGraphSteps.Length > 0)
+            throw new InvalidOperationException($"graph missing required steps: {string.Join(", ", missingGraphSteps)}");
+
+        var steps = orderedStepIds
+            .Select(stepId => stepsById[stepId])
+            .ToList();
 
         // Guardrail: steps must not embed execution metadata
         if (steps.Any(s => s.Id.Contains("execute:", StringComparison.OrdinalIgnoreCase)))

@@ -20,6 +20,7 @@ public sealed class DeterministicPlannerTests
             " core.ping ",
             new Dictionary<string, object?>
             {
+                ["plan.graph"] = "graph TD; validate-command --> resolve-command --> execute-command",
                 ["b"] = "2",
                 ["a"] = "1"
             });
@@ -40,7 +41,12 @@ public sealed class DeterministicPlannerTests
         var services = new StubRuntimeServices();
         var policy = new StubDelegationPolicy();
         var planner = new DeterministicBuildPlanner(services, policy);
-        var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var request = new BuildRequest(
+            "core.ping",
+            new Dictionary<string, object?>
+            {
+                ["plan.graph"] = "graph TD; validate-command --> resolve-command --> execute-command"
+            });
 
         var plan = planner.Plan(request);
         var computed = BuildPlanHasher.ComputePlanId(plan.Request, plan.Authority, plan.Steps, plan.Artifacts);
@@ -62,6 +68,50 @@ public sealed class DeterministicPlannerTests
         Assert.DoesNotContain("Shoots.Runtime.Core", referencedAssemblyNames);
         Assert.DoesNotContain("Shoots.Runtime.Loader", referencedAssemblyNames);
         Assert.DoesNotContain("Shoots.Runtime.Sandbox", referencedAssemblyNames);
+    }
+
+    [Fact]
+    public void Planner_orders_steps_from_graph()
+    {
+        var services = new StubRuntimeServices(
+            new RuntimeCommandSpec(
+                "core.ping",
+                "Health check.",
+                Array.Empty<RuntimeArgSpec>()));
+
+        var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
+        var request = new BuildRequest(
+            "core.ping",
+            new Dictionary<string, object?>
+            {
+                ["plan.graph"] = "graph TD; resolve-command --> validate-command --> execute-command"
+            });
+
+        var plan = planner.Plan(request);
+
+        Assert.Equal(
+            new[] { "resolve-command", "validate-command", "execute-command" },
+            plan.Steps.Select(step => step.Id));
+    }
+
+    [Fact]
+    public void Planner_rejects_graph_missing_required_steps()
+    {
+        var services = new StubRuntimeServices(
+            new RuntimeCommandSpec(
+                "core.ping",
+                "Health check.",
+                Array.Empty<RuntimeArgSpec>()));
+
+        var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
+        var request = new BuildRequest(
+            "core.ping",
+            new Dictionary<string, object?>
+            {
+                ["plan.graph"] = "graph TD; validate-command --> resolve-command"
+            });
+
+        Assert.Throws<InvalidOperationException>(() => planner.Plan(request));
     }
 
     private sealed class StubRuntimeServices : IRuntimeServices

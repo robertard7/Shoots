@@ -22,6 +22,7 @@ public sealed class PlannerSerializationTests
             " core.ping ",
             new Dictionary<string, object?>
             {
+                ["plan.graph"] = "graph TD; validate-command --> resolve-command --> execute-command",
                 ["b"] = "2",
                 ["a"] = "1"
             }

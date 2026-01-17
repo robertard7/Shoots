@@ -4,6 +4,7 @@ namespace Shoots.Runtime.Abstractions;
 
 [JsonSourceGenerationOptions(WriteIndented = false)]
 [JsonSerializable(typeof(BuildPlan))]
+[JsonSerializable(typeof(AiBuildStep))]
 internal partial class BuildPlanJsonContext : JsonSerializerContext
 {
 }

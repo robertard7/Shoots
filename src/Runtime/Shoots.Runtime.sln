@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Core", "Shoo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Loader", "Shoots.Runtime.Loader\Shoots.Runtime.Loader.csproj", "{BD60421D-9D67-4214-9546-8B099D5B6E5F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Runner", "Shoots.Runtime.Runner\Shoots.Runtime.Runner.csproj", "{CD085751-D013-421F-8B7C-D33925519B7B}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Sandbox", "Shoots.Runtime.Sandbox\Shoots.Runtime.Sandbox.csproj", "{986B204C-AFBC-44A5-A42A-D628535B85BF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Language", "Shoots.Runtime.Language\Shoots.Runtime.Language.csproj", "{EFDB0B71-7298-4ADB-9115-6DB044DE998C}"
@@ -61,6 +63,18 @@ Global
 		{BD60421D-9D67-4214-9546-8B099D5B6E5F}.Release|x64.Build.0 = Release|Any CPU
 		{BD60421D-9D67-4214-9546-8B099D5B6E5F}.Release|x86.ActiveCfg = Release|Any CPU
 		{BD60421D-9D67-4214-9546-8B099D5B6E5F}.Release|x86.Build.0 = Release|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Debug|x64.Build.0 = Debug|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Debug|x86.Build.0 = Debug|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Release|x64.ActiveCfg = Release|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Release|x64.Build.0 = Release|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Release|x86.ActiveCfg = Release|Any CPU
+		{CD085751-D013-421F-8B7C-D33925519B7B}.Release|x86.Build.0 = Release|Any CPU
 		{986B204C-AFBC-44A5-A42A-D628535B85BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{986B204C-AFBC-44A5-A42A-D628535B85BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{986B204C-AFBC-44A5-A42A-D628535B85BF}.Debug|x64.ActiveCfg = Debug|Any CPU

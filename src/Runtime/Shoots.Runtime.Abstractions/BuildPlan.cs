@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Shoots.Runtime.Abstractions;
 
 // ⚠️ CONTRACT FREEZE
@@ -29,7 +31,27 @@ public sealed record BuildPlan(
 /// </summary>
 /// <param name="Id">Stable step identifier.</param>
 /// <param name="Description">Human-readable step description.</param>
-public sealed record BuildStep(
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+[JsonDerivedType(typeof(AiBuildStep), typeDiscriminator: "ai")]
+public record BuildStep(
     string Id,
     string Description
 );
+
+// ⚠️ CONTRACT FREEZE
+// Any change here requires:
+// 1. New versioned type OR
+// 2. Explicit RFC + test update
+/// <summary>
+/// Deterministic step representing an AI prompt request.
+/// </summary>
+/// <param name="Id">Stable step identifier.</param>
+/// <param name="Description">Human-readable step description.</param>
+/// <param name="Prompt">Deterministic prompt text.</param>
+/// <param name="OutputSchema">Deterministic output schema string (opaque JSON).</param>
+public sealed record AiBuildStep(
+    string Id,
+    string Description,
+    string Prompt,
+    string OutputSchema
+) : BuildStep(Id, Description);

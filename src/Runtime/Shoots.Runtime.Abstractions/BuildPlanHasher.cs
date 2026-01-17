@@ -1,3 +1,4 @@
+using System;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -9,9 +10,10 @@ namespace Shoots.Runtime.Abstractions;
 /// - request.CommandId (normalized)
 /// - BuildContract.Version
 /// - authority.ProviderId, authority.Kind, authority.PolicyId, authority.AllowsDelegation
-/// - request.Args ordered by key (case-insensitive), normalized key/value tokens
-/// - steps ordered as provided (id + description)
+/// - request.Args ordered by key (case-insensitive), normalized key/value tokens (including plan.graph)
+/// - steps ordered as provided (id + description, plus AI prompt/schema when present)
 /// - artifacts ordered as provided (id + description)
+/// Excludes timestamps, environment/machine identifiers, absolute paths, and other non-semantic runtime state.
 /// </summary>
 public static class BuildPlanHasher
 {
@@ -57,7 +59,13 @@ public static class BuildPlanHasher
             sb.Append("|step=")
               .Append(NormalizeToken(step.Id))
               .Append('=')
-              .Append(NormalizeToken(step.Description));
+              .Append(NormalizeTextToken(step.Description));
+
+            if (step is AiBuildStep aiStep)
+            {
+                sb.Append("|ai.prompt=").Append(NormalizeTextToken(aiStep.Prompt));
+                sb.Append("|ai.schema=").Append(NormalizeTextToken(aiStep.OutputSchema));
+            }
         }
 
         foreach (var artifact in artifacts)
@@ -65,7 +73,7 @@ public static class BuildPlanHasher
             sb.Append("|artifact=")
               .Append(NormalizeToken(artifact.Id))
               .Append('=')
-              .Append(NormalizeToken(artifact.Description));
+              .Append(NormalizeTextToken(artifact.Description));
         }
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
@@ -73,4 +81,22 @@ public static class BuildPlanHasher
     }
 
     private static string NormalizeToken(string value) => value.Trim();
+
+    private static string NormalizeTextToken(string value)
+    {
+        var normalized = value.Trim();
+        if (LooksLikeAbsolutePath(normalized))
+            throw new ArgumentException("absolute paths are not allowed in plan text inputs", nameof(value));
+        return normalized;
+    }
+
+    private static bool LooksLikeAbsolutePath(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        return value.StartsWith("/", StringComparison.Ordinal) ||
+               value.StartsWith("\\", StringComparison.Ordinal) ||
+               (value.Length > 1 && value[1] == ':');
+    }
 }
