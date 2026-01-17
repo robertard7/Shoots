@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using System.Text.Json;
 
@@ -5,28 +6,42 @@ namespace Shoots.Runtime.Abstractions;
 
 public static class BuildPlanRenderer
 {
+    // CONTRACT FROZEN
+    // Any change here requires updating golden tests.
+
     public static string RenderText(BuildPlan plan)
     {
-        if (plan is null) throw new ArgumentNullException(nameof(plan));
+        if (plan is null)
+            throw new ArgumentNullException(nameof(plan));
 
-        var builder = new StringBuilder();
-        builder.AppendLine($"plan={plan.PlanId}");
-        builder.AppendLine($"command={plan.Request.CommandId}");
-        builder.AppendLine($"authority.provider={plan.Authority.ProviderId.Value}");
-        builder.AppendLine($"authority.kind={plan.Authority.Kind}");
-        builder.AppendLine($"authority.hash={plan.PlanId}");
-        builder.AppendLine($"delegation.policy={plan.Authority.PolicyId}");
-        builder.AppendLine($"delegation.allowed={plan.Authority.AllowsDelegation}");
+        var builder = new StringBuilder(256);
+
+        builder.Append("plan=").AppendLine(plan.PlanId);
+        builder.Append("command=").AppendLine(plan.Request.CommandId);
+
+        builder.Append("authority.provider=").AppendLine(plan.Authority.ProviderId.Value);
+        builder.Append("authority.kind=").AppendLine(plan.Authority.Kind.ToString());
+        builder.Append("authority.hash=").AppendLine(plan.PlanId);
+
+        builder.Append("delegation.policy=").AppendLine(plan.Authority.PolicyId);
+        builder.Append("delegation.allowed=").AppendLine(plan.Authority.AllowsDelegation.ToString());
+
         builder.AppendLine("steps:");
         foreach (var step in plan.Steps)
         {
-            builder.AppendLine($"- {step.Id}: {step.Description}");
+            builder.Append("- ")
+                   .Append(step.Id)
+                   .Append(": ")
+                   .AppendLine(step.Description);
         }
 
         builder.AppendLine("artifacts:");
         foreach (var artifact in plan.Artifacts)
         {
-            builder.AppendLine($"- {artifact.Id}: {artifact.Description}");
+            builder.Append("- ")
+                   .Append(artifact.Id)
+                   .Append(": ")
+                   .AppendLine(artifact.Description);
         }
 
         return builder.ToString();
@@ -34,14 +49,12 @@ public static class BuildPlanRenderer
 
     public static string RenderJson(BuildPlan plan)
     {
-        if (plan is null) throw new ArgumentNullException(nameof(plan));
+        if (plan is null)
+            throw new ArgumentNullException(nameof(plan));
 
         return JsonSerializer.Serialize(
             plan,
-            new JsonSerializerOptions
-            {
-                WriteIndented = true
-            }
+            BuildPlanJsonContext.Default.BuildPlan
         );
     }
 }
