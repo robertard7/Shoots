@@ -9,7 +9,7 @@
 - No planner logic exists in runtime assemblies.
 
 ## X1 — Contract freeze checkpoint
-- Canonical contracts (`BuildRequest`, `BuildPlan`, `BuildStep`, `BuildArtifact`, `DelegationAuthority`) remain frozen.
+- Canonical contracts (`BuildRequest`, `BuildPlan`, `BuildStep`, `BuildArtifact`, `DelegationAuthority`) remain frozen in `Shoots.Contracts.Core`.
 - Any future changes must be additive and justified.
 
 ## X2 — Hashing rules frozen

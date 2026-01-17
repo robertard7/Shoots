@@ -1,4 +1,4 @@
-namespace Shoots.Runtime.Abstractions;
+namespace Shoots.Contracts.Core;
 
 public static class BuildContract
 {

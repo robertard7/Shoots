@@ -1,3 +1,5 @@
+using Shoots.Contracts.Core;
+
 namespace Shoots.Runtime.Abstractions;
 
 /// <summary>

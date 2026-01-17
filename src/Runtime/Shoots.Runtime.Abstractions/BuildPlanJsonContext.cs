@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Shoots.Contracts.Core;
 
 namespace Shoots.Runtime.Abstractions;
 

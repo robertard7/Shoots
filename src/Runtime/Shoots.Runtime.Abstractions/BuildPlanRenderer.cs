@@ -2,6 +2,7 @@ using System;
 using System.Text;
 using System.Linq;
 using System.Text.Json;
+using Shoots.Contracts.Core;
 
 namespace Shoots.Runtime.Abstractions;
 
