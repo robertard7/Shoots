@@ -15,7 +15,12 @@ public static class ToolAuthorityValidator
         if (registry is null)
             throw new ArgumentNullException(nameof(registry));
         if (plan.Authority is null)
-            throw new ArgumentException("plan authority is required", nameof(plan));
+        {
+            error = new RuntimeError(
+                "tool_authority_missing",
+                "Plan authority is required for tool validation.");
+            return false;
+        }
 
         foreach (var step in plan.Steps)
         {

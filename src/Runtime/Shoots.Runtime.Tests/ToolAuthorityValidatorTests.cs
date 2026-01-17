@@ -61,7 +61,42 @@ public sealed class ToolAuthorityValidatorTests
         Assert.Null(error);
     }
 
-    private static BuildPlan CreatePlan(DelegationAuthority authority, ToolId toolId)
+    [Fact]
+    public void Validation_denies_when_authority_missing()
+    {
+        var toolId = new ToolId("tools.local");
+        var plan = CreatePlan(null, toolId);
+        var registry = new StubToolRegistry();
+
+        var result = ToolAuthorityValidator.TryValidate(plan, registry, out var error);
+
+        Assert.False(result);
+        Assert.NotNull(error);
+        Assert.Equal("tool_authority_missing", error!.Code);
+    }
+
+    [Fact]
+    public void Validation_denies_when_tool_is_missing()
+    {
+        var planAuthority = new DelegationAuthority(
+            ProviderId: new ProviderId("local"),
+            Kind: ProviderKind.Local,
+            PolicyId: "local-only",
+            AllowsDelegation: false
+        );
+
+        var toolId = new ToolId("tools.unknown");
+        var plan = CreatePlan(planAuthority, toolId);
+        var registry = new StubToolRegistry();
+
+        var result = ToolAuthorityValidator.TryValidate(plan, registry, out var error);
+
+        Assert.False(result);
+        Assert.NotNull(error);
+        Assert.Equal("tool_missing", error!.Code);
+    }
+
+    private static BuildPlan CreatePlan(DelegationAuthority? authority, ToolId toolId)
     {
         var request = new BuildRequest("core.tool", new Dictionary<string, object?>());
         var steps = new BuildStep[]

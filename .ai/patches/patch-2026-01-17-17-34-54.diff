@@ -1,0 +1,66 @@
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/ToolAuthorityValidator.cs b/src/Runtime/Shoots.Runtime.Abstractions/ToolAuthorityValidator.cs
+index d90d772..4ee4e3a 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/ToolAuthorityValidator.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/ToolAuthorityValidator.cs
+@@ -15,7 +15,12 @@ public static class ToolAuthorityValidator
+         if (registry is null)
+             throw new ArgumentNullException(nameof(registry));
+         if (plan.Authority is null)
+-            throw new ArgumentException("plan authority is required", nameof(plan));
++        {
++            error = new RuntimeError(
++                "tool_authority_missing",
++                "Plan authority is required for tool validation.");
++            return false;
++        }
+ 
+         foreach (var step in plan.Steps)
+         {
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs b/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
+index 16ef3ff..ace8ae4 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
+@@ -61,7 +61,42 @@ public sealed class ToolAuthorityValidatorTests
+         Assert.Null(error);
+     }
+ 
+-    private static BuildPlan CreatePlan(DelegationAuthority authority, ToolId toolId)
++    [Fact]
++    public void Validation_denies_when_authority_missing()
++    {
++        var toolId = new ToolId("tools.local");
++        var plan = CreatePlan(null, toolId);
++        var registry = new StubToolRegistry();
++
++        var result = ToolAuthorityValidator.TryValidate(plan, registry, out var error);
++
++        Assert.False(result);
++        Assert.NotNull(error);
++        Assert.Equal("tool_authority_missing", error!.Code);
++    }
++
++    [Fact]
++    public void Validation_denies_when_tool_is_missing()
++    {
++        var planAuthority = new DelegationAuthority(
++            ProviderId: new ProviderId("local"),
++            Kind: ProviderKind.Local,
++            PolicyId: "local-only",
++            AllowsDelegation: false
++        );
++
++        var toolId = new ToolId("tools.unknown");
++        var plan = CreatePlan(planAuthority, toolId);
++        var registry = new StubToolRegistry();
++
++        var result = ToolAuthorityValidator.TryValidate(plan, registry, out var error);
++
++        Assert.False(result);
++        Assert.NotNull(error);
++        Assert.Equal("tool_missing", error!.Code);
++    }
++
++    private static BuildPlan CreatePlan(DelegationAuthority? authority, ToolId toolId)
+     {
+         var request = new BuildRequest("core.tool", new Dictionary<string, object?>());
+         var steps = new BuildStep[]
