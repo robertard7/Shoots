@@ -25,11 +25,20 @@ public sealed record ToolOutputSpec(
 );
 
 /// <summary>
+/// Declarative tool authority scope.
+/// </summary>
+public sealed record ToolAuthorityScope(
+    ProviderKind RequiredProviderKind,
+    ProviderCapabilities RequiredCapabilities
+);
+
+/// <summary>
 /// Deterministic tool contract (metadata only).
 /// </summary>
 public sealed record ToolSpec(
     ToolId ToolId,
     string Description,
+    ToolAuthorityScope RequiredAuthority,
     IReadOnlyList<ToolInputSpec> Inputs,
     IReadOnlyList<ToolOutputSpec> Outputs
 );

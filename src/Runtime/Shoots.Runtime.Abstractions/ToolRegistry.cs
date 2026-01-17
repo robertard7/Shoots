@@ -3,19 +3,10 @@ using Shoots.Contracts.Core;
 namespace Shoots.Runtime.Abstractions;
 
 /// <summary>
-/// Declarative tool authority requirements.
-/// </summary>
-public sealed record ToolAuthorityRequirement(
-    ProviderKind RequiredProviderKind,
-    ProviderCapabilities RequiredCapabilities
-);
-
-/// <summary>
 /// Tool registry entry (contracts only).
 /// </summary>
 public sealed record ToolRegistryEntry(
-    ToolSpec Spec,
-    ToolAuthorityRequirement AuthorityRequirement
+    ToolSpec Spec
 );
 
 /// <summary>
