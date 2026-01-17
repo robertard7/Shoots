@@ -1,20 +1,21 @@
 ﻿#nullable enable
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Shoots.Runtime.Abstractions;
-using Shoots.Runtime.Core;
-using Shoots.Runtime.Loader;
 
 namespace Shoots.Builder.Core;
 
 public sealed class BuilderKernel
 {
-    private readonly string _modulesDir;
+    private readonly IRuntimeHost _runtimeHost;
+    private readonly IRuntimeServices _runtimeServices;
+    private readonly IBuildPlanner _planner;
 
-    public BuilderKernel(string modulesDir)
+    public BuilderKernel(IRuntimeHost runtimeHost, IRuntimeServices runtimeServices, IBuildPlanner planner)
     {
-        _modulesDir = modulesDir ?? throw new ArgumentNullException(nameof(modulesDir));
+        _runtimeHost = runtimeHost ?? throw new ArgumentNullException(nameof(runtimeHost));
+        _runtimeServices = runtimeServices ?? throw new ArgumentNullException(nameof(runtimeServices));
+        _planner = planner ?? throw new ArgumentNullException(nameof(planner));
     }
 
 	private static RunState Classify(RuntimeResult result)
@@ -113,17 +114,20 @@ public sealed class BuilderKernel
 		};
 	}
 
-    public BuildRunResult Run(string input)
+    public BuildRunResult Run(BuildRequest request)
     {
-        if (string.IsNullOrWhiteSpace(input))
-            throw new ArgumentException("input is required", nameof(input));
-
-        // --- Command resolution ---
-        var commandId = input.Trim();
+        if (request is null)
+            throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(request.CommandId))
+            throw new ArgumentException("command id is required", nameof(request));
+        if (request.Args is null)
+            throw new ArgumentException("args are required", nameof(request));
 
         // --- Deterministic plan + hash ---
-        var planText = $"COMMAND:\n{commandId}\n";
-        var hash = Sha256Hex(planText);
+        var plan = _planner.Plan(request);
+        var hash = plan.PlanId;
+        var planText = BuildPlanRenderer.RenderText(plan);
+        var planJson = BuildPlanRenderer.RenderJson(plan);
 
         // --- Artifact root (method-scoped, authoritative) ---
         var artifactsRoot = Path.Combine(
@@ -139,34 +143,10 @@ public sealed class BuilderKernel
             planText,
             Encoding.UTF8
         );
-
-        // --- Load runtime modules ---
-        var loader = new DefaultRuntimeLoader();
-
-        IReadOnlyList<IRuntimeModule> modules =
-            Directory.Exists(_modulesDir)
-                ? loader.LoadFromDirectory(_modulesDir)
-                : Array.Empty<IRuntimeModule>();
-
-        Console.WriteLine($"[builder] modulesDir = {_modulesDir}");
-        Console.WriteLine($"[builder] loaded modules = {modules.Count}");
-
-        foreach (var module in modules)
-        {
-            Console.WriteLine($"[builder] module: {module.ModuleId} v{module.ModuleVersion}");
-            foreach (var cmd in module.Describe())
-                Console.WriteLine($"[builder]   command: {cmd.CommandId}");
-        }
-
-        // --- Builder-owned narrator + helper (runtime escape hatch) ---
-        var narrator = new TextRuntimeNarrator(Console.WriteLine);
-        var helper = new DeterministicRuntimeHelper();
-
-        // --- Runtime is authoritative ---
-        var engine = new RuntimeEngine(
-            modules,
-            narrator,
-            helper
+        File.WriteAllText(
+            Path.Combine(artifactsRoot, "plan.json"),
+            planJson,
+            Encoding.UTF8
         );
 
         // --- Runtime context ---
@@ -174,17 +154,17 @@ public sealed class BuilderKernel
             SessionId: hash,
             CorrelationId: Guid.NewGuid().ToString("n"),
             Env: new Dictionary<string, string>(),
-            Services: engine
+            Services: _runtimeServices
         );
 
-        var request = new RuntimeRequest(
-            CommandId: commandId,
-            Args: new Dictionary<string, object?>(),
+        var runtimeRequest = new RuntimeRequest(
+            CommandId: plan.Request.CommandId,
+            Args: new Dictionary<string, object?>(plan.Request.Args),
             Context: context
         );
 
         // --- Execute ---
-        var result = engine.Execute(request);
+        var result = _runtimeHost.Execute(runtimeRequest);
 
         // --- Persist result ---
         var resultPayload = new
@@ -221,25 +201,21 @@ public sealed class BuilderKernel
 			);
 		}
 
-		return new BuildRunResult(
-			hash,
-			artifactsRoot,
-			state,
-			result.Error?.Code
-		);
+        return new BuildRunResult(
+            hash,
+            artifactsRoot,
+            state,
+            plan,
+            result.Error?.Code
+        );
     }
 
-    private static string Sha256Hex(string input)
-    {
-        var bytes = Encoding.UTF8.GetBytes(input);
-        var hash = SHA256.HashData(bytes);
-        return Convert.ToHexString(hash).ToLowerInvariant();
-    }
 }
 
 public sealed record BuildRunResult(
     string Hash,
     string Folder,
     RunState State,
+    BuildPlan Plan,
     string? Reason = null
 );

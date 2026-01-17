@@ -100,6 +100,20 @@ Codex and other agents are not allowed to execute code locally or in containers.
 
 The runner is the single source of truth.
 
+CODEX COMMAND CONTRACT
+----------------------
+
+Codex validation must follow this exact sequence:
+
+    dotnet restore
+    dotnet build Shoots.sln -c Release
+    dotnet test Shoots.sln -c Release
+
+REGRESSION TRIPWIRE
+-------------------
+
+If anything regresses, re-run the contract above as the single health check.
+
 ---
 
 CONTRIBUTIONS
@@ -131,4 +145,3 @@ FINAL NOTE
 Shoots exists to finish systems, not endlessly redesign them.
 
 If something feels "too strict," that is intentional.
-

@@ -8,7 +8,8 @@ namespace Shoots.Runtime.Core;
 
 public sealed class RuntimeEngine :
     IRuntimeServices,
-    IRuntimeAssist
+    IRuntimeAssist,
+    IRuntimeHost
 {
     private readonly Dictionary<string, (IRuntimeModule Module, RuntimeCommandSpec Spec)> _index;
 
@@ -17,6 +18,7 @@ public sealed class RuntimeEngine :
 
     public IRuntimeNarrator Narrator => _narrator;
     public IRuntimeHelper Helper => _helper;
+    public RuntimeVersion Version { get; } = RuntimeVersion.Parse("0.1.0");
 
     public RuntimeEngine(
         IEnumerable<IRuntimeModule> modules,

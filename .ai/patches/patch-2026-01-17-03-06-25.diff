@@ -1,0 +1,410 @@
+diff --git Shoots.sln Shoots.sln
+index 0f7ea6c..b2bc990 100644
+--- /Shoots.sln
++++ /Shoots.sln
+@@ -23,9 +23,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Builder", "Builder", "{1959
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Core", "src\Builder\Shoots.Builder.Core\Shoots.Builder.Core.csproj", "{F7982660-6D23-434A-8403-D022EC24590E}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Cli", "src\Builder\Shoots.Builder.Cli\Shoots.Builder.Cli.csproj", "{7554EE2E-F14C-46FC-800D-1EBE937C813D}"
+-EndProject
+-Global
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Cli", "src\Builder\Shoots.Builder.Cli\Shoots.Builder.Cli.csproj", "{7554EE2E-F14C-46FC-800D-1EBE937C813D}"
++EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Tests", "src\Builder\Shoots.Builder.Tests\Shoots.Builder.Tests.csproj", "{6E86F625-BE6A-4072-AADD-AD65542091C2}"
++EndProject
++Global
+ 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+ 		Debug|Any CPU = Debug|Any CPU
+ 		Release|Any CPU = Release|Any CPU
+@@ -64,19 +66,24 @@ Global
+ 		{F7982660-6D23-434A-8403-D022EC24590E}.Release|Any CPU.Build.0 = Release|Any CPU
+ 		{7554EE2E-F14C-46FC-800D-1EBE937C813D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+ 		{7554EE2E-F14C-46FC-800D-1EBE937C813D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+-		{7554EE2E-F14C-46FC-800D-1EBE937C813D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+-		{7554EE2E-F14C-46FC-800D-1EBE937C813D}.Release|Any CPU.Build.0 = Release|Any CPU
+-	EndGlobalSection
+-	GlobalSection(NestedProjects) = preSolution
+-		{621484DB-F2E4-454F-82C4-A9A9FF05BF48} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
++		{7554EE2E-F14C-46FC-800D-1EBE937C813D}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{7554EE2E-F14C-46FC-800D-1EBE937C813D}.Release|Any CPU.Build.0 = Release|Any CPU
++		{6E86F625-BE6A-4072-AADD-AD65542091C2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{6E86F625-BE6A-4072-AADD-AD65542091C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{6E86F625-BE6A-4072-AADD-AD65542091C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{6E86F625-BE6A-4072-AADD-AD65542091C2}.Release|Any CPU.Build.0 = Release|Any CPU
++	EndGlobalSection
++	GlobalSection(NestedProjects) = preSolution
++		{621484DB-F2E4-454F-82C4-A9A9FF05BF48} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
+ 		{D3F206DE-8617-4990-AB87-EB8F6E088FE2} = {621484DB-F2E4-454F-82C4-A9A9FF05BF48}
+ 		{7785F63F-C691-403E-9C32-075A9C81A529} = {621484DB-F2E4-454F-82C4-A9A9FF05BF48}
+ 		{28DC3E33-7255-449B-BCB7-0A861D713F8C} = {621484DB-F2E4-454F-82C4-A9A9FF05BF48}
+ 		{12375F14-C63F-4275-A9AE-E012CE9E381A} = {621484DB-F2E4-454F-82C4-A9A9FF05BF48}
+ 		{0A33692A-6AA7-4968-B621-028565B8618B} = {621484DB-F2E4-454F-82C4-A9A9FF05BF48}
+ 		{7B033FB0-88A6-435B-931B-D39D972F7BEB} = {621484DB-F2E4-454F-82C4-A9A9FF05BF48}
+-		{195911A4-CEAD-4F50-842F-1A5BFDD1B7BA} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
+-		{F7982660-6D23-434A-8403-D022EC24590E} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
+-		{7554EE2E-F14C-46FC-800D-1EBE937C813D} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
+-	EndGlobalSection
+-EndGlobal
++		{195911A4-CEAD-4F50-842F-1A5BFDD1B7BA} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
++		{F7982660-6D23-434A-8403-D022EC24590E} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
++		{7554EE2E-F14C-46FC-800D-1EBE937C813D} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
++		{6E86F625-BE6A-4072-AADD-AD65542091C2} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
++	EndGlobalSection
++EndGlobal
+diff --git src/Builder/Shoots.Builder.Cli/Program.cs src/Builder/Shoots.Builder.Cli/Program.cs
+index 5a54cfe..18eab19 100644
+--- /src/Builder/Shoots.Builder.Cli/Program.cs
++++ /src/Builder/Shoots.Builder.Cli/Program.cs
+@@ -17,7 +17,7 @@ var modulesDir = Path.Combine(
+     "modules"
+ );
+ 
+-// Builder depends on runtime abstractions only; loader and engine wiring live in the CLI.
++// CLI owns runtime execution wiring: loader + engine construction live only here.
+ var loader = new DefaultRuntimeLoader();
+ IReadOnlyList<IRuntimeModule> modules =
+     Directory.Exists(modulesDir)
+diff --git src/Builder/Shoots.Builder.Core/BuilderKernel.cs src/Builder/Shoots.Builder.Core/BuilderKernel.cs
+index b100f78..9b31d19 100644
+--- /src/Builder/Shoots.Builder.Core/BuilderKernel.cs
++++ /src/Builder/Shoots.Builder.Core/BuilderKernel.cs
+@@ -123,9 +123,6 @@ public sealed class BuilderKernel
+         if (request.Args is null)
+             throw new ArgumentException("args are required", nameof(request));
+ 
+-        // --- Command resolution ---
+-        var commandId = request.CommandId.Trim();
+-
+         // --- Deterministic plan + hash ---
+         var plan = _planner.Plan(request);
+         var hash = plan.PlanId;
+@@ -161,8 +158,8 @@ public sealed class BuilderKernel
+         );
+ 
+         var runtimeRequest = new RuntimeRequest(
+-            CommandId: commandId,
+-            Args: new Dictionary<string, object?>(request.Args),
++            CommandId: plan.Request.CommandId,
++            Args: new Dictionary<string, object?>(plan.Request.Args),
+             Context: context
+         );
+ 
+diff --git src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
+new file mode 100644
+index 0000000..5069803
+--- //dev/null
++++ /src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
+@@ -0,0 +1,50 @@
++using System.Reflection;
++using Shoots.Runtime.Abstractions;
++using Xunit;
++
++namespace Shoots.Builder.Tests;
++
++public sealed class BuilderContractTests
++{
++    [Fact]
++    public void Build_request_can_produce_plan_via_planner()
++    {
++        var request = new BuildRequest(
++            "core.ping",
++            new Dictionary<string, object?> { ["msg"] = "hello" }
++        );
++
++        var planner = new StubPlanner();
++        var plan = planner.Plan(request);
++
++        Assert.Equal("core.ping", plan.Request.CommandId);
++        Assert.NotEmpty(plan.Steps);
++        Assert.NotEmpty(plan.Artifacts);
++    }
++
++    [Fact]
++    public void BuilderCore_must_not_reference_runtime_execution()
++    {
++        var asm = typeof(Shoots.Builder.Core.BuilderKernel).Assembly;
++        var referenced = asm.GetReferencedAssemblies()
++            .Select(a => a.Name ?? string.Empty)
++            .ToArray();
++
++        Assert.DoesNotContain("Shoots.Runtime.Core", referenced);
++        Assert.DoesNotContain("Shoots.Runtime.Loader", referenced);
++        Assert.DoesNotContain("Shoots.Runtime.Sandbox", referenced);
++    }
++
++    private sealed class StubPlanner : IBuildPlanner
++    {
++        public BuildPlan Plan(BuildRequest request)
++        {
++            return new BuildPlan(
++                PlanId: "stub-plan",
++                Request: request,
++                Steps: new[] { new BuildStep("stub-step", "Stub step.") },
++                Artifacts: new[] { new BuildArtifact("stub-artifact", "Stub artifact.") }
++            );
++        }
++    }
++}
+diff --git src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj
+new file mode 100644
+index 0000000..88112b7
+--- //dev/null
++++ /src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj
+@@ -0,0 +1,21 @@
++<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <IsPackable>false</IsPackable>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\Shoots.Builder.Core\Shoots.Builder.Core.csproj" />
++    <ProjectReference Include="..\..\Runtime\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
++    <PackageReference Include="xunit" Version="2.9.2" />
++    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
++  </ItemGroup>
++
++</Project>
+diff --git src/Builder/Shoots.Builder.sln src/Builder/Shoots.Builder.sln
+index 48cfaf7..1ff81e7 100644
+--- /src/Builder/Shoots.Builder.sln
++++ /src/Builder/Shoots.Builder.sln
+@@ -5,9 +5,11 @@ VisualStudioVersion = 17.0.31903.59
+ MinimumVisualStudioVersion = 10.0.40219.1
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Core", "Shoots.Builder.Core\Shoots.Builder.Core.csproj", "{DF3C0042-027C-4206-BB48-1D245EC25CE6}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Cli", "Shoots.Builder.Cli\Shoots.Builder.Cli.csproj", "{06C3351F-5014-453F-9364-1D63829E626A}"
+-EndProject
+-Global
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Cli", "Shoots.Builder.Cli\Shoots.Builder.Cli.csproj", "{06C3351F-5014-453F-9364-1D63829E626A}"
++EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Tests", "Shoots.Builder.Tests\Shoots.Builder.Tests.csproj", "{3D0DDE1E-9135-4792-935F-2A071DA16510}"
++EndProject
++Global
+ 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+ 		Debug|Any CPU = Debug|Any CPU
+ 		Debug|x64 = Debug|x64
+@@ -40,7 +42,19 @@ Global
+ 		{06C3351F-5014-453F-9364-1D63829E626A}.Release|x64.ActiveCfg = Release|Any CPU
+ 		{06C3351F-5014-453F-9364-1D63829E626A}.Release|x64.Build.0 = Release|Any CPU
+ 		{06C3351F-5014-453F-9364-1D63829E626A}.Release|x86.ActiveCfg = Release|Any CPU
+-		{06C3351F-5014-453F-9364-1D63829E626A}.Release|x86.Build.0 = Release|Any CPU
++		{06C3351F-5014-453F-9364-1D63829E626A}.Release|x86.Build.0 = Release|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Debug|x64.ActiveCfg = Debug|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Debug|x64.Build.0 = Debug|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Debug|x86.ActiveCfg = Debug|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Debug|x86.Build.0 = Debug|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Release|Any CPU.Build.0 = Release|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Release|x64.ActiveCfg = Release|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Release|x64.Build.0 = Release|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Release|x86.ActiveCfg = Release|Any CPU
++		{3D0DDE1E-9135-4792-935F-2A071DA16510}.Release|x86.Build.0 = Release|Any CPU
+ 	EndGlobalSection
+ 	GlobalSection(SolutionProperties) = preSolution
+ 		HideSolutionNode = FALSE
+diff --git src/Runtime/Shoots.Runtime.Abstractions/BuildArtifact.cs src/Runtime/Shoots.Runtime.Abstractions/BuildArtifact.cs
+index 6aa0a2f..f3f8c21 100644
+--- /src/Runtime/Shoots.Runtime.Abstractions/BuildArtifact.cs
++++ /src/Runtime/Shoots.Runtime.Abstractions/BuildArtifact.cs
+@@ -3,6 +3,8 @@ namespace Shoots.Runtime.Abstractions;
+ /// <summary>
+ /// Declares an expected artifact produced by a plan.
+ /// </summary>
++/// <param name="Id">Stable artifact identifier.</param>
++/// <param name="Description">Human-readable artifact description.</param>
+ public sealed record BuildArtifact(
+     string Id,
+     string Description
+diff --git src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs
+index 27f8c9c..f2fac24 100644
+--- /src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs
++++ /src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs
+@@ -1,8 +1,12 @@
+ namespace Shoots.Runtime.Abstractions;
+ 
+ /// <summary>
+-/// Deterministic plan produced for a build request.
++/// Deterministic plan derived from a build request.
+ /// </summary>
++/// <param name="PlanId">Derived hash identifier for the plan (deterministic).</param>
++/// <param name="Request">Input request used to derive the plan.</param>
++/// <param name="Steps">Ordered steps derived deterministically from the request.</param>
++/// <param name="Artifacts">Ordered artifacts expected from executing the plan.</param>
+ public sealed record BuildPlan(
+     string PlanId,
+     BuildRequest Request,
+@@ -10,6 +14,11 @@ public sealed record BuildPlan(
+     IReadOnlyList<BuildArtifact> Artifacts
+ );
+ 
++/// <summary>
++/// Deterministic step derived from a build request.
++/// </summary>
++/// <param name="Id">Stable step identifier.</param>
++/// <param name="Description">Human-readable step description.</param>
+ public sealed record BuildStep(
+     string Id,
+     string Description
+diff --git src/Runtime/Shoots.Runtime.Abstractions/BuildRequest.cs src/Runtime/Shoots.Runtime.Abstractions/BuildRequest.cs
+index 21b25b0..a58e8e9 100644
+--- /src/Runtime/Shoots.Runtime.Abstractions/BuildRequest.cs
++++ /src/Runtime/Shoots.Runtime.Abstractions/BuildRequest.cs
+@@ -1,8 +1,10 @@
+ namespace Shoots.Runtime.Abstractions;
+ 
+ /// <summary>
+-/// Canonical build request sent from the builder to the runtime.
++/// Canonical, immutable build request sent from the builder to the runtime.
+ /// </summary>
++/// <param name="CommandId">Input command identifier (caller-provided).</param>
++/// <param name="Args">Input arguments for the command (caller-provided).</param>
+ public sealed record BuildRequest(
+     string CommandId,
+     IReadOnlyDictionary<string, object?> Args
+diff --git src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
+new file mode 100644
+index 0000000..99f40a1
+--- //dev/null
++++ /src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
+@@ -0,0 +1,32 @@
++using System.Security.Cryptography;
++using System.Text;
++using Shoots.Runtime.Abstractions;
++
++namespace Shoots.Runtime.Core;
++
++public static class BuildPlanHasher
++{
++    public static string ComputePlanId(BuildRequest request)
++    {
++        if (request is null)
++            throw new ArgumentNullException(nameof(request));
++        if (request.Args is null)
++            throw new ArgumentException("args are required", nameof(request));
++
++        var sb = new StringBuilder();
++        sb.Append("command=").Append(NormalizeToken(request.CommandId));
++
++        foreach (var kvp in request.Args.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
++        {
++            sb.Append("|arg=")
++              .Append(NormalizeToken(kvp.Key))
++              .Append('=')
++              .Append(NormalizeToken(kvp.Value?.ToString() ?? "null"));
++        }
++
++        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
++        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
++    }
++
++    private static string NormalizeToken(string value) => value.Trim();
++}
+diff --git src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs
+index 2b4da8c..4ab923d 100644
+--- /src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs
++++ /src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs
+@@ -1,5 +1,3 @@
+-using System.Security.Cryptography;
+-using System.Text;
+ using Shoots.Runtime.Abstractions;
+ 
+ namespace Shoots.Runtime.Core;
+@@ -18,49 +16,37 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
+         if (request is null)
+             throw new ArgumentNullException(nameof(request));
+ 
+-        var steps = new List<BuildStep>
+-        {
+-            new("resolve-command", $"Resolve command '{request.CommandId}'."),
+-            new("execute-command", $"Execute command '{request.CommandId}'.")
+-        };
++        var normalizedCommandId = request.CommandId.Trim();
++        var normalizedArgs = new SortedDictionary<string, object?>(
++            request.Args,
++            StringComparer.OrdinalIgnoreCase);
++        var steps = new List<BuildStep>();
+ 
+-        var spec = _services.GetCommand(request.CommandId);
++        var spec = _services.GetCommand(normalizedCommandId);
+         if (spec is null)
+         {
+-            steps.Insert(1, new BuildStep("validate-command", "Fail if the command is unknown."));
++            steps.Add(new BuildStep("validate-command", "Fail if the command is unknown."));
+         }
+         else
+         {
+-            steps.Insert(1, new BuildStep("validate-command", $"Validate command '{spec.CommandId}' args."));
++            steps.Add(new BuildStep("validate-command", $"Validate command '{spec.CommandId}' args."));
+         }
++        steps.Add(new BuildStep("resolve-command", $"Resolve command '{normalizedCommandId}'."));
++        steps.Add(new BuildStep("execute-command", $"Execute command '{normalizedCommandId}'."));
+ 
+-        var artifacts = new List<BuildArtifact>
++        var artifacts = new[]
+         {
+-            new("plan.txt", "Human-readable plan output."),
+-            new("plan.json", "Machine-readable plan output."),
+-            new("result.json", "Runtime execution result."),
+-            new("resolution.json", "Failure classification output.")
++            new BuildArtifact("plan.txt", "Human-readable plan output."),
++            new BuildArtifact("plan.json", "Machine-readable plan output."),
++            new BuildArtifact("result.json", "Runtime execution result."),
++            new BuildArtifact("resolution.json", "Failure classification output.")
+         };
+ 
+         return new BuildPlan(
+-            PlanId: ComputePlanId(request),
+-            Request: request,
++            PlanId: BuildPlanHasher.ComputePlanId(request),
++            Request: request with { CommandId = normalizedCommandId, Args = normalizedArgs },
+             Steps: steps,
+             Artifacts: artifacts
+         );
+     }
+-
+-    private static string ComputePlanId(BuildRequest request)
+-    {
+-        var sb = new StringBuilder();
+-        sb.Append("command=").Append(request.CommandId);
+-
+-        foreach (var kvp in request.Args.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+-        {
+-            sb.Append("|arg=").Append(kvp.Key).Append('=').Append(kvp.Value?.ToString() ?? "null");
+-        }
+-
+-        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+-        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+-    }
+ }
+diff --git src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs
+index f73b739..8b6eb7b 100644
+--- /src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs
++++ /src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs
+@@ -19,7 +19,7 @@ public sealed class PlannerSerializationTests
+ 
+         var planner = new DeterministicBuildPlanner(services);
+         var request = new BuildRequest(
+-            "core.ping",
++            " core.ping ",
+             new Dictionary<string, object?>
+             {
+                 ["b"] = "2",
+@@ -38,6 +38,7 @@ public sealed class PlannerSerializationTests
+         Assert.Equal(planText, BuildPlanRenderer.RenderText(roundTrip));
+         Assert.Equal(plan.Steps.Select(step => step.Id), roundTrip.Steps.Select(step => step.Id));
+         Assert.Equal(plan.Artifacts.Select(artifact => artifact.Id), roundTrip.Artifacts.Select(artifact => artifact.Id));
++        Assert.Equal("core.ping", roundTrip.Request.CommandId);
+ 
+         var secondPlan = planner.Plan(request);
+         Assert.Equal(plan.PlanId, secondPlan.PlanId);
