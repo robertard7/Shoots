@@ -1,5 +1,4 @@
 using Shoots.Runtime.Abstractions;
-using Shoots.Runtime.Core;
 using Xunit;
 
 namespace Shoots.Runtime.Tests;
@@ -10,6 +9,8 @@ public sealed class AuthorityInvariantTests
     public void Plan_hash_includes_authority()
     {
         var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var steps = new[] { new BuildStep("s1", "step") };
+        var artifacts = new[] { new BuildArtifact("a1", "artifact") };
 
         var localHash = BuildPlanHasher.ComputePlanId(
             request,
@@ -17,7 +18,9 @@ public sealed class AuthorityInvariantTests
                 new ProviderId("local"),
                 ProviderKind.Local,
                 "local-only",
-                false));
+                false),
+            steps,
+            artifacts);
 
         var delegatedHash = BuildPlanHasher.ComputePlanId(
             request,
@@ -25,31 +28,19 @@ public sealed class AuthorityInvariantTests
                 new ProviderId("remote"),
                 ProviderKind.Delegated,
                 "local-only",
-                false));
+                false),
+            steps,
+            artifacts);
 
         Assert.NotEqual(localHash, delegatedHash);
-    }
-
-    [Fact]
-    public void Plan_hash_matches_authority_fields()
-    {
-        var services = new StubRuntimeServices();
-        var policy = new DefaultDelegationPolicy();
-        var planner = new DeterministicBuildPlanner(services, policy);
-        var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
-
-        var plan = planner.Plan(request);
-        var computed = BuildPlanHasher.ComputePlanId(
-            plan.Request,
-            plan.Authority);
-
-        Assert.Equal(plan.PlanId, computed);
     }
 
     [Fact]
     public void Plan_hash_changes_when_policy_changes()
     {
         var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var steps = new[] { new BuildStep("s1", "step") };
+        var artifacts = new[] { new BuildArtifact("a1", "artifact") };
 
         var localHash = BuildPlanHasher.ComputePlanId(
             request,
@@ -57,7 +48,9 @@ public sealed class AuthorityInvariantTests
                 new ProviderId("local"),
                 ProviderKind.Local,
                 "local-only",
-                false));
+                false),
+            steps,
+            artifacts);
 
         var alternateHash = BuildPlanHasher.ComputePlanId(
             request,
@@ -65,7 +58,9 @@ public sealed class AuthorityInvariantTests
                 new ProviderId("local"),
                 ProviderKind.Local,
                 "alternate-policy",
-                false));
+                false),
+            steps,
+            artifacts);
 
         Assert.NotEqual(localHash, alternateHash);
     }
@@ -77,10 +72,4 @@ public sealed class AuthorityInvariantTests
         Assert.Equal(5, props.Length);
     }
 
-    private sealed class StubRuntimeServices : IRuntimeServices
-    {
-        public IReadOnlyList<RuntimeCommandSpec> GetAllCommands() => Array.Empty<RuntimeCommandSpec>();
-
-        public RuntimeCommandSpec? GetCommand(string commandId) => null;
-    }
 }

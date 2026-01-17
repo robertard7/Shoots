@@ -150,10 +150,18 @@ public sealed class BuilderKernel
         );
 
         // --- Runtime context ---
+        var env = new Dictionary<string, string>
+        {
+            ["authority.provider"] = plan.Authority.ProviderId.Value,
+            ["authority.kind"] = plan.Authority.Kind.ToString(),
+            ["authority.policy"] = plan.Authority.PolicyId,
+            ["authority.allows_delegation"] = plan.Authority.AllowsDelegation.ToString()
+        };
+
         var context = new RuntimeContext(
             SessionId: hash,
             CorrelationId: Guid.NewGuid().ToString("n"),
-            Env: new Dictionary<string, string>(),
+            Env: env,
             Services: _runtimeServices
         );
 

@@ -48,6 +48,13 @@ public sealed class RuntimeEngine :
         if (request is null)
             return RuntimeResult.Fail(RuntimeError.Internal("Null request"));
 
+        var authorityError = ValidateAuthority(request.Context);
+        if (authorityError is not null)
+        {
+            _narrator.OnError(authorityError);
+            return RuntimeResult.Fail(authorityError);
+        }
+
         if (!_index.TryGetValue(request.CommandId, out var hit))
         {
             var err = RuntimeError.UnknownCommand(request.CommandId);
@@ -100,5 +107,42 @@ public sealed class RuntimeEngine :
         return _index.TryGetValue(commandId, out var hit)
             ? hit.Spec
             : null;
+    }
+
+    private static RuntimeError? ValidateAuthority(RuntimeContext context)
+    {
+        if (context.Env is null)
+            return null;
+
+        if (!context.Env.TryGetValue("authority.kind", out var kindValue))
+            return null;
+
+        if (!Enum.TryParse<ProviderKind>(kindValue, true, out var kind))
+        {
+            return RuntimeError.InvalidArguments(
+                "Invalid authority kind",
+                kindValue);
+        }
+
+        if (!context.Env.TryGetValue("authority.allows_delegation", out var allowsValue) ||
+            !bool.TryParse(allowsValue, out var allowsDelegation))
+        {
+            return RuntimeError.InvalidArguments(
+                "Invalid authority delegation flag",
+                allowsValue);
+        }
+
+        if (kind == ProviderKind.Delegated && !allowsDelegation)
+        {
+            return RuntimeError.InvalidArguments(
+                "Delegation authority rejected",
+                new
+                {
+                    kind = kind.ToString(),
+                    allowsDelegation
+                });
+        }
+
+        return null;
     }
 }
