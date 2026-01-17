@@ -19,7 +19,7 @@ public sealed class PlannerSerializationTests
 
         var planner = new DeterministicBuildPlanner(services);
         var request = new BuildRequest(
-            "core.ping",
+            " core.ping ",
             new Dictionary<string, object?>
             {
                 ["b"] = "2",
@@ -38,6 +38,7 @@ public sealed class PlannerSerializationTests
         Assert.Equal(planText, BuildPlanRenderer.RenderText(roundTrip));
         Assert.Equal(plan.Steps.Select(step => step.Id), roundTrip.Steps.Select(step => step.Id));
         Assert.Equal(plan.Artifacts.Select(artifact => artifact.Id), roundTrip.Artifacts.Select(artifact => artifact.Id));
+        Assert.Equal("core.ping", roundTrip.Request.CommandId);
 
         var secondPlan = planner.Plan(request);
         Assert.Equal(plan.PlanId, secondPlan.PlanId);

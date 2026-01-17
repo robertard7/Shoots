@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Runtime.Core;
@@ -18,49 +16,37 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         if (request is null)
             throw new ArgumentNullException(nameof(request));
 
-        var steps = new List<BuildStep>
-        {
-            new("resolve-command", $"Resolve command '{request.CommandId}'."),
-            new("execute-command", $"Execute command '{request.CommandId}'.")
-        };
+        var normalizedCommandId = request.CommandId.Trim();
+        var normalizedArgs = new SortedDictionary<string, object?>(
+            request.Args,
+            StringComparer.OrdinalIgnoreCase);
+        var steps = new List<BuildStep>();
 
-        var spec = _services.GetCommand(request.CommandId);
+        var spec = _services.GetCommand(normalizedCommandId);
         if (spec is null)
         {
-            steps.Insert(1, new BuildStep("validate-command", "Fail if the command is unknown."));
+            steps.Add(new BuildStep("validate-command", "Fail if the command is unknown."));
         }
         else
         {
-            steps.Insert(1, new BuildStep("validate-command", $"Validate command '{spec.CommandId}' args."));
+            steps.Add(new BuildStep("validate-command", $"Validate command '{spec.CommandId}' args."));
         }
+        steps.Add(new BuildStep("resolve-command", $"Resolve command '{normalizedCommandId}'."));
+        steps.Add(new BuildStep("execute-command", $"Execute command '{normalizedCommandId}'."));
 
-        var artifacts = new List<BuildArtifact>
+        var artifacts = new[]
         {
-            new("plan.txt", "Human-readable plan output."),
-            new("plan.json", "Machine-readable plan output."),
-            new("result.json", "Runtime execution result."),
-            new("resolution.json", "Failure classification output.")
+            new BuildArtifact("plan.txt", "Human-readable plan output."),
+            new BuildArtifact("plan.json", "Machine-readable plan output."),
+            new BuildArtifact("result.json", "Runtime execution result."),
+            new BuildArtifact("resolution.json", "Failure classification output.")
         };
 
         return new BuildPlan(
-            PlanId: ComputePlanId(request),
-            Request: request,
+            PlanId: BuildPlanHasher.ComputePlanId(request),
+            Request: request with { CommandId = normalizedCommandId, Args = normalizedArgs },
             Steps: steps,
             Artifacts: artifacts
         );
-    }
-
-    private static string ComputePlanId(BuildRequest request)
-    {
-        var sb = new StringBuilder();
-        sb.Append("command=").Append(request.CommandId);
-
-        foreach (var kvp in request.Args.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
-        {
-            sb.Append("|arg=").Append(kvp.Key).Append('=').Append(kvp.Value?.ToString() ?? "null");
-        }
-
-        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     }
 }

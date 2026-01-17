@@ -123,9 +123,6 @@ public sealed class BuilderKernel
         if (request.Args is null)
             throw new ArgumentException("args are required", nameof(request));
 
-        // --- Command resolution ---
-        var commandId = request.CommandId.Trim();
-
         // --- Deterministic plan + hash ---
         var plan = _planner.Plan(request);
         var hash = plan.PlanId;
@@ -161,8 +158,8 @@ public sealed class BuilderKernel
         );
 
         var runtimeRequest = new RuntimeRequest(
-            CommandId: commandId,
-            Args: new Dictionary<string, object?>(request.Args),
+            CommandId: plan.Request.CommandId,
+            Args: new Dictionary<string, object?>(plan.Request.Args),
             Context: context
         );
 

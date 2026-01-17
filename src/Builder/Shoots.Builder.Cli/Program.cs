@@ -17,7 +17,7 @@ var modulesDir = Path.Combine(
     "modules"
 );
 
-// Builder depends on runtime abstractions only; loader and engine wiring live in the CLI.
+// CLI owns runtime execution wiring: loader + engine construction live only here.
 var loader = new DefaultRuntimeLoader();
 IReadOnlyList<IRuntimeModule> modules =
     Directory.Exists(modulesDir)
