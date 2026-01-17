@@ -47,6 +47,23 @@ public sealed class BuilderContractTests
     }
 
     [Fact]
+    public void BuilderCli_must_not_reference_runtime_execution_projects()
+    {
+        var assembly = Assembly.Load("Shoots.Builder.Cli");
+
+        var directReferences = CollectDirectReferencedAssemblyNames(assembly);
+        var transitiveReferences = CollectTransitiveReferencedAssemblyNames(assembly);
+
+        Assert.DoesNotContain("Shoots.Runtime.Core", directReferences);
+        Assert.DoesNotContain("Shoots.Runtime.Loader", directReferences);
+        Assert.DoesNotContain("Shoots.Runtime.Sandbox", directReferences);
+
+        Assert.DoesNotContain("Shoots.Runtime.Core", transitiveReferences);
+        Assert.DoesNotContain("Shoots.Runtime.Loader", transitiveReferences);
+        Assert.DoesNotContain("Shoots.Runtime.Sandbox", transitiveReferences);
+    }
+
+    [Fact]
     public void BuilderCore_cannot_accept_provider_authority_in_constructors()
     {
         var kernelType = typeof(Shoots.Builder.Core.BuilderKernel);

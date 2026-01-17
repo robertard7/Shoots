@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shoots.Builder.Core\Shoots.Builder.Core.csproj" />
+    <ProjectReference Include="..\Shoots.Builder.Cli\Shoots.Builder.Cli.csproj" />
     <ProjectReference Include="..\..\Runtime\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
   </ItemGroup>
 

@@ -114,7 +114,7 @@ public sealed class BuilderKernel
 		};
 	}
 
-    public BuildRunResult Run(BuildRequest request)
+    public BuildRunResult Run(BuildRequest request, string artifactsRoot)
     {
         if (request is null)
             throw new ArgumentNullException(nameof(request));
@@ -122,6 +122,8 @@ public sealed class BuilderKernel
             throw new ArgumentException("command id is required", nameof(request));
         if (request.Args is null)
             throw new ArgumentException("args are required", nameof(request));
+        if (string.IsNullOrWhiteSpace(artifactsRoot))
+            throw new ArgumentException("artifacts root is required", nameof(artifactsRoot));
 
         // --- Deterministic plan + hash ---
         var plan = _planner.Plan(request);
@@ -130,12 +132,6 @@ public sealed class BuilderKernel
         var planJson = BuildPlanRenderer.RenderJson(plan);
 
         // --- Artifact root (method-scoped, authoritative) ---
-        var artifactsRoot = Path.Combine(
-            Environment.CurrentDirectory,
-            "artifacts",
-            hash
-        );
-
         Directory.CreateDirectory(artifactsRoot);
 
         File.WriteAllText(

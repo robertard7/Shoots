@@ -1,75 +1,122 @@
-﻿using Shoots.Builder.Core;
+using System.Text;
+using Shoots.Builder.Core;
 using Shoots.Runtime.Abstractions;
-using Shoots.Runtime.Core;
-using Shoots.Runtime.Loader;
 
 if (args.Length == 0)
 {
-    Console.Error.WriteLine("usage: shoots <command>");
+    Console.Error.WriteLine("usage: shoots <command> --graph <mermaid> [--out <path>]");
     return 1;
 }
 
-var input = string.Join(" ", args);
+string? command = null;
+string? graph = null;
+string? outputPath = null;
+var extraArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
 
-// Modules directory is always relative to execution root
-var modulesDir = Path.Combine(
-    Environment.CurrentDirectory,
-    "modules"
-);
-
-// CLI owns runtime execution wiring: loader + engine construction live only here.
-var loader = new DefaultRuntimeLoader();
-IReadOnlyList<IRuntimeModule> modules =
-    Directory.Exists(modulesDir)
-        ? loader.LoadFromDirectory(modulesDir)
-        : Array.Empty<IRuntimeModule>();
-
-Console.WriteLine($"[builder] modulesDir = {modulesDir}");
-Console.WriteLine($"[builder] loaded modules = {modules.Count}");
-
-foreach (var module in modules)
+for (var i = 0; i < args.Length; i++)
 {
-    Console.WriteLine($"[builder] module: {module.ModuleId} v{module.ModuleVersion}");
-    foreach (var cmd in module.Describe())
-        Console.WriteLine($"[builder]   command: {cmd.CommandId}");
+    var arg = args[i];
+    if (string.Equals(arg, "--graph", StringComparison.OrdinalIgnoreCase))
+    {
+        if (i + 1 >= args.Length)
+        {
+            Console.Error.WriteLine("missing value for --graph");
+            return 1;
+        }
+
+        graph = args[++i];
+        continue;
+    }
+
+    if (string.Equals(arg, "--out", StringComparison.OrdinalIgnoreCase))
+    {
+        if (i + 1 >= args.Length)
+        {
+            Console.Error.WriteLine("missing value for --out");
+            return 1;
+        }
+
+        outputPath = args[++i];
+        continue;
+    }
+
+    if (command is null)
+    {
+        command = arg;
+        continue;
+    }
+
+    var parts = arg.Split('=', 2);
+    if (parts.Length == 2)
+    {
+        extraArgs[parts[0]] = parts[1];
+        continue;
+    }
+
+    Console.Error.WriteLine($"unknown argument: {arg}");
+    return 1;
 }
 
-var narrator = new TextRuntimeNarrator(Console.WriteLine);
-var helper = new DeterministicRuntimeHelper();
-var engine = new RuntimeEngine(modules, narrator, helper);
+if (string.IsNullOrWhiteSpace(command))
+{
+    Console.Error.WriteLine("command is required");
+    return 1;
+}
+
+if (string.IsNullOrWhiteSpace(graph))
+{
+    Console.Error.WriteLine("--graph is required");
+    return 1;
+}
+
+extraArgs["plan.graph"] = graph;
 
 var buildRequest = new BuildRequest(
-    CommandId: input,
-    Args: new Dictionary<string, object?>
-    {
-        ["plan.graph"] = "graph TD; validate-command --> resolve-command --> execute-command"
-    }
+    CommandId: command,
+    Args: extraArgs
 );
-var policy = new DefaultDelegationPolicy();
-var planner = new DeterministicBuildPlanner(engine, policy);
-var kernel = new BuilderKernel(engine, engine, planner);
 
-// Execute
-var result = kernel.Run(buildRequest);
+var planner = new DeterministicBuildPlanner(
+    new CliRuntimeServices(),
+    new CliDelegationPolicy());
 
-Console.WriteLine("[plan:text]");
-Console.WriteLine(BuildPlanRenderer.RenderText(result.Plan));
-Console.WriteLine("[plan:json]");
-Console.WriteLine(BuildPlanRenderer.RenderJson(result.Plan));
+var plan = planner.Plan(buildRequest);
+var json = BuildPlanRenderer.RenderJson(plan);
 
-// Emit authoritative result
-Console.WriteLine($"state={result.State}");
-Console.WriteLine($"hash={result.Hash}");
-Console.WriteLine($"folder={result.Folder}");
-
-if (!string.IsNullOrEmpty(result.Reason))
-    Console.WriteLine($"reason={result.Reason}");
-
-// Law #2: exit code reflects final state
-return result.State switch
+if (!string.IsNullOrWhiteSpace(outputPath))
 {
-    RunState.Success => 0,
-    RunState.Blocked => 2,
-    RunState.Invalid => 1,
-    _ => 1
-};
+    File.WriteAllText(outputPath, json, Encoding.UTF8);
+}
+else
+{
+    Console.WriteLine(json);
+}
+
+return 0;
+
+internal sealed class CliRuntimeServices : IRuntimeServices
+{
+    public IReadOnlyList<RuntimeCommandSpec> GetAllCommands() => Array.Empty<RuntimeCommandSpec>();
+
+    public RuntimeCommandSpec? GetCommand(string commandId) => null;
+}
+
+internal sealed class CliDelegationPolicy : IDelegationPolicy
+{
+    public string PolicyId => "cli-local";
+
+    public DelegationDecision Decide(BuildRequest request, BuildPlan plan)
+    {
+        _ = request ?? throw new ArgumentNullException(nameof(request));
+        _ = plan ?? throw new ArgumentNullException(nameof(plan));
+
+        return new DelegationDecision(
+            new DelegationAuthority(
+                ProviderId: new ProviderId("local"),
+                Kind: ProviderKind.Local,
+                PolicyId: PolicyId,
+                AllowsDelegation: false
+            )
+        );
+    }
+}

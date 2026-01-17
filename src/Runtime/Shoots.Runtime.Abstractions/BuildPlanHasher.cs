@@ -1,4 +1,4 @@
-using System.IO;
+using System;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -59,12 +59,12 @@ public static class BuildPlanHasher
             sb.Append("|step=")
               .Append(NormalizeToken(step.Id))
               .Append('=')
-              .Append(NormalizeToken(step.Description));
+              .Append(NormalizeTextToken(step.Description));
 
             if (step is AiBuildStep aiStep)
             {
-                sb.Append("|ai.prompt=").Append(NormalizeToken(aiStep.Prompt));
-                sb.Append("|ai.schema=").Append(NormalizeToken(aiStep.OutputSchema));
+                sb.Append("|ai.prompt=").Append(NormalizeTextToken(aiStep.Prompt));
+                sb.Append("|ai.schema=").Append(NormalizeTextToken(aiStep.OutputSchema));
             }
         }
 
@@ -73,26 +73,30 @@ public static class BuildPlanHasher
             sb.Append("|artifact=")
               .Append(NormalizeToken(artifact.Id))
               .Append('=')
-              .Append(NormalizeToken(artifact.Description));
+              .Append(NormalizeTextToken(artifact.Description));
         }
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     }
 
-    private static string NormalizeToken(string value)
+    private static string NormalizeToken(string value) => value.Trim();
+
+    private static string NormalizeTextToken(string value)
     {
         var normalized = value.Trim();
-        if (ContainsAbsolutePath(normalized))
-            throw new ArgumentException("absolute paths are not allowed in plan hash inputs", nameof(value));
+        if (LooksLikeAbsolutePath(normalized))
+            throw new ArgumentException("absolute paths are not allowed in plan text inputs", nameof(value));
         return normalized;
     }
 
-    private static bool ContainsAbsolutePath(string value)
+    private static bool LooksLikeAbsolutePath(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return false;
 
-        return Path.IsPathRooted(value);
+        return value.StartsWith("/", StringComparison.Ordinal) ||
+               value.StartsWith("\\", StringComparison.Ordinal) ||
+               (value.Length > 1 && value[1] == ':');
     }
 }
