@@ -10,7 +10,7 @@ namespace Shoots.Runtime.Abstractions;
 /// - BuildContract.Version
 /// - authority.ProviderId, authority.Kind, authority.PolicyId, authority.AllowsDelegation
 /// - request.Args ordered by key (case-insensitive), normalized key/value tokens
-/// - steps ordered as provided (id + description)
+/// - steps ordered as provided (id + description, plus AI prompt/schema when present)
 /// - artifacts ordered as provided (id + description)
 /// Excludes timestamps, environment/machine identifiers, absolute paths, and other non-semantic runtime state.
 /// </summary>
@@ -59,6 +59,12 @@ public static class BuildPlanHasher
               .Append(NormalizeToken(step.Id))
               .Append('=')
               .Append(NormalizeToken(step.Description));
+
+            if (step is AiBuildStep aiStep)
+            {
+                sb.Append("|ai.prompt=").Append(NormalizeToken(aiStep.Prompt));
+                sb.Append("|ai.schema=").Append(NormalizeToken(aiStep.OutputSchema));
+            }
         }
 
         foreach (var artifact in artifacts)

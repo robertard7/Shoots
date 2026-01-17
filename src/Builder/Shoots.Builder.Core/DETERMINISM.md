@@ -26,6 +26,7 @@ The plan hash must include only semantic inputs, in stable order:
 - `DelegationAuthority` fields (provider id, kind, policy id, allows delegation)
 - `BuildRequest.Args` ordered by key (case-insensitive), normalized key/value tokens
 - `BuildStep` list (id + description) in order
+- `AiBuildStep` prompt + output schema when present
 - `BuildArtifact` list (id + description) in order
 
 The plan hash must exclude non-semantic runtime data such as timestamps, machine/user identifiers,

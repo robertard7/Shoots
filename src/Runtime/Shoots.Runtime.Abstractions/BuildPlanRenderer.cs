@@ -33,6 +33,12 @@ public static class BuildPlanRenderer
                    .Append(step.Id)
                    .Append(": ")
                    .AppendLine(step.Description);
+
+            if (step is AiBuildStep aiStep)
+            {
+                builder.Append("  prompt=").AppendLine(aiStep.Prompt);
+                builder.Append("  schema=").AppendLine(aiStep.OutputSchema);
+            }
         }
 
         builder.AppendLine("artifacts:");
