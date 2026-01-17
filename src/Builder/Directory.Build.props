@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <!-- Law #1 enforcement -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors>$(WarningsAsErrors)</WarningsAsErrors>
+
+    <!-- Required so IDE analyzers (IDE0005 etc) are enforced at build time -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Analyzer + style enforcement -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+
+    <!-- Structural honesty -->
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shoots.Runtime\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Shoots.Runtime\Shoots.Runtime.Core\Shoots.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\Shoots.Runtime\Shoots.Runtime.Loader\Shoots.Runtime.Loader.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

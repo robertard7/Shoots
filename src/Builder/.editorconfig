@@ -1,0 +1,38 @@
+root = true
+
+# Apply to all C# files
+[*.cs]
+dotnet_style_qualification_for_field = true:silent
+dotnet_style_qualification_for_property = true:silent
+dotnet_style_qualification_for_method = true:silent
+dotnet_style_qualification_for_event = true:silent
+
+# --------------------------
+# LAW #1: Dead code is illegal
+# --------------------------
+
+# Unused private members (classic “stub left behind”)
+dotnet_diagnostic.IDE0051.severity = error
+
+# Unused parameters (forces refactoring of downstream signatures)
+dotnet_diagnostic.IDE0060.severity = error
+
+# Unnecessary assignment (signals dead paths / refactor leftovers)
+dotnet_diagnostic.IDE0059.severity = error
+
+# Remove unnecessary usings (keeps surface honest)
+dotnet_diagnostic.IDE0005.severity = error
+
+# Unreachable code (dead paths)
+dotnet_diagnostic.CS0162.severity = error
+
+# Variable declared but never used
+dotnet_diagnostic.CS0168.severity = error
+
+# Assigned but value never used
+dotnet_diagnostic.CS0219.severity = error
+
+# ---------------------------------------
+# Disable XML doc noise (NOT structural)
+# ---------------------------------------
+dotnet_diagnostic.CS1591.severity = none

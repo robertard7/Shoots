@@ -1,0 +1,19 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build output
+bin/
+obj/
+
+# OS junk
+Thumbs.db
+.DS_Store
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# NuGet
+packages/
