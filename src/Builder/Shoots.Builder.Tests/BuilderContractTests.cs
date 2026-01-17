@@ -34,11 +34,16 @@ public sealed class BuilderContractTests
     {
         var assembly = typeof(Shoots.Builder.Core.BuilderKernel).Assembly;
 
-        var referencedAssemblyNames = CollectReferencedAssemblyNames(assembly);
+        var directReferences = CollectDirectReferencedAssemblyNames(assembly);
+        var transitiveReferences = CollectTransitiveReferencedAssemblyNames(assembly);
 
-        Assert.DoesNotContain("Shoots.Runtime.Core", referencedAssemblyNames);
-        Assert.DoesNotContain("Shoots.Runtime.Loader", referencedAssemblyNames);
-        Assert.DoesNotContain("Shoots.Runtime.Sandbox", referencedAssemblyNames);
+        Assert.DoesNotContain("Shoots.Runtime.Core", directReferences);
+        Assert.DoesNotContain("Shoots.Runtime.Loader", directReferences);
+        Assert.DoesNotContain("Shoots.Runtime.Sandbox", directReferences);
+
+        Assert.DoesNotContain("Shoots.Runtime.Core", transitiveReferences);
+        Assert.DoesNotContain("Shoots.Runtime.Loader", transitiveReferences);
+        Assert.DoesNotContain("Shoots.Runtime.Sandbox", transitiveReferences);
     }
 
     [Fact]
@@ -57,7 +62,16 @@ public sealed class BuilderContractTests
         Assert.DoesNotContain(typeof(DelegationAuthority), parameterTypes);
     }
 
-    private static string[] CollectReferencedAssemblyNames(Assembly rootAssembly)
+    private static string[] CollectDirectReferencedAssemblyNames(Assembly rootAssembly)
+    {
+        return rootAssembly
+            .GetReferencedAssemblies()
+            .Select(reference => reference.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToArray()!;
+    }
+
+    private static string[] CollectTransitiveReferencedAssemblyNames(Assembly rootAssembly)
     {
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var queue = new Queue<Assembly>();

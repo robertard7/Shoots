@@ -27,3 +27,6 @@ The plan hash must include only semantic inputs, in stable order:
 - `BuildRequest.Args` ordered by key (case-insensitive), normalized key/value tokens
 - `BuildStep` list (id + description) in order
 - `BuildArtifact` list (id + description) in order
+
+The plan hash must exclude non-semantic runtime data such as timestamps, machine/user identifiers,
+environment values, and absolute paths.

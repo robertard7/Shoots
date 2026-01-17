@@ -12,6 +12,7 @@ namespace Shoots.Runtime.Abstractions;
 /// - request.Args ordered by key (case-insensitive), normalized key/value tokens
 /// - steps ordered as provided (id + description)
 /// - artifacts ordered as provided (id + description)
+/// Excludes timestamps, environment/machine identifiers, absolute paths, and other non-semantic runtime state.
 /// </summary>
 public static class BuildPlanHasher
 {
