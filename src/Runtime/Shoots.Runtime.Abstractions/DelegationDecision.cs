@@ -4,9 +4,7 @@ namespace Shoots.Runtime.Abstractions;
 /// Deterministic delegation decision derived from a request and plan.
 /// </summary>
 public sealed record DelegationDecision(
-    ProviderId AuthorityProviderId,
-    ProviderKind AuthorityKind,
-    bool AllowsDelegation
+    DelegationAuthority Authority
 );
 
 /// <summary>

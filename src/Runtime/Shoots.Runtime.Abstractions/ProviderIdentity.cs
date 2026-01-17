@@ -26,3 +26,13 @@ public enum ProviderCapabilities
     Execute = 2,
     Artifacts = 4
 }
+
+/// <summary>
+/// Immutable authority assigned to a plan at planning time.
+/// </summary>
+public sealed record DelegationAuthority(
+    ProviderId ProviderId,
+    ProviderKind Kind,
+    string PolicyId,
+    bool AllowsDelegation
+);

@@ -1,5 +1,9 @@
 namespace Shoots.Runtime.Abstractions;
 
+// ⚠️ CONTRACT FREEZE
+// Any change here requires:
+// 1. New versioned type OR
+// 2. Explicit RFC + test update
 /// <summary>
 /// Canonical, immutable build request sent from the builder to the runtime.
 /// </summary>

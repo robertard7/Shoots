@@ -12,11 +12,11 @@ public static class BuildPlanRenderer
         var builder = new StringBuilder();
         builder.AppendLine($"plan={plan.PlanId}");
         builder.AppendLine($"command={plan.Request.CommandId}");
-        builder.AppendLine($"authority.provider={plan.AuthorityProviderId.Value}");
-        builder.AppendLine($"authority.kind={plan.AuthorityKind}");
+        builder.AppendLine($"authority.provider={plan.Authority.ProviderId.Value}");
+        builder.AppendLine($"authority.kind={plan.Authority.Kind}");
         builder.AppendLine($"authority.hash={plan.PlanId}");
-        builder.AppendLine($"delegation.policy={plan.DelegationPolicyId}");
-        builder.AppendLine($"delegation.allowed={plan.AllowsDelegation}");
+        builder.AppendLine($"delegation.policy={plan.Authority.PolicyId}");
+        builder.AppendLine($"delegation.allowed={plan.Authority.AllowsDelegation}");
         builder.AppendLine("steps:");
         foreach (var step in plan.Steps)
         {

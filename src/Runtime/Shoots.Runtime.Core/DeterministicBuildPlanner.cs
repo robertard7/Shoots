@@ -48,16 +48,17 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         var provisionalPlan = new BuildPlan(
             PlanId: string.Empty,
             Request: normalizedRequest,
-            AuthorityProviderId: new ProviderId("local"),
-            AuthorityKind: ProviderKind.Local,
-            DelegationPolicyId: _policy.PolicyId,
-            AllowsDelegation: false,
+            Authority: new DelegationAuthority(
+                new ProviderId("local"),
+                ProviderKind.Local,
+                _policy.PolicyId,
+                false),
             Steps: steps,
             Artifacts: artifacts
         );
 
         var decision = _policy.Decide(normalizedRequest, provisionalPlan);
-        if (!decision.AllowsDelegation && decision.AuthorityKind == ProviderKind.Delegated)
+        if (!decision.Authority.AllowsDelegation && decision.Authority.Kind == ProviderKind.Delegated)
             throw new InvalidOperationException("Delegation cannot be delegated without permission.");
         if (string.IsNullOrWhiteSpace(_policy.PolicyId))
             throw new InvalidOperationException("Delegation policy id is required.");
@@ -65,18 +66,12 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             throw new InvalidOperationException("Plan steps must not embed execution metadata.");
         var planId = BuildPlanHasher.ComputePlanId(
             normalizedRequest,
-            decision.AuthorityProviderId,
-            decision.AuthorityKind,
-            _policy.PolicyId,
-            decision.AllowsDelegation);
+            decision.Authority);
 
         return new BuildPlan(
             PlanId: planId,
             Request: normalizedRequest,
-            AuthorityProviderId: decision.AuthorityProviderId,
-            AuthorityKind: decision.AuthorityKind,
-            DelegationPolicyId: _policy.PolicyId,
-            AllowsDelegation: decision.AllowsDelegation,
+            Authority: decision.Authority,
             Steps: steps,
             Artifacts: artifacts
         );

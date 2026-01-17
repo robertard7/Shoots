@@ -8,26 +8,26 @@ public static class BuildPlanHasher
 {
     public static string ComputePlanId(
         BuildRequest request,
-        ProviderId authorityProviderId,
-        ProviderKind authorityKind,
-        string delegationPolicyId,
-        bool allowsDelegation)
+        DelegationAuthority authority)
     {
         if (request is null)
             throw new ArgumentNullException(nameof(request));
         if (request.Args is null)
             throw new ArgumentException("args are required", nameof(request));
-        if (string.IsNullOrWhiteSpace(authorityProviderId.Value))
-            throw new ArgumentException("authority provider id is required", nameof(authorityProviderId));
-        if (string.IsNullOrWhiteSpace(delegationPolicyId))
-            throw new ArgumentException("delegation policy id is required", nameof(delegationPolicyId));
+        if (authority is null)
+            throw new ArgumentNullException(nameof(authority));
+        if (string.IsNullOrWhiteSpace(authority.ProviderId.Value))
+            throw new ArgumentException("authority provider id is required", nameof(authority));
+        if (string.IsNullOrWhiteSpace(authority.PolicyId))
+            throw new ArgumentException("delegation policy id is required", nameof(authority));
 
         var sb = new StringBuilder();
         sb.Append("command=").Append(NormalizeToken(request.CommandId));
-        sb.Append("|authority.provider=").Append(NormalizeToken(authorityProviderId.Value));
-        sb.Append("|authority.kind=").Append(authorityKind.ToString());
-        sb.Append("|delegation.policy=").Append(NormalizeToken(delegationPolicyId));
-        sb.Append("|delegation.allowed=").Append(allowsDelegation.ToString());
+        sb.Append("|contract=").Append(BuildContract.Version);
+        sb.Append("|authority.provider=").Append(NormalizeToken(authority.ProviderId.Value));
+        sb.Append("|authority.kind=").Append(authority.Kind.ToString());
+        sb.Append("|delegation.policy=").Append(NormalizeToken(authority.PolicyId));
+        sb.Append("|delegation.allowed=").Append(authority.AllowsDelegation.ToString());
 
         foreach (var kvp in request.Args.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
         {

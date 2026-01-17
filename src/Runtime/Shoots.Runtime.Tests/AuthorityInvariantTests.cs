@@ -13,17 +13,19 @@ public sealed class AuthorityInvariantTests
 
         var localHash = BuildPlanHasher.ComputePlanId(
             request,
-            new ProviderId("local"),
-            ProviderKind.Local,
-            "local-only",
-            false);
+            new DelegationAuthority(
+                new ProviderId("local"),
+                ProviderKind.Local,
+                "local-only",
+                false));
 
         var delegatedHash = BuildPlanHasher.ComputePlanId(
             request,
-            new ProviderId("remote"),
-            ProviderKind.Delegated,
-            "local-only",
-            false);
+            new DelegationAuthority(
+                new ProviderId("remote"),
+                ProviderKind.Delegated,
+                "local-only",
+                false));
 
         Assert.NotEqual(localHash, delegatedHash);
     }
@@ -39,10 +41,7 @@ public sealed class AuthorityInvariantTests
         var plan = planner.Plan(request);
         var computed = BuildPlanHasher.ComputePlanId(
             plan.Request,
-            plan.AuthorityProviderId,
-            plan.AuthorityKind,
-            plan.DelegationPolicyId,
-            plan.AllowsDelegation);
+            plan.Authority);
 
         Assert.Equal(plan.PlanId, computed);
     }
@@ -54,19 +53,28 @@ public sealed class AuthorityInvariantTests
 
         var localHash = BuildPlanHasher.ComputePlanId(
             request,
-            new ProviderId("local"),
-            ProviderKind.Local,
-            "local-only",
-            false);
+            new DelegationAuthority(
+                new ProviderId("local"),
+                ProviderKind.Local,
+                "local-only",
+                false));
 
         var alternateHash = BuildPlanHasher.ComputePlanId(
             request,
-            new ProviderId("local"),
-            ProviderKind.Local,
-            "alternate-policy",
-            false);
+            new DelegationAuthority(
+                new ProviderId("local"),
+                ProviderKind.Local,
+                "alternate-policy",
+                false));
 
         Assert.NotEqual(localHash, alternateHash);
+    }
+
+    [Fact]
+    public void BuildPlan_contract_shape_is_frozen()
+    {
+        var props = typeof(BuildPlan).GetProperties();
+        Assert.Equal(5, props.Length);
     }
 
     private sealed class StubRuntimeServices : IRuntimeServices

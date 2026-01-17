@@ -13,9 +13,11 @@ public sealed class DefaultDelegationPolicy : IDelegationPolicy
         _ = plan ?? throw new ArgumentNullException(nameof(plan));
 
         return new DelegationDecision(
-            AuthorityProviderId: LocalProviderId,
-            AuthorityKind: ProviderKind.Local,
-            AllowsDelegation: false
+            new DelegationAuthority(
+                ProviderId: LocalProviderId,
+                Kind: ProviderKind.Local,
+                PolicyId: PolicyId,
+                AllowsDelegation: false)
         );
     }
 }

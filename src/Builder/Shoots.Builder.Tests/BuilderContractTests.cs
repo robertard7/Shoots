@@ -55,10 +55,11 @@ public sealed class BuilderContractTests
             return new BuildPlan(
                 PlanId: "stub-plan",
                 Request: request,
-                AuthorityProviderId: new ProviderId("local"),
-                AuthorityKind: ProviderKind.Local,
-                DelegationPolicyId: "local-only",
-                AllowsDelegation: false,
+                Authority: new DelegationAuthority(
+                    new ProviderId("local"),
+                    ProviderKind.Local,
+                    "local-only",
+                    false),
                 Steps: new[] { new BuildStep("stub-step", "Stub step.") },
                 Artifacts: new[] { new BuildArtifact("stub-artifact", "Stub artifact.") }
             );
