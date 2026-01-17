@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Runtime.Core;
@@ -19,18 +22,21 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
     {
         if (request is null)
             throw new ArgumentNullException(nameof(request));
+        if (request.Args is null)
+            throw new ArgumentException("args are required", nameof(request));
 
-        // ----------------------------
-        // Normalize request (PURE)
-        // ----------------------------
-
+        // Normalize command
         var normalizedCommandId = request.CommandId.Trim();
 
-        var normalizedArgs =
-            new SortedDictionary<string, object?>(
-                request.Args ?? throw new ArgumentException("args are required", nameof(request)),
-                StringComparer.OrdinalIgnoreCase
-            );
+        // Normalize args deterministically:
+        // - case-insensitive keys
+        // - stable ordering
+        // - no mutation of the request's original dictionary
+        var normalizedArgs = new SortedDictionary<string, object?>(
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var kvp in request.Args)
+            normalizedArgs[kvp.Key] = kvp.Value;
 
         var normalizedRequest = request with
         {
@@ -38,10 +44,7 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             Args = normalizedArgs
         };
 
-        // ----------------------------
-        // Build steps (deterministic)
-        // ----------------------------
-
+        // Deterministic steps
         var steps = new List<BuildStep>();
 
         var spec = _services.GetCommand(normalizedCommandId);
@@ -62,14 +65,11 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             $"Execute command '{normalizedCommandId}'."
         ));
 
-        // Guardrail: planner must not leak execution metadata
+        // Guardrail: steps must not embed execution metadata
         if (steps.Any(s => s.Id.Contains("execute:", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("Plan steps must not embed execution metadata.");
 
-        // ----------------------------
-        // Artifacts (stable ordering)
-        // ----------------------------
-
+        // Stable artifacts list
         var artifacts = new[]
         {
             new BuildArtifact("plan.txt", "Human-readable plan output."),
@@ -78,13 +78,10 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             new BuildArtifact("resolution.json", "Failure classification output.")
         };
 
-        // ----------------------------
-        // Provisional plan (authority seed)
-        // ----------------------------
-
         if (string.IsNullOrWhiteSpace(_policy.PolicyId))
             throw new InvalidOperationException("Delegation policy id is required.");
 
+        // Provisional plan for delegation decision (authority seed)
         var provisionalAuthority = new DelegationAuthority(
             ProviderId: new ProviderId("local"),
             Kind: ProviderKind.Local,
@@ -100,32 +97,17 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             Artifacts: artifacts
         );
 
-        // ----------------------------
-        // Delegation decision (PURE)
-        // ----------------------------
-
+        // Delegation decision (pure)
         var decision = _policy.Decide(normalizedRequest, provisionalPlan);
 
         if (!decision.Authority.AllowsDelegation &&
             decision.Authority.Kind == ProviderKind.Delegated)
         {
-            throw new InvalidOperationException(
-                "Delegation cannot be delegated without permission."
-            );
+            throw new InvalidOperationException("Delegation cannot be delegated without permission.");
         }
 
-        // ----------------------------
-        // Deterministic hash
-        // ----------------------------
-
-        var planId = BuildPlanHasher.ComputePlanId(
-            normalizedRequest,
-            decision.Authority
-        );
-
-        // ----------------------------
-        // Final plan (IMMUTABLE)
-        // ----------------------------
+        // Deterministic hash (single authority)
+        var planId = BuildPlanHasher.ComputePlanId(normalizedRequest, decision.Authority);
 
         return new BuildPlan(
             PlanId: planId,
