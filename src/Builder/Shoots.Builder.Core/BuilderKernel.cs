@@ -3,18 +3,18 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Shoots.Runtime.Abstractions;
-using Shoots.Runtime.Core;
-using Shoots.Runtime.Loader;
 
 namespace Shoots.Builder.Core;
 
 public sealed class BuilderKernel
 {
-    private readonly string _modulesDir;
+    private readonly IRuntimeHost _runtimeHost;
+    private readonly IRuntimeServices _runtimeServices;
 
-    public BuilderKernel(string modulesDir)
+    public BuilderKernel(IRuntimeHost runtimeHost, IRuntimeServices runtimeServices)
     {
-        _modulesDir = modulesDir ?? throw new ArgumentNullException(nameof(modulesDir));
+        _runtimeHost = runtimeHost ?? throw new ArgumentNullException(nameof(runtimeHost));
+        _runtimeServices = runtimeServices ?? throw new ArgumentNullException(nameof(runtimeServices));
     }
 
 	private static RunState Classify(RuntimeResult result)
@@ -140,41 +140,12 @@ public sealed class BuilderKernel
             Encoding.UTF8
         );
 
-        // --- Load runtime modules ---
-        var loader = new DefaultRuntimeLoader();
-
-        IReadOnlyList<IRuntimeModule> modules =
-            Directory.Exists(_modulesDir)
-                ? loader.LoadFromDirectory(_modulesDir)
-                : Array.Empty<IRuntimeModule>();
-
-        Console.WriteLine($"[builder] modulesDir = {_modulesDir}");
-        Console.WriteLine($"[builder] loaded modules = {modules.Count}");
-
-        foreach (var module in modules)
-        {
-            Console.WriteLine($"[builder] module: {module.ModuleId} v{module.ModuleVersion}");
-            foreach (var cmd in module.Describe())
-                Console.WriteLine($"[builder]   command: {cmd.CommandId}");
-        }
-
-        // --- Builder-owned narrator + helper (runtime escape hatch) ---
-        var narrator = new TextRuntimeNarrator(Console.WriteLine);
-        var helper = new DeterministicRuntimeHelper();
-
-        // --- Runtime is authoritative ---
-        var engine = new RuntimeEngine(
-            modules,
-            narrator,
-            helper
-        );
-
         // --- Runtime context ---
         var context = new RuntimeContext(
             SessionId: hash,
             CorrelationId: Guid.NewGuid().ToString("n"),
             Env: new Dictionary<string, string>(),
-            Services: engine
+            Services: _runtimeServices
         );
 
         var request = new RuntimeRequest(
@@ -184,7 +155,7 @@ public sealed class BuilderKernel
         );
 
         // --- Execute ---
-        var result = engine.Execute(request);
+        var result = _runtimeHost.Execute(request);
 
         // --- Persist result ---
         var resultPayload = new

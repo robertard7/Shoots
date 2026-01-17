@@ -1,4 +1,7 @@
 ﻿using Shoots.Builder.Core;
+using Shoots.Runtime.Abstractions;
+using Shoots.Runtime.Core;
+using Shoots.Runtime.Loader;
 
 if (args.Length == 0)
 {
@@ -14,7 +17,28 @@ var modulesDir = Path.Combine(
     "modules"
 );
 
-var kernel = new BuilderKernel(modulesDir);
+// Builder depends on runtime abstractions only; loader and engine wiring live in the CLI.
+var loader = new DefaultRuntimeLoader();
+IReadOnlyList<IRuntimeModule> modules =
+    Directory.Exists(modulesDir)
+        ? loader.LoadFromDirectory(modulesDir)
+        : Array.Empty<IRuntimeModule>();
+
+Console.WriteLine($"[builder] modulesDir = {modulesDir}");
+Console.WriteLine($"[builder] loaded modules = {modules.Count}");
+
+foreach (var module in modules)
+{
+    Console.WriteLine($"[builder] module: {module.ModuleId} v{module.ModuleVersion}");
+    foreach (var cmd in module.Describe())
+        Console.WriteLine($"[builder]   command: {cmd.CommandId}");
+}
+
+var narrator = new TextRuntimeNarrator(Console.WriteLine);
+var helper = new DeterministicRuntimeHelper();
+var engine = new RuntimeEngine(modules, narrator, helper);
+
+var kernel = new BuilderKernel(engine, engine);
 
 // Execute
 var result = kernel.Run(input);

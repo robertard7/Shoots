@@ -2,6 +2,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shoots.Builder.Core\Shoots.Builder.Core.csproj" />
+    <ProjectReference Include="..\..\Runtime\Shoots.Runtime.Core\Shoots.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\Runtime\Shoots.Runtime.Loader\Shoots.Runtime.Loader.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
