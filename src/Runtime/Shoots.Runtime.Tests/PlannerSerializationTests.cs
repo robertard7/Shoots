@@ -17,7 +17,7 @@ public sealed class PlannerSerializationTests
                 Array.Empty<RuntimeArgSpec>())
         );
 
-        var planner = new DeterministicBuildPlanner(services);
+        var planner = new DeterministicBuildPlanner(services, new DefaultDelegationPolicy());
         var request = new BuildRequest(
             " core.ping ",
             new Dictionary<string, object?>
@@ -39,6 +39,8 @@ public sealed class PlannerSerializationTests
         Assert.Equal(plan.Steps.Select(step => step.Id), roundTrip.Steps.Select(step => step.Id));
         Assert.Equal(plan.Artifacts.Select(artifact => artifact.Id), roundTrip.Artifacts.Select(artifact => artifact.Id));
         Assert.Equal("core.ping", roundTrip.Request.CommandId);
+        Assert.Equal(plan.AuthorityProviderId, roundTrip.AuthorityProviderId);
+        Assert.Equal(plan.AuthorityKind, roundTrip.AuthorityKind);
 
         var secondPlan = planner.Plan(request);
         Assert.Equal(plan.PlanId, secondPlan.PlanId);

@@ -1,0 +1,178 @@
+diff --git src/Builder/Shoots.Builder.Cli/Program.cs src/Builder/Shoots.Builder.Cli/Program.cs
+index 18eab19..2d4120a 100644
+--- /src/Builder/Shoots.Builder.Cli/Program.cs
++++ /src/Builder/Shoots.Builder.Cli/Program.cs
+@@ -42,7 +42,8 @@ var buildRequest = new BuildRequest(
+     CommandId: input,
+     Args: new Dictionary<string, object?>()
+ );
+-var planner = new DeterministicBuildPlanner(engine);
++var policy = new DefaultDelegationPolicy();
++var planner = new DeterministicBuildPlanner(engine, policy);
+ var kernel = new BuilderKernel(engine, engine, planner);
+ 
+ // Execute
+diff --git src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
+index 5069803..ad5f362 100644
+--- /src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
++++ /src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
+@@ -35,6 +35,19 @@ public sealed class BuilderContractTests
+         Assert.DoesNotContain("Shoots.Runtime.Sandbox", referenced);
+     }
+ 
++    [Fact]
++    public void BuilderCore_cannot_inject_provider_authority()
++    {
++        var kernelType = typeof(Shoots.Builder.Core.BuilderKernel);
++        var constructorParams = kernelType.GetConstructors()
++            .SelectMany(ctor => ctor.GetParameters())
++            .Select(param => param.ParameterType)
++            .ToArray();
++
++        Assert.DoesNotContain(typeof(ProviderId), constructorParams);
++        Assert.DoesNotContain(typeof(ProviderKind), constructorParams);
++    }
++
+     private sealed class StubPlanner : IBuildPlanner
+     {
+         public BuildPlan Plan(BuildRequest request)
+@@ -42,6 +55,8 @@ public sealed class BuilderContractTests
+             return new BuildPlan(
+                 PlanId: "stub-plan",
+                 Request: request,
++                AuthorityProviderId: new ProviderId("local"),
++                AuthorityKind: ProviderKind.Local,
+                 Steps: new[] { new BuildStep("stub-step", "Stub step.") },
+                 Artifacts: new[] { new BuildArtifact("stub-artifact", "Stub artifact.") }
+             );
+diff --git src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs
+index f2fac24..dc8a687 100644
+--- /src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs
++++ /src/Runtime/Shoots.Runtime.Abstractions/BuildPlan.cs
+@@ -5,11 +5,15 @@ namespace Shoots.Runtime.Abstractions;
+ /// </summary>
+ /// <param name="PlanId">Derived hash identifier for the plan (deterministic).</param>
+ /// <param name="Request">Input request used to derive the plan.</param>
++/// <param name="AuthorityProviderId">Authority provider identity assigned at planning time.</param>
++/// <param name="AuthorityKind">Authority provider kind assigned at planning time.</param>
+ /// <param name="Steps">Ordered steps derived deterministically from the request.</param>
+ /// <param name="Artifacts">Ordered artifacts expected from executing the plan.</param>
+ public sealed record BuildPlan(
+     string PlanId,
+     BuildRequest Request,
++    ProviderId AuthorityProviderId,
++    ProviderKind AuthorityKind,
+     IReadOnlyList<BuildStep> Steps,
+     IReadOnlyList<BuildArtifact> Artifacts
+ );
+diff --git src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs
+index bd8edb2..60fed3f 100644
+--- /src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs
++++ /src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs
+@@ -12,6 +12,8 @@ public static class BuildPlanRenderer
+         var builder = new StringBuilder();
+         builder.AppendLine($"plan={plan.PlanId}");
+         builder.AppendLine($"command={plan.Request.CommandId}");
++        builder.AppendLine($"authority.provider={plan.AuthorityProviderId.Value}");
++        builder.AppendLine($"authority.kind={plan.AuthorityKind}");
+         builder.AppendLine("steps:");
+         foreach (var step in plan.Steps)
+         {
+diff --git src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
+index 99f40a1..4ec0f5e 100644
+--- /src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
++++ /src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
+@@ -6,15 +6,22 @@ namespace Shoots.Runtime.Core;
+ 
+ public static class BuildPlanHasher
+ {
+-    public static string ComputePlanId(BuildRequest request)
++    public static string ComputePlanId(
++        BuildRequest request,
++        ProviderId authorityProviderId,
++        ProviderKind authorityKind)
+     {
+         if (request is null)
+             throw new ArgumentNullException(nameof(request));
+         if (request.Args is null)
+             throw new ArgumentException("args are required", nameof(request));
++        if (string.IsNullOrWhiteSpace(authorityProviderId.Value))
++            throw new ArgumentException("authority provider id is required", nameof(authorityProviderId));
+ 
+         var sb = new StringBuilder();
+         sb.Append("command=").Append(NormalizeToken(request.CommandId));
++        sb.Append("|authority.provider=").Append(NormalizeToken(authorityProviderId.Value));
++        sb.Append("|authority.kind=").Append(authorityKind.ToString());
+ 
+         foreach (var kvp in request.Args.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+         {
+diff --git src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs
+index 4ab923d..87d8adb 100644
+--- /src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs
++++ /src/Runtime/Shoots.Runtime.Core/DeterministicBuildPlanner.cs
+@@ -5,10 +5,12 @@ namespace Shoots.Runtime.Core;
+ public sealed class DeterministicBuildPlanner : IBuildPlanner
+ {
+     private readonly IRuntimeServices _services;
++    private readonly IDelegationPolicy _policy;
+ 
+-    public DeterministicBuildPlanner(IRuntimeServices services)
++    public DeterministicBuildPlanner(IRuntimeServices services, IDelegationPolicy policy)
+     {
+         _services = services ?? throw new ArgumentNullException(nameof(services));
++        _policy = policy ?? throw new ArgumentNullException(nameof(policy));
+     }
+ 
+     public BuildPlan Plan(BuildRequest request)
+@@ -42,9 +44,27 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
+             new BuildArtifact("resolution.json", "Failure classification output.")
+         };
+ 
++        var normalizedRequest = request with { CommandId = normalizedCommandId, Args = normalizedArgs };
++        var provisionalPlan = new BuildPlan(
++            PlanId: string.Empty,
++            Request: normalizedRequest,
++            AuthorityProviderId: new ProviderId("local"),
++            AuthorityKind: ProviderKind.Local,
++            Steps: steps,
++            Artifacts: artifacts
++        );
++
++        var decision = _policy.Decide(normalizedRequest, provisionalPlan);
++        var planId = BuildPlanHasher.ComputePlanId(
++            normalizedRequest,
++            decision.AuthorityProviderId,
++            decision.AuthorityKind);
++
+         return new BuildPlan(
+-            PlanId: BuildPlanHasher.ComputePlanId(request),
+-            Request: request with { CommandId = normalizedCommandId, Args = normalizedArgs },
++            PlanId: planId,
++            Request: normalizedRequest,
++            AuthorityProviderId: decision.AuthorityProviderId,
++            AuthorityKind: decision.AuthorityKind,
+             Steps: steps,
+             Artifacts: artifacts
+         );
+diff --git src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs
+index 8b6eb7b..5779d9a 100644
+--- /src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs
++++ /src/Runtime/Shoots.Runtime.Tests/PlannerSerializationTests.cs
+@@ -17,7 +17,7 @@ public sealed class PlannerSerializationTests
+                 Array.Empty<RuntimeArgSpec>())
+         );
+ 
+-        var planner = new DeterministicBuildPlanner(services);
++        var planner = new DeterministicBuildPlanner(services, new DefaultDelegationPolicy());
+         var request = new BuildRequest(
+             " core.ping ",
+             new Dictionary<string, object?>
+@@ -39,6 +39,8 @@ public sealed class PlannerSerializationTests
+         Assert.Equal(plan.Steps.Select(step => step.Id), roundTrip.Steps.Select(step => step.Id));
+         Assert.Equal(plan.Artifacts.Select(artifact => artifact.Id), roundTrip.Artifacts.Select(artifact => artifact.Id));
+         Assert.Equal("core.ping", roundTrip.Request.CommandId);
++        Assert.Equal(plan.AuthorityProviderId, roundTrip.AuthorityProviderId);
++        Assert.Equal(plan.AuthorityKind, roundTrip.AuthorityKind);
+ 
+         var secondPlan = planner.Plan(request);
+         Assert.Equal(plan.PlanId, secondPlan.PlanId);

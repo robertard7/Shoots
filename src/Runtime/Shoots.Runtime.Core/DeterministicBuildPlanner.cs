@@ -5,10 +5,12 @@ namespace Shoots.Runtime.Core;
 public sealed class DeterministicBuildPlanner : IBuildPlanner
 {
     private readonly IRuntimeServices _services;
+    private readonly IDelegationPolicy _policy;
 
-    public DeterministicBuildPlanner(IRuntimeServices services)
+    public DeterministicBuildPlanner(IRuntimeServices services, IDelegationPolicy policy)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
+        _policy = policy ?? throw new ArgumentNullException(nameof(policy));
     }
 
     public BuildPlan Plan(BuildRequest request)
@@ -42,9 +44,27 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             new BuildArtifact("resolution.json", "Failure classification output.")
         };
 
+        var normalizedRequest = request with { CommandId = normalizedCommandId, Args = normalizedArgs };
+        var provisionalPlan = new BuildPlan(
+            PlanId: string.Empty,
+            Request: normalizedRequest,
+            AuthorityProviderId: new ProviderId("local"),
+            AuthorityKind: ProviderKind.Local,
+            Steps: steps,
+            Artifacts: artifacts
+        );
+
+        var decision = _policy.Decide(normalizedRequest, provisionalPlan);
+        var planId = BuildPlanHasher.ComputePlanId(
+            normalizedRequest,
+            decision.AuthorityProviderId,
+            decision.AuthorityKind);
+
         return new BuildPlan(
-            PlanId: BuildPlanHasher.ComputePlanId(request),
-            Request: request with { CommandId = normalizedCommandId, Args = normalizedArgs },
+            PlanId: planId,
+            Request: normalizedRequest,
+            AuthorityProviderId: decision.AuthorityProviderId,
+            AuthorityKind: decision.AuthorityKind,
             Steps: steps,
             Artifacts: artifacts
         );

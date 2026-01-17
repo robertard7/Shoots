@@ -35,6 +35,19 @@ public sealed class BuilderContractTests
         Assert.DoesNotContain("Shoots.Runtime.Sandbox", referenced);
     }
 
+    [Fact]
+    public void BuilderCore_cannot_inject_provider_authority()
+    {
+        var kernelType = typeof(Shoots.Builder.Core.BuilderKernel);
+        var constructorParams = kernelType.GetConstructors()
+            .SelectMany(ctor => ctor.GetParameters())
+            .Select(param => param.ParameterType)
+            .ToArray();
+
+        Assert.DoesNotContain(typeof(ProviderId), constructorParams);
+        Assert.DoesNotContain(typeof(ProviderKind), constructorParams);
+    }
+
     private sealed class StubPlanner : IBuildPlanner
     {
         public BuildPlan Plan(BuildRequest request)
@@ -42,6 +55,8 @@ public sealed class BuilderContractTests
             return new BuildPlan(
                 PlanId: "stub-plan",
                 Request: request,
+                AuthorityProviderId: new ProviderId("local"),
+                AuthorityKind: ProviderKind.Local,
                 Steps: new[] { new BuildStep("stub-step", "Stub step.") },
                 Artifacts: new[] { new BuildArtifact("stub-artifact", "Stub artifact.") }
             );

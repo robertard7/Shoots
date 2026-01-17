@@ -12,6 +12,8 @@ public static class BuildPlanRenderer
         var builder = new StringBuilder();
         builder.AppendLine($"plan={plan.PlanId}");
         builder.AppendLine($"command={plan.Request.CommandId}");
+        builder.AppendLine($"authority.provider={plan.AuthorityProviderId.Value}");
+        builder.AppendLine($"authority.kind={plan.AuthorityKind}");
         builder.AppendLine("steps:");
         foreach (var step in plan.Steps)
         {

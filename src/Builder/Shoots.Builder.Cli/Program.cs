@@ -42,7 +42,8 @@ var buildRequest = new BuildRequest(
     CommandId: input,
     Args: new Dictionary<string, object?>()
 );
-var planner = new DeterministicBuildPlanner(engine);
+var policy = new DefaultDelegationPolicy();
+var planner = new DeterministicBuildPlanner(engine, policy);
 var kernel = new BuilderKernel(engine, engine, planner);
 
 // Execute
