@@ -42,11 +42,3 @@ public sealed record ToolSpec(
     IReadOnlyList<ToolInputSpec> Inputs,
     IReadOnlyList<ToolOutputSpec> Outputs
 );
-
-/// <summary>
-/// Tool contract boundary (no execution logic).
-/// </summary>
-public interface ITool
-{
-    ToolSpec Spec { get; }
-}
