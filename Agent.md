@@ -1,84 +1,77 @@
 # Shoots Agent Policy (STRICT · REPO-SAFE · RUNNER-ENFORCED)
 
-This document defines **non-negotiable operating rules** for any AI agent (Codex or otherwise) interacting with the **Shoots** repository.
+This document defines **mandatory operating rules** for AI agents (Codex or otherwise) interacting with the **Shoots** repository.
 
-Failure to follow these rules invalidates the agent’s output.
+This rewrite preserves intent while removing ambiguities and contradictions that can cause Codex refusal, deadlock, or non-build behavior.
 
 ---
 
 ## 1. Purpose
 
-The Shoots repository is the **authoritative root** for all Shoots development.
+The Shoots repository is the **authoritative source of truth** for all Shoots development.
 
-AI agents are permitted to:
+AI agents are allowed to:
 - Propose **text-only code changes**
-- Produce **git-apply-ready patches**
+- Produce **git-apply-compatible unified diffs**
+- Create or update files **inside the repository** when explicitly requested
 
-AI agents are **not permitted** to:
-- Execute code
-- Run builds or tests
-- Guess or simulate results
-- Modify repository structure without instruction
+AI agents are **not allowed** to:
+- Execute code, builds, or tests
+- Claim that builds or tests were executed
+- Guess, simulate, or invent build/test results
+- Modify repository structure unless explicitly instructed
 
-All execution, builds, and validation occur **only** via GitHub Actions on the **Windows self-hosted runner**.
+All execution and validation occurs **only** via GitHub Actions on the **Windows self-hosted runner**.
 
 ---
 
-## 2. Repository Root Resolution (MANDATORY)
+## 2. Repository Root Resolution
 
-Before any operation, the agent **must resolve the repository root** using this exact order:
+Before proposing any change, the agent must resolve the repository root using the following priority:
 
-1. If `$REPO_ROOT` exists → use it
-2. Else if `$SHOOTS_REPO_DIR` exists → use it
-3. Else resolve via:
-   ```bash
-   git rev-parse --show-toplevel
-   ```
+1. `$REPO_ROOT` if defined
+2. `$SHOOTS_REPO_DIR` if defined
+3. `git rev-parse --show-toplevel`
 
-### Hard Stop Rule
+The resolved path is treated as the **sole repository root** for all operations.
 
-If a `.git` directory exists **and** the resolved root does **not** exactly match:
-```bash
-git rev-parse --show-toplevel
-```
+### Consistency Rule
 
-→ **Abort immediately with no output.**
+If a `.git` directory exists, the resolved root **must match** `git rev-parse --show-toplevel`.
 
-### Absolute prohibitions
-- Never assume fixed paths
-- Never reference `/workspace`, containers, runners, or host OS paths
-- Never infer repository layout
+If this condition cannot be satisfied, the agent must **stop without producing output**.
 
 ---
 
 ## 3. Operating Scope
 
-Agents may operate **only** inside the resolved Shoots repository root.
+The agent may operate **only within the resolved repository root**.
 
 Rules:
-- All paths must be **relative to repo root**
-- Never read or write outside the repository
-- Never traverse parent directories
-- Never reference mounted volumes or external environments
+- All file paths must be **relative to the repository root**
+- No access outside the repository
+- No traversal of parent directories
+- No assumptions about container paths, runners, or host OS layout
 
 ---
 
-## 4. Pre-Flight Guardrails (REQUIRED)
+## 4. Pre-Flight Guardrails
 
-Before proposing **any** change, the agent must internally verify:
-- Repository root resolved correctly
-- `.git` (if present) matches the resolved root
+Before proposing changes, the agent must internally confirm:
+- Repository root resolved successfully
+- `.git` (if present) aligns with the resolved root
 
-If **any** check fails:
+If either check fails, the agent must:
 - Produce **no output**
 - Make **no changes**
-- Do **not** explain, recover, or speculate
+
+No recovery or explanation is permitted.
 
 ---
 
-## 5. Forbidden Paths (ABSOLUTE)
+## 5. Forbidden Paths
 
-The agent must never read from or modify:
+The agent must never read from or modify the following paths:
 
 ```
 .venv/
@@ -87,40 +80,35 @@ ext/vcpkg/
 ```
 
 Additional rules:
-- Always respect `.gitignore`
-- Ignored paths are treated as **nonexistent**
+- Respect `.gitignore`
+- Ignored paths are treated as nonexistent
 
 ---
 
 ## 6. File Safety Limits
 
-- Maximum readable or writable file size: **100 MB**
-- No chunking, streaming, or partial reads of larger files
+- Maximum file size for read or write: **100 MB**
+- No partial reads, streaming, or chunking of larger files
 
-For large data:
-- Generate **CAS manifests only**
-- Commit only `*.manifest.json`
-- Never commit raw large artifacts
+For large data artifacts:
+- Generate **manifest files only** (`*.manifest.json`)
+- Do not commit raw large artifacts
 
 ---
 
-## 7. Patch Output Rules (NON-NEGOTIABLE)
+## 7. Patch Output Rules
 
-Agent output **must be** a single unified diff, ready for `git apply`.
-
-### Forbidden
-- Prose
-- Commentary
-- Explanations
-- Markdown outside the diff
+When a patch is explicitly requested, output must be:
+- A **single unified diff** compatible with `git apply`
+- Contain **no prose, commentary, or explanation**
 
 ### Required diff format
 - `diff --git`
 - `---` / `+++` headers
 - `@@` hunks
 - No timestamps
-- No file owners
-- No ANSI formatting
+- No file ownership metadata
+- No ANSI or color formatting
 
 ### New files must include
 ```
@@ -129,39 +117,39 @@ new file mode 100644
 +++ b/<relative/path>
 ```
 
-### Text file requirements
-- UTF-8 encoding
-- Exactly **one** trailing newline
+All text files must:
+- Be UTF-8 encoded
+- End with exactly one trailing newline
 
 ---
 
-## 8. Patch Location (MANDATORY)
+## 8. Patch Location
 
-All patches **must** be written to:
+When creating a patch file, it must be written to:
 
 ```
 .ai/patches/patch-YYYY-MM-DD-HH-MM-SS.diff
 ```
 
-No exceptions.
+If patch output is **not explicitly requested**, the agent must not emit diffs.
 
 ---
 
-## 9. Branching Rules (When Applicable)
+## 9. Branching Rules
 
-If a branch is required, it **must** be named:
+If a branch name is required, it must follow this format:
 
 ```
-codex/{feature}-YYYY-MM-DD-HH-MM-SS
+codex/<feature>-YYYY-MM-DD-HH-MM-SS
 ```
 
-No alternative naming schemes are permitted.
+If branching is not explicitly requested, the agent must not assume or create branches.
 
 ---
 
-## 10. Project Layout Constraints (Shoots)
+## 10. Project Layout Constraints
 
-The Shoots repository enforces the following structure:
+The Shoots repository enforces this top-level structure:
 
 ```
 Shoots/
@@ -175,52 +163,43 @@ Shoots/
 
 Rules:
 - Do not create new top-level directories unless explicitly instructed
-- Do not restructure or relocate submodules
+- Do not restructure existing directories
 - Do not move files without direct instruction
 
 ---
 
-## 11. Execution & Validation Rules (STRICT)
+## 11. Execution & Validation
 
-Agents must **never**:
-- Claim execution occurred
+The agent must never:
+- Claim that execution occurred
 - Claim builds or tests passed or failed
 - Fabricate logs or outcomes
-- Say “cannot run in this environment”
 
-### Source of Truth
-
-All validation is determined **only** by GitHub Actions output from the Windows self-hosted runner:
+The **only** source of truth for validation is GitHub Actions output from:
 
 ```
 [self-hosted, Windows, X64, Shoots]
 ```
 
-If a build or test fails:
-- Surface **only real errors**
-- Fail fast
-- Do not speculate
-- Do not retry implicitly
+---
+
+## 12. Validation Workflow
+
+When validation is required:
+1. Changes are committed or proposed
+2. GitHub Actions runs on the Windows self-hosted runner
+3. Runner logs are treated as authoritative
+
+The agent must not infer or restate results unless they appear in runner output.
 
 ---
 
-## 12. Validation Workflow (REQUIRED)
+## 13. Final Output Rules
 
-When validation is required, the agent must:
-1. Push changes or update an existing PR
-2. Wait for the Windows runner workflow to complete
-3. Treat runner logs as the **sole source of truth**
+The agent must follow the user’s instruction context:
+- If **a patch is requested** → output unified diff only
+- If **a document is requested** → output document only
+- If **analysis or planning is requested** → no diffs
 
-The agent must never claim results without runner confirmation.
+Any output that violates these rules is invalid.
 
----
-
-## 13. Final Output Constraint
-
-The agent’s final response **must be**:
-- A clean unified diff **only**
-- No prose
-- No summaries
-- No commentary
-
-Any violation of this policy **invalidates the output**.
