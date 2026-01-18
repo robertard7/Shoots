@@ -20,6 +20,8 @@ public static class BuildPlanRenderer
 
         builder.Append("plan=").AppendLine(plan.PlanId);
         builder.Append("command=").AppendLine(plan.Request.CommandId);
+        builder.Append("workorder.id=").AppendLine(plan.Request.WorkOrder.Id.Value);
+        builder.Append("workorder.goal=").AppendLine(plan.Request.WorkOrder.Goal);
 
         builder.Append("authority.provider=").AppendLine(plan.Authority.ProviderId.Value);
         builder.Append("authority.kind=").AppendLine(plan.Authority.Kind.ToString());
@@ -67,6 +69,29 @@ public static class BuildPlanRenderer
                            .AppendLine(")");
                 }
             }
+
+            if (step is RouteStep routeStep)
+            {
+                builder.Append("  node=").AppendLine(routeStep.NodeId);
+                builder.Append("  intent=").AppendLine(routeStep.Intent.ToString());
+                builder.Append("  owner=").AppendLine(routeStep.Owner.ToString());
+                builder.Append("  workorder=").AppendLine(routeStep.WorkOrderId.Value);
+
+                if (routeStep.ToolInvocation is not null)
+                {
+                    builder.Append("  tool=").AppendLine(routeStep.ToolInvocation.ToolId.Value);
+                    builder.Append("  tool.workorder=").AppendLine(routeStep.ToolInvocation.WorkOrderId.Value);
+                    builder.AppendLine("  tool.bindings:");
+                    foreach (var binding in routeStep.ToolInvocation.Bindings
+                                 .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        builder.Append("    - ")
+                               .Append(binding.Key)
+                               .Append(": ")
+                               .AppendLine(binding.Value?.ToString() ?? "null");
+                    }
+                }
+            }
         }
 
         builder.AppendLine("artifacts:");
@@ -76,6 +101,22 @@ public static class BuildPlanRenderer
                    .Append(artifact.Id)
                    .Append(": ")
                    .AppendLine(artifact.Description);
+        }
+
+        if (plan.ToolResult is not null)
+        {
+            builder.AppendLine("tool.result:");
+            builder.Append("  id=").AppendLine(plan.ToolResult.ToolId.Value);
+            builder.Append("  success=").AppendLine(plan.ToolResult.Success.ToString());
+            builder.AppendLine("  outputs:");
+            foreach (var output in plan.ToolResult.Outputs
+                         .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                builder.Append("    - ")
+                       .Append(output.Key)
+                       .Append(": ")
+                       .AppendLine(output.Value?.ToString() ?? "null");
+            }
         }
 
         return builder.ToString();

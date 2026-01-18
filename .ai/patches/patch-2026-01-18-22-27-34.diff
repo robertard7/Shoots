@@ -1,0 +1,143 @@
+commit 17bbc32fc3331689deb3f48c87320f53599e2095
+Author: Codex <codex@openai.com>
+Date:   Sun Jan 18 22:27:43 2026 +0000
+
+    Add provider abstractions and null adapter
+
+diff --git a/.ai/patches/patch-2026-01-18-22-27-34.diff b/.ai/patches/patch-2026-01-18-22-27-34.diff
+new file mode 100644
+index 0000000..e69de29
+diff --git a/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
+new file mode 100644
+index 0000000..2d5340c
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
+@@ -0,0 +1,12 @@
++using Shoots.Contracts.Core;
++
++namespace Shoots.Providers.Abstractions;
++
++public interface IAiProviderAdapter
++{
++    ToolSelectionDecision? RequestDecision(
++        WorkOrder workOrder,
++        RouteStep step,
++        string catalogHash,
++        string routingTraceSummary);
++}
+diff --git a/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs b/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
+new file mode 100644
+index 0000000..53a90bb
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
+@@ -0,0 +1,28 @@
++using System.Collections.Generic;
++
++namespace Shoots.Providers.Abstractions;
++
++public sealed class ProviderRegistry
++{
++    private readonly Dictionary<string, IAiProviderAdapter> _providers = new(StringComparer.OrdinalIgnoreCase);
++
++    public IReadOnlyDictionary<string, IAiProviderAdapter> Providers => _providers;
++
++    public void Register(string providerId, IAiProviderAdapter adapter)
++    {
++        if (string.IsNullOrWhiteSpace(providerId))
++            throw new ArgumentException("provider id is required", nameof(providerId));
++        if (adapter is null)
++            throw new ArgumentNullException(nameof(adapter));
++
++        _providers[providerId] = adapter;
++    }
++
++    public IAiProviderAdapter? Get(string providerId)
++    {
++        if (string.IsNullOrWhiteSpace(providerId))
++            return null;
++
++        return _providers.TryGetValue(providerId, out var adapter) ? adapter : null;
++    }
++}
+diff --git a/src/Providers/Shoots.Providers.Abstractions/Shoots.Providers.Abstractions.csproj b/src/Providers/Shoots.Providers.Abstractions/Shoots.Providers.Abstractions.csproj
+new file mode 100644
+index 0000000..4aab228
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Abstractions/Shoots.Providers.Abstractions.csproj
+@@ -0,0 +1,13 @@
++<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
++  </ItemGroup>
++
++</Project>
+diff --git a/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
+new file mode 100644
+index 0000000..8a9e910
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
+@@ -0,0 +1,18 @@
++using Shoots.Contracts.Core;
++using Shoots.Providers.Abstractions;
++
++namespace Shoots.Providers.Null;
++
++public sealed class NullAiProviderAdapter : IAiProviderAdapter
++{
++    public static readonly NullAiProviderAdapter Instance = new();
++
++    public ToolSelectionDecision? RequestDecision(
++        WorkOrder workOrder,
++        RouteStep step,
++        string catalogHash,
++        string routingTraceSummary)
++    {
++        return null;
++    }
++}
+diff --git a/src/Providers/Shoots.Providers.Null/NullProviderRegistry.cs b/src/Providers/Shoots.Providers.Null/NullProviderRegistry.cs
+new file mode 100644
+index 0000000..9da4009
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Null/NullProviderRegistry.cs
+@@ -0,0 +1,13 @@
++using Shoots.Providers.Abstractions;
++
++namespace Shoots.Providers.Null;
++
++public static class NullProviderRegistry
++{
++    public static ProviderRegistry Create()
++    {
++        var registry = new ProviderRegistry();
++        registry.Register("null.local", NullAiProviderAdapter.Instance);
++        return registry;
++    }
++}
+diff --git a/src/Providers/Shoots.Providers.Null/Shoots.Providers.Null.csproj b/src/Providers/Shoots.Providers.Null/Shoots.Providers.Null.csproj
+new file mode 100644
+index 0000000..3c05706
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Null/Shoots.Providers.Null.csproj
+@@ -0,0 +1,14 @@
++<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
++    <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
++  </ItemGroup>
++
++</Project>

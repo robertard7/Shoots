@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shoots Tool Catalog",
+  "type": "object",
+  "required": ["tools"],
+  "properties": {
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["toolId", "authority"],
+        "properties": {
+          "toolId": { "type": "string" },
+          "description": { "type": "string" },
+          "authority": {
+            "type": "object",
+            "required": ["providerKind"],
+            "properties": {
+              "providerKind": { "type": "string" },
+              "capabilities": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" },
+                "description": { "type": "string" },
+                "required": { "type": "boolean" }
+              }
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" },
+                "description": { "type": "string" }
+              }
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "execution": {
+            "type": "object",
+            "properties": {
+              "allowsNetwork": { "type": "boolean" },
+              "allowsFilesystem": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

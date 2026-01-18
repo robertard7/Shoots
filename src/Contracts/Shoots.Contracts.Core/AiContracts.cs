@@ -25,17 +25,3 @@ public sealed record AiRequest(
 public sealed record AiResponse(
     string Payload
 );
-
-// ⚠️ CONTRACT FREEZE
-// Any change here requires:
-// 1. New versioned type OR
-// 2. Explicit RFC + test update
-/// <summary>
-/// Deterministic tool selection output (AI constrained output).
-/// </summary>
-/// <param name="ToolId">Selected tool identifier.</param>
-/// <param name="InputBindings">Tool input bindings.</param>
-public sealed record ToolSelection(
-    ToolId ToolId,
-    IReadOnlyDictionary<string, object?> InputBindings
-);

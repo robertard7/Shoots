@@ -1,0 +1,265 @@
+diff --git a/src/Contracts/Shoots.Contracts.Core/AiContracts.cs b/src/Contracts/Shoots.Contracts.Core/AiContracts.cs
+index bb96f1b..4fd87f4 100644
+--- a/src/Contracts/Shoots.Contracts.Core/AiContracts.cs
++++ b/src/Contracts/Shoots.Contracts.Core/AiContracts.cs
+@@ -25,17 +25,3 @@ public sealed record AiRequest(
+ public sealed record AiResponse(
+     string Payload
+ );
+-
+-// ⚠️ CONTRACT FREEZE
+-// Any change here requires:
+-// 1. New versioned type OR
+-// 2. Explicit RFC + test update
+-/// <summary>
+-/// Deterministic tool selection output (AI constrained output).
+-/// </summary>
+-/// <param name="ToolId">Selected tool identifier.</param>
+-/// <param name="InputBindings">Tool input bindings.</param>
+-public sealed record ToolSelection(
+-    ToolId ToolId,
+-    IReadOnlyDictionary<string, object?> InputBindings
+-);
+diff --git a/src/Runtime/README.md b/src/Runtime/README.md
+index 3ea4cf6..2a90816 100644
+--- a/src/Runtime/README.md
++++ b/src/Runtime/README.md
+@@ -99,6 +99,16 @@ No partial runtime state
+ 
+ Violating these constraints breaks runtime guarantees.
+ 
++Routing invariants
++
++RouteGate is the final authority for routing state transitions.
++
++The runtime never infers intent or retries implicitly.
++
++The planner must emit complete routing steps for every Mermaid node.
++
++Routing decisions are only accepted for SelectTool intents.
++
+ Module contract
+ 
+ Runtime modules implement IRuntimeModule and expose handlers that follow a strict input/output contract.
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/RouteGateNarrator.cs b/src/Runtime/Shoots.Runtime.Abstractions/RouteGateNarrator.cs
+new file mode 100644
+index 0000000..06da8ec
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Abstractions/RouteGateNarrator.cs
+@@ -0,0 +1,46 @@
++using System;
++using System.Linq;
++using Shoots.Contracts.Core;
++
++namespace Shoots.Runtime.Abstractions;
++
++public static class RouteGateNarrator
++{
++    public static void Notify(
++        IRuntimeNarrator narrator,
++        BuildPlan plan,
++        RoutingState state,
++        ToolSelectionDecision? decision,
++        RoutingState nextState,
++        RuntimeError? error)
++    {
++        if (narrator is null)
++            throw new ArgumentNullException(nameof(narrator));
++        if (plan is null)
++            throw new ArgumentNullException(nameof(plan));
++        if (state is null)
++            throw new ArgumentNullException(nameof(state));
++        if (nextState is null)
++            throw new ArgumentNullException(nameof(nextState));
++
++        var workOrder = plan.Request.WorkOrder
++            ?? throw new ArgumentException("work order is required", nameof(plan));
++
++        if (state.CurrentRouteIndex == 0 && state.Status == RoutingStatus.Pending)
++            narrator.OnWorkOrderReceived(workOrder);
++
++        var step = plan.Steps.ElementAtOrDefault(state.CurrentRouteIndex) as RouteStep
++            ?? throw new ArgumentException("route step is required", nameof(plan));
++
++        narrator.OnRouteEntered(state, step);
++
++        if (nextState.Status == RoutingStatus.Waiting)
++            narrator.OnDecisionRequired(nextState, step);
++
++        if (decision is not null && error is null)
++            narrator.OnDecisionAccepted(nextState, step);
++
++        if (error is not null)
++            narrator.OnHalted(nextState, error);
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/RoutingState.cs b/src/Runtime/Shoots.Runtime.Abstractions/RoutingState.cs
+index 781437d..e2df7b5 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/RoutingState.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/RoutingState.cs
+@@ -1,3 +1,4 @@
++using System;
+ using Shoots.Contracts.Core;
+ 
+ namespace Shoots.Runtime.Abstractions;
+@@ -18,4 +19,26 @@ public sealed record RoutingState(
+     int CurrentRouteIndex,
+     RouteIntent CurrentRouteIntent,
+     RoutingStatus Status
+-);
++)
++{
++    /// <summary>
++    /// Creates the canonical initial routing state for a plan.
++    /// </summary>
++    public static RoutingState CreateInitial(BuildPlan plan)
++    {
++        if (plan is null)
++            throw new ArgumentNullException(nameof(plan));
++        if (plan.Request.WorkOrder is null)
++            throw new ArgumentException("work order is required", nameof(plan));
++        if (plan.Steps is null || plan.Steps.Count == 0)
++            throw new ArgumentException("route steps are required", nameof(plan));
++        if (plan.Steps[0] is not RouteStep firstStep)
++            throw new ArgumentException("first step must be a route step", nameof(plan));
++
++        return new RoutingState(
++            plan.Request.WorkOrder.Id,
++            0,
++            firstStep.Intent,
++            RoutingStatus.Pending);
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+new file mode 100644
+index 0000000..c6680a1
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+@@ -0,0 +1,127 @@
++using System.Collections.Generic;
++using Shoots.Contracts.Core;
++using Shoots.Runtime.Abstractions;
++using Xunit;
++
++namespace Shoots.Runtime.Tests;
++
++public sealed class RouteGateTests
++{
++    [Fact]
++    public void TryAdvance_halts_on_workorder_mismatch()
++    {
++        var plan = CreatePlan(
++            new WorkOrderId("wo-plan"),
++            new[]
++            {
++                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
++                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
++            });
++
++        var state = new RoutingState(
++            new WorkOrderId("wo-other"),
++            0,
++            RouteIntent.Validate,
++            RoutingStatus.Pending);
++
++        var result = RouteGate.TryAdvance(plan, state, null, new StubToolRegistry(), out var nextState, out var error);
++
++        Assert.False(result);
++        Assert.NotNull(error);
++        Assert.Equal("route_workorder_mismatch", error!.Code);
++        Assert.Equal(RoutingStatus.Halted, nextState.Status);
++    }
++
++    [Fact]
++    public void TryAdvance_waits_when_select_tool_decision_missing()
++    {
++        var plan = CreatePlan(
++            new WorkOrderId("wo-plan"),
++            new[]
++            {
++                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
++                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
++            });
++
++        var state = RoutingState.CreateInitial(plan);
++
++        var result = RouteGate.TryAdvance(plan, state, null, new StubToolRegistry(), out var nextState, out var error);
++
++        Assert.False(result);
++        Assert.Null(error);
++        Assert.Equal(RoutingStatus.Waiting, nextState.Status);
++        Assert.Equal(state.CurrentRouteIndex, nextState.CurrentRouteIndex);
++    }
++
++    [Fact]
++    public void TryAdvance_halts_on_decision_for_non_select_tool()
++    {
++        var plan = CreatePlan(
++            new WorkOrderId("wo-plan"),
++            new[]
++            {
++                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
++                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
++            });
++
++        var state = RoutingState.CreateInitial(plan);
++        var decision = new ToolSelectionDecision(
++            new ToolId("tools.any"),
++            new Dictionary<string, object?>());
++
++        var result = RouteGate.TryAdvance(plan, state, decision, new StubToolRegistry(), out var nextState, out var error);
++
++        Assert.False(result);
++        Assert.NotNull(error);
++        Assert.Equal("route_decision_unexpected", error!.Code);
++        Assert.Equal(RoutingStatus.Halted, nextState.Status);
++    }
++
++    private static BuildPlan CreatePlan(WorkOrderId workOrderId, IReadOnlyList<RouteRule> routeRules)
++    {
++        var workOrder = new WorkOrder(
++            workOrderId,
++            "Original request.",
++            "Validate routing.",
++            new List<string>(),
++            new List<string>());
++
++        var request = new BuildRequest(
++            workOrder,
++            "core.route",
++            new Dictionary<string, object?>(),
++            routeRules);
++
++        var steps = new List<BuildStep>();
++        foreach (var rule in routeRules)
++        {
++            steps.Add(new RouteStep(
++                rule.NodeId,
++                $"Route {rule.NodeId}.",
++                rule.NodeId,
++                rule.Intent,
++                rule.Owner,
++                workOrderId));
++        }
++
++        var authority = new DelegationAuthority(
++            ProviderId: new ProviderId("local"),
++            Kind: ProviderKind.Local,
++            PolicyId: "local-only",
++            AllowsDelegation: false);
++
++        return new BuildPlan(
++            "plan",
++            request,
++            authority,
++            steps,
++            new[] { new BuildArtifact("plan.json", "Plan payload.") });
++    }
++
++    private sealed class StubToolRegistry : IToolRegistry
++    {
++        public IReadOnlyList<ToolRegistryEntry> GetAllTools() => new List<ToolRegistryEntry>();
++
++        public ToolRegistryEntry? GetTool(ToolId toolId) => null;
++    }
++}

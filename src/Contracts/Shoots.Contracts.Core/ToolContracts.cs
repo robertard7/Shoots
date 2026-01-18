@@ -33,12 +33,13 @@ public sealed record ToolAuthorityScope(
 );
 
 /// <summary>
-/// Deterministic tool contract (metadata only).
+/// Deterministic tool contract (metadata only, immutable).
 /// </summary>
 public sealed record ToolSpec(
     ToolId ToolId,
     string Description,
     ToolAuthorityScope RequiredAuthority,
     IReadOnlyList<ToolInputSpec> Inputs,
-    IReadOnlyList<ToolOutputSpec> Outputs
+    IReadOnlyList<ToolOutputSpec> Outputs,
+    IReadOnlyList<string> Tags
 );

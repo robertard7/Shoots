@@ -1,3 +1,5 @@
+using System;
+
 namespace Shoots.Runtime.Abstractions;
 
 public sealed record RuntimeError(
@@ -5,6 +7,12 @@ public sealed record RuntimeError(
     string Message,
     object? Details = null)
 {
+    public RuntimeError
+    {
+        if (!RuntimeErrorCatalog.IsKnown(Code))
+            throw new ArgumentException($"Runtime error code '{Code}' is not registered.", nameof(Code));
+    }
+
     public static RuntimeError UnknownCommand(string commandId) =>
         new("unknown_command", $"Unknown command '{commandId}'");
 

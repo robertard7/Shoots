@@ -10,7 +10,7 @@ public sealed class BuildPlanHasherAiStepTests
     [Fact]
     public void Hash_changes_when_ai_prompt_changes()
     {
-        var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var request = TestRequestFactory.CreateBuildRequest("core.ping", new Dictionary<string, object?>());
         var authority = new DelegationAuthority(
             ProviderId: new ProviderId("local"),
             Kind: ProviderKind.Local,
@@ -38,7 +38,7 @@ public sealed class BuildPlanHasherAiStepTests
     [Fact]
     public void Hash_changes_when_ai_schema_changes()
     {
-        var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var request = TestRequestFactory.CreateBuildRequest("core.ping", new Dictionary<string, object?>());
         var authority = new DelegationAuthority(
             ProviderId: new ProviderId("local"),
             Kind: ProviderKind.Local,

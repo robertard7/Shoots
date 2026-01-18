@@ -99,6 +99,24 @@ No partial runtime state
 
 Violating these constraints breaks runtime guarantees.
 
+Routing invariants
+
+RouteGate is the final authority for routing state transitions.
+
+The runtime never infers intent or retries implicitly.
+
+The planner must emit complete routing steps for every Mermaid node.
+
+Routing decisions are only accepted for SelectTool intents.
+
+Boundary diagram
+
+Builder
+  -> BuildPlan (RouteSteps only)
+  -> Runtime (WorkOrder + RoutingState)
+  -> RouteGate (authoritative transitions)
+  -> Tools (validated metadata only)
+
 Module contract
 
 Runtime modules implement IRuntimeModule and expose handlers that follow a strict input/output contract.

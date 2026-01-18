@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
@@ -23,7 +24,8 @@ public sealed class ToolAuthorityValidatorTests
             "Remote tool.",
             new ToolAuthorityScope(ProviderKind.Remote, ProviderCapabilities.None),
             new List<ToolInputSpec>(),
-            new List<ToolOutputSpec>());
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
 
         var plan = CreatePlan(planAuthority, toolSpec.ToolId);
         var registry = new StubToolRegistry(toolSpec);
@@ -50,7 +52,8 @@ public sealed class ToolAuthorityValidatorTests
             "Local tool.",
             new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
             new List<ToolInputSpec>(),
-            new List<ToolOutputSpec>());
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
 
         var plan = CreatePlan(planAuthority, toolSpec.ToolId);
         var registry = new StubToolRegistry(toolSpec);
@@ -98,7 +101,7 @@ public sealed class ToolAuthorityValidatorTests
 
     private static BuildPlan CreatePlan(DelegationAuthority? authority, ToolId toolId)
     {
-        var request = new BuildRequest("core.tool", new Dictionary<string, object?>());
+        var request = TestRequestFactory.CreateBuildRequest("core.tool", new Dictionary<string, object?>());
         var steps = new BuildStep[]
         {
             new ToolBuildStep(
@@ -121,6 +124,7 @@ public sealed class ToolAuthorityValidatorTests
     private sealed class StubToolRegistry : IToolRegistry
     {
         private readonly IReadOnlyDictionary<ToolId, ToolRegistryEntry> _entries;
+        public string CatalogHash => "validator";
 
         public StubToolRegistry(params ToolSpec[] specs)
         {
@@ -137,5 +141,7 @@ public sealed class ToolAuthorityValidatorTests
         {
             return _entries.TryGetValue(toolId, out var entry) ? entry : null;
         }
+
+        public IReadOnlyList<ToolRegistryEntry> GetSnapshot() => GetAllTools();
     }
 }
