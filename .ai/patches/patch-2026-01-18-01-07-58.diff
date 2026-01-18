@@ -1,0 +1,600 @@
+diff --git a/src/Builder/Shoots.Builder.Core/DETERMINISM.md b/src/Builder/Shoots.Builder.Core/DETERMINISM.md
+index f8dde47..b23e67d 100644
+--- a/src/Builder/Shoots.Builder.Core/DETERMINISM.md
++++ b/src/Builder/Shoots.Builder.Core/DETERMINISM.md
+@@ -12,6 +12,7 @@ observing any external state.
+ - No network access
+ - No global/static mutable state
+ - Planner requires `BuildRequest.WorkOrder` and `BuildRequest.Args["plan.graph"]` Mermaid graph input and fails when missing.
++- Planner validates routing completeness (single start node, terminal terminate intent, all intents present).
+ 
+ ## Current Planner Dependencies
+ - `IRuntimeServices` for command metadata only
+diff --git a/src/Builder/Shoots.Builder.Core/DeterministicBuildPlanner.cs b/src/Builder/Shoots.Builder.Core/DeterministicBuildPlanner.cs
+index a916e59..4968dd6 100644
+--- a/src/Builder/Shoots.Builder.Core/DeterministicBuildPlanner.cs
++++ b/src/Builder/Shoots.Builder.Core/DeterministicBuildPlanner.cs
+@@ -38,6 +38,7 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
+             throw new ArgumentException($"'{GraphArgKey}' must be a string", nameof(request));
+ 
+         var normalizedGraph = MermaidPlanGraph.Normalize(graphText);
++        var graph = MermaidPlanGraph.ParseGraph(normalizedGraph);
+         var orderedStepIds = MermaidPlanGraph.OrderStepIds(normalizedGraph);
+ 
+         // Normalize command
+@@ -125,6 +126,16 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
+         if (missingIntents.Length > 0)
+             throw new InvalidOperationException($"route rules missing required intents: {string.Join(", ", missingIntents)}");
+ 
++        var startNodes = MermaidPlanGraph.GetStartNodes(graph);
++        if (startNodes.Count != 1)
++            throw new InvalidOperationException($"graph must have exactly one start node (found {startNodes.Count}).");
++
++        var terminalNodes = MermaidPlanGraph.GetTerminalNodes(graph);
++        var hasTerminalIntent = terminalNodes.Any(
++            nodeId => routeRulesByNode.TryGetValue(nodeId, out var rule) && rule.Intent == RouteIntent.Terminate);
++        if (!hasTerminalIntent)
++            throw new InvalidOperationException("graph must include at least one terminal node with Terminate intent.");
++
+         var steps = orderedStepIds
+             .Select(stepId => stepsById[stepId])
+             .ToList();
+diff --git a/src/Builder/Shoots.Builder.Core/MermaidPlanGraph.cs b/src/Builder/Shoots.Builder.Core/MermaidPlanGraph.cs
+index 4da57de..a053071 100644
+--- a/src/Builder/Shoots.Builder.Core/MermaidPlanGraph.cs
++++ b/src/Builder/Shoots.Builder.Core/MermaidPlanGraph.cs
+@@ -19,7 +19,7 @@ internal static class MermaidPlanGraph
+             .Trim();
+     }
+ 
+-    public static IReadOnlyList<string> OrderStepIds(string graphText)
++    public static GraphDefinition ParseGraph(string graphText)
+     {
+         if (string.IsNullOrWhiteSpace(graphText))
+             throw new ArgumentException("graph is required", nameof(graphText));
+@@ -63,7 +63,55 @@ internal static class MermaidPlanGraph
+         if (nodes.Count == 0)
+             throw new InvalidOperationException("graph must contain at least one node");
+ 
+-        return TopologicalOrder(nodes, edges);
++        return new GraphDefinition(nodes.ToArray(), edges);
++    }
++
++    public static IReadOnlyList<string> OrderStepIds(string graphText)
++    {
++        var graph = ParseGraph(graphText);
++        return TopologicalOrder(graph.Nodes, graph.Edges);
++    }
++
++    public static IReadOnlyList<string> GetStartNodes(GraphDefinition graph)
++    {
++        if (graph is null)
++            throw new ArgumentNullException(nameof(graph));
++
++        var indegree = graph.Nodes.ToDictionary(node => node, _ => 0, StringComparer.Ordinal);
++        foreach (var (from, to) in graph.Edges)
++        {
++            if (!indegree.ContainsKey(from) || !indegree.ContainsKey(to))
++                continue;
++
++            indegree[to] = indegree[to] + 1;
++        }
++
++        return indegree
++            .Where(pair => pair.Value == 0)
++            .Select(pair => pair.Key)
++            .OrderBy(node => node, StringComparer.Ordinal)
++            .ToArray();
++    }
++
++    public static IReadOnlyList<string> GetTerminalNodes(GraphDefinition graph)
++    {
++        if (graph is null)
++            throw new ArgumentNullException(nameof(graph));
++
++        var outbound = graph.Nodes.ToDictionary(node => node, _ => 0, StringComparer.Ordinal);
++        foreach (var (from, to) in graph.Edges)
++        {
++            if (!outbound.ContainsKey(from) || !outbound.ContainsKey(to))
++                continue;
++
++            outbound[from] = outbound[from] + 1;
++        }
++
++        return outbound
++            .Where(pair => pair.Value == 0)
++            .Select(pair => pair.Key)
++            .OrderBy(node => node, StringComparer.Ordinal)
++            .ToArray();
+     }
+ 
+     private static IEnumerable<string> SplitSegments(string graphText)
+@@ -120,4 +168,8 @@ internal static class MermaidPlanGraph
+ 
+         return ordered;
+     }
++
++    internal sealed record GraphDefinition(
++        IReadOnlyList<string> Nodes,
++        IReadOnlyList<(string From, string To)> Edges);
+ }
+diff --git a/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs b/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
+index 2dd3a19..8fbbad6 100644
+--- a/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
++++ b/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
+@@ -50,6 +50,40 @@ public sealed class TextRuntimeNarrator : IRuntimeNarrator
+ 
+         _emit($"[route] workorder={narration.WorkOrder.Id.Value} step={step} {decision} {halt}");
+     }
++
++    public void OnWorkOrderReceived(WorkOrder workOrder)
++    {
++        if (workOrder is null) throw new ArgumentNullException(nameof(workOrder));
++        _emit($"[workorder] id={workOrder.Id.Value} goal={workOrder.Goal}");
++    }
++
++    public void OnRouteEntered(RoutingState state, RouteStep step)
++    {
++        if (state is null) throw new ArgumentNullException(nameof(state));
++        if (step is null) throw new ArgumentNullException(nameof(step));
++        _emit($"[route.entered] workorder={state.WorkOrderId.Value} step={step.NodeId} intent={step.Intent} status={state.Status}");
++    }
++
++    public void OnDecisionRequired(RoutingState state, RouteStep step)
++    {
++        if (state is null) throw new ArgumentNullException(nameof(state));
++        if (step is null) throw new ArgumentNullException(nameof(step));
++        _emit($"[route.decision.required] workorder={state.WorkOrderId.Value} step={step.NodeId} intent={step.Intent}");
++    }
++
++    public void OnDecisionAccepted(RoutingState state, RouteStep step)
++    {
++        if (state is null) throw new ArgumentNullException(nameof(state));
++        if (step is null) throw new ArgumentNullException(nameof(step));
++        _emit($"[route.decision.accepted] workorder={state.WorkOrderId.Value} step={step.NodeId} intent={step.Intent}");
++    }
++
++    public void OnHalted(RoutingState state, RuntimeError error)
++    {
++        if (state is null) throw new ArgumentNullException(nameof(state));
++        if (error is null) throw new ArgumentNullException(nameof(error));
++        _emit($"[route.halted] workorder={state.WorkOrderId.Value} reason={error.Code}");
++    }
+ 
+     private static string FormatArgs(RuntimeRequest request)
+     {
+diff --git a/src/Builder/Shoots.Builder.Tests/DeterministicPlannerTests.cs b/src/Builder/Shoots.Builder.Tests/DeterministicPlannerTests.cs
+index 27c138c..b4ec361 100644
+--- a/src/Builder/Shoots.Builder.Tests/DeterministicPlannerTests.cs
++++ b/src/Builder/Shoots.Builder.Tests/DeterministicPlannerTests.cs
+@@ -91,7 +91,7 @@ public sealed class DeterministicPlannerTests
+         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
+         var request = CreateRequest(
+             "core.ping",
+-            "graph TD; terminate --> review --> validate --> select",
++            "graph TD; select --> review --> validate --> terminate",
+             null,
+             new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
+             new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
+@@ -101,7 +101,7 @@ public sealed class DeterministicPlannerTests
+         var plan = planner.Plan(request);
+ 
+         Assert.Equal(
+-            new[] { "terminate", "review", "validate", "select" },
++            new[] { "select", "review", "validate", "terminate" },
+             plan.Steps.Select(step => step.Id));
+     }
+ 
+@@ -117,10 +117,12 @@ public sealed class DeterministicPlannerTests
+         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
+         var request = CreateRequest(
+             "core.ping",
+-            "graph TD; validate --> review",
++            "graph TD; select --> validate",
+             null,
++            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
+             new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
+-            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"));
++            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
++            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination"));
+ 
+         Assert.Throws<InvalidOperationException>(() => planner.Plan(request));
+     }
+diff --git a/src/Contracts/Shoots.Contracts.Core/ToolSelectionDecision.cs b/src/Contracts/Shoots.Contracts.Core/ToolSelectionDecision.cs
+new file mode 100644
+index 0000000..638d0ec
+--- /dev/null
++++ b/src/Contracts/Shoots.Contracts.Core/ToolSelectionDecision.cs
+@@ -0,0 +1,9 @@
++namespace Shoots.Contracts.Core;
++
++/// <summary>
++/// Deterministic tool selection decision envelope.
++/// </summary>
++public sealed record ToolSelectionDecision(
++    ToolId ToolId,
++    IReadOnlyDictionary<string, object?> Bindings
++);
+diff --git a/src/Contracts/Shoots.Contracts.Core/WorkOrder.cs b/src/Contracts/Shoots.Contracts.Core/WorkOrder.cs
+index a026d46..9f69f54 100644
+--- a/src/Contracts/Shoots.Contracts.Core/WorkOrder.cs
++++ b/src/Contracts/Shoots.Contracts.Core/WorkOrder.cs
+@@ -7,6 +7,7 @@ public readonly record struct WorkOrderId(string Value);
+ 
+ /// <summary>
+ /// Immutable user intent capsule.
++/// Reissue the work order to change any value.
+ /// </summary>
+ public sealed record WorkOrder(
+     WorkOrderId Id,
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/IRuntimeNarrator.cs b/src/Runtime/Shoots.Runtime.Abstractions/IRuntimeNarrator.cs
+index c1c0452..47b0e55 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/IRuntimeNarrator.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/IRuntimeNarrator.cs
+@@ -1,4 +1,6 @@
+-namespace Shoots.Runtime.Abstractions;
++using Shoots.Contracts.Core;
++
++namespace Shoots.Runtime.Abstractions;
+ 
+ public interface IRuntimeNarrator
+ {
+@@ -7,4 +9,9 @@ public interface IRuntimeNarrator
+     void OnResult(RuntimeResult result);
+     void OnError(RuntimeError error);
+     void OnRoute(RouteNarration narration);
++    void OnWorkOrderReceived(WorkOrder workOrder);
++    void OnRouteEntered(RoutingState state, RouteStep step);
++    void OnDecisionRequired(RoutingState state, RouteStep step);
++    void OnDecisionAccepted(RoutingState state, RouteStep step);
++    void OnHalted(RoutingState state, RuntimeError error);
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs b/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs
+index 6871742..02e5124 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs
+@@ -8,8 +8,10 @@ public static class RouteGate
+ {
+     public static bool TryAdvance(
+         BuildPlan plan,
+-        RouteState state,
++        RoutingState state,
++        ToolSelectionDecision? decision,
+         IToolRegistry registry,
++        out RoutingState nextState,
+         out RuntimeError? error)
+     {
+         if (plan is null)
+@@ -19,11 +21,22 @@ public static class RouteGate
+         if (registry is null)
+             throw new ArgumentNullException(nameof(registry));
+ 
+-        if (plan.Request.WorkOrder is null || state.WorkOrder is null)
++        if (state.Status == RoutingStatus.Completed || state.Status == RoutingStatus.Halted)
++        {
++            error = new RuntimeError(
++                "route_state_final",
++                "Routing state is final and cannot advance.",
++                state.Status.ToString());
++            nextState = state;
++            return false;
++        }
++
++        if (plan.Request.WorkOrder is null)
+         {
+             error = new RuntimeError(
+                 "route_workorder_missing",
+                 "Work order is required to advance routing.");
++            nextState = state with { Status = RoutingStatus.Halted };
+             return false;
+         }
+ 
+@@ -32,33 +45,46 @@ public static class RouteGate
+             error = new RuntimeError(
+                 "route_rules_missing",
+                 "Route rules are required to advance routing.");
++            nextState = state with { Status = RoutingStatus.Halted };
+             return false;
+         }
+ 
+-        if (!string.Equals(plan.Request.WorkOrder.Id.Value, state.WorkOrder.Id.Value, StringComparison.Ordinal))
++        if (string.IsNullOrWhiteSpace(state.WorkOrderId.Value))
++        {
++            error = new RuntimeError(
++                "route_workorder_missing",
++                "Work order id is required to advance routing.");
++            nextState = state with { Status = RoutingStatus.Halted };
++            return false;
++        }
++
++        if (!string.Equals(plan.Request.WorkOrder.Id.Value, state.WorkOrderId.Value, StringComparison.Ordinal))
+         {
+             error = new RuntimeError(
+                 "route_workorder_mismatch",
+                 "Work order mismatch between plan and state.",
+-                new { plan = plan.Request.WorkOrder.Id.Value, state = state.WorkOrder.Id.Value });
++                new { plan = plan.Request.WorkOrder.Id.Value, state = state.WorkOrderId.Value });
++            nextState = state with { Status = RoutingStatus.Halted };
+             return false;
+         }
+ 
+-        if (state.StepIndex < 0 || state.StepIndex >= plan.Steps.Count)
++        if (state.CurrentRouteIndex < 0 || state.CurrentRouteIndex >= plan.Steps.Count)
+         {
+             error = new RuntimeError(
+                 "route_step_out_of_range",
+                 "Route step index is out of range.",
+-                state.StepIndex);
++                state.CurrentRouteIndex);
++            nextState = state with { Status = RoutingStatus.Halted };
+             return false;
+         }
+ 
+-        if (plan.Steps[state.StepIndex] is not RouteStep routeStep)
++        if (plan.Steps[state.CurrentRouteIndex] is not RouteStep routeStep)
+         {
+             error = new RuntimeError(
+                 "route_step_invalid",
+                 "Route step is required at the current index.",
+-                plan.Steps[state.StepIndex].Id);
++                plan.Steps[state.CurrentRouteIndex].Id);
++            nextState = state with { Status = RoutingStatus.Halted };
+             return false;
+         }
+ 
+@@ -68,6 +94,7 @@ public static class RouteGate
+                 "route_workorder_step_mismatch",
+                 "Route step work order does not match plan work order.",
+                 new { routeStep = routeStep.WorkOrderId.Value, plan = plan.Request.WorkOrder.Id.Value });
++            nextState = state with { Status = RoutingStatus.Halted };
+             return false;
+         }
+ 
+@@ -79,6 +106,7 @@ public static class RouteGate
+                 "route_rule_missing",
+                 "Route rule is missing for the current node.",
+                 routeStep.NodeId);
++            nextState = state with { Status = RoutingStatus.Halted };
+             return false;
+         }
+ 
+@@ -88,36 +116,117 @@ public static class RouteGate
+                 "route_rule_mismatch",
+                 "Route step does not match route rule.",
+                 new { rule.Intent, rule.Owner, routeStep.Intent, routeStep.Owner });
++            nextState = state with { Status = RoutingStatus.Halted };
+             return false;
+         }
+ 
+         if (plan.Steps.Any(step => step is ToolBuildStep))
+         {
+             if (!ToolAuthorityValidator.TryValidate(plan, registry, out error))
++            {
++                nextState = state with { Status = RoutingStatus.Halted };
+                 return false;
++            }
++        }
++
++        if (state.CurrentRouteIntent != routeStep.Intent)
++        {
++            error = new RuntimeError(
++                "route_intent_mismatch",
++                "Routing state intent does not match current route step.",
++                new { state.CurrentRouteIntent, routeStep.Intent });
++            nextState = state with { Status = RoutingStatus.Halted };
++            return false;
+         }
+ 
+         if (routeStep.Intent == RouteIntent.SelectTool)
+         {
+-            if (state.ToolSelection is null)
++            if (routeStep.Owner != DecisionOwner.Ai)
+             {
+                 error = new RuntimeError(
+-                    "route_decision_required",
+-                    "Tool selection is required for SelectTool intent.");
++                    "route_owner_invalid",
++                    "SelectTool intent requires Ai decision ownership.");
++                nextState = state with { Status = RoutingStatus.Halted };
+                 return false;
+             }
+ 
+-            if (!TryValidateToolSelection(plan, state.ToolSelection, registry, out error))
++            if (decision is null)
++            {
++                nextState = state with { Status = RoutingStatus.Waiting };
++                error = null;
+                 return false;
++            }
++
++            if (!TryValidateToolSelection(plan, decision, registry, out error))
++            {
++                nextState = state with { Status = RoutingStatus.Halted };
++                return false;
++            }
++        }
++        else
++        {
++            if (decision is not null)
++            {
++                error = new RuntimeError(
++                    "route_decision_unexpected",
++                    "Decision output is only allowed for SelectTool intent.");
++                nextState = state with { Status = RoutingStatus.Halted };
++                return false;
++            }
+         }
+ 
++        var isTerminalStep = state.CurrentRouteIndex >= plan.Steps.Count - 1;
++        if (routeStep.Intent == RouteIntent.Terminate)
++        {
++            if (!isTerminalStep)
++            {
++                error = new RuntimeError(
++                    "route_terminate_not_terminal",
++                    "Terminate intent must be at a terminal route step.",
++                    routeStep.NodeId);
++                nextState = state with { Status = RoutingStatus.Halted };
++                return false;
++            }
++
++            nextState = state with { Status = RoutingStatus.Completed };
++            error = null;
++            return true;
++        }
++
++        if (isTerminalStep)
++        {
++            error = new RuntimeError(
++                "route_terminal_missing",
++                "Terminal route step must use Terminate intent.",
++                routeStep.NodeId);
++            nextState = state with { Status = RoutingStatus.Halted };
++            return false;
++        }
++
++        var nextIndex = state.CurrentRouteIndex + 1;
++        if (nextIndex >= plan.Steps.Count || plan.Steps[nextIndex] is not RouteStep nextStep)
++        {
++            error = new RuntimeError(
++                "route_step_invalid",
++                "Next route step is invalid.",
++                nextIndex);
++            nextState = state with { Status = RoutingStatus.Halted };
++            return false;
++        }
++
++        nextState = state with
++        {
++            CurrentRouteIndex = nextIndex,
++            CurrentRouteIntent = nextStep.Intent,
++            Status = RoutingStatus.Pending
++        };
+         error = null;
+         return true;
+     }
+ 
+     private static bool TryValidateToolSelection(
+         BuildPlan plan,
+-        ToolSelection selection,
++        ToolSelectionDecision selection,
+         IToolRegistry registry,
+         out RuntimeError? error)
+     {
+@@ -133,7 +242,7 @@ public static class RouteGate
+         if (!ToolAuthorityValidator.TryValidateAuthority(plan.Authority, entry.Spec.RequiredAuthority, out error))
+             return false;
+ 
+-        if (selection.InputBindings is null)
++        if (selection.Bindings is null)
+         {
+             error = new RuntimeError(
+                 "tool_bindings_missing",
+@@ -143,7 +252,7 @@ public static class RouteGate
+ 
+         foreach (var input in entry.Spec.Inputs)
+         {
+-            if (input.Required && !selection.InputBindings.ContainsKey(input.Name))
++            if (input.Required && !selection.Bindings.ContainsKey(input.Name))
+             {
+                 error = new RuntimeError(
+                     "tool_binding_missing",
+@@ -152,7 +261,7 @@ public static class RouteGate
+             }
+         }
+ 
+-        foreach (var binding in selection.InputBindings.Keys)
++        foreach (var binding in selection.Bindings.Keys)
+         {
+             if (entry.Spec.Inputs.All(input => !string.Equals(input.Name, binding, StringComparison.Ordinal)))
+             {
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/RouteState.cs b/src/Runtime/Shoots.Runtime.Abstractions/RouteState.cs
+deleted file mode 100644
+index 731b344..0000000
+--- a/src/Runtime/Shoots.Runtime.Abstractions/RouteState.cs
++++ /dev/null
+@@ -1,12 +0,0 @@
+-using Shoots.Contracts.Core;
+-
+-namespace Shoots.Runtime.Abstractions;
+-
+-/// <summary>
+-/// Immutable routing state snapshot.
+-/// </summary>
+-public sealed record RouteState(
+-    WorkOrder WorkOrder,
+-    int StepIndex,
+-    ToolSelection? ToolSelection = null
+-);
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/RoutingState.cs b/src/Runtime/Shoots.Runtime.Abstractions/RoutingState.cs
+new file mode 100644
+index 0000000..781437d
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Abstractions/RoutingState.cs
+@@ -0,0 +1,21 @@
++using Shoots.Contracts.Core;
++
++namespace Shoots.Runtime.Abstractions;
++
++public enum RoutingStatus
++{
++    Pending,
++    Waiting,
++    Halted,
++    Completed
++}
++
++/// <summary>
++/// Immutable routing progress snapshot.
++/// </summary>
++public sealed record RoutingState(
++    WorkOrderId WorkOrderId,
++    int CurrentRouteIndex,
++    RouteIntent CurrentRouteIntent,
++    RoutingStatus Status
++);
+diff --git a/src/Runtime/Shoots.Runtime.Core/NullRuntimeNarrator.cs b/src/Runtime/Shoots.Runtime.Core/NullRuntimeNarrator.cs
+index f255751..65705ca 100644
+--- a/src/Runtime/Shoots.Runtime.Core/NullRuntimeNarrator.cs
++++ b/src/Runtime/Shoots.Runtime.Core/NullRuntimeNarrator.cs
+@@ -1,4 +1,5 @@
+-using Shoots.Runtime.Abstractions;
++using Shoots.Contracts.Core;
++using Shoots.Runtime.Abstractions;
+ 
+ namespace Shoots.Runtime.Core;
+ 
+@@ -35,4 +36,33 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
+     {
+         if (narration is null) throw new ArgumentNullException(nameof(narration));
+     }
++
++    public void OnWorkOrderReceived(WorkOrder workOrder)
++    {
++        if (workOrder is null) throw new ArgumentNullException(nameof(workOrder));
++    }
++
++    public void OnRouteEntered(RoutingState state, RouteStep step)
++    {
++        if (state is null) throw new ArgumentNullException(nameof(state));
++        if (step is null) throw new ArgumentNullException(nameof(step));
++    }
++
++    public void OnDecisionRequired(RoutingState state, RouteStep step)
++    {
++        if (state is null) throw new ArgumentNullException(nameof(state));
++        if (step is null) throw new ArgumentNullException(nameof(step));
++    }
++
++    public void OnDecisionAccepted(RoutingState state, RouteStep step)
++    {
++        if (state is null) throw new ArgumentNullException(nameof(state));
++        if (step is null) throw new ArgumentNullException(nameof(step));
++    }
++
++    public void OnHalted(RoutingState state, RuntimeError error)
++    {
++        if (state is null) throw new ArgumentNullException(nameof(state));
++        if (error is null) throw new ArgumentNullException(nameof(error));
++    }
+ }

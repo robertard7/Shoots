@@ -49,6 +49,28 @@ public static class ToolAuthorityValidator
         return true;
     }
 
+    public static bool TryValidateAuthority(
+        DelegationAuthority authority,
+        ToolAuthorityScope required,
+        out RuntimeError? error)
+    {
+        if (authority is null)
+            throw new ArgumentNullException(nameof(authority));
+        if (required is null)
+            throw new ArgumentNullException(nameof(required));
+
+        if (MeetsAuthority(authority, required))
+        {
+            error = null;
+            return true;
+        }
+
+        error = new RuntimeError(
+            "tool_authority_denied",
+            $"Tool requires '{required.RequiredProviderKind}' authority.");
+        return false;
+    }
+
     private static bool MeetsAuthority(
         DelegationAuthority authority,
         ToolAuthorityScope required)

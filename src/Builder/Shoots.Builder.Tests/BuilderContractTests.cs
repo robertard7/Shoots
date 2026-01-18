@@ -14,10 +14,23 @@ public sealed class BuilderContractTests
     public void Build_request_can_produce_plan_via_planner()
     {
         var request = new BuildRequest(
+            WorkOrder: new WorkOrder(
+                Id: new WorkOrderId("wo-test"),
+                OriginalRequest: "Test request.",
+                Goal: "Validate planner contract.",
+                Constraints: Array.Empty<string>(),
+                SuccessCriteria: Array.Empty<string>()),
             CommandId: "core.ping",
             Args: new Dictionary<string, object?>
             {
                 ["msg"] = "hello"
+            },
+            RouteRules: new[]
+            {
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
+                new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
             }
         );
 

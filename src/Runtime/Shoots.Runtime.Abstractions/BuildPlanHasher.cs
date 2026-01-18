@@ -10,10 +10,13 @@ namespace Shoots.Runtime.Abstractions;
 /// Inputs (in order):
 /// - request.CommandId (normalized)
 /// - BuildContract.Version
+/// - request.WorkOrder fields
 /// - authority.ProviderId, authority.Kind, authority.PolicyId, authority.AllowsDelegation
 /// - request.Args ordered by key (case-insensitive), normalized key/value tokens (including plan.graph)
+/// - request.RouteRules ordered by node id (including allowed output kind)
 /// - steps ordered as provided (id + description, plus AI prompt/schema when present)
 /// - tool steps include tool id + normalized input bindings + declared outputs
+/// - route steps include node id + intent + owner + work order id
 /// - artifacts ordered as provided (id + description)
 /// Excludes timestamps, environment/machine identifiers, absolute paths, and other non-semantic runtime state.
 /// </summary>
@@ -29,6 +32,14 @@ public static class BuildPlanHasher
             throw new ArgumentNullException(nameof(request));
         if (request.Args is null)
             throw new ArgumentException("args are required", nameof(request));
+        if (request.WorkOrder is null)
+            throw new ArgumentException("work order is required", nameof(request));
+        if (request.WorkOrder.Constraints is null)
+            throw new ArgumentException("work order constraints are required", nameof(request));
+        if (request.WorkOrder.SuccessCriteria is null)
+            throw new ArgumentException("work order success criteria are required", nameof(request));
+        if (request.RouteRules is null)
+            throw new ArgumentException("route rules are required", nameof(request));
         if (authority is null)
             throw new ArgumentNullException(nameof(authority));
         if (string.IsNullOrWhiteSpace(authority.ProviderId.Value))
@@ -43,6 +54,15 @@ public static class BuildPlanHasher
         var sb = new StringBuilder();
         sb.Append("command=").Append(NormalizeToken(request.CommandId));
         sb.Append("|contract=").Append(BuildContract.Version);
+        sb.Append("|workorder.id=").Append(NormalizeToken(request.WorkOrder.Id.Value));
+        sb.Append("|workorder.request=").Append(NormalizeTextToken(request.WorkOrder.OriginalRequest));
+        sb.Append("|workorder.goal=").Append(NormalizeTextToken(request.WorkOrder.Goal));
+
+        foreach (var constraint in request.WorkOrder.Constraints)
+            sb.Append("|workorder.constraint=").Append(NormalizeTextToken(constraint));
+
+        foreach (var criterion in request.WorkOrder.SuccessCriteria)
+            sb.Append("|workorder.success=").Append(NormalizeTextToken(criterion));
         sb.Append("|authority.provider=").Append(NormalizeToken(authority.ProviderId.Value));
         sb.Append("|authority.kind=").Append(authority.Kind.ToString());
         sb.Append("|delegation.policy=").Append(NormalizeToken(authority.PolicyId));
@@ -54,6 +74,19 @@ public static class BuildPlanHasher
               .Append(NormalizeToken(kvp.Key))
               .Append('=')
               .Append(NormalizeToken(kvp.Value?.ToString() ?? "null"));
+        }
+
+        foreach (var rule in request.RouteRules
+                     .OrderBy(rule => rule.NodeId, StringComparer.Ordinal))
+        {
+            sb.Append("|route.rule=")
+              .Append(NormalizeToken(rule.NodeId))
+              .Append(':')
+              .Append(rule.Intent.ToString())
+              .Append(':')
+              .Append(rule.Owner.ToString())
+              .Append('=')
+              .Append(NormalizeToken(rule.AllowedOutputKind));
         }
 
         foreach (var step in steps)
@@ -91,6 +124,14 @@ public static class BuildPlanHasher
                       .Append('=')
                       .Append(NormalizeTextToken(output.Description));
                 }
+            }
+
+            if (step is RouteStep routeStep)
+            {
+                sb.Append("|route.node=").Append(NormalizeToken(routeStep.NodeId));
+                sb.Append("|route.intent=").Append(routeStep.Intent.ToString());
+                sb.Append("|route.owner=").Append(routeStep.Owner.ToString());
+                sb.Append("|route.workorder=").Append(NormalizeToken(routeStep.WorkOrderId.Value));
             }
         }
 

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using Shoots.Builder.Core;
 using Shoots.Contracts.Core;
@@ -19,15 +21,18 @@ public sealed class PlannerSerializationTests
         );
 
         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
-        var request = new BuildRequest(
+        var request = CreateRequest(
             " core.ping ",
+            "graph TD; select --> validate --> review --> terminate",
             new Dictionary<string, object?>
             {
-                ["plan.graph"] = "graph TD; validate-command --> resolve-command --> execute-command",
                 ["b"] = "2",
                 ["a"] = "1"
-            }
-        );
+            },
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination"));
 
         var plan = planner.Plan(request);
         var planText = BuildPlanRenderer.RenderText(plan);
@@ -46,6 +51,35 @@ public sealed class PlannerSerializationTests
         var secondPlan = planner.Plan(request);
         Assert.Equal(plan.PlanId, secondPlan.PlanId);
         Assert.Equal(planText, BuildPlanRenderer.RenderText(secondPlan));
+    }
+
+    private static BuildRequest CreateRequest(
+        string commandId,
+        string graph,
+        IReadOnlyDictionary<string, object?>? extraArgs,
+        params RouteRule[] routeRules)
+    {
+        var args = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["plan.graph"] = graph
+        };
+
+        if (extraArgs is not null)
+        {
+            foreach (var kvp in extraArgs)
+                args[kvp.Key] = kvp.Value;
+        }
+
+        return new BuildRequest(
+            WorkOrder: new WorkOrder(
+                Id: new WorkOrderId("wo-test"),
+                OriginalRequest: "Test request.",
+                Goal: "Validate plan serialization.",
+                Constraints: Array.Empty<string>(),
+                SuccessCriteria: Array.Empty<string>()),
+            CommandId: commandId,
+            Args: args,
+            RouteRules: routeRules);
     }
 
     private sealed class StubRuntimeServices : IRuntimeServices

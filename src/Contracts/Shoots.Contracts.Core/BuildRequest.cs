@@ -4,6 +4,8 @@ namespace Shoots.Contracts.Core;
 /// Immutable request for planning.
 /// </summary>
 public sealed record BuildRequest(
+    WorkOrder WorkOrder,
     string CommandId,
-    IReadOnlyDictionary<string, object?> Args
+    IReadOnlyDictionary<string, object?> Args,
+    IReadOnlyList<RouteRule> RouteRules
 );

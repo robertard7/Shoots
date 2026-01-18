@@ -98,7 +98,7 @@ public sealed class ToolAuthorityValidatorTests
 
     private static BuildPlan CreatePlan(DelegationAuthority? authority, ToolId toolId)
     {
-        var request = new BuildRequest("core.tool", new Dictionary<string, object?>());
+        var request = TestRequestFactory.CreateBuildRequest("core.tool", new Dictionary<string, object?>());
         var steps = new BuildStep[]
         {
             new ToolBuildStep(

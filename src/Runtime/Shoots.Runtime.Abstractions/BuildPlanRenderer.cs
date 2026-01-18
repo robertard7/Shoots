@@ -20,6 +20,8 @@ public static class BuildPlanRenderer
 
         builder.Append("plan=").AppendLine(plan.PlanId);
         builder.Append("command=").AppendLine(plan.Request.CommandId);
+        builder.Append("workorder.id=").AppendLine(plan.Request.WorkOrder.Id.Value);
+        builder.Append("workorder.goal=").AppendLine(plan.Request.WorkOrder.Goal);
 
         builder.Append("authority.provider=").AppendLine(plan.Authority.ProviderId.Value);
         builder.Append("authority.kind=").AppendLine(plan.Authority.Kind.ToString());
@@ -66,6 +68,14 @@ public static class BuildPlanRenderer
                            .Append(output.Description)
                            .AppendLine(")");
                 }
+            }
+
+            if (step is RouteStep routeStep)
+            {
+                builder.Append("  node=").AppendLine(routeStep.NodeId);
+                builder.Append("  intent=").AppendLine(routeStep.Intent.ToString());
+                builder.Append("  owner=").AppendLine(routeStep.Owner.ToString());
+                builder.Append("  workorder=").AppendLine(routeStep.WorkOrderId.Value);
             }
         }
 

@@ -34,6 +34,7 @@ public sealed record BuildPlan(
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(AiBuildStep), typeDiscriminator: "ai")]
 [JsonDerivedType(typeof(ToolBuildStep), typeDiscriminator: "tool")]
+[JsonDerivedType(typeof(RouteStep), typeDiscriminator: "route")]
 public record BuildStep(
     string Id,
     string Description
@@ -75,4 +76,26 @@ public sealed record ToolBuildStep(
     ToolId ToolId,
     IReadOnlyDictionary<string, object?> InputBindings,
     IReadOnlyList<ToolOutputSpec> Outputs
+) : BuildStep(Id, Description);
+
+// ⚠️ CONTRACT FREEZE
+// Any change here requires:
+// 1. New versioned type OR
+// 2. Explicit RFC + test update
+/// <summary>
+/// Deterministic routing step bound to a graph node.
+/// </summary>
+/// <param name="Id">Stable step identifier.</param>
+/// <param name="Description">Human-readable step description.</param>
+/// <param name="NodeId">Mermaid graph node identifier.</param>
+/// <param name="Intent">Deterministic routing intent.</param>
+/// <param name="Owner">Decision owner for the routing step.</param>
+/// <param name="WorkOrderId">Associated work order identifier.</param>
+public sealed record RouteStep(
+    string Id,
+    string Description,
+    string NodeId,
+    RouteIntent Intent,
+    DecisionOwner Owner,
+    WorkOrderId WorkOrderId
 ) : BuildStep(Id, Description);

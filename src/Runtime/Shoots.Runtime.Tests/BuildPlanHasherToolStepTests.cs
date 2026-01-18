@@ -10,7 +10,7 @@ public sealed class BuildPlanHasherToolStepTests
     [Fact]
     public void Hash_changes_when_tool_input_changes()
     {
-        var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var request = TestRequestFactory.CreateBuildRequest("core.ping", new Dictionary<string, object?>());
         var authority = new DelegationAuthority(
             ProviderId: new ProviderId("local"),
             Kind: ProviderKind.Local,
@@ -53,7 +53,7 @@ public sealed class BuildPlanHasherToolStepTests
     [Fact]
     public void Hash_changes_when_tool_output_changes()
     {
-        var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var request = TestRequestFactory.CreateBuildRequest("core.ping", new Dictionary<string, object?>());
         var authority = new DelegationAuthority(
             ProviderId: new ProviderId("local"),
             Kind: ProviderKind.Local,

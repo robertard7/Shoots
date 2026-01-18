@@ -9,7 +9,7 @@ public sealed class AuthorityInvariantTests
     [Fact]
     public void Plan_hash_includes_authority()
     {
-        var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var request = TestRequestFactory.CreateBuildRequest("core.ping", new Dictionary<string, object?>());
         var steps = new[] { new BuildStep("s1", "step") };
         var artifacts = new[] { new BuildArtifact("a1", "artifact") };
 
@@ -39,7 +39,7 @@ public sealed class AuthorityInvariantTests
     [Fact]
     public void Plan_hash_changes_when_policy_changes()
     {
-        var request = new BuildRequest("core.ping", new Dictionary<string, object?>());
+        var request = TestRequestFactory.CreateBuildRequest("core.ping", new Dictionary<string, object?>());
         var steps = new[] { new BuildStep("s1", "step") };
         var artifacts = new[] { new BuildArtifact("a1", "artifact") };
 
