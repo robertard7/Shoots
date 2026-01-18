@@ -9,5 +9,15 @@ Routing invariants (locked):
 - SelectTool decisions are the only accepted decision outputs.
 - ToolInvocation is only allowed on SelectTool and must match WorkOrderId.
 - Tool registry validation uses immutable snapshots.
+- Contracts.Core routing and tool types are frozen.
+- ToolResult is serialized and hashed but not consumed by routing.
 
 Any change to these rules requires explicit approval.
+
+Checklist:
+
+- [x] RouteGate is the only routing state machine
+- [x] RoutingState cannot be advanced outside RouteGate
+- [x] SelectTool decisions bounded to AI ownership
+- [x] ToolInvocation and ToolResult are immutable envelopes only
+- [x] Builder avoids ToolRegistry and RoutingState

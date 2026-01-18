@@ -9,6 +9,7 @@ namespace Shoots.Runtime.Abstractions;
 [JsonSerializable(typeof(ToolBuildStep))]
 [JsonSerializable(typeof(RouteStep))]
 [JsonSerializable(typeof(ToolInvocation))]
+[JsonSerializable(typeof(ToolResult))]
 internal partial class BuildPlanJsonContext : JsonSerializerContext
 {
 }

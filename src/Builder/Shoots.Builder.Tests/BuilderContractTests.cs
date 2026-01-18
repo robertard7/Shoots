@@ -93,6 +93,22 @@ public sealed class BuilderContractTests
         Assert.DoesNotContain(typeof(DelegationAuthority), parameterTypes);
     }
 
+    [Fact]
+    public void BuilderCore_must_not_reference_tool_registry()
+    {
+        var assembly = typeof(Shoots.Builder.Core.BuilderKernel).Assembly;
+
+        var parameterTypes = assembly
+            .GetTypes()
+            .SelectMany(type => type.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+            .OfType<MethodBase>()
+            .SelectMany(method => method.GetParameters())
+            .Select(parameter => parameter.ParameterType)
+            .ToArray();
+
+        Assert.DoesNotContain(typeof(IToolRegistry), parameterTypes);
+    }
+
     private static string[] CollectDirectReferencedAssemblyNames(Assembly rootAssembly)
     {
         return rootAssembly

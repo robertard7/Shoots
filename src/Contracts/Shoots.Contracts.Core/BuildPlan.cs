@@ -19,7 +19,8 @@ public sealed record BuildPlan(
     BuildRequest Request,
     DelegationAuthority Authority,
     IReadOnlyList<BuildStep> Steps,
-    IReadOnlyList<BuildArtifact> Artifacts
+    IReadOnlyList<BuildArtifact> Artifacts,
+    ToolResult? ToolResult = null
 );
 
 // ⚠️ CONTRACT FREEZE

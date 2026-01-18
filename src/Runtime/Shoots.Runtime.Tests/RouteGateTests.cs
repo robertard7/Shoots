@@ -240,7 +240,122 @@ public sealed class RouteGateTests
         }
     }
 
-    private static BuildPlan CreatePlan(WorkOrderId workOrderId, IReadOnlyList<RouteRule> routeRules)
+    [Fact]
+    public void TryAdvance_does_not_advance_after_completed()
+    {
+        var toolSpec = new ToolSpec(
+            new ToolId("tools.echo"),
+            "Echo tool.",
+            new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+            new List<ToolInputSpec>(),
+            new List<ToolOutputSpec>());
+
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+            });
+
+        var registry = new SnapshotOnlyRegistry(toolSpec);
+        var state = RoutingState.CreateInitial(plan);
+
+        var decision = new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>());
+        var advanced = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
+
+        Assert.True(advanced);
+        Assert.Null(error);
+
+        advanced = RouteGate.TryAdvance(plan, nextState, null, registry, out var finalState, out error);
+        Assert.True(advanced);
+        Assert.Equal(RoutingStatus.Completed, finalState.Status);
+
+        advanced = RouteGate.TryAdvance(plan, finalState, null, registry, out var postState, out error);
+        Assert.False(advanced);
+        Assert.NotNull(error);
+        Assert.Equal("route_state_final", error!.Code);
+        Assert.Equal(RoutingStatus.Completed, postState.Status);
+    }
+
+    [Fact]
+    public void TryAdvance_halts_when_select_tool_owner_is_not_ai()
+    {
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Human, "tool.selection"),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+            });
+
+        var state = RoutingState.CreateInitial(plan);
+        var decision = new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>());
+
+        var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
+
+        Assert.False(result);
+        Assert.NotNull(error);
+        Assert.Equal("route_owner_invalid", error!.Code);
+        Assert.Equal(RoutingStatus.Halted, nextState.Status);
+    }
+
+    [Fact]
+    public void TryAdvance_rejects_decision_on_workorder_mismatch()
+    {
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+            });
+
+        var state = new RoutingState(
+            new WorkOrderId("wo-other"),
+            0,
+            RouteIntent.SelectTool,
+            RoutingStatus.Pending);
+        var decision = new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>());
+
+        var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
+
+        Assert.False(result);
+        Assert.NotNull(error);
+        Assert.Equal("route_workorder_mismatch", error!.Code);
+        Assert.Equal(RoutingStatus.Halted, nextState.Status);
+    }
+
+    [Fact]
+    public void Tool_result_does_not_affect_routing()
+    {
+        var toolResult = new ToolResult(
+            new ToolId("tools.result"),
+            new Dictionary<string, object?> { ["output"] = "value" },
+            true);
+
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+            },
+            toolResult);
+
+        var state = RoutingState.CreateInitial(plan);
+
+        var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(), out var nextState, out var error);
+
+        Assert.True(result);
+        Assert.Null(error);
+        Assert.Equal(1, nextState.CurrentRouteIndex);
+    }
+
+    private static BuildPlan CreatePlan(
+        WorkOrderId workOrderId,
+        IReadOnlyList<RouteRule> routeRules,
+        ToolResult? toolResult = null)
     {
         var workOrder = new WorkOrder(
             workOrderId,
@@ -278,7 +393,8 @@ public sealed class RouteGateTests
             request,
             authority,
             steps,
-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
+            new[] { new BuildArtifact("plan.json", "Plan payload.") },
+            toolResult);
     }
 
     private sealed class StubToolRegistry : IToolRegistry

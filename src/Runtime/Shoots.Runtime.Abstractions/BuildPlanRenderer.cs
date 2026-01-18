@@ -103,6 +103,22 @@ public static class BuildPlanRenderer
                    .AppendLine(artifact.Description);
         }
 
+        if (plan.ToolResult is not null)
+        {
+            builder.AppendLine("tool.result:");
+            builder.Append("  id=").AppendLine(plan.ToolResult.ToolId.Value);
+            builder.Append("  success=").AppendLine(plan.ToolResult.Success.ToString());
+            builder.AppendLine("  outputs:");
+            foreach (var output in plan.ToolResult.Outputs
+                         .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                builder.Append("    - ")
+                       .Append(output.Key)
+                       .Append(": ")
+                       .AppendLine(output.Value?.ToString() ?? "null");
+            }
+        }
+
         return builder.ToString();
     }
 

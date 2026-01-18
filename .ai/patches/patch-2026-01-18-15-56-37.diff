@@ -1,0 +1,423 @@
+diff --git a/.ai/freeze/PLUMBING_COMPLETE.md b/.ai/freeze/PLUMBING_COMPLETE.md
+new file mode 100644
+index 0000000..7d8ce0d
+--- /dev/null
++++ b/.ai/freeze/PLUMBING_COMPLETE.md
+@@ -0,0 +1,10 @@
++# Plumbing Complete
++
++This checkpoint marks the end of routing/tool/AI plumbing.
++
++- Routing is immutable and gated by RouteGate.
++- Tool contracts are metadata-only envelopes.
++- AI decisions are pluggable but inert.
++- Narration covers all routing outcomes.
++
++No execution or UI has been introduced.
+diff --git a/.ai/freeze/routing.md b/.ai/freeze/routing.md
+index c0239b2..60f3f8e 100644
+--- a/.ai/freeze/routing.md
++++ b/.ai/freeze/routing.md
+@@ -9,5 +9,15 @@ Routing invariants (locked):
+ - SelectTool decisions are the only accepted decision outputs.
+ - ToolInvocation is only allowed on SelectTool and must match WorkOrderId.
+ - Tool registry validation uses immutable snapshots.
++- Contracts.Core routing and tool types are frozen.
++- ToolResult is serialized and hashed but not consumed by routing.
+ 
+ Any change to these rules requires explicit approval.
++
++Checklist:
++
++- [x] RouteGate is the only routing state machine
++- [x] RoutingState cannot be advanced outside RouteGate
++- [x] SelectTool decisions bounded to AI ownership
++- [x] ToolInvocation and ToolResult are immutable envelopes only
++- [x] Builder avoids ToolRegistry and RoutingState
+diff --git a/src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs b/src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
+index 032eb4b..a508198 100644
+--- a/src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
++++ b/src/Builder/Shoots.Builder.Tests/BuilderContractTests.cs
+@@ -93,6 +93,22 @@ public sealed class BuilderContractTests
+         Assert.DoesNotContain(typeof(DelegationAuthority), parameterTypes);
+     }
+ 
++    [Fact]
++    public void BuilderCore_must_not_reference_tool_registry()
++    {
++        var assembly = typeof(Shoots.Builder.Core.BuilderKernel).Assembly;
++
++        var parameterTypes = assembly
++            .GetTypes()
++            .SelectMany(type => type.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
++            .OfType<MethodBase>()
++            .SelectMany(method => method.GetParameters())
++            .Select(parameter => parameter.ParameterType)
++            .ToArray();
++
++        Assert.DoesNotContain(typeof(IToolRegistry), parameterTypes);
++    }
++
+     private static string[] CollectDirectReferencedAssemblyNames(Assembly rootAssembly)
+     {
+         return rootAssembly
+diff --git a/src/Contracts/Shoots.Contracts.Core/BuildPlan.cs b/src/Contracts/Shoots.Contracts.Core/BuildPlan.cs
+index 3f84d17..7f1a986 100644
+--- a/src/Contracts/Shoots.Contracts.Core/BuildPlan.cs
++++ b/src/Contracts/Shoots.Contracts.Core/BuildPlan.cs
+@@ -19,7 +19,8 @@ public sealed record BuildPlan(
+     BuildRequest Request,
+     DelegationAuthority Authority,
+     IReadOnlyList<BuildStep> Steps,
+-    IReadOnlyList<BuildArtifact> Artifacts
++    IReadOnlyList<BuildArtifact> Artifacts,
++    ToolResult? ToolResult = null
+ );
+ 
+ // ⚠️ CONTRACT FREEZE
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanHasher.cs b/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanHasher.cs
+index dba43b1..b507004 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanHasher.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanHasher.cs
+@@ -19,6 +19,7 @@ namespace Shoots.Runtime.Abstractions;
+ /// - route steps include node id + intent + owner + work order id
+ /// - route steps include tool invocation details when present
+ /// - artifacts ordered as provided (id + description)
++/// - tool result fields when provided
+ /// Excludes timestamps, environment/machine identifiers, absolute paths, and other non-semantic runtime state.
+ /// </summary>
+ public static class BuildPlanHasher
+@@ -28,6 +29,16 @@ public static class BuildPlanHasher
+         DelegationAuthority authority,
+         IReadOnlyList<BuildStep> steps,
+         IReadOnlyList<BuildArtifact> artifacts)
++    {
++        return ComputePlanId(request, authority, steps, artifacts, null);
++    }
++
++    public static string ComputePlanId(
++        BuildRequest request,
++        DelegationAuthority authority,
++        IReadOnlyList<BuildStep> steps,
++        IReadOnlyList<BuildArtifact> artifacts,
++        ToolResult? toolResult)
+     {
+         if (request is null)
+             throw new ArgumentNullException(nameof(request));
+@@ -159,6 +170,20 @@ public static class BuildPlanHasher
+               .Append(NormalizeTextToken(artifact.Description));
+         }
+ 
++        if (toolResult is not null)
++        {
++            sb.Append("|tool.result.id=").Append(NormalizeToken(toolResult.ToolId.Value));
++            sb.Append("|tool.result.success=").Append(toolResult.Success.ToString());
++            foreach (var output in toolResult.Outputs
++                         .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
++            {
++                sb.Append("|tool.result.output=")
++                  .Append(NormalizeToken(output.Key))
++                  .Append('=')
++                  .Append(NormalizeTextToken(output.Value?.ToString() ?? "null"));
++            }
++        }
++
+         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+     }
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanJsonContext.cs b/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanJsonContext.cs
+index 4c796c3..7eeab86 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanJsonContext.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanJsonContext.cs
+@@ -9,6 +9,7 @@ namespace Shoots.Runtime.Abstractions;
+ [JsonSerializable(typeof(ToolBuildStep))]
+ [JsonSerializable(typeof(RouteStep))]
+ [JsonSerializable(typeof(ToolInvocation))]
++[JsonSerializable(typeof(ToolResult))]
+ internal partial class BuildPlanJsonContext : JsonSerializerContext
+ {
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs b/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs
+index 106cf94..5819145 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/BuildPlanRenderer.cs
+@@ -103,6 +103,22 @@ public static class BuildPlanRenderer
+                    .AppendLine(artifact.Description);
+         }
+ 
++        if (plan.ToolResult is not null)
++        {
++            builder.AppendLine("tool.result:");
++            builder.Append("  id=").AppendLine(plan.ToolResult.ToolId.Value);
++            builder.Append("  success=").AppendLine(plan.ToolResult.Success.ToString());
++            builder.AppendLine("  outputs:");
++            foreach (var output in plan.ToolResult.Outputs
++                         .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
++            {
++                builder.Append("    - ")
++                       .Append(output.Key)
++                       .Append(": ")
++                       .AppendLine(output.Value?.ToString() ?? "null");
++            }
++        }
++
+         return builder.ToString();
+     }
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs b/src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
+index 4d25133..ee42782 100644
+--- a/src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
++++ b/src/Runtime/Shoots.Runtime.Core/BuildPlanHasher.cs
+@@ -13,4 +13,14 @@ public static class BuildPlanHasher
+     {
+         return Shoots.Runtime.Abstractions.BuildPlanHasher.ComputePlanId(request, authority, steps, artifacts);
+     }
++
++    public static string ComputePlanId(
++        BuildRequest request,
++        DelegationAuthority authority,
++        IReadOnlyList<BuildStep> steps,
++        IReadOnlyList<BuildArtifact> artifacts,
++        ToolResult? toolResult)
++    {
++        return Shoots.Runtime.Abstractions.BuildPlanHasher.ComputePlanId(request, authority, steps, artifacts, toolResult);
++    }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Tests/BuildPlanHasherToolResultTests.cs b/src/Runtime/Shoots.Runtime.Tests/BuildPlanHasherToolResultTests.cs
+new file mode 100644
+index 0000000..e417326
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Tests/BuildPlanHasherToolResultTests.cs
+@@ -0,0 +1,41 @@
++using System.Collections.Generic;
++using Shoots.Contracts.Core;
++using Shoots.Runtime.Abstractions;
++using Xunit;
++
++namespace Shoots.Runtime.Tests;
++
++public sealed class BuildPlanHasherToolResultTests
++{
++    [Fact]
++    public void Hash_changes_when_tool_result_changes()
++    {
++        var request = TestRequestFactory.CreateBuildRequest("core.ping", new Dictionary<string, object?>());
++        var authority = new DelegationAuthority(
++            ProviderId: new ProviderId("local"),
++            Kind: ProviderKind.Local,
++            PolicyId: "local-only",
++            AllowsDelegation: false
++        );
++
++        var steps = new BuildStep[]
++        {
++            new BuildStep("step-1", "Step")
++        };
++        var artifacts = new[] { new BuildArtifact("plan.json", "Plan payload.") };
++
++        var firstResult = new ToolResult(
++            new ToolId("tools.result"),
++            new Dictionary<string, object?> { ["value"] = "alpha" },
++            true);
++        var secondResult = new ToolResult(
++            new ToolId("tools.result"),
++            new Dictionary<string, object?> { ["value"] = "beta" },
++            true);
++
++        var firstHash = BuildPlanHasher.ComputePlanId(request, authority, steps, artifacts, firstResult);
++        var secondHash = BuildPlanHasher.ComputePlanId(request, authority, steps, artifacts, secondResult);
++
++        Assert.NotEqual(firstHash, secondHash);
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Tests/BuildPlanSerializationToolResultTests.cs b/src/Runtime/Shoots.Runtime.Tests/BuildPlanSerializationToolResultTests.cs
+new file mode 100644
+index 0000000..1f76928
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Tests/BuildPlanSerializationToolResultTests.cs
+@@ -0,0 +1,47 @@
++using System.Collections.Generic;
++using System.Text.Json;
++using Shoots.Contracts.Core;
++using Shoots.Runtime.Abstractions;
++using Xunit;
++
++namespace Shoots.Runtime.Tests;
++
++public sealed class BuildPlanSerializationToolResultTests
++{
++    [Fact]
++    public void Tool_result_round_trips_in_plan_json()
++    {
++        var workOrder = TestRequestFactory.CreateWorkOrder();
++        var request = new BuildRequest(
++            workOrder,
++            "core.route",
++            new Dictionary<string, object?>(),
++            TestRequestFactory.CreateRouteRules());
++
++        var toolResult = new ToolResult(
++            new ToolId("tools.result"),
++            new Dictionary<string, object?> { ["value"] = "alpha" },
++            true);
++
++        var plan = new BuildPlan(
++            "plan",
++            request,
++            new DelegationAuthority(
++                ProviderId: new ProviderId("local"),
++                Kind: ProviderKind.Local,
++                PolicyId: "local-only",
++                AllowsDelegation: false),
++            new BuildStep[] { new BuildStep("step-1", "Step") },
++            new[] { new BuildArtifact("plan.json", "Plan payload.") },
++            toolResult);
++
++        var json = BuildPlanRenderer.RenderJson(plan);
++        var roundTrip = JsonSerializer.Deserialize<BuildPlan>(json);
++
++        Assert.NotNull(roundTrip);
++        Assert.NotNull(roundTrip!.ToolResult);
++        Assert.Equal(toolResult.ToolId, roundTrip.ToolResult!.ToolId);
++        Assert.Equal(toolResult.Success, roundTrip.ToolResult.Success);
++        Assert.Equal(toolResult.Outputs["value"], roundTrip.ToolResult.Outputs["value"]);
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+index b66a519..77fa78f 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+@@ -240,7 +240,122 @@ public sealed class RouteGateTests
+         }
+     }
+ 
+-    private static BuildPlan CreatePlan(WorkOrderId workOrderId, IReadOnlyList<RouteRule> routeRules)
++    [Fact]
++    public void TryAdvance_does_not_advance_after_completed()
++    {
++        var toolSpec = new ToolSpec(
++            new ToolId("tools.echo"),
++            "Echo tool.",
++            new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
++            new List<ToolInputSpec>(),
++            new List<ToolOutputSpec>());
++
++        var plan = CreatePlan(
++            new WorkOrderId("wo-plan"),
++            new[]
++            {
++                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
++                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
++            });
++
++        var registry = new SnapshotOnlyRegistry(toolSpec);
++        var state = RoutingState.CreateInitial(plan);
++
++        var decision = new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>());
++        var advanced = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
++
++        Assert.True(advanced);
++        Assert.Null(error);
++
++        advanced = RouteGate.TryAdvance(plan, nextState, null, registry, out var finalState, out error);
++        Assert.True(advanced);
++        Assert.Equal(RoutingStatus.Completed, finalState.Status);
++
++        advanced = RouteGate.TryAdvance(plan, finalState, null, registry, out var postState, out error);
++        Assert.False(advanced);
++        Assert.NotNull(error);
++        Assert.Equal("route_state_final", error!.Code);
++        Assert.Equal(RoutingStatus.Completed, postState.Status);
++    }
++
++    [Fact]
++    public void TryAdvance_halts_when_select_tool_owner_is_not_ai()
++    {
++        var plan = CreatePlan(
++            new WorkOrderId("wo-plan"),
++            new[]
++            {
++                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Human, "tool.selection"),
++                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
++            });
++
++        var state = RoutingState.CreateInitial(plan);
++        var decision = new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>());
++
++        var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
++
++        Assert.False(result);
++        Assert.NotNull(error);
++        Assert.Equal("route_owner_invalid", error!.Code);
++        Assert.Equal(RoutingStatus.Halted, nextState.Status);
++    }
++
++    [Fact]
++    public void TryAdvance_rejects_decision_on_workorder_mismatch()
++    {
++        var plan = CreatePlan(
++            new WorkOrderId("wo-plan"),
++            new[]
++            {
++                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
++                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
++            });
++
++        var state = new RoutingState(
++            new WorkOrderId("wo-other"),
++            0,
++            RouteIntent.SelectTool,
++            RoutingStatus.Pending);
++        var decision = new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>());
++
++        var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
++
++        Assert.False(result);
++        Assert.NotNull(error);
++        Assert.Equal("route_workorder_mismatch", error!.Code);
++        Assert.Equal(RoutingStatus.Halted, nextState.Status);
++    }
++
++    [Fact]
++    public void Tool_result_does_not_affect_routing()
++    {
++        var toolResult = new ToolResult(
++            new ToolId("tools.result"),
++            new Dictionary<string, object?> { ["output"] = "value" },
++            true);
++
++        var plan = CreatePlan(
++            new WorkOrderId("wo-plan"),
++            new[]
++            {
++                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
++                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
++            },
++            toolResult);
++
++        var state = RoutingState.CreateInitial(plan);
++
++        var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(), out var nextState, out var error);
++
++        Assert.True(result);
++        Assert.Null(error);
++        Assert.Equal(1, nextState.CurrentRouteIndex);
++    }
++
++    private static BuildPlan CreatePlan(
++        WorkOrderId workOrderId,
++        IReadOnlyList<RouteRule> routeRules,
++        ToolResult? toolResult = null)
+     {
+         var workOrder = new WorkOrder(
+             workOrderId,
+@@ -278,7 +393,8 @@ public sealed class RouteGateTests
+             request,
+             authority,
+             steps,
+-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
++            new[] { new BuildArtifact("plan.json", "Plan payload.") },
++            toolResult);
+     }
+ 
+     private sealed class StubToolRegistry : IToolRegistry

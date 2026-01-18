@@ -19,6 +19,7 @@ namespace Shoots.Runtime.Abstractions;
 /// - route steps include node id + intent + owner + work order id
 /// - route steps include tool invocation details when present
 /// - artifacts ordered as provided (id + description)
+/// - tool result fields when provided
 /// Excludes timestamps, environment/machine identifiers, absolute paths, and other non-semantic runtime state.
 /// </summary>
 public static class BuildPlanHasher
@@ -28,6 +29,16 @@ public static class BuildPlanHasher
         DelegationAuthority authority,
         IReadOnlyList<BuildStep> steps,
         IReadOnlyList<BuildArtifact> artifacts)
+    {
+        return ComputePlanId(request, authority, steps, artifacts, null);
+    }
+
+    public static string ComputePlanId(
+        BuildRequest request,
+        DelegationAuthority authority,
+        IReadOnlyList<BuildStep> steps,
+        IReadOnlyList<BuildArtifact> artifacts,
+        ToolResult? toolResult)
     {
         if (request is null)
             throw new ArgumentNullException(nameof(request));
@@ -157,6 +168,20 @@ public static class BuildPlanHasher
               .Append(NormalizeToken(artifact.Id))
               .Append('=')
               .Append(NormalizeTextToken(artifact.Description));
+        }
+
+        if (toolResult is not null)
+        {
+            sb.Append("|tool.result.id=").Append(NormalizeToken(toolResult.ToolId.Value));
+            sb.Append("|tool.result.success=").Append(toolResult.Success.ToString());
+            foreach (var output in toolResult.Outputs
+                         .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.Append("|tool.result.output=")
+                  .Append(NormalizeToken(output.Key))
+                  .Append('=')
+                  .Append(NormalizeTextToken(output.Value?.ToString() ?? "null"));
+            }
         }
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
