@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
+using Shoots.Providers.Bridge;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Runtime.Core;
@@ -65,7 +66,7 @@ public sealed class RuntimeOrchestrator
     public static ExecutionEnvelope Run(
         BuildPlan plan,
         IToolRegistry registry,
-        IAiDecisionProvider aiDecisionProvider,
+        IAiDecisionProvider? aiDecisionProvider = null,
         IRuntimePersistence? persistence = null,
         IRuntimeNarrator? narrator = null)
     {
@@ -73,12 +74,12 @@ public sealed class RuntimeOrchestrator
             throw new ArgumentNullException(nameof(plan));
         if (registry is null)
             throw new ArgumentNullException(nameof(registry));
-        if (aiDecisionProvider is null)
-            throw new ArgumentNullException(nameof(aiDecisionProvider));
+        var resolvedAiDecisionProvider = aiDecisionProvider
+            ?? new BridgeAiDecisionProvider(ProviderRegistryFactory.CreateDefault(), "fake.local");
 
         var orchestrator = new RuntimeOrchestrator(
             registry,
-            aiDecisionProvider,
+            resolvedAiDecisionProvider,
             narrator ?? NullRuntimeNarrator.Instance,
             new DeterministicToolExecutor(registry),
             persistence);

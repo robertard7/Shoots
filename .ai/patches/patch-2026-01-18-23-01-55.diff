@@ -1,0 +1,273 @@
+diff --git a/Shoots.sln b/Shoots.sln
+index aba1bde..0f4994c 100644
+--- a/Shoots.sln
++++ b/Shoots.sln
+@@ -9,6 +9,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Contracts", "Contracts", "{
+ EndProject
+ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Runtime", "Runtime", "{621484DB-F2E4-454F-82C4-A9A9FF05BF48}"
+ EndProject
++Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Providers", "Providers", "{7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}"
++EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Contracts.Core", "src\\Contracts\\Shoots.Contracts.Core\\Shoots.Contracts.Core.csproj", "{9D286002-0340-4561-8406-383AE1024734}"
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Abstractions", "src\Runtime\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj", "{D3F206DE-8617-4990-AB87-EB8F6E088FE2}"
+@@ -33,9 +35,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Cli", "src\B
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Tests", "src\Builder\Shoots.Builder.Tests\Shoots.Builder.Tests.csproj", "{6E86F625-BE6A-4072-AADD-AD65542091C2}"
+ EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Bridge", "src\\Providers\\Shoots.Providers.Bridge\\Shoots.Providers.Bridge.csproj", "{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}"
++EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Fake", "src\\Providers\\Shoots.Providers.Fake\\Shoots.Providers.Fake.csproj", "{A7363365-209B-4597-8CC3-36F386D4E2BA}"
++EndProject
+ Global
+-	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+-		Debug|Any CPU = Debug|Any CPU
++	GlobalSection(SolutionConfigurationPlatforms) = preSolution
++		Debug|Any CPU = Debug|Any CPU
+ 		Release|Any CPU = Release|Any CPU
+ 	EndGlobalSection
+ 	GlobalSection(SolutionProperties) = preSolution
+@@ -86,10 +92,19 @@ Global
+ 		{6E86F625-BE6A-4072-AADD-AD65542091C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+ 		{6E86F625-BE6A-4072-AADD-AD65542091C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+ 		{6E86F625-BE6A-4072-AADD-AD65542091C2}.Release|Any CPU.Build.0 = Release|Any CPU
++		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}.Release|Any CPU.Build.0 = Release|Any CPU
++		{A7363365-209B-4597-8CC3-36F386D4E2BA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{A7363365-209B-4597-8CC3-36F386D4E2BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{A7363365-209B-4597-8CC3-36F386D4E2BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{A7363365-209B-4597-8CC3-36F386D4E2BA}.Release|Any CPU.Build.0 = Release|Any CPU
+ 	EndGlobalSection
+ 	GlobalSection(NestedProjects) = preSolution
+ 		{621484DB-F2E4-454F-82C4-A9A9FF05BF48} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
+ 		{BBE5C6BC-D447-448B-AEC1-A8E315472029} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
++		{7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
+ 		{9D286002-0340-4561-8406-383AE1024734} = {BBE5C6BC-D447-448B-AEC1-A8E315472029}
+ 		{D3F206DE-8617-4990-AB87-EB8F6E088FE2} = {621484DB-F2E4-454F-82C4-A9A9FF05BF48}
+ 		{7785F63F-C691-403E-9C32-075A9C81A529} = {621484DB-F2E4-454F-82C4-A9A9FF05BF48}
+@@ -102,5 +117,7 @@ Global
+ 		{F7982660-6D23-434A-8403-D022EC24590E} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
+ 		{7554EE2E-F14C-46FC-800D-1EBE937C813D} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
+ 		{6E86F625-BE6A-4072-AADD-AD65542091C2} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
++		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
++		{A7363365-209B-4597-8CC3-36F386D4E2BA} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
+ 	EndGlobalSection
+ EndGlobal
+diff --git a/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs b/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
+index 53a90bb..a035749 100644
+--- a/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
++++ b/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
+@@ -1,3 +1,4 @@
++using System;
+ using System.Collections.Generic;
+ 
+ namespace Shoots.Providers.Abstractions;
+diff --git a/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs b/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs
+new file mode 100644
+index 0000000..cd4a160
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs
+@@ -0,0 +1,45 @@
++using System;
++using Shoots.Contracts.Core;
++using Shoots.Providers.Abstractions;
++using Shoots.Runtime.Abstractions;
++
++namespace Shoots.Providers.Bridge;
++
++public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
++{
++    private readonly ProviderRegistry _registry;
++    private readonly string _providerId;
++
++    public BridgeAiDecisionProvider(ProviderRegistry registry, string providerId)
++    {
++        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
++        if (string.IsNullOrWhiteSpace(providerId))
++            throw new ArgumentException("provider id is required", nameof(providerId));
++
++        _providerId = providerId;
++    }
++
++    public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
++    {
++        if (request is null)
++            throw new ArgumentNullException(nameof(request));
++
++        var step = request.Step;
++        if (step.Intent != RouteIntent.SelectTool || step.Owner != DecisionOwner.Ai)
++            return null;
++
++        var adapter = _registry.Get(_providerId);
++        if (adapter is null)
++            throw new InvalidOperationException($"Provider '{_providerId}' is not registered.");
++
++        var traceSummary = request.TraceSummary.Count == 0
++            ? string.Empty
++            : string.Join(",", request.TraceSummary);
++
++        return adapter.RequestDecision(
++            request.WorkOrder,
++            step,
++            request.CatalogHash ?? string.Empty,
++            traceSummary);
++    }
++}
+diff --git a/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs b/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
+new file mode 100644
+index 0000000..6e102bd
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
+@@ -0,0 +1,16 @@
++using Shoots.Providers.Abstractions;
++using Shoots.Providers.Fake;
++using Shoots.Providers.Null;
++
++namespace Shoots.Providers.Bridge;
++
++public static class ProviderRegistryFactory
++{
++    public static ProviderRegistry CreateDefault()
++    {
++        var registry = new ProviderRegistry();
++        registry.Register("fake.local", new FakeAiProviderAdapter());
++        registry.Register("null.local", NullAiProviderAdapter.Instance);
++        return registry;
++    }
++}
+diff --git a/src/Providers/Shoots.Providers.Bridge/Shoots.Providers.Bridge.csproj b/src/Providers/Shoots.Providers.Bridge/Shoots.Providers.Bridge.csproj
+new file mode 100644
+index 0000000..25339a4
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Bridge/Shoots.Providers.Bridge.csproj
+@@ -0,0 +1,17 @@
++<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
++    <ProjectReference Include="..\Shoots.Providers.Fake\Shoots.Providers.Fake.csproj" />
++    <ProjectReference Include="..\Shoots.Providers.Null\Shoots.Providers.Null.csproj" />
++    <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
++    <ProjectReference Include="..\..\Runtime\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
++  </ItemGroup>
++
++</Project>
+diff --git a/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs
+new file mode 100644
+index 0000000..b165e97
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs
+@@ -0,0 +1,19 @@
++using System;
++using System.Collections.Generic;
++using Shoots.Contracts.Core;
++using Shoots.Providers.Abstractions;
++
++namespace Shoots.Providers.Fake;
++
++public sealed class FakeAiProviderAdapter : IAiProviderAdapter
++{
++    public ToolSelectionDecision? RequestDecision(
++        WorkOrder workOrder,
++        RouteStep step,
++        string catalogHash,
++        string routingTraceSummary)
++    {
++        var bindings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
++        return new ToolSelectionDecision(new ToolId("filesystem.read"), bindings);
++    }
++}
+diff --git a/src/Providers/Shoots.Providers.Fake/Shoots.Providers.Fake.csproj b/src/Providers/Shoots.Providers.Fake/Shoots.Providers.Fake.csproj
+new file mode 100644
+index 0000000..3c05706
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Fake/Shoots.Providers.Fake.csproj
+@@ -0,0 +1,14 @@
++<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
++    <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
++  </ItemGroup>
++
++</Project>
+diff --git a/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
+index 8a9e910..cdcb699 100644
+--- a/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
++++ b/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
+@@ -1,3 +1,4 @@
++using System;
+ using Shoots.Contracts.Core;
+ using Shoots.Providers.Abstractions;
+ 
+@@ -13,6 +14,6 @@ public sealed class NullAiProviderAdapter : IAiProviderAdapter
+         string catalogHash,
+         string routingTraceSummary)
+     {
+-        return null;
++        throw new InvalidOperationException("Null provider invoked");
+     }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs b/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
+index ef30658..7b26b59 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
+@@ -2,6 +2,7 @@ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using Shoots.Contracts.Core;
++using Shoots.Providers.Bridge;
+ using Shoots.Runtime.Abstractions;
+ 
+ namespace Shoots.Runtime.Core;
+@@ -65,7 +66,7 @@ public sealed class RuntimeOrchestrator
+     public static ExecutionEnvelope Run(
+         BuildPlan plan,
+         IToolRegistry registry,
+-        IAiDecisionProvider aiDecisionProvider,
++        IAiDecisionProvider? aiDecisionProvider = null,
+         IRuntimePersistence? persistence = null,
+         IRuntimeNarrator? narrator = null)
+     {
+@@ -73,12 +74,12 @@ public sealed class RuntimeOrchestrator
+             throw new ArgumentNullException(nameof(plan));
+         if (registry is null)
+             throw new ArgumentNullException(nameof(registry));
+-        if (aiDecisionProvider is null)
+-            throw new ArgumentNullException(nameof(aiDecisionProvider));
++        var resolvedAiDecisionProvider = aiDecisionProvider
++            ?? new BridgeAiDecisionProvider(ProviderRegistryFactory.CreateDefault(), "fake.local");
+ 
+         var orchestrator = new RuntimeOrchestrator(
+             registry,
+-            aiDecisionProvider,
++            resolvedAiDecisionProvider,
+             narrator ?? NullRuntimeNarrator.Instance,
+             new DeterministicToolExecutor(registry),
+             persistence);
+diff --git a/src/Runtime/Shoots.Runtime.Core/Shoots.Runtime.Core.csproj b/src/Runtime/Shoots.Runtime.Core/Shoots.Runtime.Core.csproj
+index f153e58..6f15d19 100644
+--- a/src/Runtime/Shoots.Runtime.Core/Shoots.Runtime.Core.csproj
++++ b/src/Runtime/Shoots.Runtime.Core/Shoots.Runtime.Core.csproj
+@@ -2,6 +2,7 @@
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
++    <ProjectReference Include="..\..\Providers\Shoots.Providers.Bridge\Shoots.Providers.Bridge.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
+   </ItemGroup>
+ 

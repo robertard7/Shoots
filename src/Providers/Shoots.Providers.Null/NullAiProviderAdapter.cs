@@ -1,3 +1,4 @@
+using System;
 using Shoots.Contracts.Core;
 using Shoots.Providers.Abstractions;
 
@@ -13,6 +14,6 @@ public sealed class NullAiProviderAdapter : IAiProviderAdapter
         string catalogHash,
         string routingTraceSummary)
     {
-        return null;
+        throw new InvalidOperationException("Null provider invoked");
     }
 }
