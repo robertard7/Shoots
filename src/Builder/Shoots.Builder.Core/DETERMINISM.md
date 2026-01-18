@@ -12,6 +12,7 @@ observing any external state.
 - No network access
 - No global/static mutable state
 - Planner requires `BuildRequest.WorkOrder` and `BuildRequest.Args["plan.graph"]` Mermaid graph input and fails when missing.
+- Planner validates routing completeness (single start node, terminal terminate intent, all intents present).
 
 ## Current Planner Dependencies
 - `IRuntimeServices` for command metadata only

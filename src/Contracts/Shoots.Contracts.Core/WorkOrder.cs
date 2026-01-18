@@ -7,6 +7,7 @@ public readonly record struct WorkOrderId(string Value);
 
 /// <summary>
 /// Immutable user intent capsule.
+/// Reissue the work order to change any value.
 /// </summary>
 public sealed record WorkOrder(
     WorkOrderId Id,

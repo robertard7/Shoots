@@ -8,8 +8,10 @@ public static class RouteGate
 {
     public static bool TryAdvance(
         BuildPlan plan,
-        RouteState state,
+        RoutingState state,
+        ToolSelectionDecision? decision,
         IToolRegistry registry,
+        out RoutingState nextState,
         out RuntimeError? error)
     {
         if (plan is null)
@@ -19,11 +21,22 @@ public static class RouteGate
         if (registry is null)
             throw new ArgumentNullException(nameof(registry));
 
-        if (plan.Request.WorkOrder is null || state.WorkOrder is null)
+        if (state.Status == RoutingStatus.Completed || state.Status == RoutingStatus.Halted)
+        {
+            error = new RuntimeError(
+                "route_state_final",
+                "Routing state is final and cannot advance.",
+                state.Status.ToString());
+            nextState = state;
+            return false;
+        }
+
+        if (plan.Request.WorkOrder is null)
         {
             error = new RuntimeError(
                 "route_workorder_missing",
                 "Work order is required to advance routing.");
+            nextState = state with { Status = RoutingStatus.Halted };
             return false;
         }
 
@@ -32,33 +45,46 @@ public static class RouteGate
             error = new RuntimeError(
                 "route_rules_missing",
                 "Route rules are required to advance routing.");
+            nextState = state with { Status = RoutingStatus.Halted };
             return false;
         }
 
-        if (!string.Equals(plan.Request.WorkOrder.Id.Value, state.WorkOrder.Id.Value, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(state.WorkOrderId.Value))
+        {
+            error = new RuntimeError(
+                "route_workorder_missing",
+                "Work order id is required to advance routing.");
+            nextState = state with { Status = RoutingStatus.Halted };
+            return false;
+        }
+
+        if (!string.Equals(plan.Request.WorkOrder.Id.Value, state.WorkOrderId.Value, StringComparison.Ordinal))
         {
             error = new RuntimeError(
                 "route_workorder_mismatch",
                 "Work order mismatch between plan and state.",
-                new { plan = plan.Request.WorkOrder.Id.Value, state = state.WorkOrder.Id.Value });
+                new { plan = plan.Request.WorkOrder.Id.Value, state = state.WorkOrderId.Value });
+            nextState = state with { Status = RoutingStatus.Halted };
             return false;
         }
 
-        if (state.StepIndex < 0 || state.StepIndex >= plan.Steps.Count)
+        if (state.CurrentRouteIndex < 0 || state.CurrentRouteIndex >= plan.Steps.Count)
         {
             error = new RuntimeError(
                 "route_step_out_of_range",
                 "Route step index is out of range.",
-                state.StepIndex);
+                state.CurrentRouteIndex);
+            nextState = state with { Status = RoutingStatus.Halted };
             return false;
         }
 
-        if (plan.Steps[state.StepIndex] is not RouteStep routeStep)
+        if (plan.Steps[state.CurrentRouteIndex] is not RouteStep routeStep)
         {
             error = new RuntimeError(
                 "route_step_invalid",
                 "Route step is required at the current index.",
-                plan.Steps[state.StepIndex].Id);
+                plan.Steps[state.CurrentRouteIndex].Id);
+            nextState = state with { Status = RoutingStatus.Halted };
             return false;
         }
 
@@ -68,6 +94,7 @@ public static class RouteGate
                 "route_workorder_step_mismatch",
                 "Route step work order does not match plan work order.",
                 new { routeStep = routeStep.WorkOrderId.Value, plan = plan.Request.WorkOrder.Id.Value });
+            nextState = state with { Status = RoutingStatus.Halted };
             return false;
         }
 
@@ -79,6 +106,7 @@ public static class RouteGate
                 "route_rule_missing",
                 "Route rule is missing for the current node.",
                 routeStep.NodeId);
+            nextState = state with { Status = RoutingStatus.Halted };
             return false;
         }
 
@@ -88,36 +116,117 @@ public static class RouteGate
                 "route_rule_mismatch",
                 "Route step does not match route rule.",
                 new { rule.Intent, rule.Owner, routeStep.Intent, routeStep.Owner });
+            nextState = state with { Status = RoutingStatus.Halted };
             return false;
         }
 
         if (plan.Steps.Any(step => step is ToolBuildStep))
         {
             if (!ToolAuthorityValidator.TryValidate(plan, registry, out error))
+            {
+                nextState = state with { Status = RoutingStatus.Halted };
                 return false;
+            }
+        }
+
+        if (state.CurrentRouteIntent != routeStep.Intent)
+        {
+            error = new RuntimeError(
+                "route_intent_mismatch",
+                "Routing state intent does not match current route step.",
+                new { state.CurrentRouteIntent, routeStep.Intent });
+            nextState = state with { Status = RoutingStatus.Halted };
+            return false;
         }
 
         if (routeStep.Intent == RouteIntent.SelectTool)
         {
-            if (state.ToolSelection is null)
+            if (routeStep.Owner != DecisionOwner.Ai)
             {
                 error = new RuntimeError(
-                    "route_decision_required",
-                    "Tool selection is required for SelectTool intent.");
+                    "route_owner_invalid",
+                    "SelectTool intent requires Ai decision ownership.");
+                nextState = state with { Status = RoutingStatus.Halted };
                 return false;
             }
 
-            if (!TryValidateToolSelection(plan, state.ToolSelection, registry, out error))
+            if (decision is null)
+            {
+                nextState = state with { Status = RoutingStatus.Waiting };
+                error = null;
                 return false;
+            }
+
+            if (!TryValidateToolSelection(plan, decision, registry, out error))
+            {
+                nextState = state with { Status = RoutingStatus.Halted };
+                return false;
+            }
+        }
+        else
+        {
+            if (decision is not null)
+            {
+                error = new RuntimeError(
+                    "route_decision_unexpected",
+                    "Decision output is only allowed for SelectTool intent.");
+                nextState = state with { Status = RoutingStatus.Halted };
+                return false;
+            }
         }
 
+        var isTerminalStep = state.CurrentRouteIndex >= plan.Steps.Count - 1;
+        if (routeStep.Intent == RouteIntent.Terminate)
+        {
+            if (!isTerminalStep)
+            {
+                error = new RuntimeError(
+                    "route_terminate_not_terminal",
+                    "Terminate intent must be at a terminal route step.",
+                    routeStep.NodeId);
+                nextState = state with { Status = RoutingStatus.Halted };
+                return false;
+            }
+
+            nextState = state with { Status = RoutingStatus.Completed };
+            error = null;
+            return true;
+        }
+
+        if (isTerminalStep)
+        {
+            error = new RuntimeError(
+                "route_terminal_missing",
+                "Terminal route step must use Terminate intent.",
+                routeStep.NodeId);
+            nextState = state with { Status = RoutingStatus.Halted };
+            return false;
+        }
+
+        var nextIndex = state.CurrentRouteIndex + 1;
+        if (nextIndex >= plan.Steps.Count || plan.Steps[nextIndex] is not RouteStep nextStep)
+        {
+            error = new RuntimeError(
+                "route_step_invalid",
+                "Next route step is invalid.",
+                nextIndex);
+            nextState = state with { Status = RoutingStatus.Halted };
+            return false;
+        }
+
+        nextState = state with
+        {
+            CurrentRouteIndex = nextIndex,
+            CurrentRouteIntent = nextStep.Intent,
+            Status = RoutingStatus.Pending
+        };
         error = null;
         return true;
     }
 
     private static bool TryValidateToolSelection(
         BuildPlan plan,
-        ToolSelection selection,
+        ToolSelectionDecision selection,
         IToolRegistry registry,
         out RuntimeError? error)
     {
@@ -133,7 +242,7 @@ public static class RouteGate
         if (!ToolAuthorityValidator.TryValidateAuthority(plan.Authority, entry.Spec.RequiredAuthority, out error))
             return false;
 
-        if (selection.InputBindings is null)
+        if (selection.Bindings is null)
         {
             error = new RuntimeError(
                 "tool_bindings_missing",
@@ -143,7 +252,7 @@ public static class RouteGate
 
         foreach (var input in entry.Spec.Inputs)
         {
-            if (input.Required && !selection.InputBindings.ContainsKey(input.Name))
+            if (input.Required && !selection.Bindings.ContainsKey(input.Name))
             {
                 error = new RuntimeError(
                     "tool_binding_missing",
@@ -152,7 +261,7 @@ public static class RouteGate
             }
         }
 
-        foreach (var binding in selection.InputBindings.Keys)
+        foreach (var binding in selection.Bindings.Keys)
         {
             if (entry.Spec.Inputs.All(input => !string.Equals(input.Name, binding, StringComparison.Ordinal)))
             {

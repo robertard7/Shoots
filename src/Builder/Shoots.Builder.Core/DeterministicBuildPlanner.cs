@@ -38,6 +38,7 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             throw new ArgumentException($"'{GraphArgKey}' must be a string", nameof(request));
 
         var normalizedGraph = MermaidPlanGraph.Normalize(graphText);
+        var graph = MermaidPlanGraph.ParseGraph(normalizedGraph);
         var orderedStepIds = MermaidPlanGraph.OrderStepIds(normalizedGraph);
 
         // Normalize command
@@ -124,6 +125,16 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             .ToArray();
         if (missingIntents.Length > 0)
             throw new InvalidOperationException($"route rules missing required intents: {string.Join(", ", missingIntents)}");
+
+        var startNodes = MermaidPlanGraph.GetStartNodes(graph);
+        if (startNodes.Count != 1)
+            throw new InvalidOperationException($"graph must have exactly one start node (found {startNodes.Count}).");
+
+        var terminalNodes = MermaidPlanGraph.GetTerminalNodes(graph);
+        var hasTerminalIntent = terminalNodes.Any(
+            nodeId => routeRulesByNode.TryGetValue(nodeId, out var rule) && rule.Intent == RouteIntent.Terminate);
+        if (!hasTerminalIntent)
+            throw new InvalidOperationException("graph must include at least one terminal node with Terminate intent.");
 
         var steps = orderedStepIds
             .Select(stepId => stepsById[stepId])

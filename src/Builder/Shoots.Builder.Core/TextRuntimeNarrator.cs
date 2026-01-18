@@ -51,6 +51,40 @@ public sealed class TextRuntimeNarrator : IRuntimeNarrator
         _emit($"[route] workorder={narration.WorkOrder.Id.Value} step={step} {decision} {halt}");
     }
 
+    public void OnWorkOrderReceived(WorkOrder workOrder)
+    {
+        if (workOrder is null) throw new ArgumentNullException(nameof(workOrder));
+        _emit($"[workorder] id={workOrder.Id.Value} goal={workOrder.Goal}");
+    }
+
+    public void OnRouteEntered(RoutingState state, RouteStep step)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        _emit($"[route.entered] workorder={state.WorkOrderId.Value} step={step.NodeId} intent={step.Intent} status={state.Status}");
+    }
+
+    public void OnDecisionRequired(RoutingState state, RouteStep step)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        _emit($"[route.decision.required] workorder={state.WorkOrderId.Value} step={step.NodeId} intent={step.Intent}");
+    }
+
+    public void OnDecisionAccepted(RoutingState state, RouteStep step)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        _emit($"[route.decision.accepted] workorder={state.WorkOrderId.Value} step={step.NodeId} intent={step.Intent}");
+    }
+
+    public void OnHalted(RoutingState state, RuntimeError error)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (error is null) throw new ArgumentNullException(nameof(error));
+        _emit($"[route.halted] workorder={state.WorkOrderId.Value} reason={error.Code}");
+    }
+
     private static string FormatArgs(RuntimeRequest request)
     {
         if (request.Args.Count == 0) return "{}";

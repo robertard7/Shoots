@@ -19,7 +19,7 @@ internal static class MermaidPlanGraph
             .Trim();
     }
 
-    public static IReadOnlyList<string> OrderStepIds(string graphText)
+    public static GraphDefinition ParseGraph(string graphText)
     {
         if (string.IsNullOrWhiteSpace(graphText))
             throw new ArgumentException("graph is required", nameof(graphText));
@@ -63,7 +63,55 @@ internal static class MermaidPlanGraph
         if (nodes.Count == 0)
             throw new InvalidOperationException("graph must contain at least one node");
 
-        return TopologicalOrder(nodes, edges);
+        return new GraphDefinition(nodes.ToArray(), edges);
+    }
+
+    public static IReadOnlyList<string> OrderStepIds(string graphText)
+    {
+        var graph = ParseGraph(graphText);
+        return TopologicalOrder(graph.Nodes, graph.Edges);
+    }
+
+    public static IReadOnlyList<string> GetStartNodes(GraphDefinition graph)
+    {
+        if (graph is null)
+            throw new ArgumentNullException(nameof(graph));
+
+        var indegree = graph.Nodes.ToDictionary(node => node, _ => 0, StringComparer.Ordinal);
+        foreach (var (from, to) in graph.Edges)
+        {
+            if (!indegree.ContainsKey(from) || !indegree.ContainsKey(to))
+                continue;
+
+            indegree[to] = indegree[to] + 1;
+        }
+
+        return indegree
+            .Where(pair => pair.Value == 0)
+            .Select(pair => pair.Key)
+            .OrderBy(node => node, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<string> GetTerminalNodes(GraphDefinition graph)
+    {
+        if (graph is null)
+            throw new ArgumentNullException(nameof(graph));
+
+        var outbound = graph.Nodes.ToDictionary(node => node, _ => 0, StringComparer.Ordinal);
+        foreach (var (from, to) in graph.Edges)
+        {
+            if (!outbound.ContainsKey(from) || !outbound.ContainsKey(to))
+                continue;
+
+            outbound[from] = outbound[from] + 1;
+        }
+
+        return outbound
+            .Where(pair => pair.Value == 0)
+            .Select(pair => pair.Key)
+            .OrderBy(node => node, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static IEnumerable<string> SplitSegments(string graphText)
@@ -120,4 +168,8 @@ internal static class MermaidPlanGraph
 
         return ordered;
     }
+
+    internal sealed record GraphDefinition(
+        IReadOnlyList<string> Nodes,
+        IReadOnlyList<(string From, string To)> Edges);
 }

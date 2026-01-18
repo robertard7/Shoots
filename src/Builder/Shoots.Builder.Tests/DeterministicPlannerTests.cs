@@ -91,7 +91,7 @@ public sealed class DeterministicPlannerTests
         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
         var request = CreateRequest(
             "core.ping",
-            "graph TD; terminate --> review --> validate --> select",
+            "graph TD; select --> review --> validate --> terminate",
             null,
             new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
             new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
@@ -101,7 +101,7 @@ public sealed class DeterministicPlannerTests
         var plan = planner.Plan(request);
 
         Assert.Equal(
-            new[] { "terminate", "review", "validate", "select" },
+            new[] { "select", "review", "validate", "terminate" },
             plan.Steps.Select(step => step.Id));
     }
 
@@ -117,10 +117,12 @@ public sealed class DeterministicPlannerTests
         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
         var request = CreateRequest(
             "core.ping",
-            "graph TD; validate --> review",
+            "graph TD; select --> validate",
             null,
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
             new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"));
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination"));
 
         Assert.Throws<InvalidOperationException>(() => planner.Plan(request));
     }
