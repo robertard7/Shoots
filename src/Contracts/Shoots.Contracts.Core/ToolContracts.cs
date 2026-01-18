@@ -1,0 +1,44 @@
+namespace Shoots.Contracts.Core;
+
+/// <summary>
+/// Immutable tool identity.
+/// </summary>
+public readonly record struct ToolId(string Value);
+
+/// <summary>
+/// Deterministic tool input specification.
+/// </summary>
+public sealed record ToolInputSpec(
+    string Name,
+    string Type,
+    bool Required,
+    string Description
+);
+
+/// <summary>
+/// Deterministic tool output specification.
+/// </summary>
+public sealed record ToolOutputSpec(
+    string Name,
+    string Type,
+    string Description
+);
+
+/// <summary>
+/// Declarative tool authority scope.
+/// </summary>
+public sealed record ToolAuthorityScope(
+    ProviderKind RequiredProviderKind,
+    ProviderCapabilities RequiredCapabilities
+);
+
+/// <summary>
+/// Deterministic tool contract (metadata only).
+/// </summary>
+public sealed record ToolSpec(
+    ToolId ToolId,
+    string Description,
+    ToolAuthorityScope RequiredAuthority,
+    IReadOnlyList<ToolInputSpec> Inputs,
+    IReadOnlyList<ToolOutputSpec> Outputs
+);

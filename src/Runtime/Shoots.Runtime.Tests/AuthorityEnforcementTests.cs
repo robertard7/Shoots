@@ -1,3 +1,4 @@
+using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Core;
 using Xunit;

@@ -1,4 +1,4 @@
-namespace Shoots.Runtime.Abstractions;
+namespace Shoots.Contracts.Core;
 
 // ⚠️ CONTRACT FREEZE
 // Any change here requires:
@@ -31,9 +31,11 @@ public sealed record AiResponse(
 // 1. New versioned type OR
 // 2. Explicit RFC + test update
 /// <summary>
-/// AI provider boundary (contracts only).
+/// Deterministic tool selection output (AI constrained output).
 /// </summary>
-public interface IAiProvider
-{
-    AiResponse Invoke(AiRequest request);
-}
+/// <param name="ToolId">Selected tool identifier.</param>
+/// <param name="InputBindings">Tool input bindings.</param>
+public sealed record ToolSelection(
+    ToolId ToolId,
+    IReadOnlyDictionary<string, object?> InputBindings
+);

@@ -1,4 +1,5 @@
 using Shoots.Builder.Core;
+using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 using Xunit;
 

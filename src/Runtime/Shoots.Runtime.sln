@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Abstractions", "Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj", "{91AB10D7-EA2E-4F46-993A-18558E9B4EDD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Contracts.Core", "..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj", "{9D286002-0340-4561-8406-383AE1024734}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Core", "Shoots.Runtime.Core\Shoots.Runtime.Core.csproj", "{FBCF7CB0-3272-4CDD-BD2E-88010F9D96EC}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Loader", "Shoots.Runtime.Loader\Shoots.Runtime.Loader.csproj", "{BD60421D-9D67-4214-9546-8B099D5B6E5F}"
@@ -39,6 +41,18 @@ Global
 		{91AB10D7-EA2E-4F46-993A-18558E9B4EDD}.Release|x64.Build.0 = Release|Any CPU
 		{91AB10D7-EA2E-4F46-993A-18558E9B4EDD}.Release|x86.ActiveCfg = Release|Any CPU
 		{91AB10D7-EA2E-4F46-993A-18558E9B4EDD}.Release|x86.Build.0 = Release|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Debug|x64.Build.0 = Debug|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Debug|x86.Build.0 = Debug|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Release|x64.ActiveCfg = Release|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Release|x64.Build.0 = Release|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Release|x86.ActiveCfg = Release|Any CPU
+		{9D286002-0340-4561-8406-383AE1024734}.Release|x86.Build.0 = Release|Any CPU
 		{FBCF7CB0-3272-4CDD-BD2E-88010F9D96EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{FBCF7CB0-3272-4CDD-BD2E-88010F9D96EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FBCF7CB0-3272-4CDD-BD2E-88010F9D96EC}.Debug|x64.ActiveCfg = Debug|Any CPU

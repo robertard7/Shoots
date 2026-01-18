@@ -1,6 +1,7 @@
 ﻿#nullable enable
 using System.Text;
 using System.Text.Json;
+using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Builder.Core;
