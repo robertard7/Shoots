@@ -1,0 +1,270 @@
+diff --git a/src/Contracts/Shoots.Contracts.Core/ToolContracts.cs b/src/Contracts/Shoots.Contracts.Core/ToolContracts.cs
+index 0b7dcf9..fe5d6f3 100644
+--- a/src/Contracts/Shoots.Contracts.Core/ToolContracts.cs
++++ b/src/Contracts/Shoots.Contracts.Core/ToolContracts.cs
+@@ -40,5 +40,6 @@ public sealed record ToolSpec(
+     string Description,
+     ToolAuthorityScope RequiredAuthority,
+     IReadOnlyList<ToolInputSpec> Inputs,
+-    IReadOnlyList<ToolOutputSpec> Outputs
++    IReadOnlyList<ToolOutputSpec> Outputs,
++    IReadOnlyList<string> Tags
+ );
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/RuntimeDtos.cs b/src/Runtime/Shoots.Runtime.Abstractions/RuntimeDtos.cs
+index 2b088f8..645a826 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/RuntimeDtos.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/RuntimeDtos.cs
+@@ -25,7 +25,8 @@ public sealed record RoutingTraceEntryDto(
+ public sealed record ToolResultDto(
+     string ToolId,
+     bool Success,
+-    IReadOnlyDictionary<string, object?> Outputs
++    IReadOnlyDictionary<string, object?> Outputs,
++    IReadOnlyList<string> Tags
+ );
+ 
+ public sealed record BuildArtifactDto(
+diff --git a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+index fc108fd..18d70a1 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+@@ -58,6 +58,11 @@ public sealed class RoutingLoop
+         {
+             throw new ArgumentException("trace plan mismatch", nameof(trace));
+         }
++        if (trace is not null &&
++            !string.Equals(trace.CatalogHash, _catalogHash, StringComparison.Ordinal))
++        {
++            throw new ArgumentException("trace catalog hash mismatch", nameof(trace));
++        }
+ 
+         State = initialState ?? RoutingState.CreateInitial(_plan);
+     }
+@@ -102,11 +107,12 @@ public sealed class RoutingLoop
+                     if (invocation is not null)
+                     {
+                         var envelope = BuildEnvelope();
+-                        _traceBuilder.Add(RoutingTraceEventKind.ToolExecuted, invocation.ToolId.Value, State, step);
++                        var toolDetail = BuildToolExecutionDetail(invocation.ToolId);
++                        _traceBuilder.Add(RoutingTraceEventKind.ToolExecuted, toolDetail, State, step);
+                         var result = _toolExecutor.Execute(invocation, envelope);
+                         _toolResults.Add(result);
+-                        var toolDetail = SerializeToolResult(result);
+-                        _traceBuilder.Add(RoutingTraceEventKind.ToolResult, toolDetail, State, step);
++                        var resultDetail = SerializeToolResult(result);
++                        _traceBuilder.Add(RoutingTraceEventKind.ToolResult, resultDetail, State, step);
+ 
+                         if (!result.Success)
+                         {
+@@ -195,6 +201,19 @@ public sealed class RoutingLoop
+         return string.Join("|", builder);
+     }
+ 
++    private string BuildToolExecutionDetail(ToolId toolId)
++    {
++        var entry = _registry.GetSnapshot()
++            .FirstOrDefault(candidate => candidate.Spec.ToolId == toolId);
++        var tags = entry?.Spec.Tags ?? Array.Empty<string>();
++
++        if (tags.Count == 0)
++            return $"tool.id={toolId.Value}";
++
++        var tagList = string.Join(",", tags.OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase));
++        return $"tool.id={toolId.Value}|tags={tagList}";
++    }
++
+     private static string ResolveToolFailureCode(ToolResult result)
+     {
+         if (result.Outputs.TryGetValue("error.code", out var value) &&
+diff --git a/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs b/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
+index 28a31e7..ef30658 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
+@@ -159,7 +159,7 @@ public sealed class RuntimeOrchestrator
+         {
+             if (entry.Event == RoutingTraceEventKind.ToolExecuted && entry.Detail is not null)
+             {
+-                pendingTool = new ToolId(entry.Detail);
++                pendingTool = ParseToolExecutionDetail(entry.Detail);
+                 continue;
+             }
+ 
+@@ -174,6 +174,27 @@ public sealed class RuntimeOrchestrator
+         return results;
+     }
+ 
++    private static ToolId? ParseToolExecutionDetail(string detail)
++    {
++        if (string.IsNullOrWhiteSpace(detail))
++            return null;
++
++        if (!detail.Contains('=', StringComparison.Ordinal))
++            return new ToolId(detail);
++
++        foreach (var token in detail.Split('|', StringSplitOptions.RemoveEmptyEntries))
++        {
++            var parts = token.Split('=', 2, StringSplitOptions.TrimEntries);
++            if (parts.Length != 2)
++                continue;
++
++            if (string.Equals(parts[0], "tool.id", StringComparison.OrdinalIgnoreCase))
++                return new ToolId(parts[1]);
++        }
++
++        return null;
++    }
++
+     private static (bool Success, IReadOnlyDictionary<string, object?> Outputs) ParseToolResult(string detail)
+     {
+         var outputs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+diff --git a/src/Runtime/Shoots.Runtime.Core/ToolCatalogLoader.cs b/src/Runtime/Shoots.Runtime.Core/ToolCatalogLoader.cs
+index 3bd0114..51a4904 100644
+--- a/src/Runtime/Shoots.Runtime.Core/ToolCatalogLoader.cs
++++ b/src/Runtime/Shoots.Runtime.Core/ToolCatalogLoader.cs
+@@ -45,8 +45,8 @@ public sealed class ToolCatalogLoader
+         var inputs = tool.Inputs?.Select(input => new ToolInputSpec(
+                 input.Name,
+                 input.Type,
+-                input.Description ?? string.Empty,
+-                input.Required))
++                input.Required,
++                input.Description ?? string.Empty))
+             .ToList() ?? new List<ToolInputSpec>();
+ 
+         var outputs = tool.Outputs?.Select(output => new ToolOutputSpec(
+@@ -60,7 +60,8 @@ public sealed class ToolCatalogLoader
+             tool.Description ?? string.Empty,
+             new ToolAuthorityScope(providerKind, capabilities),
+             inputs,
+-            outputs);
++            outputs,
++            tool.Tags ?? Array.Empty<string>());
+ 
+         return new ToolRegistryEntry(spec);
+     }
+@@ -86,7 +87,8 @@ public sealed class ToolCatalogLoader
+         string? Description,
+         ToolCatalogAuthority Authority,
+         IReadOnlyList<ToolCatalogInput>? Inputs,
+-        IReadOnlyList<ToolCatalogOutput>? Outputs);
++        IReadOnlyList<ToolCatalogOutput>? Outputs,
++        IReadOnlyList<string>? Tags);
+ 
+     private sealed record ToolCatalogAuthority(
+         string ProviderKind,
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+index be95f23..5594370 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+@@ -86,7 +86,8 @@ public sealed class RouteGateTests
+             "Echo tool.",
+             new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+             new List<ToolInputSpec>(),
+-            new List<ToolOutputSpec>());
++            new List<ToolOutputSpec>(),
++            Array.Empty<string>());
+ 
+         var plan = CreatePlan(
+             new WorkOrderId("wo-plan"),
+@@ -181,7 +182,8 @@ public sealed class RouteGateTests
+             "Snapshot tool.",
+             new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+             new List<ToolInputSpec>(),
+-            new List<ToolOutputSpec>());
++            new List<ToolOutputSpec>(),
++            Array.Empty<string>());
+ 
+         var plan = CreatePlan(
+             new WorkOrderId("wo-plan"),
+@@ -248,7 +250,8 @@ public sealed class RouteGateTests
+             "Echo tool.",
+             new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+             new List<ToolInputSpec>(),
+-            new List<ToolOutputSpec>());
++            new List<ToolOutputSpec>(),
++            Array.Empty<string>());
+ 
+         var plan = CreatePlan(
+             new WorkOrderId("wo-plan"),
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+index d5ecb96..3ee627f 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+@@ -191,7 +191,8 @@ public sealed class RoutingLoopTests
+                 "Sample tool.",
+                 new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+                 new List<ToolInputSpec>(),
+-                new List<ToolOutputSpec>());
++                new List<ToolOutputSpec>(),
++                new[] { "sample", "test" });
+         }
+     }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs b/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
+index c5cb628..3801aa4 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
+@@ -1,3 +1,4 @@
++using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using Shoots.Contracts.Core;
+@@ -23,7 +24,8 @@ public sealed class ToolAuthorityValidatorTests
+             "Remote tool.",
+             new ToolAuthorityScope(ProviderKind.Remote, ProviderCapabilities.None),
+             new List<ToolInputSpec>(),
+-            new List<ToolOutputSpec>());
++            new List<ToolOutputSpec>(),
++            Array.Empty<string>());
+ 
+         var plan = CreatePlan(planAuthority, toolSpec.ToolId);
+         var registry = new StubToolRegistry(toolSpec);
+@@ -50,7 +52,8 @@ public sealed class ToolAuthorityValidatorTests
+             "Local tool.",
+             new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+             new List<ToolInputSpec>(),
+-            new List<ToolOutputSpec>());
++            new List<ToolOutputSpec>(),
++            Array.Empty<string>());
+ 
+         var plan = CreatePlan(planAuthority, toolSpec.ToolId);
+         var registry = new StubToolRegistry(toolSpec);
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ToolCatalogLoaderTests.cs b/src/Runtime/Shoots.Runtime.Tests/ToolCatalogLoaderTests.cs
+index 34404d9..a27b14e 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ToolCatalogLoaderTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ToolCatalogLoaderTests.cs
+@@ -24,7 +24,8 @@ public sealed class ToolCatalogLoaderTests
+               ],
+               "outputs": [
+                 { "name": "output", "type": "string", "description": "Output" }
+-              ]
++              ],
++              "tags": ["filesystem", "read"]
+             }
+           ]
+         }
+@@ -35,6 +36,8 @@ public sealed class ToolCatalogLoaderTests
+ 
+         Assert.False(string.IsNullOrWhiteSpace(snapshot.Hash));
+         Assert.Single(snapshot.Entries);
+-        Assert.Equal("tools.sample", snapshot.Entries.First().Spec.ToolId.Value);
++        var tool = snapshot.Entries.First().Spec;
++        Assert.Equal("tools.sample", tool.ToolId.Value);
++        Assert.Contains("filesystem", tool.Tags);
+     }
+ }
+diff --git a/src/Runtime/tools.schema.json b/src/Runtime/tools.schema.json
+index 0aaaa23..e86dc83 100644
+--- a/src/Runtime/tools.schema.json
++++ b/src/Runtime/tools.schema.json
+@@ -48,6 +48,10 @@
+               }
+             }
+           },
++          "tags": {
++            "type": "array",
++            "items": { "type": "string" }
++          },
+           "execution": {
+             "type": "object",
+             "properties": {

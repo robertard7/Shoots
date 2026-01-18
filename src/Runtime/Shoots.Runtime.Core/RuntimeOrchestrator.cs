@@ -159,7 +159,7 @@ public sealed class RuntimeOrchestrator
         {
             if (entry.Event == RoutingTraceEventKind.ToolExecuted && entry.Detail is not null)
             {
-                pendingTool = new ToolId(entry.Detail);
+                pendingTool = ParseToolExecutionDetail(entry.Detail);
                 continue;
             }
 
@@ -172,6 +172,27 @@ public sealed class RuntimeOrchestrator
         }
 
         return results;
+    }
+
+    private static ToolId? ParseToolExecutionDetail(string detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+            return null;
+
+        if (!detail.Contains('=', StringComparison.Ordinal))
+            return new ToolId(detail);
+
+        foreach (var token in detail.Split('|', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = token.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length != 2)
+                continue;
+
+            if (string.Equals(parts[0], "tool.id", StringComparison.OrdinalIgnoreCase))
+                return new ToolId(parts[1]);
+        }
+
+        return null;
     }
 
     private static (bool Success, IReadOnlyDictionary<string, object?> Outputs) ParseToolResult(string detail)

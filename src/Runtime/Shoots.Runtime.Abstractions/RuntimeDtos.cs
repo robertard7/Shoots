@@ -25,7 +25,8 @@ public sealed record RoutingTraceEntryDto(
 public sealed record ToolResultDto(
     string ToolId,
     bool Success,
-    IReadOnlyDictionary<string, object?> Outputs
+    IReadOnlyDictionary<string, object?> Outputs,
+    IReadOnlyList<string> Tags
 );
 
 public sealed record BuildArtifactDto(

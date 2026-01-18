@@ -1,0 +1,81 @@
+{
+  "tools": [
+    {
+      "toolId": "filesystem.read",
+      "description": "Read a file from the workspace.",
+      "authority": {
+        "providerKind": "Local",
+        "capabilities": ["Plan"]
+      },
+      "inputs": [
+        { "name": "path", "type": "string", "description": "Relative file path.", "required": true }
+      ],
+      "outputs": [
+        { "name": "contents", "type": "string", "description": "File contents." }
+      ],
+      "tags": ["filesystem", "read"]
+    },
+    {
+      "toolId": "filesystem.write",
+      "description": "Write a file to the workspace.",
+      "authority": {
+        "providerKind": "Local",
+        "capabilities": ["Plan"]
+      },
+      "inputs": [
+        { "name": "path", "type": "string", "description": "Relative file path.", "required": true },
+        { "name": "contents", "type": "string", "description": "File contents.", "required": true }
+      ],
+      "outputs": [
+        { "name": "written", "type": "boolean", "description": "Whether the file was written." }
+      ],
+      "tags": ["filesystem", "write"]
+    },
+    {
+      "toolId": "process.exec",
+      "description": "Dry-run process execution.",
+      "authority": {
+        "providerKind": "Local",
+        "capabilities": ["Plan"]
+      },
+      "inputs": [
+        { "name": "command", "type": "string", "description": "Command line.", "required": true }
+      ],
+      "outputs": [
+        { "name": "exitCode", "type": "integer", "description": "Dry-run exit code." }
+      ],
+      "tags": ["process", "dry-run"]
+    },
+    {
+      "toolId": "text.render",
+      "description": "Render text templates deterministically.",
+      "authority": {
+        "providerKind": "Local",
+        "capabilities": ["Plan"]
+      },
+      "inputs": [
+        { "name": "template", "type": "string", "description": "Template text.", "required": true },
+        { "name": "data", "type": "object", "description": "Template data.", "required": false }
+      ],
+      "outputs": [
+        { "name": "rendered", "type": "string", "description": "Rendered text." }
+      ],
+      "tags": ["text", "render"]
+    },
+    {
+      "toolId": "archive.zip",
+      "description": "Zip a set of files (metadata only).",
+      "authority": {
+        "providerKind": "Local",
+        "capabilities": ["Plan"]
+      },
+      "inputs": [
+        { "name": "paths", "type": "array", "description": "Relative paths to include.", "required": true }
+      ],
+      "outputs": [
+        { "name": "archiveId", "type": "string", "description": "Archive identifier." }
+      ],
+      "tags": ["archive", "zip"]
+    }
+  ]
+}

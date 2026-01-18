@@ -24,7 +24,8 @@ public sealed class ToolCatalogLoaderTests
               ],
               "outputs": [
                 { "name": "output", "type": "string", "description": "Output" }
-              ]
+              ],
+              "tags": ["filesystem", "read"]
             }
           ]
         }
@@ -35,6 +36,8 @@ public sealed class ToolCatalogLoaderTests
 
         Assert.False(string.IsNullOrWhiteSpace(snapshot.Hash));
         Assert.Single(snapshot.Entries);
-        Assert.Equal("tools.sample", snapshot.Entries.First().Spec.ToolId.Value);
+        var tool = snapshot.Entries.First().Spec;
+        Assert.Equal("tools.sample", tool.ToolId.Value);
+        Assert.Contains("filesystem", tool.Tags);
     }
 }

@@ -191,7 +191,8 @@ public sealed class RoutingLoopTests
                 "Sample tool.",
                 new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
                 new List<ToolInputSpec>(),
-                new List<ToolOutputSpec>());
+                new List<ToolOutputSpec>(),
+                new[] { "sample", "test" });
         }
     }
 }

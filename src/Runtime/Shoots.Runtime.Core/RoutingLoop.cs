@@ -58,6 +58,11 @@ public sealed class RoutingLoop
         {
             throw new ArgumentException("trace plan mismatch", nameof(trace));
         }
+        if (trace is not null &&
+            !string.Equals(trace.CatalogHash, _catalogHash, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("trace catalog hash mismatch", nameof(trace));
+        }
 
         State = initialState ?? RoutingState.CreateInitial(_plan);
     }
@@ -102,11 +107,12 @@ public sealed class RoutingLoop
                     if (invocation is not null)
                     {
                         var envelope = BuildEnvelope();
-                        _traceBuilder.Add(RoutingTraceEventKind.ToolExecuted, invocation.ToolId.Value, State, step);
+                        var toolDetail = BuildToolExecutionDetail(invocation.ToolId);
+                        _traceBuilder.Add(RoutingTraceEventKind.ToolExecuted, toolDetail, State, step);
                         var result = _toolExecutor.Execute(invocation, envelope);
                         _toolResults.Add(result);
-                        var toolDetail = SerializeToolResult(result);
-                        _traceBuilder.Add(RoutingTraceEventKind.ToolResult, toolDetail, State, step);
+                        var resultDetail = SerializeToolResult(result);
+                        _traceBuilder.Add(RoutingTraceEventKind.ToolResult, resultDetail, State, step);
 
                         if (!result.Success)
                         {
@@ -193,6 +199,19 @@ public sealed class RoutingLoop
         }
 
         return string.Join("|", builder);
+    }
+
+    private string BuildToolExecutionDetail(ToolId toolId)
+    {
+        var entry = _registry.GetSnapshot()
+            .FirstOrDefault(candidate => candidate.Spec.ToolId == toolId);
+        var tags = entry?.Spec.Tags ?? Array.Empty<string>();
+
+        if (tags.Count == 0)
+            return $"tool.id={toolId.Value}";
+
+        var tagList = string.Join(",", tags.OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase));
+        return $"tool.id={toolId.Value}|tags={tagList}";
     }
 
     private static string ResolveToolFailureCode(ToolResult result)

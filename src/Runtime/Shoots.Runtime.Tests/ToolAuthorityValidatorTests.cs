@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
@@ -23,7 +24,8 @@ public sealed class ToolAuthorityValidatorTests
             "Remote tool.",
             new ToolAuthorityScope(ProviderKind.Remote, ProviderCapabilities.None),
             new List<ToolInputSpec>(),
-            new List<ToolOutputSpec>());
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
 
         var plan = CreatePlan(planAuthority, toolSpec.ToolId);
         var registry = new StubToolRegistry(toolSpec);
@@ -50,7 +52,8 @@ public sealed class ToolAuthorityValidatorTests
             "Local tool.",
             new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
             new List<ToolInputSpec>(),
-            new List<ToolOutputSpec>());
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
 
         var plan = CreatePlan(planAuthority, toolSpec.ToolId);
         var registry = new StubToolRegistry(toolSpec);

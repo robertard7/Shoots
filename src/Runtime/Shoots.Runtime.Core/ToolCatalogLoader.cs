@@ -45,8 +45,8 @@ public sealed class ToolCatalogLoader
         var inputs = tool.Inputs?.Select(input => new ToolInputSpec(
                 input.Name,
                 input.Type,
-                input.Description ?? string.Empty,
-                input.Required))
+                input.Required,
+                input.Description ?? string.Empty))
             .ToList() ?? new List<ToolInputSpec>();
 
         var outputs = tool.Outputs?.Select(output => new ToolOutputSpec(
@@ -60,7 +60,8 @@ public sealed class ToolCatalogLoader
             tool.Description ?? string.Empty,
             new ToolAuthorityScope(providerKind, capabilities),
             inputs,
-            outputs);
+            outputs,
+            tool.Tags ?? Array.Empty<string>());
 
         return new ToolRegistryEntry(spec);
     }
@@ -86,7 +87,8 @@ public sealed class ToolCatalogLoader
         string? Description,
         ToolCatalogAuthority Authority,
         IReadOnlyList<ToolCatalogInput>? Inputs,
-        IReadOnlyList<ToolCatalogOutput>? Outputs);
+        IReadOnlyList<ToolCatalogOutput>? Outputs,
+        IReadOnlyList<string>? Tags);
 
     private sealed record ToolCatalogAuthority(
         string ProviderKind,

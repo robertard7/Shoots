@@ -48,6 +48,10 @@
               }
             }
           },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
           "execution": {
             "type": "object",
             "properties": {

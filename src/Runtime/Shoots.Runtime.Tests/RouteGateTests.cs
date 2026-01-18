@@ -86,7 +86,8 @@ public sealed class RouteGateTests
             "Echo tool.",
             new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
             new List<ToolInputSpec>(),
-            new List<ToolOutputSpec>());
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
 
         var plan = CreatePlan(
             new WorkOrderId("wo-plan"),
@@ -181,7 +182,8 @@ public sealed class RouteGateTests
             "Snapshot tool.",
             new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
             new List<ToolInputSpec>(),
-            new List<ToolOutputSpec>());
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
 
         var plan = CreatePlan(
             new WorkOrderId("wo-plan"),
@@ -248,7 +250,8 @@ public sealed class RouteGateTests
             "Echo tool.",
             new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
             new List<ToolInputSpec>(),
-            new List<ToolOutputSpec>());
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
 
         var plan = CreatePlan(
             new WorkOrderId("wo-plan"),

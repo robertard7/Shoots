@@ -40,5 +40,6 @@ public sealed record ToolSpec(
     string Description,
     ToolAuthorityScope RequiredAuthority,
     IReadOnlyList<ToolInputSpec> Inputs,
-    IReadOnlyList<ToolOutputSpec> Outputs
+    IReadOnlyList<ToolOutputSpec> Outputs,
+    IReadOnlyList<string> Tags
 );
