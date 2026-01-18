@@ -22,6 +22,13 @@ internal sealed class RoutingTraceBuilder
 
     public RoutingTrace Build() => new RoutingTrace(_entries.ToArray());
 
+    public IReadOnlyList<ExecutionTelemetryRecord> BuildTelemetry()
+    {
+        return _entries
+            .Select(entry => new ExecutionTelemetryRecord(entry.Tick, entry.Event, entry.Detail))
+            .ToArray();
+    }
+
     public void Add(
         RoutingTraceEventKind kind,
         string? detail = null,

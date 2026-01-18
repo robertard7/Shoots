@@ -45,9 +45,26 @@ public sealed class RuntimeOrchestrator
             seed?.ToolResults,
             seed?.Trace);
         var result = loop.Run();
-
-        var envelope = new ExecutionEnvelope(plan, result.State, result.ToolResults, result.Trace);
+        var finalStatus = ResolveFinalStatus(result.State);
+        var envelope = new ExecutionEnvelope(
+            plan,
+            result.State,
+            result.ToolResults,
+            result.Trace,
+            result.Telemetry,
+            _registry.CatalogHash,
+            finalStatus);
         _persistence?.Save(envelope);
         return envelope;
+    }
+
+    private static ExecutionFinalStatus ResolveFinalStatus(RoutingState state)
+    {
+        return state.Status switch
+        {
+            RoutingStatus.Completed => ExecutionFinalStatus.Completed,
+            RoutingStatus.Halted => ExecutionFinalStatus.Halted,
+            _ => ExecutionFinalStatus.Aborted
+        };
     }
 }

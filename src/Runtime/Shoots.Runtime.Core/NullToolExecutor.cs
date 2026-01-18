@@ -16,10 +16,12 @@ public sealed class NullToolExecutor : IToolExecutor
         _outputs = outputs ?? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
     }
 
-    public ToolResult Execute(ToolInvocation invocation)
+    public ToolResult Execute(ToolInvocation invocation, ExecutionEnvelope envelope)
     {
         if (invocation is null)
             throw new ArgumentNullException(nameof(invocation));
+        if (envelope is null)
+            throw new ArgumentNullException(nameof(envelope));
 
         return new ToolResult(invocation.ToolId, _outputs, _success);
     }

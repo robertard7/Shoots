@@ -121,6 +121,7 @@ public sealed class ToolAuthorityValidatorTests
     private sealed class StubToolRegistry : IToolRegistry
     {
         private readonly IReadOnlyDictionary<ToolId, ToolRegistryEntry> _entries;
+        public string CatalogHash => "validator";
 
         public StubToolRegistry(params ToolSpec[] specs)
         {

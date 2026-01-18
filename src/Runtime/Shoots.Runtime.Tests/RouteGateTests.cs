@@ -399,6 +399,8 @@ public sealed class RouteGateTests
 
     private sealed class StubToolRegistry : IToolRegistry
     {
+        public string CatalogHash => "stub";
+
         public IReadOnlyList<ToolRegistryEntry> GetAllTools() => new List<ToolRegistryEntry>();
 
         public ToolRegistryEntry? GetTool(ToolId toolId) => null;
@@ -410,6 +412,7 @@ public sealed class RouteGateTests
     {
         private readonly List<ToolRegistryEntry> _snapshot;
         public bool LiveMissing { get; set; }
+        public string CatalogHash => "snapshot";
 
         public SnapshotOnlyRegistry(params ToolSpec[] specs)
         {

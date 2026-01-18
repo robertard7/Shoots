@@ -7,5 +7,5 @@ namespace Shoots.Runtime.Abstractions;
 /// </summary>
 public interface IToolExecutor
 {
-    ToolResult Execute(ToolInvocation invocation);
+    ToolResult Execute(ToolInvocation invocation, ExecutionEnvelope envelope);
 }

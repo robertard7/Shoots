@@ -14,6 +14,8 @@ public sealed record ToolRegistryEntry(
 /// </summary>
 public interface IToolRegistry
 {
+    string CatalogHash { get; }
+
     IReadOnlyList<ToolRegistryEntry> GetAllTools();
 
     ToolRegistryEntry? GetTool(ToolId toolId);

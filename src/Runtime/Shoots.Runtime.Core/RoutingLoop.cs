@@ -15,6 +15,7 @@ public sealed class RoutingLoop
     private readonly List<ToolResult> _toolResults = new();
     private readonly RoutingTraceBuilder _traceBuilder;
     private readonly TracingRuntimeNarrator _tracingNarrator;
+    private readonly string _catalogHash;
 
     public RoutingState State { get; private set; }
     public IReadOnlyList<ToolResult> ToolResults => _toolResults;
@@ -37,6 +38,7 @@ public sealed class RoutingLoop
         _toolExecutor = toolExecutor ?? throw new ArgumentNullException(nameof(toolExecutor));
         _traceBuilder = new RoutingTraceBuilder(trace);
         _tracingNarrator = new TracingRuntimeNarrator(_narrator, _traceBuilder);
+        _catalogHash = registry.CatalogHash;
 
         if (_plan.Request.WorkOrder is null)
             throw new ArgumentException("work order is required", nameof(plan));
@@ -56,7 +58,7 @@ public sealed class RoutingLoop
     public RoutingLoopResult Run()
     {
         if (State.Status == RoutingStatus.Completed || State.Status == RoutingStatus.Halted)
-            return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build());
+            return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build(), _traceBuilder.BuildTelemetry());
 
         var previousNarrator = RouteGate.Narrator;
         RouteGate.Narrator = _tracingNarrator;
@@ -71,11 +73,13 @@ public sealed class RoutingLoop
                 if (State.Status == RoutingStatus.Waiting && decision is null)
                     break;
 
-                var advanced = RouteGate.TryAdvance(_plan, State, decision, _registry, out var nextState, out _);
+                var advanced = RouteGate.TryAdvance(_plan, State, decision, _registry, out var nextState, out var error);
                 State = nextState;
 
                 if (!advanced)
                 {
+                    if (decision is not null && error is not null)
+                        _traceBuilder.Add(RoutingTraceEventKind.DecisionRejected, error.Code, State, step, error);
                     if (State.Status == RoutingStatus.Waiting)
                         continue;
                     break;
@@ -89,7 +93,13 @@ public sealed class RoutingLoop
                                          : new ToolInvocation(decision.ToolId, decision.Bindings, State.WorkOrderId));
 
                     if (invocation is not null)
-                        _toolResults.Add(_toolExecutor.Execute(invocation));
+                    {
+                        var envelope = BuildEnvelope();
+                        _traceBuilder.Add(RoutingTraceEventKind.ToolExecuted, invocation.ToolId.Value, State, step);
+                        var result = _toolExecutor.Execute(invocation, envelope);
+                        _toolResults.Add(result);
+                        _traceBuilder.Add(RoutingTraceEventKind.ToolResult, result.Success.ToString(), State, step);
+                    }
                 }
 
                 if (State.Status == RoutingStatus.Completed || State.Status == RoutingStatus.Halted)
@@ -101,7 +111,7 @@ public sealed class RoutingLoop
             RouteGate.Narrator = previousNarrator;
         }
 
-        return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build());
+        return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build(), _traceBuilder.BuildTelemetry());
     }
 
     private ToolSelectionDecision? ResolveDecision(RouteStep step)
@@ -109,9 +119,34 @@ public sealed class RoutingLoop
         if (State.Status != RoutingStatus.Waiting)
             return null;
 
-        return _aiDecisionProvider.RequestDecision(_plan.Request.WorkOrder!, step, State);
+        var snapshot = _registry.GetSnapshot();
+        var envelope = BuildEnvelope();
+        var context = new AiDecisionRequestContext(_plan.Request.WorkOrder!, step, State, envelope, snapshot);
+        return _aiDecisionProvider.RequestDecision(context);
     }
 
+    private ExecutionEnvelope BuildEnvelope()
+    {
+        var telemetry = _traceBuilder.BuildTelemetry();
+        return new ExecutionEnvelope(
+            _plan,
+            State,
+            _toolResults.ToArray(),
+            _traceBuilder.Build(),
+            telemetry,
+            _catalogHash,
+            ResolveFinalStatus(State));
+    }
+
+    private static ExecutionFinalStatus ResolveFinalStatus(RoutingState state)
+    {
+        return state.Status switch
+        {
+            RoutingStatus.Completed => ExecutionFinalStatus.Completed,
+            RoutingStatus.Halted => ExecutionFinalStatus.Halted,
+            _ => ExecutionFinalStatus.Aborted
+        };
+    }
     private static RouteStep RequireRouteStep(BuildPlan plan, RoutingState state)
     {
         if (plan.Steps is null || plan.Steps.Count == 0)

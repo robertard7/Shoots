@@ -1,4 +1,4 @@
-using Shoots.Contracts.Core;
+using System;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Runtime.Core;
@@ -7,14 +7,9 @@ public sealed class NullAiDecisionProvider : IAiDecisionProvider
 {
     public static readonly NullAiDecisionProvider Instance = new();
 
-    public ToolSelectionDecision? RequestDecision(
-        WorkOrder workOrder,
-        RouteStep step,
-        RoutingState state)
+    public ToolSelectionDecision? RequestDecision(AiDecisionRequestContext context)
     {
-        _ = workOrder ?? throw new ArgumentNullException(nameof(workOrder));
-        _ = step ?? throw new ArgumentNullException(nameof(step));
-        _ = state ?? throw new ArgumentNullException(nameof(state));
+        _ = context ?? throw new ArgumentNullException(nameof(context));
 
         return null;
     }

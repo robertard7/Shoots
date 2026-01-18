@@ -30,6 +30,9 @@ public enum RoutingTraceEventKind
     RouteEntered,
     DecisionRequired,
     DecisionAccepted,
+    DecisionRejected,
+    ToolExecuted,
+    ToolResult,
     Halted,
     Completed
 }

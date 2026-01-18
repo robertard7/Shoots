@@ -10,5 +10,8 @@ public sealed record ExecutionEnvelope(
     BuildPlan Plan,
     RoutingState State,
     IReadOnlyList<ToolResult> ToolResults,
-    RoutingTrace Trace
+    RoutingTrace Trace,
+    IReadOnlyList<ExecutionTelemetryRecord> Telemetry,
+    string ToolCatalogHash,
+    ExecutionFinalStatus FinalStatus
 );
