@@ -144,14 +144,14 @@ public sealed class RoutingLoopTests
 
     private sealed class RefusingAiDecisionProvider : IAiDecisionProvider
     {
-        public ToolSelectionDecision? RequestDecision(AiDecisionRequestContext context) => null;
+        public ToolSelectionDecision? RequestDecision(AiDecisionRequest request) => null;
     }
 
     private sealed class AcceptingAiDecisionProvider : IAiDecisionProvider
     {
-        public ToolSelectionDecision? RequestDecision(AiDecisionRequestContext context)
+        public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
         {
-            if (context.Step.Intent != RouteIntent.SelectTool)
+            if (request.Step.Intent != RouteIntent.SelectTool)
                 return null;
 
             return new ToolSelectionDecision(new ToolId("tools.sample"), new Dictionary<string, object?>());

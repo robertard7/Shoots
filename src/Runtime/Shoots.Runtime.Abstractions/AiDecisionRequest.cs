@@ -6,10 +6,10 @@ namespace Shoots.Runtime.Abstractions;
 /// <summary>
 /// Read-only context for AI decision requests.
 /// </summary>
-public sealed record AiDecisionRequestContext(
+public sealed record AiDecisionRequest(
     WorkOrder WorkOrder,
     RouteStep Step,
     RoutingState State,
-    ExecutionEnvelope Envelope,
-    IReadOnlyList<ToolRegistryEntry> ToolSnapshot
+    string CatalogHash,
+    IReadOnlyList<RoutingTraceEventKind> TraceSummary
 );

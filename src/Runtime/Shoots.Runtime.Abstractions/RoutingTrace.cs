@@ -7,6 +7,8 @@ namespace Shoots.Runtime.Abstractions;
 /// Immutable log of routing events with logical timestamps.
 /// </summary>
 public sealed record RoutingTrace(
+    BuildPlan Plan,
+    string CatalogHash,
     IReadOnlyList<RoutingTraceEntry> Entries
 );
 

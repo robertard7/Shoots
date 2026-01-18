@@ -7,9 +7,9 @@ public sealed class NullAiDecisionProvider : IAiDecisionProvider
 {
     public static readonly NullAiDecisionProvider Instance = new();
 
-    public ToolSelectionDecision? RequestDecision(AiDecisionRequestContext context)
+    public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
     {
-        _ = context ?? throw new ArgumentNullException(nameof(context));
+        _ = request ?? throw new ArgumentNullException(nameof(request));
 
         return null;
     }

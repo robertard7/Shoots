@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 
@@ -46,16 +48,96 @@ public sealed class RuntimeOrchestrator
             seed?.Trace);
         var result = loop.Run();
         var finalStatus = ResolveFinalStatus(result.State);
+        var artifacts = BuildArtifacts(plan, result.ToolResults);
         var envelope = new ExecutionEnvelope(
             plan,
             result.State,
             result.ToolResults,
+            artifacts,
             result.Trace,
             result.Telemetry,
             _registry.CatalogHash,
             finalStatus);
         _persistence?.Save(envelope);
         return envelope;
+    }
+
+    public static ExecutionEnvelope Run(
+        BuildPlan plan,
+        IToolRegistry registry,
+        IAiDecisionProvider aiDecisionProvider,
+        IRuntimePersistence? persistence = null,
+        IRuntimeNarrator? narrator = null)
+    {
+        if (plan is null)
+            throw new ArgumentNullException(nameof(plan));
+        if (registry is null)
+            throw new ArgumentNullException(nameof(registry));
+        if (aiDecisionProvider is null)
+            throw new ArgumentNullException(nameof(aiDecisionProvider));
+
+        var orchestrator = new RuntimeOrchestrator(
+            registry,
+            aiDecisionProvider,
+            narrator ?? NullRuntimeNarrator.Instance,
+            new DeterministicToolExecutor(registry),
+            persistence);
+
+        return orchestrator.Run(plan);
+    }
+
+    public static ExecutionEnvelope Resume(
+        RoutingTrace trace,
+        IToolRegistry registry,
+        IAiDecisionProvider aiDecisionProvider)
+    {
+        if (trace is null)
+            throw new ArgumentNullException(nameof(trace));
+        if (registry is null)
+            throw new ArgumentNullException(nameof(registry));
+        if (aiDecisionProvider is null)
+            throw new ArgumentNullException(nameof(aiDecisionProvider));
+
+        var toolResults = RebuildToolResults(trace);
+        var lastState = ResolveLastState(trace);
+
+        if (!string.Equals(trace.CatalogHash, registry.CatalogHash, StringComparison.Ordinal))
+            return HaltFromTrace(trace, registry, toolResults, lastState, "invalid_arguments", "Catalog hash mismatch.");
+
+        var computed = Shoots.Runtime.Abstractions.BuildPlanHasher.ComputePlanId(
+            trace.Plan.Request,
+            trace.Plan.Authority,
+            trace.Plan.Steps,
+            trace.Plan.Artifacts,
+            trace.Plan.ToolResult);
+        if (!string.Equals(computed, trace.Plan.PlanId, StringComparison.Ordinal))
+            return HaltFromTrace(trace, registry, toolResults, lastState, "invalid_arguments", "Plan hash mismatch.");
+
+        var resumeState = ResolveLastNonTerminalState(trace) ?? lastState ?? RoutingState.CreateInitial(trace.Plan);
+
+        var loop = new RoutingLoop(
+            trace.Plan,
+            registry,
+            aiDecisionProvider,
+            NullRuntimeNarrator.Instance,
+            new DeterministicToolExecutor(registry),
+            resumeState,
+            toolResults,
+            trace);
+
+        var result = loop.Run();
+        var artifacts = BuildArtifacts(trace.Plan, result.ToolResults);
+        var finalStatus = ResolveFinalStatus(result.State);
+
+        return new ExecutionEnvelope(
+            trace.Plan,
+            result.State,
+            result.ToolResults,
+            artifacts,
+            result.Trace,
+            result.Telemetry,
+            registry.CatalogHash,
+            finalStatus);
     }
 
     private static ExecutionFinalStatus ResolveFinalStatus(RoutingState state)
@@ -66,5 +148,114 @@ public sealed class RuntimeOrchestrator
             RoutingStatus.Halted => ExecutionFinalStatus.Halted,
             _ => ExecutionFinalStatus.Aborted
         };
+    }
+
+    private static IReadOnlyList<ToolResult> RebuildToolResults(RoutingTrace trace)
+    {
+        var results = new List<ToolResult>();
+        ToolId? pendingTool = null;
+
+        foreach (var entry in trace.Entries)
+        {
+            if (entry.Event == RoutingTraceEventKind.ToolExecuted && entry.Detail is not null)
+            {
+                pendingTool = new ToolId(entry.Detail);
+                continue;
+            }
+
+            if (entry.Event != RoutingTraceEventKind.ToolResult || pendingTool is null || entry.Detail is null)
+                continue;
+
+            var parsed = ParseToolResult(entry.Detail);
+            results.Add(new ToolResult(pendingTool, parsed.Outputs, parsed.Success));
+            pendingTool = null;
+        }
+
+        return results;
+    }
+
+    private static (bool Success, IReadOnlyDictionary<string, object?> Outputs) ParseToolResult(string detail)
+    {
+        var outputs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var success = false;
+
+        foreach (var token in detail.Split('|', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = token.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length != 2)
+                continue;
+
+            if (string.Equals(parts[0], "success", StringComparison.OrdinalIgnoreCase))
+            {
+                _ = bool.TryParse(parts[1], out success);
+                continue;
+            }
+
+            outputs[parts[0]] = parts[1];
+        }
+
+        return (success, outputs);
+    }
+
+    private static RoutingState? ResolveLastState(RoutingTrace trace)
+    {
+        return trace.Entries.LastOrDefault(entry => entry.State is not null)?.State;
+    }
+
+    private static RoutingState? ResolveLastNonTerminalState(RoutingTrace trace)
+    {
+        return trace.Entries
+            .Where(entry => entry.State is not null)
+            .Select(entry => entry.State!)
+            .LastOrDefault(state => state.Status is not RoutingStatus.Completed and not RoutingStatus.Halted);
+    }
+
+    private static ExecutionEnvelope HaltFromTrace(
+        RoutingTrace trace,
+        IToolRegistry registry,
+        IReadOnlyList<ToolResult> toolResults,
+        RoutingState? seedState,
+        string code,
+        string message)
+    {
+        var state = seedState ?? RoutingState.CreateInitial(trace.Plan);
+        state = state with { Status = RoutingStatus.Halted };
+
+        var builder = new RoutingTraceBuilder(trace.Plan, registry.CatalogHash, trace);
+        var error = new RuntimeError(code, message);
+        builder.Add(RoutingTraceEventKind.Halted, error.Code, state, error: error);
+
+        var artifacts = BuildArtifacts(trace.Plan, toolResults);
+        var envelope = new ExecutionEnvelope(
+            trace.Plan,
+            state,
+            toolResults,
+            artifacts,
+            builder.Build(),
+            builder.BuildTelemetry(),
+            registry.CatalogHash,
+            ExecutionFinalStatus.Halted);
+
+        return envelope;
+    }
+
+    private static IReadOnlyList<BuildArtifact> BuildArtifacts(BuildPlan plan, IReadOnlyList<ToolResult> toolResults)
+    {
+        var artifacts = new List<BuildArtifact>(plan.Artifacts);
+        var index = 0;
+
+        foreach (var result in toolResults)
+        {
+            foreach (var output in result.Outputs
+                         .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                var id = $"{result.ToolId.Value}.output.{index}.{output.Key}";
+                var description = $"Tool output {output.Key}={output.Value?.ToString() ?? "null"}";
+                artifacts.Add(new BuildArtifact(id, description));
+                index++;
+            }
+        }
+
+        return artifacts;
     }
 }

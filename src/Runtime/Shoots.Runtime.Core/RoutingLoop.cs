@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 
@@ -36,9 +37,9 @@ public sealed class RoutingLoop
         _aiDecisionProvider = aiDecisionProvider ?? throw new ArgumentNullException(nameof(aiDecisionProvider));
         _narrator = narrator ?? throw new ArgumentNullException(nameof(narrator));
         _toolExecutor = toolExecutor ?? throw new ArgumentNullException(nameof(toolExecutor));
-        _traceBuilder = new RoutingTraceBuilder(trace);
-        _tracingNarrator = new TracingRuntimeNarrator(_narrator, _traceBuilder);
         _catalogHash = registry.CatalogHash;
+        _traceBuilder = new RoutingTraceBuilder(_plan, _catalogHash, trace);
+        _tracingNarrator = new TracingRuntimeNarrator(_narrator, _traceBuilder);
 
         if (_plan.Request.WorkOrder is null)
             throw new ArgumentException("work order is required", nameof(plan));
@@ -51,6 +52,12 @@ public sealed class RoutingLoop
 
         if (toolResults is not null)
             _toolResults.AddRange(toolResults);
+
+        if (trace is not null &&
+            !string.Equals(trace.Plan.PlanId, _plan.PlanId, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("trace plan mismatch", nameof(trace));
+        }
 
         State = initialState ?? RoutingState.CreateInitial(_plan);
     }
@@ -98,7 +105,17 @@ public sealed class RoutingLoop
                         _traceBuilder.Add(RoutingTraceEventKind.ToolExecuted, invocation.ToolId.Value, State, step);
                         var result = _toolExecutor.Execute(invocation, envelope);
                         _toolResults.Add(result);
-                        _traceBuilder.Add(RoutingTraceEventKind.ToolResult, result.Success.ToString(), State, step);
+                        var toolDetail = SerializeToolResult(result);
+                        _traceBuilder.Add(RoutingTraceEventKind.ToolResult, toolDetail, State, step);
+
+                        if (!result.Success)
+                        {
+                            var code = ResolveToolFailureCode(result);
+                            var failure = new RuntimeError(code, $"Tool '{result.ToolId.Value}' failed.");
+                            State = State with { Status = RoutingStatus.Halted };
+                            _tracingNarrator.OnHalted(State, failure);
+                            break;
+                        }
                     }
                 }
 
@@ -119,23 +136,75 @@ public sealed class RoutingLoop
         if (State.Status != RoutingStatus.Waiting)
             return null;
 
-        var snapshot = _registry.GetSnapshot();
-        var envelope = BuildEnvelope();
-        var context = new AiDecisionRequestContext(_plan.Request.WorkOrder!, step, State, envelope, snapshot);
-        return _aiDecisionProvider.RequestDecision(context);
+        var summary = _traceBuilder.Build()
+            .Entries
+            .Select(entry => entry.Event)
+            .ToArray();
+        var request = new AiDecisionRequest(_plan.Request.WorkOrder!, step, State, _catalogHash, summary);
+        return _aiDecisionProvider.RequestDecision(request);
     }
 
     private ExecutionEnvelope BuildEnvelope()
     {
         var telemetry = _traceBuilder.BuildTelemetry();
+        var artifacts = BuildArtifacts();
         return new ExecutionEnvelope(
             _plan,
             State,
             _toolResults.ToArray(),
+            artifacts,
             _traceBuilder.Build(),
             telemetry,
             _catalogHash,
             ResolveFinalStatus(State));
+    }
+
+    private IReadOnlyList<BuildArtifact> BuildArtifacts()
+    {
+        var artifacts = new List<BuildArtifact>(_plan.Artifacts);
+        var index = 0;
+
+        foreach (var result in _toolResults)
+        {
+            foreach (var output in result.Outputs
+                         .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                var id = $"{result.ToolId.Value}.output.{index}.{output.Key}";
+                var description = $"Tool output {output.Key}={output.Value?.ToString() ?? "null"}";
+                artifacts.Add(new BuildArtifact(id, description));
+                index++;
+            }
+        }
+
+        return artifacts;
+    }
+
+    private static string SerializeToolResult(ToolResult result)
+    {
+        var builder = new List<string>
+        {
+            $"success={result.Success.ToString()}"
+        };
+
+        foreach (var output in result.Outputs
+                     .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            builder.Add($"{output.Key}={output.Value?.ToString() ?? "null"}");
+        }
+
+        return string.Join("|", builder);
+    }
+
+    private static string ResolveToolFailureCode(ToolResult result)
+    {
+        if (result.Outputs.TryGetValue("error.code", out var value) &&
+            value is string code &&
+            RuntimeErrorCatalog.IsKnown(code))
+        {
+            return code;
+        }
+
+        return "tool_missing";
     }
 
     private static ExecutionFinalStatus ResolveFinalStatus(RoutingState state)

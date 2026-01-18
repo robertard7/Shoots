@@ -10,9 +10,16 @@ internal sealed class RoutingTraceBuilder
 {
     private readonly List<RoutingTraceEntry> _entries = new();
     private int _nextTick;
+    private readonly BuildPlan _plan;
+    private readonly string _catalogHash;
 
-    public RoutingTraceBuilder(RoutingTrace? seed = null)
+    public RoutingTraceBuilder(BuildPlan plan, string catalogHash, RoutingTrace? seed = null)
     {
+        _plan = plan ?? throw new ArgumentNullException(nameof(plan));
+        _catalogHash = string.IsNullOrWhiteSpace(catalogHash)
+            ? throw new ArgumentException("catalog hash is required", nameof(catalogHash))
+            : catalogHash;
+
         if (seed is not null)
         {
             _entries.AddRange(seed.Entries);
@@ -20,7 +27,7 @@ internal sealed class RoutingTraceBuilder
         }
     }
 
-    public RoutingTrace Build() => new RoutingTrace(_entries.ToArray());
+    public RoutingTrace Build() => new RoutingTrace(_plan, _catalogHash, _entries.ToArray());
 
     public IReadOnlyList<ExecutionTelemetryRecord> BuildTelemetry()
     {
