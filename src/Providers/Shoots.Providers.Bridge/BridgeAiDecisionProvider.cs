@@ -32,14 +32,10 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
         if (adapter is null)
             throw new InvalidOperationException($"Provider '{_providerId}' is not registered.");
 
-        var traceSummary = request.TraceSummary.Count == 0
-            ? string.Empty
-            : string.Join(",", request.TraceSummary);
-
         return adapter.RequestDecision(
             request.WorkOrder,
             step,
             request.CatalogHash ?? string.Empty,
-            traceSummary);
+            string.Empty);
     }
 }
