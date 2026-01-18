@@ -13,33 +13,53 @@ public sealed class RoutingLoop
     private readonly IRuntimeNarrator _narrator;
     private readonly IToolExecutor _toolExecutor;
     private readonly List<ToolResult> _toolResults = new();
+    private readonly RoutingTraceBuilder _traceBuilder;
+    private readonly TracingRuntimeNarrator _tracingNarrator;
 
     public RoutingState State { get; private set; }
     public IReadOnlyList<ToolResult> ToolResults => _toolResults;
+    public RoutingTrace Trace => _traceBuilder.Build();
 
     public RoutingLoop(
         BuildPlan plan,
         IToolRegistry registry,
         IAiDecisionProvider aiDecisionProvider,
         IRuntimeNarrator narrator,
-        IToolExecutor toolExecutor)
+        IToolExecutor toolExecutor,
+        RoutingState? initialState = null,
+        IReadOnlyList<ToolResult>? toolResults = null,
+        RoutingTrace? trace = null)
     {
         _plan = plan ?? throw new ArgumentNullException(nameof(plan));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _aiDecisionProvider = aiDecisionProvider ?? throw new ArgumentNullException(nameof(aiDecisionProvider));
         _narrator = narrator ?? throw new ArgumentNullException(nameof(narrator));
         _toolExecutor = toolExecutor ?? throw new ArgumentNullException(nameof(toolExecutor));
+        _traceBuilder = new RoutingTraceBuilder(trace);
+        _tracingNarrator = new TracingRuntimeNarrator(_narrator, _traceBuilder);
 
         if (_plan.Request.WorkOrder is null)
             throw new ArgumentException("work order is required", nameof(plan));
 
-        State = RoutingState.CreateInitial(_plan);
+        if (initialState is not null &&
+            !string.Equals(initialState.WorkOrderId.Value, _plan.Request.WorkOrder.Id.Value, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("work order mismatch between plan and state", nameof(initialState));
+        }
+
+        if (toolResults is not null)
+            _toolResults.AddRange(toolResults);
+
+        State = initialState ?? RoutingState.CreateInitial(_plan);
     }
 
     public RoutingLoopResult Run()
     {
+        if (State.Status == RoutingStatus.Completed || State.Status == RoutingStatus.Halted)
+            return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build());
+
         var previousNarrator = RouteGate.Narrator;
-        RouteGate.Narrator = _narrator;
+        RouteGate.Narrator = _tracingNarrator;
 
         try
         {
@@ -81,7 +101,7 @@ public sealed class RoutingLoop
             RouteGate.Narrator = previousNarrator;
         }
 
-        return new RoutingLoopResult(State, _toolResults.ToArray());
+        return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build());
     }
 
     private ToolSelectionDecision? ResolveDecision(RouteStep step)

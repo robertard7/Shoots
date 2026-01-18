@@ -234,7 +234,7 @@ public static class RouteGate
                 return false;
             }
 
-            if (!TryValidateToolSelection(snapshot, effectiveDecision, out error))
+            if (!TryValidateToolSelection(plan, snapshot, effectiveDecision, out error))
             {
                 nextState = state with { Status = RoutingStatus.Halted };
                 narrator?.OnHalted(nextState, error);
@@ -310,10 +310,14 @@ public static class RouteGate
     }
 
     private static bool TryValidateToolSelection(
+        BuildPlan plan,
         IReadOnlyList<ToolRegistryEntry> snapshot,
         ToolSelectionDecision selection,
         out RuntimeError? error)
     {
+        if (plan is null)
+            throw new ArgumentNullException(nameof(plan));
+
         var entry = snapshot.FirstOrDefault(candidate => candidate.Spec.ToolId == selection.ToolId);
         if (entry is null)
         {

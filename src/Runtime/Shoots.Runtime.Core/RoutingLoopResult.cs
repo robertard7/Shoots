@@ -6,5 +6,6 @@ namespace Shoots.Runtime.Core;
 
 public sealed record RoutingLoopResult(
     RoutingState State,
-    IReadOnlyList<ToolResult> ToolResults
+    IReadOnlyList<ToolResult> ToolResults,
+    RoutingTrace Trace
 );
