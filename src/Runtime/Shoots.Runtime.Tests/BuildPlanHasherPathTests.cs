@@ -11,7 +11,7 @@ public sealed class BuildPlanHasherPathTests
     [Fact]
     public void Hash_rejects_absolute_paths()
     {
-        var request = new BuildRequest(
+        var request = TestRequestFactory.CreateBuildRequest(
             "core.ping",
             new Dictionary<string, object?>
             {

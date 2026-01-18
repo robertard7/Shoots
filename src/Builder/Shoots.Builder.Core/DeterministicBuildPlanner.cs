@@ -24,8 +24,12 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
     {
         if (request is null)
             throw new ArgumentNullException(nameof(request));
+        if (request.WorkOrder is null)
+            throw new ArgumentException("work order is required", nameof(request));
         if (request.Args is null)
             throw new ArgumentException("args are required", nameof(request));
+        if (request.RouteRules is null)
+            throw new ArgumentException("route rules are required", nameof(request));
 
         if (!request.Args.TryGetValue(GraphArgKey, out var graphValue))
             throw new ArgumentException($"missing required '{GraphArgKey}'", nameof(request));
@@ -51,31 +55,63 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
 
         normalizedArgs[GraphArgKey] = normalizedGraph;
 
+        if (string.IsNullOrWhiteSpace(request.WorkOrder.Id.Value))
+            throw new ArgumentException("work order id is required", nameof(request));
+        if (string.IsNullOrWhiteSpace(request.WorkOrder.OriginalRequest))
+            throw new ArgumentException("work order original request is required", nameof(request));
+        if (string.IsNullOrWhiteSpace(request.WorkOrder.Goal))
+            throw new ArgumentException("work order goal is required", nameof(request));
+        if (request.WorkOrder.Constraints is null)
+            throw new ArgumentException("work order constraints are required", nameof(request));
+        if (request.WorkOrder.SuccessCriteria is null)
+            throw new ArgumentException("work order success criteria are required", nameof(request));
+
+        var normalizedRouteRules = request.RouteRules
+            .OrderBy(rule => rule.NodeId, StringComparer.Ordinal)
+            .ThenBy(rule => rule.Intent)
+            .ThenBy(rule => rule.Owner)
+            .ThenBy(rule => rule.AllowedOutputKind, StringComparer.Ordinal)
+            .ToList();
+
         var normalizedRequest = request with
         {
             CommandId = normalizedCommandId,
-            Args = normalizedArgs
+            Args = normalizedArgs,
+            RouteRules = normalizedRouteRules
         };
 
         // Deterministic steps
         var stepsById = new Dictionary<string, BuildStep>(StringComparer.Ordinal);
+        var routeRulesByNode = normalizedRouteRules.ToDictionary(
+            rule => rule.NodeId,
+            rule => rule,
+            StringComparer.Ordinal);
 
         var spec = _services.GetCommand(normalizedCommandId);
 
-        stepsById["validate-command"] =
-            spec is null
-                ? new BuildStep("validate-command", "Fail if the command is unknown.")
-                : new BuildStep("validate-command", $"Validate command '{spec.CommandId}' args.");
+        if (spec is null)
+            throw new InvalidOperationException($"unknown command '{normalizedCommandId}'");
 
-        stepsById["resolve-command"] = new BuildStep(
-            "resolve-command",
-            $"Resolve command '{normalizedCommandId}'."
-        );
+        foreach (var nodeId in orderedStepIds)
+        {
+            if (!routeRulesByNode.TryGetValue(nodeId, out var rule))
+                continue;
 
-        stepsById["execute-command"] = new BuildStep(
-            "execute-command",
-            $"Execute command '{normalizedCommandId}'."
-        );
+            stepsById[nodeId] = new RouteStep(
+                Id: nodeId,
+                Description: $"Route '{nodeId}' intent={rule.Intent} owner={rule.Owner}.",
+                NodeId: nodeId,
+                Intent: rule.Intent,
+                Owner: rule.Owner,
+                WorkOrderId: request.WorkOrder.Id
+            );
+        }
+
+        var unknownRouteNodes = routeRulesByNode.Keys
+            .Where(nodeId => !orderedStepIds.Contains(nodeId, StringComparer.Ordinal))
+            .ToArray();
+        if (unknownRouteNodes.Length > 0)
+            throw new InvalidOperationException($"route rules reference unknown nodes: {string.Join(", ", unknownRouteNodes)}");
 
         var unknownGraphSteps = orderedStepIds
             .Where(stepId => !stepsById.ContainsKey(stepId))
@@ -83,11 +119,11 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         if (unknownGraphSteps.Length > 0)
             throw new InvalidOperationException($"graph references unknown steps: {string.Join(", ", unknownGraphSteps)}");
 
-        var missingGraphSteps = stepsById.Keys
-            .Where(stepId => !orderedStepIds.Contains(stepId, StringComparer.Ordinal))
+        var missingIntents = Enum.GetValues<RouteIntent>()
+            .Where(intent => !routeRulesByNode.Values.Any(rule => rule.Intent == intent))
             .ToArray();
-        if (missingGraphSteps.Length > 0)
-            throw new InvalidOperationException($"graph missing required steps: {string.Join(", ", missingGraphSteps)}");
+        if (missingIntents.Length > 0)
+            throw new InvalidOperationException($"route rules missing required intents: {string.Join(", ", missingIntents)}");
 
         var steps = orderedStepIds
             .Select(stepId => stepsById[stepId])

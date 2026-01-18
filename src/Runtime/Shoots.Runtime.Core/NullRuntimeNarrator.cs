@@ -30,4 +30,9 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
     {
         if (error is null) throw new ArgumentNullException(nameof(error));
     }
+
+    public void OnRoute(RouteNarration narration)
+    {
+        if (narration is null) throw new ArgumentNullException(nameof(narration));
+    }
 }

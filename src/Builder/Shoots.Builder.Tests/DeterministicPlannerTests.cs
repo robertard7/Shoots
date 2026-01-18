@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Shoots.Builder.Core;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
@@ -17,14 +19,18 @@ public sealed class DeterministicPlannerTests
                 Array.Empty<RuntimeArgSpec>()));
 
         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
-        var request = new BuildRequest(
+        var request = CreateRequest(
             " core.ping ",
+            "graph TD; select --> validate --> review --> terminate",
             new Dictionary<string, object?>
             {
-                ["plan.graph"] = "graph TD; validate-command --> resolve-command --> execute-command",
                 ["b"] = "2",
                 ["a"] = "1"
-            });
+            },
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination"));
 
         var firstPlan = planner.Plan(request);
         var secondPlan = planner.Plan(request);
@@ -42,12 +48,14 @@ public sealed class DeterministicPlannerTests
         var services = new StubRuntimeServices();
         var policy = new StubDelegationPolicy();
         var planner = new DeterministicBuildPlanner(services, policy);
-        var request = new BuildRequest(
+        var request = CreateRequest(
             "core.ping",
-            new Dictionary<string, object?>
-            {
-                ["plan.graph"] = "graph TD; validate-command --> resolve-command --> execute-command"
-            });
+            "graph TD; select --> validate --> review --> terminate",
+            null,
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination"));
 
         var plan = planner.Plan(request);
         var computed = BuildPlanHasher.ComputePlanId(plan.Request, plan.Authority, plan.Steps, plan.Artifacts);
@@ -81,17 +89,19 @@ public sealed class DeterministicPlannerTests
                 Array.Empty<RuntimeArgSpec>()));
 
         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
-        var request = new BuildRequest(
+        var request = CreateRequest(
             "core.ping",
-            new Dictionary<string, object?>
-            {
-                ["plan.graph"] = "graph TD; resolve-command --> validate-command --> execute-command"
-            });
+            "graph TD; terminate --> review --> validate --> select",
+            null,
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination"));
 
         var plan = planner.Plan(request);
 
         Assert.Equal(
-            new[] { "resolve-command", "validate-command", "execute-command" },
+            new[] { "terminate", "review", "validate", "select" },
             plan.Steps.Select(step => step.Id));
     }
 
@@ -105,14 +115,43 @@ public sealed class DeterministicPlannerTests
                 Array.Empty<RuntimeArgSpec>()));
 
         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
-        var request = new BuildRequest(
+        var request = CreateRequest(
             "core.ping",
-            new Dictionary<string, object?>
-            {
-                ["plan.graph"] = "graph TD; validate-command --> resolve-command"
-            });
+            "graph TD; validate --> review",
+            null,
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"));
 
         Assert.Throws<InvalidOperationException>(() => planner.Plan(request));
+    }
+
+    private static BuildRequest CreateRequest(
+        string commandId,
+        string graph,
+        IReadOnlyDictionary<string, object?>? extraArgs,
+        params RouteRule[] routeRules)
+    {
+        var args = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["plan.graph"] = graph
+        };
+
+        if (extraArgs is not null)
+        {
+            foreach (var kvp in extraArgs)
+                args[kvp.Key] = kvp.Value;
+        }
+
+        return new BuildRequest(
+            WorkOrder: new WorkOrder(
+                Id: new WorkOrderId("wo-test"),
+                OriginalRequest: "Test request.",
+                Goal: "Validate planning behavior.",
+                Constraints: Array.Empty<string>(),
+                SuccessCriteria: Array.Empty<string>()),
+            CommandId: commandId,
+            Args: args,
+            RouteRules: routeRules);
     }
 
     private sealed class StubRuntimeServices : IRuntimeServices

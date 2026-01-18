@@ -37,6 +37,20 @@ public sealed class TextRuntimeNarrator : IRuntimeNarrator
         _emit($"[error] {error.Code}: {error.Message}");
     }
 
+    public void OnRoute(RouteNarration narration)
+    {
+        if (narration is null) throw new ArgumentNullException(nameof(narration));
+
+        var step = narration.CurrentStep is null
+            ? "none"
+            : $"{narration.CurrentStep.NodeId}:{narration.CurrentStep.Intent}/{narration.CurrentStep.Owner}";
+
+        var decision = narration.DecisionRequired ? "decision=required" : "decision=none";
+        var halt = narration.HaltReason is null ? "halt=none" : $"halt={narration.HaltReason.Code}";
+
+        _emit($"[route] workorder={narration.WorkOrder.Id.Value} step={step} {decision} {halt}");
+    }
+
     private static string FormatArgs(RuntimeRequest request)
     {
         if (request.Args.Count == 0) return "{}";
