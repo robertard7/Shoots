@@ -97,5 +97,6 @@ public sealed record RouteStep(
     string NodeId,
     RouteIntent Intent,
     DecisionOwner Owner,
-    WorkOrderId WorkOrderId
+    WorkOrderId WorkOrderId,
+    ToolInvocation? ToolInvocation = null
 ) : BuildStep(Id, Description);

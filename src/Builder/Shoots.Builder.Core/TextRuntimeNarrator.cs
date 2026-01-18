@@ -85,6 +85,13 @@ public sealed class TextRuntimeNarrator : IRuntimeNarrator
         _emit($"[route.halted] workorder={state.WorkOrderId.Value} reason={error.Code}");
     }
 
+    public void OnCompleted(RoutingState state, RouteStep step)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        _emit($"[route.completed] workorder={state.WorkOrderId.Value} step={step.NodeId}");
+    }
+
     private static string FormatArgs(RuntimeRequest request)
     {
         if (request.Args.Count == 0) return "{}";

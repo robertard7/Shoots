@@ -17,6 +17,7 @@ namespace Shoots.Runtime.Abstractions;
 /// - steps ordered as provided (id + description, plus AI prompt/schema when present)
 /// - tool steps include tool id + normalized input bindings + declared outputs
 /// - route steps include node id + intent + owner + work order id
+/// - route steps include tool invocation details when present
 /// - artifacts ordered as provided (id + description)
 /// Excludes timestamps, environment/machine identifiers, absolute paths, and other non-semantic runtime state.
 /// </summary>
@@ -132,6 +133,21 @@ public static class BuildPlanHasher
                 sb.Append("|route.intent=").Append(routeStep.Intent.ToString());
                 sb.Append("|route.owner=").Append(routeStep.Owner.ToString());
                 sb.Append("|route.workorder=").Append(NormalizeToken(routeStep.WorkOrderId.Value));
+
+                if (routeStep.ToolInvocation is not null)
+                {
+                    sb.Append("|route.tool.id=").Append(NormalizeToken(routeStep.ToolInvocation.ToolId.Value));
+                    sb.Append("|route.tool.workorder=").Append(NormalizeToken(routeStep.ToolInvocation.WorkOrderId.Value));
+
+                    foreach (var binding in routeStep.ToolInvocation.Bindings
+                                 .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        sb.Append("|route.tool.binding=")
+                          .Append(NormalizeToken(binding.Key))
+                          .Append('=')
+                          .Append(NormalizeTextToken(binding.Value?.ToString() ?? "null"));
+                    }
+                }
             }
         }
 

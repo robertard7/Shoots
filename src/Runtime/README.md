@@ -109,6 +109,14 @@ The planner must emit complete routing steps for every Mermaid node.
 
 Routing decisions are only accepted for SelectTool intents.
 
+Boundary diagram
+
+Builder
+  -> BuildPlan (RouteSteps only)
+  -> Runtime (WorkOrder + RoutingState)
+  -> RouteGate (authoritative transitions)
+  -> Tools (validated metadata only)
+
 Module contract
 
 Runtime modules implement IRuntimeModule and expose handlers that follow a strict input/output contract.

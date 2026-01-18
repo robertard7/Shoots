@@ -17,4 +17,6 @@ public interface IToolRegistry
     IReadOnlyList<ToolRegistryEntry> GetAllTools();
 
     ToolRegistryEntry? GetTool(ToolId toolId);
+
+    IReadOnlyList<ToolRegistryEntry> GetSnapshot();
 }

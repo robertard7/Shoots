@@ -14,4 +14,5 @@ public interface IRuntimeNarrator
     void OnDecisionRequired(RoutingState state, RouteStep step);
     void OnDecisionAccepted(RoutingState state, RouteStep step);
     void OnHalted(RoutingState state, RuntimeError error);
+    void OnCompleted(RoutingState state, RouteStep step);
 }

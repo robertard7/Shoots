@@ -76,6 +76,21 @@ public static class BuildPlanRenderer
                 builder.Append("  intent=").AppendLine(routeStep.Intent.ToString());
                 builder.Append("  owner=").AppendLine(routeStep.Owner.ToString());
                 builder.Append("  workorder=").AppendLine(routeStep.WorkOrderId.Value);
+
+                if (routeStep.ToolInvocation is not null)
+                {
+                    builder.Append("  tool=").AppendLine(routeStep.ToolInvocation.ToolId.Value);
+                    builder.Append("  tool.workorder=").AppendLine(routeStep.ToolInvocation.WorkOrderId.Value);
+                    builder.AppendLine("  tool.bindings:");
+                    foreach (var binding in routeStep.ToolInvocation.Bindings
+                                 .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        builder.Append("    - ")
+                               .Append(binding.Key)
+                               .Append(": ")
+                               .AppendLine(binding.Value?.ToString() ?? "null");
+                    }
+                }
             }
         }
 

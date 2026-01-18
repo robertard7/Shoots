@@ -137,5 +137,7 @@ public sealed class ToolAuthorityValidatorTests
         {
             return _entries.TryGetValue(toolId, out var entry) ? entry : null;
         }
+
+        public IReadOnlyList<ToolRegistryEntry> GetSnapshot() => GetAllTools();
     }
 }

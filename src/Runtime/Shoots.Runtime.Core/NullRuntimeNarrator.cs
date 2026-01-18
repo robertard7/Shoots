@@ -65,4 +65,10 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
         if (state is null) throw new ArgumentNullException(nameof(state));
         if (error is null) throw new ArgumentNullException(nameof(error));
     }
+
+    public void OnCompleted(RoutingState state, RouteStep step)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+    }
 }
