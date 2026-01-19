@@ -116,6 +116,52 @@ public sealed class RuntimeOrchestrator
 
         var resumeState = ResolveLastNonTerminalState(trace) ?? lastState ?? RoutingState.CreateInitial(trace.Plan);
 
+        if (string.IsNullOrWhiteSpace(resumeState.IntentToken.ConstraintsHash) ||
+            string.IsNullOrWhiteSpace(resumeState.IntentToken.CurrentStateHash))
+        {
+            return HaltFromTrace(trace, registry, toolResults, resumeState, "route_intent_token_missing", "Intent token is required.");
+        }
+
+        if (trace.Plan.Request.WorkOrder is null)
+            return HaltFromTrace(trace, registry, toolResults, resumeState, "route_workorder_missing", "Work order is required for routing.");
+
+        var resumeStep = ResolveRouteStep(trace.Plan, resumeState.CurrentRouteIndex);
+        var expectedToken = RouteIntentTokenFactory.Create(trace.Plan.Request.WorkOrder, resumeStep);
+        var expectedHash = RouteIntentTokenFactory.ComputeTokenHash(expectedToken);
+        var actualHash = RouteIntentTokenFactory.ComputeTokenHash(resumeState.IntentToken);
+        if (!string.Equals(expectedHash, actualHash, StringComparison.Ordinal))
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_intent_token_mismatch",
+                "Intent token hash mismatch.");
+        }
+
+        if (trace.Plan.Request.RouteRules is null)
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_rules_missing",
+                "Route rules are required to resume routing.");
+        }
+
+        if (!trace.Plan.Request.RouteRules.Any(rule => string.Equals(rule.NodeId, resumeStep.NodeId, StringComparison.Ordinal)))
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_node_missing",
+                $"Route node '{resumeStep.NodeId}' is not present in the Mermaid graph.");
+        }
+
         var loop = new RoutingLoop(
             trace.Plan,
             registry,
@@ -139,6 +185,18 @@ public sealed class RuntimeOrchestrator
             result.Telemetry,
             registry.CatalogHash,
             finalStatus);
+    }
+
+    private static RouteStep ResolveRouteStep(BuildPlan plan, int index)
+    {
+        if (plan.Steps is null || plan.Steps.Count == 0)
+            throw new ArgumentException("route steps are required", nameof(plan));
+        if (index < 0 || index >= plan.Steps.Count)
+            throw new ArgumentOutOfRangeException(nameof(index), "route step index is out of range");
+        if (plan.Steps[index] is not RouteStep routeStep)
+            throw new ArgumentException("route step is required", nameof(plan));
+
+        return routeStep;
     }
 
     private static ExecutionFinalStatus ResolveFinalStatus(RoutingState state)

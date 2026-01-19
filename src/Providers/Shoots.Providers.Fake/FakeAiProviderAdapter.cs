@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Shoots.Contracts.Core;
 using Shoots.Providers.Abstractions;
+using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Providers.Fake;
 
@@ -12,13 +13,13 @@ public sealed class FakeAiProviderAdapter : IAiProviderAdapter
         RouteStep step,
         MermaidNodeKind nodeKind,
         IReadOnlyList<string> allowedNextNodes,
+        RouteIntentToken intentToken,
         string catalogHash,
         string routingTraceSummary)
     {
-        if (allowedNextNodes.Count == 0)
-            return null;
-
-        var nextNodeId = allowedNextNodes[0];
+        var nextNodeId = allowedNextNodes.Count == 0
+            ? string.Empty
+            : allowedNextNodes[0];
         ToolSelectionDecision? toolSelection = null;
 
         if (step.Intent == RouteIntent.SelectTool)
@@ -27,6 +28,7 @@ public sealed class FakeAiProviderAdapter : IAiProviderAdapter
             toolSelection = new ToolSelectionDecision(new ToolId("filesystem.read"), bindings);
         }
 
-        return new RouteDecision(nextNodeId, toolSelection);
+        var decisionToken = RouteIntentTokenFactory.Create(workOrder, step);
+        return new RouteDecision(nextNodeId, decisionToken, step.Intent, toolSelection);
     }
 }

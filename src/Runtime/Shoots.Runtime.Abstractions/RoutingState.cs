@@ -16,6 +16,7 @@ public enum RoutingStatus
 /// </summary>
 public sealed record RoutingState(
     WorkOrderId WorkOrderId,
+    RouteIntentToken IntentToken,
     int CurrentRouteIndex,
     RouteIntent CurrentRouteIntent,
     RoutingStatus Status
@@ -34,8 +35,11 @@ public sealed record RoutingState(
         if (firstStep.Intent == RouteIntent.Terminate)
             throw new ArgumentException("first route step cannot be terminate", nameof(plan));
 
+        var token = RouteIntentTokenFactory.Create(plan.Request.WorkOrder, firstStep);
+
         return new RoutingState(
             plan.Request.WorkOrder.Id,
+            token,
             0,
             firstStep.Intent,
             RoutingStatus.Pending);
@@ -54,8 +58,11 @@ public sealed record RoutingState(
         if (firstStep.Intent == RouteIntent.Terminate)
             throw new ArgumentException("first route step cannot be terminate", nameof(plan));
 
+        var token = RouteIntentTokenFactory.Create(workOrder, firstStep);
+
         return new RoutingState(
             workOrder.Id,
+            token,
             0,
             firstStep.Intent,
             RoutingStatus.Pending);

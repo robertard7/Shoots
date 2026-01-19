@@ -21,6 +21,7 @@ public sealed class RouteGateTests
 
         var state = new RoutingState(
             new WorkOrderId("wo-other"),
+            CreateIntentToken(plan),
             0,
             RouteIntent.Validate,
             RoutingStatus.Pending);
@@ -68,6 +69,8 @@ public sealed class RouteGateTests
         var state = RoutingState.CreateInitial(plan);
         var decision = new RouteDecision(
             "terminate",
+            state.IntentToken,
+            RouteIntent.Validate,
             new ToolSelectionDecision(
                 new ToolId("tools.any"),
                 new Dictionary<string, object?>()));
@@ -110,6 +113,8 @@ public sealed class RouteGateTests
 
             var decision = new RouteDecision(
                 "validate",
+                state.IntentToken,
+                RouteIntent.SelectTool,
                 new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>()));
             var advanced = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
 
@@ -143,6 +148,8 @@ public sealed class RouteGateTests
         var state = RoutingState.CreateInitial(plan);
         var decision = new RouteDecision(
             "terminate",
+            state.IntentToken,
+            RouteIntent.Validate,
             new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
@@ -165,13 +172,18 @@ public sealed class RouteGateTests
                 new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
+        var lateStep = plan.Steps[1] as RouteStep ?? throw new InvalidOperationException("second step must be a route step");
+        var lateToken = RouteIntentTokenFactory.Create(plan.Request.WorkOrder, lateStep);
         var lateState = new RoutingState(
             plan.Request.WorkOrder.Id,
+            lateToken,
             1,
             RouteIntent.Validate,
             RoutingStatus.Pending);
         var decision = new RouteDecision(
             "terminate",
+            lateState.IntentToken,
+            RouteIntent.SelectTool,
             new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, lateState, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
@@ -208,6 +220,8 @@ public sealed class RouteGateTests
         var state = RoutingState.CreateInitial(plan);
         var decision = new RouteDecision(
             "terminate",
+            state.IntentToken,
+            RouteIntent.SelectTool,
             new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
@@ -235,6 +249,7 @@ public sealed class RouteGateTests
         {
             var state = new RoutingState(
                 new WorkOrderId("wo-other"),
+                CreateIntentToken(plan),
                 0,
                 RouteIntent.Validate,
                 RoutingStatus.Pending);
@@ -276,6 +291,8 @@ public sealed class RouteGateTests
 
         var decision = new RouteDecision(
             "terminate",
+            state.IntentToken,
+            RouteIntent.SelectTool,
             new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>()));
         var advanced = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
 
@@ -307,6 +324,8 @@ public sealed class RouteGateTests
         var state = RoutingState.CreateInitial(plan);
         var decision = new RouteDecision(
             "terminate",
+            state.IntentToken,
+            RouteIntent.SelectTool,
             new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
@@ -330,11 +349,14 @@ public sealed class RouteGateTests
 
         var state = new RoutingState(
             new WorkOrderId("wo-other"),
+            CreateIntentToken(plan),
             0,
             RouteIntent.SelectTool,
             RoutingStatus.Pending);
         var decision = new RouteDecision(
             "terminate",
+            state.IntentToken,
+            RouteIntent.SelectTool,
             new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
@@ -463,14 +485,20 @@ public sealed class RouteGateTests
         public void OnError(RuntimeError error) => Events.Add("error");
         public void OnRoute(RouteNarration narration) => Events.Add("route");
         public void OnWorkOrderReceived(WorkOrder workOrder) => Events.Add("workorder");
-        public void OnRouteEntered(RoutingState state, RouteStep step) => Events.Add("entered");
-        public void OnNodeEntered(RoutingState state, RouteStep step) => Events.Add("node.entered");
-        public void OnDecisionRequired(RoutingState state, RouteStep step) => Events.Add("decision.required");
-        public void OnDecisionAccepted(RoutingState state, RouteStep step) => Events.Add("decision.accepted");
-        public void OnNodeTransitionChosen(RoutingState state, RouteStep step, string nextNodeId) => Events.Add("node.transition");
-        public void OnNodeAdvanced(RoutingState state, RouteStep step, string nextNodeId) => Events.Add("node.advanced");
-        public void OnNodeHalted(RoutingState state, RouteStep step, RuntimeError error) => Events.Add("node.halted");
+        public void OnRouteEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("entered");
+        public void OnNodeEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("node.entered");
+        public void OnDecisionRequired(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("decision.required");
+        public void OnDecisionAccepted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("decision.accepted");
+        public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId) => Events.Add("node.transition");
+        public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId) => Events.Add("node.advanced");
+        public void OnNodeHalted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, RuntimeError error) => Events.Add("node.halted");
         public void OnHalted(RoutingState state, RuntimeError error) => Events.Add("halted");
-        public void OnCompleted(RoutingState state, RouteStep step) => Events.Add("completed");
+        public void OnCompleted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("completed");
+    }
+
+    private static RouteIntentToken CreateIntentToken(BuildPlan plan)
+    {
+        var originStep = plan.Steps[0] as RouteStep ?? throw new InvalidOperationException("first step must be a route step");
+        return RouteIntentTokenFactory.Create(plan.Request.WorkOrder, originStep);
     }
 }

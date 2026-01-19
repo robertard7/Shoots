@@ -37,6 +37,7 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
             step,
             request.NodeKind,
             request.AllowedNextNodes,
+            request.IntentToken,
             request.CatalogHash ?? string.Empty,
             string.Empty);
     }

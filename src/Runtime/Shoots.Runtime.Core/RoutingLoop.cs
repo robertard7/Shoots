@@ -150,7 +150,7 @@ public sealed class RoutingLoop
             .FirstOrDefault(candidate => string.Equals(candidate.NodeId, step.NodeId, StringComparison.Ordinal));
         var nodeKind = rule?.NodeKind ?? MermaidNodeKind.Linear;
         var allowedNextNodes = rule?.AllowedNextNodes ?? Array.Empty<string>();
-        var request = new AiDecisionRequest(_plan.Request.WorkOrder!, step, State, _catalogHash, summary, nodeKind, allowedNextNodes);
+        var request = new AiDecisionRequest(_plan.Request.WorkOrder!, step, State, _catalogHash, summary, nodeKind, allowedNextNodes, State.IntentToken);
         return _aiDecisionProvider.RequestDecision(request);
     }
 

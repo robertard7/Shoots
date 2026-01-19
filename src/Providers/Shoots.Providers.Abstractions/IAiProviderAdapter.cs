@@ -10,6 +10,7 @@ public interface IAiProviderAdapter
         RouteStep step,
         MermaidNodeKind nodeKind,
         IReadOnlyList<string> allowedNextNodes,
+        RouteIntentToken intentToken,
         string catalogHash,
         string routingTraceSummary);
 }

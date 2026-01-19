@@ -157,6 +157,8 @@ public sealed class RoutingLoopTests
 
             return new RouteDecision(
                 "terminate",
+                request.IntentToken,
+                request.Step.Intent,
                 new ToolSelectionDecision(new ToolId("tools.sample"), new Dictionary<string, object?>()));
         }
     }

@@ -13,5 +13,6 @@ public sealed record AiDecisionRequest(
     string CatalogHash,
     IReadOnlyList<RoutingTraceEventKind> TraceSummary,
     MermaidNodeKind NodeKind,
-    IReadOnlyList<string> AllowedNextNodes
+    IReadOnlyList<string> AllowedNextNodes,
+    RouteIntentToken IntentToken
 );
