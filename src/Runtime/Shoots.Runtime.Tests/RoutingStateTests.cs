@@ -74,20 +74,6 @@ public sealed class RoutingStateTests
                 workOrder.Id)
         };
 
-        var authority = new DelegationAuthority(
-            ProviderId: new ProviderId("local"),
-            Kind: ProviderKind.Local,
-            PolicyId: "local-only",
-            AllowsDelegation: false);
-
-        return new BuildPlan(
-            "plan",
-            request,
-            HashTools.ComputeSha256Hash("graph"),
-            HashTools.ComputeSha256Hash("nodes"),
-            HashTools.ComputeSha256Hash("edges"),
-            authority,
-            steps,
-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
+        return BuildPlanTestFactory.CreatePlan(request, steps);
     }
 }

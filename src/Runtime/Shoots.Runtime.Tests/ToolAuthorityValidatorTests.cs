@@ -113,15 +113,12 @@ public sealed class ToolAuthorityValidatorTests
         };
         var artifacts = new[] { new BuildArtifact("plan.json", "Plan payload.") };
 
-        return new BuildPlan(
-            PlanId: "plan",
-            Request: request,
-            GraphStructureHash: HashTools.ComputeSha256Hash("graph"),
-            NodeSetHash: HashTools.ComputeSha256Hash("nodes"),
-            EdgeSetHash: HashTools.ComputeSha256Hash("edges"),
-            Authority: authority,
-            Steps: steps,
-            Artifacts: artifacts);
+        return BuildPlanTestFactory.CreatePlan(
+            request,
+            steps,
+            authority: authority,
+            useDefaultAuthority: false,
+            artifacts: artifacts);
     }
 
     private sealed class StubToolRegistry : IToolRegistry

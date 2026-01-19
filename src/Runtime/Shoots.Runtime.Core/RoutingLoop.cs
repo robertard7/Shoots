@@ -80,7 +80,19 @@ public sealed class RoutingLoop
             while (true)
             {
                 var step = RequireRouteStep(_plan, State);
-                var selection = ResolveDecision(step);
+                ToolSelectionDecision? selection;
+                try
+                {
+                    selection = ResolveDecision(step);
+                }
+                catch (Exception ex)
+                {
+                    var error = new RuntimeError("internal_error", "Provider failure.", ex.Message);
+                    _traceBuilder.Add(RoutingTraceEventKind.Error, "provider.failure", state: State, step: step, error: error);
+                    State = State with { Status = RoutingStatus.Halted };
+                    _tracingNarrator.OnHalted(State, error);
+                    break;
+                }
                 var decision = selection is null
                     ? null
                     : new RouteDecision(null, selection);
@@ -142,11 +154,15 @@ public sealed class RoutingLoop
         if (State.Status != RoutingStatus.Waiting)
             return null;
 
+        if (step.Intent != RouteIntent.SelectTool || step.Owner != DecisionOwner.Ai)
+            return null;
+
         var snapshot = _registry.GetSnapshot()
             .Select(entry => entry.Spec)
             .OrderBy(spec => spec.ToolId.Value, StringComparer.Ordinal)
             .ToArray();
         var catalog = new ToolCatalogSnapshot(_catalogHash, snapshot);
+        _traceBuilder.Add(RoutingTraceEventKind.DecisionRequired, "provider.invoked", state: State, step: step);
         var request = new AiDecisionRequest(
             _plan.Request.WorkOrder!,
             step,

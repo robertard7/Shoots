@@ -48,19 +48,7 @@ public sealed class RoutingLoopTests
                 workOrder.Id)
         };
 
-        var plan = new BuildPlan(
-            "plan",
-            request,
-            HashTools.ComputeSha256Hash("graph"),
-            HashTools.ComputeSha256Hash("nodes"),
-            HashTools.ComputeSha256Hash("edges"),
-            new DelegationAuthority(
-                ProviderId: new ProviderId("local"),
-                Kind: ProviderKind.Local,
-                PolicyId: "local-only",
-                AllowsDelegation: false),
-            steps,
-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
+        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
 
         var loop = new RoutingLoop(
             plan,
@@ -115,19 +103,7 @@ public sealed class RoutingLoopTests
                 workOrder.Id)
         };
 
-        var plan = new BuildPlan(
-            "plan",
-            request,
-            HashTools.ComputeSha256Hash("graph"),
-            HashTools.ComputeSha256Hash("nodes"),
-            HashTools.ComputeSha256Hash("edges"),
-            new DelegationAuthority(
-                ProviderId: new ProviderId("local"),
-                Kind: ProviderKind.Local,
-                PolicyId: "local-only",
-                AllowsDelegation: false),
-            steps,
-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
+        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
 
         var loop = new RoutingLoop(
             plan,
@@ -188,19 +164,7 @@ public sealed class RoutingLoopTests
                 workOrder.Id)
         };
 
-        var plan = new BuildPlan(
-            "plan",
-            request,
-            HashTools.ComputeSha256Hash("graph"),
-            HashTools.ComputeSha256Hash("nodes"),
-            HashTools.ComputeSha256Hash("edges"),
-            new DelegationAuthority(
-                ProviderId: new ProviderId("local"),
-                Kind: ProviderKind.Local,
-                PolicyId: "local-only",
-                AllowsDelegation: false),
-            steps,
-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
+        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
 
         var first = new RoutingLoop(
             plan,
@@ -232,6 +196,62 @@ public sealed class RoutingLoopTests
         Assert.Equal(RoutingStatus.Completed, second.State.Status);
         Assert.Equal("terminate", first.State.CurrentNodeId);
         Assert.Equal("terminate", second.State.CurrentNodeId);
+    }
+
+    [Fact]
+    public void Provider_failure_halts_with_trace_error()
+    {
+        var workOrder = new WorkOrder(
+            new WorkOrderId("wo-fail"),
+            "Original request.",
+            "Route loop provider failure.",
+            new List<string>(),
+            new List<string>());
+
+        var request = new BuildRequest(
+            workOrder,
+            "core.route",
+            new Dictionary<string, object?>(),
+            new[]
+            {
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+            });
+
+        var steps = new BuildStep[]
+        {
+            new RouteStep(
+                "select",
+                "Select tool.",
+                "select",
+                RouteIntent.SelectTool,
+                DecisionOwner.Ai,
+                workOrder.Id),
+            new RouteStep(
+                "terminate",
+                "Terminate route.",
+                "terminate",
+                RouteIntent.Terminate,
+                DecisionOwner.Rule,
+                workOrder.Id)
+        };
+
+        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
+
+        var loop = new RoutingLoop(
+            plan,
+            new EmptyToolRegistry(),
+            new ThrowingAiDecisionProvider(),
+            NullRuntimeNarrator.Instance,
+            new NullToolExecutor());
+
+        var result = loop.Run();
+
+        var errorEntry = Assert.Single(result.Trace.Entries.Where(entry => entry.Event == RoutingTraceEventKind.Error));
+        Assert.Equal("internal_error", errorEntry.Error?.Code);
+        Assert.Equal(RoutingStatus.Halted, result.State.Status);
+        Assert.Equal("select", result.State.CurrentNodeId);
+        Assert.Empty(result.ToolResults);
     }
 
     [Fact]
@@ -272,19 +292,7 @@ public sealed class RoutingLoopTests
                 workOrder.Id)
         };
 
-        var plan = new BuildPlan(
-            "plan",
-            request,
-            HashTools.ComputeSha256Hash("graph"),
-            HashTools.ComputeSha256Hash("nodes"),
-            HashTools.ComputeSha256Hash("edges"),
-            new DelegationAuthority(
-                ProviderId: new ProviderId("local"),
-                Kind: ProviderKind.Local,
-                PolicyId: "local-only",
-                AllowsDelegation: false),
-            steps,
-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
+        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
 
         var loop = new RoutingLoop(
             plan,
