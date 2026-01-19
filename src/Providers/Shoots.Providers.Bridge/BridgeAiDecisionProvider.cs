@@ -19,13 +19,13 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
         _providerId = providerId;
     }
 
-    public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
+    public RouteDecision? RequestDecision(AiDecisionRequest request)
     {
         if (request is null)
             throw new ArgumentNullException(nameof(request));
 
         var step = request.Step;
-        if (step.Intent != RouteIntent.SelectTool || step.Owner != DecisionOwner.Ai)
+        if (step.Owner != DecisionOwner.Ai)
             return null;
 
         var adapter = _registry.Get(_providerId);
@@ -35,6 +35,8 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
         return adapter.RequestDecision(
             request.WorkOrder,
             step,
+            request.NodeKind,
+            request.AllowedNextNodes,
             request.CatalogHash ?? string.Empty,
             string.Empty);
     }

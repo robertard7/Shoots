@@ -12,7 +12,7 @@ public sealed class RoutingStateTests
     [Fact]
     public void CreateInitial_rejects_terminate_first_step()
     {
-        var plan = CreatePlan(new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination"));
+        var plan = CreatePlan(new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>()));
 
         Assert.Throws<ArgumentException>(() => RoutingState.CreateInitial(plan));
     }
@@ -20,7 +20,7 @@ public sealed class RoutingStateTests
     [Fact]
     public void CreateInitial_uses_supplied_workorder()
     {
-        var plan = CreatePlan(new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"));
+        var plan = CreatePlan(new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }));
         var workOrder = new WorkOrder(
             new WorkOrderId("wo-custom"),
             "Original request.",

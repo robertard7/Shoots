@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Shoots.Contracts.Core;
 
 /// <summary>
@@ -23,11 +25,24 @@ public enum DecisionOwner
 }
 
 /// <summary>
+/// Deterministic Mermaid node kind.
+/// </summary>
+public enum MermaidNodeKind
+{
+    Start,
+    Gate,
+    Linear,
+    Terminate
+}
+
+/// <summary>
 /// Deterministic routing rule.
 /// </summary>
 public sealed record RouteRule(
     string NodeId,
     RouteIntent Intent,
     DecisionOwner Owner,
-    string AllowedOutputKind
+    string AllowedOutputKind,
+    MermaidNodeKind NodeKind,
+    IReadOnlyList<string> AllowedNextNodes
 );

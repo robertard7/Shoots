@@ -48,6 +48,12 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
         if (step is null) throw new ArgumentNullException(nameof(step));
     }
 
+    public void OnNodeEntered(RoutingState state, RouteStep step)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+    }
+
     public void OnDecisionRequired(RoutingState state, RouteStep step)
     {
         if (state is null) throw new ArgumentNullException(nameof(state));
@@ -58,6 +64,27 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
     {
         if (state is null) throw new ArgumentNullException(nameof(state));
         if (step is null) throw new ArgumentNullException(nameof(step));
+    }
+
+    public void OnNodeTransitionChosen(RoutingState state, RouteStep step, string nextNodeId)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (nextNodeId is null) throw new ArgumentNullException(nameof(nextNodeId));
+    }
+
+    public void OnNodeAdvanced(RoutingState state, RouteStep step, string nextNodeId)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (nextNodeId is null) throw new ArgumentNullException(nameof(nextNodeId));
+    }
+
+    public void OnNodeHalted(RoutingState state, RouteStep step, RuntimeError error)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (error is null) throw new ArgumentNullException(nameof(error));
     }
 
     public void OnHalted(RoutingState state, RuntimeError error)

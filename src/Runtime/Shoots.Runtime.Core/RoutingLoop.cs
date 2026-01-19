@@ -100,9 +100,9 @@ public sealed class RoutingLoop
                 if (step.Intent == RouteIntent.SelectTool)
                 {
                     var invocation = step.ToolInvocation
-                                     ?? (decision is null
+                                     ?? (decision?.ToolSelection is null
                                          ? null
-                                         : new ToolInvocation(decision.ToolId, decision.Bindings, State.WorkOrderId));
+                                         : new ToolInvocation(decision.ToolSelection.ToolId, decision.ToolSelection.Bindings, State.WorkOrderId));
 
                     if (invocation is not null)
                     {
@@ -137,7 +137,7 @@ public sealed class RoutingLoop
         return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build(), _traceBuilder.BuildTelemetry());
     }
 
-    private ToolSelectionDecision? ResolveDecision(RouteStep step)
+    private RouteDecision? ResolveDecision(RouteStep step)
     {
         if (State.Status != RoutingStatus.Waiting)
             return null;
@@ -146,7 +146,11 @@ public sealed class RoutingLoop
             .Entries
             .Select(entry => entry.Event)
             .ToArray();
-        var request = new AiDecisionRequest(_plan.Request.WorkOrder!, step, State, _catalogHash, summary);
+        var rule = _plan.Request.RouteRules
+            .FirstOrDefault(candidate => string.Equals(candidate.NodeId, step.NodeId, StringComparison.Ordinal));
+        var nodeKind = rule?.NodeKind ?? MermaidNodeKind.Linear;
+        var allowedNextNodes = rule?.AllowedNextNodes ?? Array.Empty<string>();
+        var request = new AiDecisionRequest(_plan.Request.WorkOrder!, step, State, _catalogHash, summary, nodeKind, allowedNextNodes);
         return _aiDecisionProvider.RequestDecision(request);
     }
 

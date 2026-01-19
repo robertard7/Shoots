@@ -74,13 +74,6 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             .ThenBy(rule => rule.AllowedOutputKind, StringComparer.Ordinal)
             .ToList();
 
-        var normalizedRequest = request with
-        {
-            CommandId = normalizedCommandId,
-            Args = normalizedArgs,
-            RouteRules = normalizedRouteRules
-        };
-
         // Deterministic steps
         var stepsById = new Dictionary<string, BuildStep>(StringComparer.Ordinal);
         var routeRulesByNode = normalizedRouteRules.ToDictionary(
@@ -93,10 +86,22 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         if (spec is null)
             throw new InvalidOperationException($"unknown command '{normalizedCommandId}'");
 
+        var startNodes = MermaidPlanGraph.GetStartNodes(graph);
+        if (startNodes.Count != 1)
+            throw new InvalidOperationException($"graph must have exactly one start node (found {startNodes.Count}).");
+
+        var terminalNodes = MermaidPlanGraph.GetTerminalNodes(graph);
+
         foreach (var nodeId in orderedStepIds)
         {
             if (!routeRulesByNode.TryGetValue(nodeId, out var rule))
                 continue;
+
+            var allowedNextNodes = graph.Adjacency.TryGetValue(nodeId, out var adjacency)
+                ? adjacency
+                : Array.Empty<string>();
+
+            var nodeKind = ResolveNodeKind(nodeId, startNodes, allowedNextNodes);
 
             stepsById[nodeId] = new RouteStep(
                 Id: nodeId,
@@ -106,6 +111,12 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
                 Owner: rule.Owner,
                 WorkOrderId: request.WorkOrder.Id
             );
+
+            routeRulesByNode[nodeId] = rule with
+            {
+                NodeKind = nodeKind,
+                AllowedNextNodes = allowedNextNodes
+            };
         }
 
         var unknownRouteNodes = routeRulesByNode.Keys
@@ -126,15 +137,28 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         if (missingIntents.Length > 0)
             throw new InvalidOperationException($"route rules missing required intents: {string.Join(", ", missingIntents)}");
 
-        var startNodes = MermaidPlanGraph.GetStartNodes(graph);
-        if (startNodes.Count != 1)
-            throw new InvalidOperationException($"graph must have exactly one start node (found {startNodes.Count}).");
-
-        var terminalNodes = MermaidPlanGraph.GetTerminalNodes(graph);
         var hasTerminalIntent = terminalNodes.Any(
             nodeId => routeRulesByNode.TryGetValue(nodeId, out var rule) && rule.Intent == RouteIntent.Terminate);
         if (!hasTerminalIntent)
             throw new InvalidOperationException("graph must include at least one terminal node with Terminate intent.");
+
+        foreach (var rule in routeRulesByNode.Values)
+        {
+            if (rule.Intent == RouteIntent.Terminate && rule.AllowedNextNodes.Count > 0)
+                throw new InvalidOperationException($"terminate node '{rule.NodeId}' must not have outbound edges.");
+        }
+
+        var normalizedRequest = request with
+        {
+            CommandId = normalizedCommandId,
+            Args = normalizedArgs,
+            RouteRules = routeRulesByNode.Values
+                .OrderBy(rule => rule.NodeId, StringComparer.Ordinal)
+                .ThenBy(rule => rule.Intent)
+                .ThenBy(rule => rule.Owner)
+                .ThenBy(rule => rule.AllowedOutputKind, StringComparer.Ordinal)
+                .ToList()
+        };
 
         var steps = orderedStepIds
             .Select(stepId => stepsById[stepId])
@@ -185,5 +209,22 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             Steps: steps,
             Artifacts: artifacts
         );
+    }
+
+    private static MermaidNodeKind ResolveNodeKind(
+        string nodeId,
+        IReadOnlyList<string> startNodes,
+        IReadOnlyList<string> allowedNextNodes)
+    {
+        if (startNodes.Contains(nodeId, StringComparer.Ordinal))
+            return MermaidNodeKind.Start;
+
+        if (allowedNextNodes.Count == 0)
+            return MermaidNodeKind.Terminate;
+
+        if (allowedNextNodes.Count > 1)
+            return MermaidNodeKind.Gate;
+
+        return MermaidNodeKind.Linear;
     }
 }

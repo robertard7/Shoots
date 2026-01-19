@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Shoots.Contracts.Core;
 using Shoots.Providers.Abstractions;
 
@@ -8,9 +9,11 @@ public sealed class NullAiProviderAdapter : IAiProviderAdapter
 {
     public static readonly NullAiProviderAdapter Instance = new();
 
-    public ToolSelectionDecision? RequestDecision(
+    public RouteDecision? RequestDecision(
         WorkOrder workOrder,
         RouteStep step,
+        MermaidNodeKind nodeKind,
+        IReadOnlyList<string> allowedNextNodes,
         string catalogHash,
         string routingTraceSummary)
     {

@@ -15,8 +15,8 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var state = new RoutingState(
@@ -40,8 +40,8 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var state = RoutingState.CreateInitial(plan);
@@ -61,14 +61,16 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var state = RoutingState.CreateInitial(plan);
-        var decision = new ToolSelectionDecision(
-            new ToolId("tools.any"),
-            new Dictionary<string, object?>());
+        var decision = new RouteDecision(
+            "terminate",
+            new ToolSelectionDecision(
+                new ToolId("tools.any"),
+                new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, new StubToolRegistry(), out var nextState, out var error);
 
@@ -93,9 +95,9 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "validate" }),
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Linear, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var narrator = new RecordingNarrator();
@@ -106,7 +108,9 @@ public sealed class RouteGateTests
             var registry = new SnapshotOnlyRegistry(toolSpec);
             var state = RoutingState.CreateInitial(plan);
 
-            var decision = new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>());
+            var decision = new RouteDecision(
+                "validate",
+                new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>()));
             var advanced = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
 
             Assert.True(advanced);
@@ -132,12 +136,14 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var state = RoutingState.CreateInitial(plan);
-        var decision = new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>());
+        var decision = new RouteDecision(
+            "terminate",
+            new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
 
@@ -154,9 +160,9 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "validate" }),
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Linear, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var lateState = new RoutingState(
@@ -164,7 +170,9 @@ public sealed class RouteGateTests
             1,
             RouteIntent.Validate,
             RoutingStatus.Pending);
-        var decision = new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>());
+        var decision = new RouteDecision(
+            "terminate",
+            new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, lateState, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
 
@@ -189,8 +197,8 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var registry = new SnapshotOnlyRegistry(toolSpec)
@@ -198,7 +206,9 @@ public sealed class RouteGateTests
             LiveMissing = true
         };
         var state = RoutingState.CreateInitial(plan);
-        var decision = new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>());
+        var decision = new RouteDecision(
+            "terminate",
+            new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
 
@@ -214,8 +224,8 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var narrator = new RecordingNarrator();
@@ -257,14 +267,16 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var registry = new SnapshotOnlyRegistry(toolSpec);
         var state = RoutingState.CreateInitial(plan);
 
-        var decision = new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>());
+        var decision = new RouteDecision(
+            "terminate",
+            new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>()));
         var advanced = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
 
         Assert.True(advanced);
@@ -288,12 +300,14 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Human, "tool.selection"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Human, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var state = RoutingState.CreateInitial(plan);
-        var decision = new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>());
+        var decision = new RouteDecision(
+            "terminate",
+            new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
 
@@ -310,8 +324,8 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var state = new RoutingState(
@@ -319,7 +333,9 @@ public sealed class RouteGateTests
             0,
             RouteIntent.SelectTool,
             RoutingStatus.Pending);
-        var decision = new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>());
+        var decision = new RouteDecision(
+            "terminate",
+            new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
 
@@ -341,8 +357,8 @@ public sealed class RouteGateTests
             new WorkOrderId("wo-plan"),
             new[]
             {
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             },
             toolResult);
 
@@ -448,8 +464,12 @@ public sealed class RouteGateTests
         public void OnRoute(RouteNarration narration) => Events.Add("route");
         public void OnWorkOrderReceived(WorkOrder workOrder) => Events.Add("workorder");
         public void OnRouteEntered(RoutingState state, RouteStep step) => Events.Add("entered");
+        public void OnNodeEntered(RoutingState state, RouteStep step) => Events.Add("node.entered");
         public void OnDecisionRequired(RoutingState state, RouteStep step) => Events.Add("decision.required");
         public void OnDecisionAccepted(RoutingState state, RouteStep step) => Events.Add("decision.accepted");
+        public void OnNodeTransitionChosen(RoutingState state, RouteStep step, string nextNodeId) => Events.Add("node.transition");
+        public void OnNodeAdvanced(RoutingState state, RouteStep step, string nextNodeId) => Events.Add("node.advanced");
+        public void OnNodeHalted(RoutingState state, RouteStep step, RuntimeError error) => Events.Add("node.halted");
         public void OnHalted(RoutingState state, RuntimeError error) => Events.Add("halted");
         public void OnCompleted(RoutingState state, RouteStep step) => Events.Add("completed");
     }

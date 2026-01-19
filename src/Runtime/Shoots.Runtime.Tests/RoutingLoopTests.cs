@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
@@ -24,8 +25,8 @@ public sealed class RoutingLoopTests
             new Dictionary<string, object?>(),
             new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var steps = new BuildStep[]
@@ -88,8 +89,8 @@ public sealed class RoutingLoopTests
             new Dictionary<string, object?>(),
             new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
             });
 
         var steps = new BuildStep[]
@@ -144,17 +145,19 @@ public sealed class RoutingLoopTests
 
     private sealed class RefusingAiDecisionProvider : IAiDecisionProvider
     {
-        public ToolSelectionDecision? RequestDecision(AiDecisionRequest request) => null;
+        public RouteDecision? RequestDecision(AiDecisionRequest request) => null;
     }
 
     private sealed class AcceptingAiDecisionProvider : IAiDecisionProvider
     {
-        public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
+        public RouteDecision? RequestDecision(AiDecisionRequest request)
         {
             if (request.Step.Intent != RouteIntent.SelectTool)
                 return null;
 
-            return new ToolSelectionDecision(new ToolId("tools.sample"), new Dictionary<string, object?>());
+            return new RouteDecision(
+                "terminate",
+                new ToolSelectionDecision(new ToolId("tools.sample"), new Dictionary<string, object?>()));
         }
     }
 

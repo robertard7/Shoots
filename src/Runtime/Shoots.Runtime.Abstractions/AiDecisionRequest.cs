@@ -11,5 +11,7 @@ public sealed record AiDecisionRequest(
     RouteStep Step,
     RoutingState State,
     string CatalogHash,
-    IReadOnlyList<RoutingTraceEventKind> TraceSummary
+    IReadOnlyList<RoutingTraceEventKind> TraceSummary,
+    MermaidNodeKind NodeKind,
+    IReadOnlyList<string> AllowedNextNodes
 );

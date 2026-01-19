@@ -63,7 +63,8 @@ internal static class MermaidPlanGraph
         if (nodes.Count == 0)
             throw new InvalidOperationException("graph must contain at least one node");
 
-        return new GraphDefinition(nodes.ToArray(), edges);
+        var adjacency = BuildAdjacency(nodes, edges);
+        return new GraphDefinition(nodes.ToArray(), edges, adjacency);
     }
 
     public static IReadOnlyList<string> OrderStepIds(string graphText)
@@ -169,7 +170,31 @@ internal static class MermaidPlanGraph
         return ordered;
     }
 
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildAdjacency(
+        IEnumerable<string> nodes,
+        IEnumerable<(string From, string To)> edges)
+    {
+        var adjacency = nodes.ToDictionary(
+            node => node,
+            _ => new SortedSet<string>(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+
+        foreach (var (from, to) in edges)
+        {
+            if (!adjacency.TryGetValue(from, out var targets))
+                continue;
+
+            targets.Add(to);
+        }
+
+        return adjacency.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<string>)pair.Value.ToArray(),
+            StringComparer.Ordinal);
+    }
+
     internal sealed record GraphDefinition(
         IReadOnlyList<string> Nodes,
-        IReadOnlyList<(string From, string To)> Edges);
+        IReadOnlyList<(string From, string To)> Edges,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> Adjacency);
 }

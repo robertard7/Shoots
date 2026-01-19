@@ -27,10 +27,10 @@ public sealed class BuilderContractTests
             },
             RouteRules: new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-                new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Linear, Array.Empty<string>()),
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Linear, Array.Empty<string>()),
+                new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Linear, Array.Empty<string>()),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Linear, Array.Empty<string>())
             }
         );
 

@@ -58,6 +58,12 @@ internal sealed class TracingRuntimeNarrator : IRuntimeNarrator
         _inner.OnRouteEntered(state, step);
     }
 
+    public void OnNodeEntered(RoutingState state, RouteStep step)
+    {
+        _trace.Add(RoutingTraceEventKind.NodeEntered, step.NodeId, state, step);
+        _inner.OnNodeEntered(state, step);
+    }
+
     public void OnDecisionRequired(RoutingState state, RouteStep step)
     {
         _trace.Add(RoutingTraceEventKind.DecisionRequired, step.NodeId, state, step);
@@ -68,6 +74,24 @@ internal sealed class TracingRuntimeNarrator : IRuntimeNarrator
     {
         _trace.Add(RoutingTraceEventKind.DecisionAccepted, step.NodeId, state, step);
         _inner.OnDecisionAccepted(state, step);
+    }
+
+    public void OnNodeTransitionChosen(RoutingState state, RouteStep step, string nextNodeId)
+    {
+        _trace.Add(RoutingTraceEventKind.NodeTransitionChosen, $"{step.NodeId}->{nextNodeId}", state, step);
+        _inner.OnNodeTransitionChosen(state, step, nextNodeId);
+    }
+
+    public void OnNodeAdvanced(RoutingState state, RouteStep step, string nextNodeId)
+    {
+        _trace.Add(RoutingTraceEventKind.NodeAdvanced, $"{step.NodeId}->{nextNodeId}", state, step);
+        _inner.OnNodeAdvanced(state, step, nextNodeId);
+    }
+
+    public void OnNodeHalted(RoutingState state, RouteStep step, RuntimeError error)
+    {
+        _trace.Add(RoutingTraceEventKind.NodeHalted, error.Code, state, step, error);
+        _inner.OnNodeHalted(state, step, error);
     }
 
     public void OnHalted(RoutingState state, RuntimeError error)

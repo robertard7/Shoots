@@ -29,10 +29,10 @@ internal static class TestRequestFactory
     {
         return new[]
         {
-            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
-            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "validate" }),
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Linear, new[] { "review" }),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Linear, new[] { "terminate" }),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
         };
     }
 }
