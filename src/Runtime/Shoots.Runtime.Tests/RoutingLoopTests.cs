@@ -305,6 +305,7 @@ public sealed class RoutingLoopTests
 
         Assert.Equal(RoutingStatus.Completed, result.State.Status);
         Assert.Equal("terminate", result.State.CurrentNodeId);
+        Assert.DoesNotContain(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.DecisionRequired);
     }
 
     private sealed class RefusingAiDecisionProvider : IAiDecisionProvider
