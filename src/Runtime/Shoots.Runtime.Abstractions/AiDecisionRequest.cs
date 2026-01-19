@@ -8,11 +8,8 @@ namespace Shoots.Runtime.Abstractions;
 /// </summary>
 public sealed record AiDecisionRequest(
     WorkOrder WorkOrder,
-    RouteStep Step,
-    RoutingState State,
-    string CatalogHash,
-    IReadOnlyList<RoutingTraceEventKind> TraceSummary,
+    string CurrentNodeId,
     MermaidNodeKind NodeKind,
     IReadOnlyList<string> AllowedNextNodes,
-    RouteIntentToken IntentToken
+    ToolCatalogSnapshot Catalog
 );

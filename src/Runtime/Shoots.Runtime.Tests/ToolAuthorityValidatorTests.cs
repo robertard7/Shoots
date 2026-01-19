@@ -116,6 +116,9 @@ public sealed class ToolAuthorityValidatorTests
         return new BuildPlan(
             PlanId: "plan",
             Request: request,
+            GraphStructureHash: HashTools.ComputeSha256Hash("graph"),
+            NodeSetHash: HashTools.ComputeSha256Hash("nodes"),
+            EdgeSetHash: HashTools.ComputeSha256Hash("edges"),
             Authority: authority,
             Steps: steps,
             Artifacts: artifacts);

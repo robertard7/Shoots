@@ -82,16 +82,13 @@ public sealed class RoutingLoop
                 var step = RequireRouteStep(_plan, State);
                 var decision = ResolveDecision(step);
 
-                if (State.Status == RoutingStatus.Waiting && decision is null)
-                    break;
-
                 var advanced = RouteGate.TryAdvance(_plan, State, decision, _registry, out var nextState, out var error);
                 State = nextState;
 
                 if (!advanced)
                 {
                     if (decision is not null && error is not null)
-                        _traceBuilder.Add(RoutingTraceEventKind.DecisionRejected, error.Code, State, step, error);
+                        _traceBuilder.Add(RoutingTraceEventKind.DecisionRejected, detail: error.Code, state: State, step: step, error: error);
                     if (State.Status == RoutingStatus.Waiting)
                         continue;
                     break;
@@ -108,11 +105,11 @@ public sealed class RoutingLoop
                     {
                         var envelope = BuildEnvelope();
                         var toolDetail = BuildToolExecutionDetail(invocation.ToolId);
-                        _traceBuilder.Add(RoutingTraceEventKind.ToolExecuted, toolDetail, State, step);
+                        _traceBuilder.Add(RoutingTraceEventKind.ToolExecuted, detail: toolDetail, state: State, step: step);
                         var result = _toolExecutor.Execute(invocation, envelope);
                         _toolResults.Add(result);
                         var resultDetail = SerializeToolResult(result);
-                        _traceBuilder.Add(RoutingTraceEventKind.ToolResult, resultDetail, State, step);
+                        _traceBuilder.Add(RoutingTraceEventKind.ToolResult, detail: resultDetail, state: State, step: step);
 
                         if (!result.Success)
                         {
@@ -142,15 +139,16 @@ public sealed class RoutingLoop
         if (State.Status != RoutingStatus.Waiting)
             return null;
 
-        var summary = _traceBuilder.Build()
-            .Entries
-            .Select(entry => entry.Event)
-            .ToArray();
         var rule = _plan.Request.RouteRules
             .FirstOrDefault(candidate => string.Equals(candidate.NodeId, step.NodeId, StringComparison.Ordinal));
-        var nodeKind = rule?.NodeKind ?? MermaidNodeKind.Linear;
+        var nodeKind = rule?.NodeKind ?? MermaidNodeKind.Route;
         var allowedNextNodes = rule?.AllowedNextNodes ?? Array.Empty<string>();
-        var request = new AiDecisionRequest(_plan.Request.WorkOrder!, step, State, _catalogHash, summary, nodeKind, allowedNextNodes, State.IntentToken);
+        var snapshot = _registry.GetSnapshot()
+            .Select(entry => entry.Spec)
+            .OrderBy(spec => spec.ToolId.Value, StringComparer.Ordinal)
+            .ToArray();
+        var catalog = new ToolCatalogSnapshot(_catalogHash, snapshot);
+        var request = new AiDecisionRequest(_plan.Request.WorkOrder!, step.NodeId, nodeKind, allowedNextNodes, catalog);
         return _aiDecisionProvider.RequestDecision(request);
     }
 
@@ -243,9 +241,12 @@ public sealed class RoutingLoop
     {
         if (plan.Steps is null || plan.Steps.Count == 0)
             throw new ArgumentException("route steps are required", nameof(plan));
-        if (state.CurrentRouteIndex < 0 || state.CurrentRouteIndex >= plan.Steps.Count)
-            throw new ArgumentOutOfRangeException(nameof(state), "route index out of range");
-        if (plan.Steps[state.CurrentRouteIndex] is not RouteStep routeStep)
+        if (string.IsNullOrWhiteSpace(state.CurrentNodeId))
+            throw new ArgumentException("route node id is required", nameof(state));
+        var routeStep = plan.Steps
+            .OfType<RouteStep>()
+            .FirstOrDefault(step => string.Equals(step.NodeId, state.CurrentNodeId, StringComparison.Ordinal));
+        if (routeStep is null)
             throw new ArgumentException("route step is required", nameof(plan));
         return routeStep;
     }

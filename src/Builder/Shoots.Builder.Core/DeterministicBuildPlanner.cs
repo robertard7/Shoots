@@ -91,6 +91,21 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             throw new InvalidOperationException($"graph must have exactly one start node (found {startNodes.Count}).");
 
         var terminalNodes = MermaidPlanGraph.GetTerminalNodes(graph);
+        if (terminalNodes.Count == 0)
+            throw new InvalidOperationException("graph must include at least one terminal node.");
+
+        var inboundCounts = graph.Nodes.ToDictionary(node => node.Id, _ => 0, StringComparer.Ordinal);
+        foreach (var (from, to) in graph.Edges)
+        {
+            if (inboundCounts.ContainsKey(to))
+                inboundCounts[to] += 1;
+        }
+
+        foreach (var startNode in startNodes)
+        {
+            if (inboundCounts.TryGetValue(startNode, out var inbound) && inbound > 0)
+                throw new InvalidOperationException($"start node '{startNode}' must not have inbound edges.");
+        }
 
         foreach (var nodeId in orderedStepIds)
         {
@@ -101,7 +116,20 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
                 ? adjacency
                 : Array.Empty<string>();
 
-            var nodeKind = ResolveNodeKind(nodeId, startNodes, allowedNextNodes);
+            var nodeDefinition = graph.Nodes.First(def => string.Equals(def.Id, nodeId, StringComparison.Ordinal));
+            var nodeKind = nodeDefinition.Kind;
+
+            if (nodeKind == MermaidNodeKind.Terminal && allowedNextNodes.Count > 0)
+                throw new InvalidOperationException($"terminal node '{nodeId}' must not have outbound edges.");
+
+            if (nodeKind != MermaidNodeKind.Terminal && allowedNextNodes.Count == 0)
+                throw new InvalidOperationException($"node '{nodeId}' must declare outbound edges.");
+
+            if (allowedNextNodes.Count > 1 && nodeKind != MermaidNodeKind.Gate)
+                throw new InvalidOperationException($"node '{nodeId}' must be annotated as gate for multiple outbound edges.");
+
+            if (nodeKind == MermaidNodeKind.Gate && allowedNextNodes.Count < 2)
+                throw new InvalidOperationException($"gate node '{nodeId}' must declare multiple outbound edges.");
 
             stepsById[nodeId] = new RouteStep(
                 Id: nodeId,
@@ -141,12 +169,6 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             nodeId => routeRulesByNode.TryGetValue(nodeId, out var rule) && rule.Intent == RouteIntent.Terminate);
         if (!hasTerminalIntent)
             throw new InvalidOperationException("graph must include at least one terminal node with Terminate intent.");
-
-        foreach (var rule in routeRulesByNode.Values)
-        {
-            if (rule.Intent == RouteIntent.Terminate && rule.AllowedNextNodes.Count > 0)
-                throw new InvalidOperationException($"terminate node '{rule.NodeId}' must not have outbound edges.");
-        }
 
         var normalizedRequest = request with
         {
@@ -191,6 +213,9 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         var provisionalPlan = new BuildPlan(
             PlanId: string.Empty,
             Request: normalizedRequest,
+            GraphStructureHash: graph.Hashes.GraphStructureHash,
+            NodeSetHash: graph.Hashes.NodeSetHash,
+            EdgeSetHash: graph.Hashes.EdgeSetHash,
             Authority: provisionalAuthority,
             Steps: steps,
             Artifacts: artifacts
@@ -205,26 +230,12 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         return new BuildPlan(
             PlanId: planId,
             Request: normalizedRequest,
+            GraphStructureHash: graph.Hashes.GraphStructureHash,
+            NodeSetHash: graph.Hashes.NodeSetHash,
+            EdgeSetHash: graph.Hashes.EdgeSetHash,
             Authority: decision.Authority,
             Steps: steps,
             Artifacts: artifacts
         );
-    }
-
-    private static MermaidNodeKind ResolveNodeKind(
-        string nodeId,
-        IReadOnlyList<string> startNodes,
-        IReadOnlyList<string> allowedNextNodes)
-    {
-        if (startNodes.Contains(nodeId, StringComparer.Ordinal))
-            return MermaidNodeKind.Start;
-
-        if (allowedNextNodes.Count == 0)
-            return MermaidNodeKind.Terminate;
-
-        if (allowedNextNodes.Count > 1)
-            return MermaidNodeKind.Gate;
-
-        return MermaidNodeKind.Linear;
     }
 }

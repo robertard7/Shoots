@@ -4,8 +4,6 @@ namespace Shoots.Contracts.Core;
 /// Deterministic routing decision payload.
 /// </summary>
 public sealed record RouteDecision(
-    string SuggestedNextNodeId,
-    RouteIntentToken IntentToken,
-    RouteIntent ObservedIntent,
+    string? NextNodeId,
     ToolSelectionDecision? ToolSelection = null
 );

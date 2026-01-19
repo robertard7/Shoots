@@ -16,10 +16,20 @@ public sealed record RoutingTraceEntry(
     int Tick,
     RoutingTraceEventKind Event,
     string? Detail = null,
+    string? FromNodeId = null,
+    string? ToNodeId = null,
+    RoutingDecisionSource? DecisionSource = null,
     RoutingState? State = null,
     RouteStep? Step = null,
     RuntimeError? Error = null
 );
+
+public enum RoutingDecisionSource
+{
+    Mermaid,
+    Provider,
+    Rule
+}
 
 public enum RoutingTraceEventKind
 {

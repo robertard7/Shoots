@@ -21,16 +21,16 @@ public sealed class DeterministicPlannerTests
         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
         var request = CreateRequest(
             " core.ping ",
-            "graph TD; select --> validate --> review --> terminate",
+            "graph TD; select:::start --> validate --> review --> terminate:::terminal",
             new Dictionary<string, object?>
             {
                 ["b"] = "2",
                 ["a"] = "1"
             },
-            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Linear, Array.Empty<string>()));
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Route, Array.Empty<string>()));
 
         var firstPlan = planner.Plan(request);
         var secondPlan = planner.Plan(request);
@@ -50,12 +50,12 @@ public sealed class DeterministicPlannerTests
         var planner = new DeterministicBuildPlanner(services, policy);
         var request = CreateRequest(
             "core.ping",
-            "graph TD; select --> validate --> review --> terminate",
+            "graph TD; select:::start --> validate --> review --> terminate:::terminal",
             null,
-            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Linear, Array.Empty<string>()));
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Route, Array.Empty<string>()));
 
         var plan = planner.Plan(request);
         var computed = BuildPlanHasher.ComputePlanId(plan.Request, plan.Authority, plan.Steps, plan.Artifacts);
@@ -91,12 +91,12 @@ public sealed class DeterministicPlannerTests
         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
         var request = CreateRequest(
             "core.ping",
-            "graph TD; select --> review --> validate --> terminate",
+            "graph TD; select:::start --> review --> validate --> terminate:::terminal",
             null,
-            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Linear, Array.Empty<string>()));
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Route, Array.Empty<string>()));
 
         var plan = planner.Plan(request);
 
@@ -117,12 +117,12 @@ public sealed class DeterministicPlannerTests
         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
         var request = CreateRequest(
             "core.ping",
-            "graph TD; select --> validate",
+            "graph TD; select:::start --> validate",
             null,
-            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Linear, Array.Empty<string>()),
-            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Linear, Array.Empty<string>()));
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Route, Array.Empty<string>()));
 
         Assert.Throws<InvalidOperationException>(() => planner.Plan(request));
     }

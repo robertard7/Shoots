@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Core;
@@ -10,7 +11,7 @@ namespace Shoots.Runtime.Tests;
 public sealed class RoutingLoopTests
 {
     [Fact]
-    public void Ai_refusal_leaves_state_waiting()
+    public void Ai_refusal_halts_routing()
     {
         var workOrder = new WorkOrder(
             new WorkOrderId("wo-loop"),
@@ -26,7 +27,7 @@ public sealed class RoutingLoopTests
             new[]
             {
                 new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var steps = new BuildStep[]
@@ -50,6 +51,9 @@ public sealed class RoutingLoopTests
         var plan = new BuildPlan(
             "plan",
             request,
+            HashTools.ComputeSha256Hash("graph"),
+            HashTools.ComputeSha256Hash("nodes"),
+            HashTools.ComputeSha256Hash("edges"),
             new DelegationAuthority(
                 ProviderId: new ProviderId("local"),
                 Kind: ProviderKind.Local,
@@ -67,8 +71,8 @@ public sealed class RoutingLoopTests
 
         var result = loop.Run();
 
-        Assert.Equal(RoutingStatus.Waiting, result.State.Status);
-        Assert.Equal(0, result.State.CurrentRouteIndex);
+        Assert.Equal(RoutingStatus.Halted, result.State.Status);
+        Assert.Equal("select", result.State.CurrentNodeId);
         Assert.Empty(result.ToolResults);
         Assert.Empty(result.Telemetry);
     }
@@ -90,7 +94,7 @@ public sealed class RoutingLoopTests
             new[]
             {
                 new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var steps = new BuildStep[]
@@ -114,6 +118,9 @@ public sealed class RoutingLoopTests
         var plan = new BuildPlan(
             "plan",
             request,
+            HashTools.ComputeSha256Hash("graph"),
+            HashTools.ComputeSha256Hash("nodes"),
+            HashTools.ComputeSha256Hash("edges"),
             new DelegationAuthority(
                 ProviderId: new ProviderId("local"),
                 Kind: ProviderKind.Local,
@@ -152,13 +159,11 @@ public sealed class RoutingLoopTests
     {
         public RouteDecision? RequestDecision(AiDecisionRequest request)
         {
-            if (request.Step.Intent != RouteIntent.SelectTool)
+            if (request.NodeKind != MermaidNodeKind.Tool && request.NodeKind != MermaidNodeKind.Start)
                 return null;
 
             return new RouteDecision(
-                "terminate",
-                request.IntentToken,
-                request.Step.Intent,
+                null,
                 new ToolSelectionDecision(new ToolId("tools.sample"), new Dictionary<string, object?>()));
         }
     }

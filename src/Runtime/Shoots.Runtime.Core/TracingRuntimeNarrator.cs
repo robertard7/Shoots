@@ -18,100 +18,100 @@ internal sealed class TracingRuntimeNarrator : IRuntimeNarrator
 
     public void OnPlan(string text)
     {
-        _trace.Add(RoutingTraceEventKind.Plan, text);
+        _trace.Add(RoutingTraceEventKind.Plan, detail: text);
         _inner.OnPlan(text);
     }
 
     public void OnCommand(RuntimeCommandSpec command, RuntimeRequest request)
     {
-        _trace.Add(RoutingTraceEventKind.Command, command.CommandId);
+        _trace.Add(RoutingTraceEventKind.Command, detail: command.CommandId);
         _inner.OnCommand(command, request);
     }
 
     public void OnResult(RuntimeResult result)
     {
-        _trace.Add(RoutingTraceEventKind.Result, result.Ok.ToString());
+        _trace.Add(RoutingTraceEventKind.Result, detail: result.Ok.ToString());
         _inner.OnResult(result);
     }
 
     public void OnError(RuntimeError error)
     {
-        _trace.Add(RoutingTraceEventKind.Error, error.Code, error: error);
+        _trace.Add(RoutingTraceEventKind.Error, detail: error.Code, error: error);
         _inner.OnError(error);
     }
 
     public void OnRoute(RouteNarration narration)
     {
         var detail = narration.DecisionRequired ? "decision_required=true" : "decision_required=false";
-        _trace.Add(RoutingTraceEventKind.Route, detail, step: narration.CurrentStep, error: narration.HaltReason);
+        _trace.Add(RoutingTraceEventKind.Route, detail: detail, step: narration.CurrentStep, error: narration.HaltReason);
         _inner.OnRoute(narration);
     }
 
     public void OnWorkOrderReceived(WorkOrder workOrder)
     {
-        _trace.Add(RoutingTraceEventKind.WorkOrderReceived, workOrder.Id.Value);
+        _trace.Add(RoutingTraceEventKind.WorkOrderReceived, detail: workOrder.Id.Value);
         _inner.OnWorkOrderReceived(workOrder);
     }
 
     public void OnRouteEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes)
     {
         var detail = BuildRouteDetail(step.NodeId, intentToken, allowedNextNodes, null);
-        _trace.Add(RoutingTraceEventKind.RouteEntered, detail, state, step);
+        _trace.Add(RoutingTraceEventKind.RouteEntered, detail: detail, state: state, step: step);
         _inner.OnRouteEntered(state, step, intentToken, allowedNextNodes);
     }
 
     public void OnNodeEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes)
     {
         var detail = BuildRouteDetail(step.NodeId, intentToken, allowedNextNodes, null);
-        _trace.Add(RoutingTraceEventKind.NodeEntered, detail, state, step);
+        _trace.Add(RoutingTraceEventKind.NodeEntered, detail: detail, state: state, step: step);
         _inner.OnNodeEntered(state, step, intentToken, allowedNextNodes);
     }
 
     public void OnDecisionRequired(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes)
     {
         var detail = BuildRouteDetail(step.NodeId, intentToken, allowedNextNodes, null);
-        _trace.Add(RoutingTraceEventKind.DecisionRequired, detail, state, step);
+        _trace.Add(RoutingTraceEventKind.DecisionRequired, detail: detail, state: state, step: step);
         _inner.OnDecisionRequired(state, step, intentToken, allowedNextNodes);
     }
 
     public void OnDecisionAccepted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes)
     {
         var detail = BuildRouteDetail(step.NodeId, intentToken, allowedNextNodes, null);
-        _trace.Add(RoutingTraceEventKind.DecisionAccepted, detail, state, step);
+        _trace.Add(RoutingTraceEventKind.DecisionAccepted, detail: detail, state: state, step: step);
         _inner.OnDecisionAccepted(state, step, intentToken, allowedNextNodes);
     }
 
-    public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId)
+    public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource)
     {
         var detail = BuildRouteDetail(step.NodeId, intentToken, allowedNextNodes, nextNodeId);
-        _trace.Add(RoutingTraceEventKind.NodeTransitionChosen, detail, state, step);
-        _inner.OnNodeTransitionChosen(state, step, intentToken, allowedNextNodes, nextNodeId);
+        _trace.Add(RoutingTraceEventKind.NodeTransitionChosen, detail: detail, fromNodeId: step.NodeId, toNodeId: nextNodeId, decisionSource: decisionSource, state: state, step: step);
+        _inner.OnNodeTransitionChosen(state, step, intentToken, allowedNextNodes, nextNodeId, decisionSource);
     }
 
-    public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId)
+    public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource)
     {
         var detail = BuildRouteDetail(step.NodeId, intentToken, allowedNextNodes, nextNodeId);
-        _trace.Add(RoutingTraceEventKind.NodeAdvanced, detail, state, step);
-        _inner.OnNodeAdvanced(state, step, intentToken, allowedNextNodes, nextNodeId);
+        _trace.Add(RoutingTraceEventKind.NodeAdvanced, detail: detail, fromNodeId: step.NodeId, toNodeId: nextNodeId, decisionSource: decisionSource, state: state, step: step);
+        _inner.OnNodeAdvanced(state, step, intentToken, allowedNextNodes, nextNodeId, decisionSource);
     }
 
     public void OnNodeHalted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, RuntimeError error)
     {
         var detail = BuildRouteDetail(step.NodeId, intentToken, allowedNextNodes, null);
-        _trace.Add(RoutingTraceEventKind.NodeHalted, detail, state, step, error);
+        _trace.Add(RoutingTraceEventKind.NodeHalted, detail: detail, state: state, step: step, error: error);
         _inner.OnNodeHalted(state, step, intentToken, allowedNextNodes, error);
     }
 
     public void OnHalted(RoutingState state, RuntimeError error)
     {
-        _trace.Add(RoutingTraceEventKind.Halted, error.Code, state, error: error);
+        _trace.Add(RoutingTraceEventKind.Halted, detail: error.Code, state: state, error: error);
         _inner.OnHalted(state, error);
     }
 
     public void OnCompleted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes)
     {
         var detail = BuildRouteDetail(step.NodeId, intentToken, allowedNextNodes, null);
-        _trace.Add(RoutingTraceEventKind.Completed, detail, state, step);
+        _trace.Add(RoutingTraceEventKind.Completed, detail: detail, state: state, step: step);
         _inner.OnCompleted(state, step, intentToken, allowedNextNodes);
     }
 

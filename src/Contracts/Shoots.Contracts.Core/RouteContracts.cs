@@ -30,9 +30,10 @@ public enum DecisionOwner
 public enum MermaidNodeKind
 {
     Start,
+    Route,
+    Tool,
     Gate,
-    Linear,
-    Terminate
+    Terminal
 }
 
 /// <summary>

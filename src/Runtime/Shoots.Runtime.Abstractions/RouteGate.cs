@@ -57,6 +57,16 @@ public static class RouteGate
             return false;
         }
 
+        if (string.IsNullOrWhiteSpace(plan.GraphStructureHash))
+        {
+            error = new RuntimeError(
+                "route_graph_hash_missing",
+                "Graph structure hash is required to advance routing.");
+            nextState = state with { Status = RoutingStatus.Halted };
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
+
         if (string.IsNullOrWhiteSpace(state.WorkOrderId.Value))
         {
             error = new RuntimeError(
@@ -78,50 +88,37 @@ public static class RouteGate
             return false;
         }
 
-        if (state.CurrentRouteIndex < 0 || state.CurrentRouteIndex >= plan.Steps.Count)
+        if (string.IsNullOrWhiteSpace(state.CurrentNodeId))
         {
             error = new RuntimeError(
-                "route_step_out_of_range",
-                "Route step index is out of range.",
-                state.CurrentRouteIndex);
+                "route_node_missing",
+                "Current node id is required to advance routing.");
             nextState = state with { Status = RoutingStatus.Halted };
             narrator?.OnHalted(nextState, error);
             return false;
         }
 
-        if (plan.Steps[state.CurrentRouteIndex] is not RouteStep routeStep)
+        var routeStep = ResolveRouteStep(plan.Steps, state.CurrentNodeId);
+        if (routeStep is null)
         {
             error = new RuntimeError(
                 "route_step_invalid",
-                "Route step is required at the current index.",
-                plan.Steps[state.CurrentRouteIndex].Id);
+                "Route step is required for the current node.",
+                state.CurrentNodeId);
             nextState = state with { Status = RoutingStatus.Halted };
             narrator?.OnHalted(nextState, error);
             return false;
         }
 
-        if (state.CurrentRouteIndex == 0 && state.Status == RoutingStatus.Pending)
-            narrator?.OnWorkOrderReceived(plan.Request.WorkOrder);
-
-        if (string.IsNullOrWhiteSpace(state.IntentToken.ConstraintsHash) ||
-            string.IsNullOrWhiteSpace(state.IntentToken.CurrentStateHash))
+        if (string.IsNullOrWhiteSpace(state.IntentToken.WorkOrderId.Value) ||
+            string.IsNullOrWhiteSpace(state.IntentToken.CurrentNodeId) ||
+            state.IntentToken.AllowedNextNodeIds is null ||
+            string.IsNullOrWhiteSpace(state.IntentToken.GraphStructureHash))
         {
             error = new RuntimeError(
                 "route_intent_token_missing",
                 "Intent token is required to advance routing.");
             nextState = state with { Status = RoutingStatus.Halted };
-            narrator?.OnHalted(nextState, error);
-            return false;
-        }
-
-        if (state.CurrentRouteIndex == 0 && routeStep.Intent == RouteIntent.Terminate)
-        {
-            error = new RuntimeError(
-                "route_start_terminate",
-                "First route step cannot be terminate.",
-                routeStep.NodeId);
-            nextState = state with { Status = RoutingStatus.Halted };
-            narrator?.OnNodeHalted(state, routeStep, error);
             narrator?.OnHalted(nextState, error);
             return false;
         }
@@ -134,19 +131,6 @@ public static class RouteGate
                 new { routeStep = routeStep.WorkOrderId.Value, plan = plan.Request.WorkOrder.Id.Value });
             nextState = state with { Status = RoutingStatus.Halted };
             narrator?.OnNodeHalted(state, routeStep, error);
-            narrator?.OnHalted(nextState, error);
-            return false;
-        }
-
-        var expectedToken = RouteIntentTokenFactory.Create(plan.Request.WorkOrder, routeStep);
-        var expectedHash = RouteIntentTokenFactory.ComputeTokenHash(expectedToken);
-        var actualHash = RouteIntentTokenFactory.ComputeTokenHash(state.IntentToken);
-        if (!string.Equals(expectedHash, actualHash, StringComparison.Ordinal))
-        {
-            error = new RuntimeError(
-                "route_intent_token_mismatch",
-                "Intent token does not match the current routing state.");
-            nextState = state with { Status = RoutingStatus.Halted };
             narrator?.OnHalted(nextState, error);
             return false;
         }
@@ -165,6 +149,42 @@ public static class RouteGate
             return false;
         }
 
+        var expectedToken = RouteIntentTokenFactory.Create(plan, rule);
+        var expectedHash = RouteIntentTokenFactory.ComputeTokenHash(expectedToken);
+        var actualHash = RouteIntentTokenFactory.ComputeTokenHash(state.IntentToken);
+        if (!string.Equals(expectedHash, actualHash, StringComparison.Ordinal))
+        {
+            error = new RuntimeError(
+                "route_intent_token_mismatch",
+                "Intent token does not match the current routing state.");
+            nextState = state with { Status = RoutingStatus.Halted };
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
+
+        if (!string.Equals(state.IntentToken.WorkOrderId.Value, state.WorkOrderId.Value, StringComparison.Ordinal) ||
+            !string.Equals(state.IntentToken.CurrentNodeId, state.CurrentNodeId, StringComparison.Ordinal) ||
+            !string.Equals(state.IntentToken.GraphStructureHash, plan.GraphStructureHash, StringComparison.Ordinal))
+        {
+            error = new RuntimeError(
+                "route_intent_token_mismatch",
+                "Intent token does not match routing state.");
+            nextState = state with { Status = RoutingStatus.Halted };
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
+
+        var ruleAllowedNodes = rule.AllowedNextNodes ?? Array.Empty<string>();
+        if (!state.IntentToken.AllowedNextNodeIds.SequenceEqual(ruleAllowedNodes, StringComparer.Ordinal))
+        {
+            error = new RuntimeError(
+                "route_intent_token_mismatch",
+                "Intent token allowed nodes do not match route rule.");
+            nextState = state with { Status = RoutingStatus.Halted };
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
+
         if (rule.Intent != routeStep.Intent || rule.Owner != routeStep.Owner)
         {
             error = new RuntimeError(
@@ -177,11 +197,14 @@ public static class RouteGate
             return false;
         }
 
-        if (state.CurrentRouteIndex == 0 && rule.NodeKind != MermaidNodeKind.Start)
+        if (rule.NodeKind == MermaidNodeKind.Start && state.Status == RoutingStatus.Pending)
+            narrator?.OnWorkOrderReceived(plan.Request.WorkOrder);
+
+        if (rule.NodeKind == MermaidNodeKind.Start && routeStep.Intent == RouteIntent.Terminate)
         {
             error = new RuntimeError(
-                "route_start_node_invalid",
-                "First route step must be a Start node.",
+                "route_start_terminate",
+                "Start node cannot use Terminate intent.",
                 routeStep.NodeId);
             nextState = state with { Status = RoutingStatus.Halted };
             narrator?.OnNodeHalted(state, routeStep, error);
@@ -189,19 +212,7 @@ public static class RouteGate
             return false;
         }
 
-        if (state.CurrentRouteIndex != 0 && rule.NodeKind == MermaidNodeKind.Start)
-        {
-            error = new RuntimeError(
-                "route_start_node_misplaced",
-                "Start node can only appear at the first route step.",
-                routeStep.NodeId);
-            nextState = state with { Status = RoutingStatus.Halted };
-            narrator?.OnNodeHalted(state, routeStep, error);
-            narrator?.OnHalted(nextState, error);
-            return false;
-        }
-
-        var allowedNextNodes = rule.AllowedNextNodes ?? Array.Empty<string>();
+        var allowedNextNodes = ruleAllowedNodes;
 
         narrator?.OnRouteEntered(state, routeStep, state.IntentToken, allowedNextNodes);
         narrator?.OnNodeEntered(state, routeStep, state.IntentToken, allowedNextNodes);
@@ -218,7 +229,7 @@ public static class RouteGate
             return false;
         }
 
-        if (rule.NodeKind == MermaidNodeKind.Terminate && allowedNextNodes.Count > 0)
+        if (rule.NodeKind == MermaidNodeKind.Terminal && allowedNextNodes.Count > 0)
         {
             error = new RuntimeError(
                 "route_terminal_outbound",
@@ -230,11 +241,35 @@ public static class RouteGate
             return false;
         }
 
-        if (rule.NodeKind != MermaidNodeKind.Terminate && allowedNextNodes.Count == 0)
+        if (rule.NodeKind != MermaidNodeKind.Terminal && allowedNextNodes.Count == 0)
         {
             error = new RuntimeError(
                 "route_outbound_missing",
                 "Non-terminal nodes must declare at least one outbound edge.",
+                routeStep.NodeId);
+            nextState = state with { Status = RoutingStatus.Halted };
+            narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
+
+        if (rule.NodeKind == MermaidNodeKind.Gate && allowedNextNodes.Count < 2)
+        {
+            error = new RuntimeError(
+                "route_gate_missing",
+                "Gate nodes must declare multiple outbound edges.",
+                routeStep.NodeId);
+            nextState = state with { Status = RoutingStatus.Halted };
+            narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
+
+        if (rule.NodeKind != MermaidNodeKind.Gate && allowedNextNodes.Count > 1)
+        {
+            error = new RuntimeError(
+                "route_gate_invalid",
+                "Multiple outbound edges require Gate node kind.",
                 routeStep.NodeId);
             nextState = state with { Status = RoutingStatus.Halted };
             narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
@@ -306,6 +341,22 @@ public static class RouteGate
             }
         }
 
+        if (decision is not null)
+        {
+            var hasNextNode = !string.IsNullOrWhiteSpace(decision.NextNodeId);
+            var hasToolSelection = decision.ToolSelection is not null;
+            if (hasNextNode == hasToolSelection)
+            {
+                error = new RuntimeError(
+                    "route_decision_invalid",
+                    "Decision must include exactly one of next node id or tool selection.");
+                nextState = state with { Status = RoutingStatus.Halted };
+                narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
+                narrator?.OnHalted(nextState, error);
+                return false;
+            }
+        }
+
         if (routeStep.Intent == RouteIntent.SelectTool)
         {
             if (routeStep.Owner != DecisionOwner.Ai)
@@ -319,6 +370,17 @@ public static class RouteGate
                 return false;
             }
 
+            if (decision?.NextNodeId is not null)
+            {
+                error = new RuntimeError(
+                    "route_decision_unexpected",
+                    "SelectTool decisions must not include next node id.");
+                nextState = state with { Status = RoutingStatus.Halted };
+                narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
+                narrator?.OnHalted(nextState, error);
+                return false;
+            }
+
             var effectiveDecision = decision?.ToolSelection
                 ?? (routeStep.ToolInvocation is null
                     ? null
@@ -326,7 +388,7 @@ public static class RouteGate
 
             if (effectiveDecision is null)
             {
-                if (decision is not null)
+                if (state.Status == RoutingStatus.Waiting || decision is not null)
                 {
                     error = new RuntimeError(
                         "route_tool_decision_missing",
@@ -368,39 +430,12 @@ public static class RouteGate
             }
         }
 
-        if (decision is not null)
-        {
-            if (string.IsNullOrWhiteSpace(decision.IntentToken.ConstraintsHash) ||
-                string.IsNullOrWhiteSpace(decision.IntentToken.CurrentStateHash))
-            {
-                error = new RuntimeError(
-                    "route_intent_token_missing",
-                    "Decision intent token is required.");
-                nextState = state with { Status = RoutingStatus.Halted };
-                narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
-                narrator?.OnHalted(nextState, error);
-                return false;
-            }
-
-            var decisionHash = RouteIntentTokenFactory.ComputeTokenHash(decision.IntentToken);
-            if (!string.Equals(decisionHash, actualHash, StringComparison.Ordinal))
-            {
-                error = new RuntimeError(
-                    "route_intent_token_mismatch",
-                    "Decision intent token does not match routing state.");
-                nextState = state with { Status = RoutingStatus.Halted };
-                narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
-                narrator?.OnHalted(nextState, error);
-                return false;
-            }
-        }
-
-        if (decision is not null && decision.ObservedIntent != state.CurrentRouteIntent)
+        if (routeStep.Intent == RouteIntent.SelectTool && allowedNextNodes.Count > 1)
         {
             error = new RuntimeError(
-                "route_intent_observed_mismatch",
-                "Decision intent does not match routing state.",
-                new { decision.ObservedIntent, state.CurrentRouteIntent });
+                "route_next_node_ambiguous",
+                "SelectTool nodes must not branch to multiple next nodes.",
+                routeStep.NodeId);
             nextState = state with { Status = RoutingStatus.Halted };
             narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
             narrator?.OnHalted(nextState, error);
@@ -441,27 +476,15 @@ public static class RouteGate
 
         string? nextNodeId = null;
 
-        if (decision is not null && string.IsNullOrWhiteSpace(decision.SuggestedNextNodeId))
-        {
-            error = new RuntimeError(
-                "route_next_node_missing",
-                "Decision must include next node id.",
-                routeStep.NodeId);
-            nextState = state with { Status = RoutingStatus.Halted };
-            narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
-            narrator?.OnHalted(nextState, error);
-            return false;
-        }
-
         if (allowedNextNodes.Count == 1)
         {
-            if (decision is not null &&
-                !string.Equals(decision.SuggestedNextNodeId, allowedNextNodes[0], StringComparison.Ordinal))
+            if (decision?.NextNodeId is not null &&
+                !string.Equals(decision.NextNodeId, allowedNextNodes[0], StringComparison.Ordinal))
             {
                 error = new RuntimeError(
                     "route_next_node_invalid",
                     "Decision next node is not allowed.",
-                    new { decision = decision.SuggestedNextNodeId, allowed = allowedNextNodes[0] });
+                    new { decision = decision.NextNodeId, allowed = allowedNextNodes[0] });
                 nextState = state with { Status = RoutingStatus.Halted };
                 narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
                 narrator?.OnHalted(nextState, error);
@@ -474,25 +497,34 @@ public static class RouteGate
         {
             if (decision is null)
             {
-                if (routeStep.Owner == DecisionOwner.Ai)
+                if (state.Status == RoutingStatus.Waiting)
+                {
+                    error = new RuntimeError(
+                        "route_decision_missing",
+                        "Decision is required to choose the next node.",
+                        routeStep.NodeId);
+                }
+                else if (routeStep.Owner == DecisionOwner.Ai)
                 {
                     nextState = state with { Status = RoutingStatus.Waiting };
                     narrator?.OnDecisionRequired(nextState, routeStep, state.IntentToken, allowedNextNodes);
                     error = null;
                     return false;
                 }
-
-                error = new RuntimeError(
-                    "route_decision_missing",
-                    "Decision is required to choose the next node.",
-                    routeStep.NodeId);
+                else
+                {
+                    error = new RuntimeError(
+                        "route_decision_missing",
+                        "Decision is required to choose the next node.",
+                        routeStep.NodeId);
+                }
                 nextState = state with { Status = RoutingStatus.Halted };
                 narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
                 narrator?.OnHalted(nextState, error);
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(decision.SuggestedNextNodeId))
+            if (string.IsNullOrWhiteSpace(decision.NextNodeId))
             {
                 error = new RuntimeError(
                     "route_next_node_missing",
@@ -504,25 +536,31 @@ public static class RouteGate
                 return false;
             }
 
-            if (!allowedNextNodes.Any(node => string.Equals(node, decision.SuggestedNextNodeId, StringComparison.Ordinal)))
+            if (!allowedNextNodes.Any(node => string.Equals(node, decision.NextNodeId, StringComparison.Ordinal)))
             {
                 error = new RuntimeError(
                     "route_next_node_invalid",
                     "Decision next node is not allowed.",
-                    new { decision = decision.SuggestedNextNodeId, allowed = allowedNextNodes });
+                    new { decision = decision.NextNodeId, allowed = allowedNextNodes });
                 nextState = state with { Status = RoutingStatus.Halted };
                 narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
                 narrator?.OnHalted(nextState, error);
                 return false;
             }
 
-            nextNodeId = decision.SuggestedNextNodeId;
+            nextNodeId = decision.NextNodeId;
         }
 
-        narrator?.OnNodeTransitionChosen(state, routeStep, state.IntentToken, allowedNextNodes, nextNodeId);
+        var decisionSource = decision?.NextNodeId is not null
+            ? RoutingDecisionSource.Provider
+            : routeStep.Owner is DecisionOwner.Rule or DecisionOwner.Runtime
+                ? RoutingDecisionSource.Rule
+                : RoutingDecisionSource.Mermaid;
 
-        var nextIndex = FindRouteStepIndex(plan.Steps, nextNodeId);
-        if (nextIndex < 0 || plan.Steps[nextIndex] is not RouteStep nextStep)
+        narrator?.OnNodeTransitionChosen(state, routeStep, state.IntentToken, allowedNextNodes, nextNodeId, decisionSource);
+
+        var nextStep = ResolveRouteStep(plan.Steps, nextNodeId);
+        if (nextStep is null)
         {
             error = new RuntimeError(
                 "route_step_invalid",
@@ -534,42 +572,54 @@ public static class RouteGate
             return false;
         }
 
-        var nextToken = RouteIntentTokenFactory.Create(plan.Request.WorkOrder!, nextStep);
+        var nextRule = plan.Request.RouteRules
+            .FirstOrDefault(candidate => string.Equals(candidate.NodeId, nextNodeId, StringComparison.Ordinal));
+        if (nextRule is null)
+        {
+            error = new RuntimeError(
+                "route_rule_missing",
+                "Route rule is missing for the next node.",
+                nextNodeId);
+            nextState = state with { Status = RoutingStatus.Halted };
+            narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
+
+        var nextToken = RouteIntentTokenFactory.Create(plan, nextRule);
 
         nextState = state with
         {
             IntentToken = nextToken,
-            CurrentRouteIndex = nextIndex,
+            CurrentNodeId = nextNodeId,
             CurrentRouteIntent = nextStep.Intent,
             Status = RoutingStatus.Pending
         };
-        narrator?.OnNodeAdvanced(nextState, routeStep, state.IntentToken, allowedNextNodes, nextNodeId);
+        narrator?.OnNodeAdvanced(nextState, routeStep, state.IntentToken, allowedNextNodes, nextNodeId, decisionSource);
         error = null;
         return true;
     }
 
     private static bool IsIntentCompatible(RouteIntent intent, MermaidNodeKind nodeKind)
     {
-        if (nodeKind == MermaidNodeKind.Terminate)
-            return intent == RouteIntent.Terminate;
-
-        return intent != RouteIntent.Terminate;
+        return nodeKind switch
+        {
+            MermaidNodeKind.Start => intent != RouteIntent.Terminate,
+            MermaidNodeKind.Route => intent != RouteIntent.Terminate,
+            MermaidNodeKind.Gate => intent != RouteIntent.Terminate,
+            MermaidNodeKind.Tool => intent == RouteIntent.SelectTool,
+            MermaidNodeKind.Terminal => intent == RouteIntent.Terminate,
+            _ => false
+        };
     }
 
-    private static int FindRouteStepIndex(
+    private static RouteStep? ResolveRouteStep(
         IReadOnlyList<BuildStep> steps,
         string nodeId)
     {
-        for (var index = 0; index < steps.Count; index++)
-        {
-            if (steps[index] is RouteStep step &&
-                string.Equals(step.NodeId, nodeId, StringComparison.Ordinal))
-            {
-                return index;
-            }
-        }
-
-        return -1;
+        return steps
+            .OfType<RouteStep>()
+            .FirstOrDefault(step => string.Equals(step.NodeId, nodeId, StringComparison.Ordinal));
     }
 
     private static bool TryValidateToolSelection(

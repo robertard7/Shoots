@@ -24,21 +24,15 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
         if (request is null)
             throw new ArgumentNullException(nameof(request));
 
-        var step = request.Step;
-        if (step.Owner != DecisionOwner.Ai)
-            return null;
-
         var adapter = _registry.Get(_providerId);
         if (adapter is null)
             throw new InvalidOperationException($"Provider '{_providerId}' is not registered.");
 
         return adapter.RequestDecision(
             request.WorkOrder,
-            step,
+            request.CurrentNodeId,
             request.NodeKind,
             request.AllowedNextNodes,
-            request.IntentToken,
-            request.CatalogHash ?? string.Empty,
-            string.Empty);
+            request.Catalog);
     }
 }

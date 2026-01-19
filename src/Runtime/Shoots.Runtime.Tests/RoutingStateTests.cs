@@ -12,7 +12,7 @@ public sealed class RoutingStateTests
     [Fact]
     public void CreateInitial_rejects_terminate_first_step()
     {
-        var plan = CreatePlan(new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>()));
+        var plan = CreatePlan(new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>()));
 
         Assert.Throws<ArgumentException>(() => RoutingState.CreateInitial(plan));
     }
@@ -31,7 +31,7 @@ public sealed class RoutingStateTests
         var state = RoutingState.CreateInitial(workOrder, plan);
 
         Assert.Equal(workOrder.Id, state.WorkOrderId);
-        Assert.Equal(0, state.CurrentRouteIndex);
+        Assert.Equal("validate", state.CurrentNodeId);
         Assert.Equal(RouteIntent.Validate, state.CurrentRouteIntent);
         Assert.Equal(RoutingStatus.Pending, state.Status);
     }
@@ -83,6 +83,9 @@ public sealed class RoutingStateTests
         return new BuildPlan(
             "plan",
             request,
+            HashTools.ComputeSha256Hash("graph"),
+            HashTools.ComputeSha256Hash("nodes"),
+            HashTools.ComputeSha256Hash("edges"),
             authority,
             steps,
             new[] { new BuildArtifact("plan.json", "Plan payload.") });

@@ -11,12 +11,10 @@ public sealed class NullAiProviderAdapter : IAiProviderAdapter
 
     public RouteDecision? RequestDecision(
         WorkOrder workOrder,
-        RouteStep step,
+        string currentNodeId,
         MermaidNodeKind nodeKind,
         IReadOnlyList<string> allowedNextNodes,
-        RouteIntentToken intentToken,
-        string catalogHash,
-        string routingTraceSummary)
+        ToolCatalogSnapshot catalog)
     {
         throw new InvalidOperationException("Null provider invoked");
     }

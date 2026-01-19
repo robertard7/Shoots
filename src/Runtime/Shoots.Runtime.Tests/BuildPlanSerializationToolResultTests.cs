@@ -26,6 +26,9 @@ public sealed class BuildPlanSerializationToolResultTests
         var plan = new BuildPlan(
             "plan",
             request,
+            HashTools.ComputeSha256Hash("graph"),
+            HashTools.ComputeSha256Hash("nodes"),
+            HashTools.ComputeSha256Hash("edges"),
             new DelegationAuthority(
                 ProviderId: new ProviderId("local"),
                 Kind: ProviderKind.Local,

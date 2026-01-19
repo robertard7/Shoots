@@ -75,7 +75,7 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
         if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
     }
 
-    public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId)
+    public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource)
     {
         if (state is null) throw new ArgumentNullException(nameof(state));
         if (step is null) throw new ArgumentNullException(nameof(step));
@@ -84,7 +84,7 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
         if (nextNodeId is null) throw new ArgumentNullException(nameof(nextNodeId));
     }
 
-    public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId)
+    public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource)
     {
         if (state is null) throw new ArgumentNullException(nameof(state));
         if (step is null) throw new ArgumentNullException(nameof(step));

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 using Xunit;
@@ -16,13 +17,13 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var state = new RoutingState(
             new WorkOrderId("wo-other"),
             CreateIntentToken(plan),
-            0,
+            "validate",
             RouteIntent.Validate,
             RoutingStatus.Pending);
 
@@ -42,7 +43,7 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var state = RoutingState.CreateInitial(plan);
@@ -52,7 +53,7 @@ public sealed class RouteGateTests
         Assert.False(result);
         Assert.Null(error);
         Assert.Equal(RoutingStatus.Waiting, nextState.Status);
-        Assert.Equal(state.CurrentRouteIndex, nextState.CurrentRouteIndex);
+        Assert.Equal(state.CurrentNodeId, nextState.CurrentNodeId);
     }
 
     [Fact]
@@ -63,14 +64,12 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var state = RoutingState.CreateInitial(plan);
         var decision = new RouteDecision(
-            "terminate",
-            state.IntentToken,
-            RouteIntent.Validate,
+            null,
             new ToolSelectionDecision(
                 new ToolId("tools.any"),
                 new Dictionary<string, object?>()));
@@ -99,8 +98,8 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "validate" }),
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Linear, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Route, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var narrator = new RecordingNarrator();
@@ -112,15 +111,13 @@ public sealed class RouteGateTests
             var state = RoutingState.CreateInitial(plan);
 
             var decision = new RouteDecision(
-                "validate",
-                state.IntentToken,
-                RouteIntent.SelectTool,
+                null,
                 new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>()));
             var advanced = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
 
             Assert.True(advanced);
             Assert.Null(error);
-            Assert.Equal(1, nextState.CurrentRouteIndex);
+            Assert.Equal("validate", nextState.CurrentNodeId);
 
             advanced = RouteGate.TryAdvance(plan, nextState, null, registry, out var finalState, out error);
             Assert.True(advanced);
@@ -142,14 +139,12 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var state = RoutingState.CreateInitial(plan);
         var decision = new RouteDecision(
-            "terminate",
-            state.IntentToken,
-            RouteIntent.Validate,
+            null,
             new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
@@ -168,22 +163,20 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "validate" }),
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Linear, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Route, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
-        var lateStep = plan.Steps[1] as RouteStep ?? throw new InvalidOperationException("second step must be a route step");
-        var lateToken = RouteIntentTokenFactory.Create(plan.Request.WorkOrder, lateStep);
+        var lateRule = plan.Request.RouteRules.First(rule => rule.NodeId == "validate");
+        var lateToken = RouteIntentTokenFactory.Create(plan, lateRule);
         var lateState = new RoutingState(
             plan.Request.WorkOrder.Id,
             lateToken,
-            1,
+            "validate",
             RouteIntent.Validate,
             RoutingStatus.Pending);
         var decision = new RouteDecision(
-            "terminate",
-            lateState.IntentToken,
-            RouteIntent.SelectTool,
+            null,
             new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, lateState, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
@@ -210,7 +203,7 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var registry = new SnapshotOnlyRegistry(toolSpec)
@@ -219,16 +212,14 @@ public sealed class RouteGateTests
         };
         var state = RoutingState.CreateInitial(plan);
         var decision = new RouteDecision(
-            "terminate",
-            state.IntentToken,
-            RouteIntent.SelectTool,
+            null,
             new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
 
         Assert.True(result);
         Assert.Null(error);
-        Assert.Equal(1, nextState.CurrentRouteIndex);
+        Assert.Equal("terminate", nextState.CurrentNodeId);
     }
 
     [Fact]
@@ -239,7 +230,7 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var narrator = new RecordingNarrator();
@@ -250,7 +241,7 @@ public sealed class RouteGateTests
             var state = new RoutingState(
                 new WorkOrderId("wo-other"),
                 CreateIntentToken(plan),
-                0,
+                "validate",
                 RouteIntent.Validate,
                 RoutingStatus.Pending);
 
@@ -283,16 +274,14 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var registry = new SnapshotOnlyRegistry(toolSpec);
         var state = RoutingState.CreateInitial(plan);
 
         var decision = new RouteDecision(
-            "terminate",
-            state.IntentToken,
-            RouteIntent.SelectTool,
+            null,
             new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>()));
         var advanced = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
 
@@ -318,14 +307,12 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Human, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var state = RoutingState.CreateInitial(plan);
         var decision = new RouteDecision(
-            "terminate",
-            state.IntentToken,
-            RouteIntent.SelectTool,
+            null,
             new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
@@ -344,19 +331,17 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
         var state = new RoutingState(
             new WorkOrderId("wo-other"),
             CreateIntentToken(plan),
-            0,
+            "select",
             RouteIntent.SelectTool,
             RoutingStatus.Pending);
         var decision = new RouteDecision(
-            "terminate",
-            state.IntentToken,
-            RouteIntent.SelectTool,
+            null,
             new ToolSelectionDecision(new ToolId("tools.any"), new Dictionary<string, object?>()));
 
         var result = RouteGate.TryAdvance(plan, state, decision, new SnapshotOnlyRegistry(), out var nextState, out var error);
@@ -380,7 +365,7 @@ public sealed class RouteGateTests
             new[]
             {
                 new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminate, Array.Empty<string>())
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             },
             toolResult);
 
@@ -390,7 +375,7 @@ public sealed class RouteGateTests
 
         Assert.True(result);
         Assert.Null(error);
-        Assert.Equal(1, nextState.CurrentRouteIndex);
+        Assert.Equal("terminate", nextState.CurrentNodeId);
     }
 
     private static BuildPlan CreatePlan(
@@ -432,6 +417,9 @@ public sealed class RouteGateTests
         return new BuildPlan(
             "plan",
             request,
+            HashTools.ComputeSha256Hash("graph"),
+            HashTools.ComputeSha256Hash("nodes"),
+            HashTools.ComputeSha256Hash("edges"),
             authority,
             steps,
             new[] { new BuildArtifact("plan.json", "Plan payload.") },
@@ -489,8 +477,8 @@ public sealed class RouteGateTests
         public void OnNodeEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("node.entered");
         public void OnDecisionRequired(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("decision.required");
         public void OnDecisionAccepted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("decision.accepted");
-        public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId) => Events.Add("node.transition");
-        public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId) => Events.Add("node.advanced");
+        public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource) => Events.Add("node.transition");
+        public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource) => Events.Add("node.advanced");
         public void OnNodeHalted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, RuntimeError error) => Events.Add("node.halted");
         public void OnHalted(RoutingState state, RuntimeError error) => Events.Add("halted");
         public void OnCompleted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("completed");
@@ -498,7 +486,7 @@ public sealed class RouteGateTests
 
     private static RouteIntentToken CreateIntentToken(BuildPlan plan)
     {
-        var originStep = plan.Steps[0] as RouteStep ?? throw new InvalidOperationException("first step must be a route step");
-        return RouteIntentTokenFactory.Create(plan.Request.WorkOrder, originStep);
+        var startRule = plan.Request.RouteRules.First(rule => rule.NodeKind == MermaidNodeKind.Start);
+        return RouteIntentTokenFactory.Create(plan, startRule);
     }
 }
