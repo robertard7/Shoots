@@ -109,6 +109,12 @@ The planner must emit complete routing steps for every Mermaid node.
 
 Routing decisions are only accepted for SelectTool intents.
 
+Mermaid graph definitions are the sole routing authority.
+
+Providers select tools only; returning a tool does not advance the graph.
+
+Provider failures halt routing and are recorded in the routing trace.
+
 Boundary diagram
 
 Builder

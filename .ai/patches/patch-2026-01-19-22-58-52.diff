@@ -1,0 +1,63 @@
+diff --git a/Shoots.sln b/Shoots.sln
+index dc07016..fb86a57 100644
+--- a/Shoots.sln
++++ b/Shoots.sln
+@@ -41,6 +41,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Fake", "sr
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Ollama", "src\\Providers\\Shoots.Providers.Ollama\\Shoots.Providers.Ollama.csproj", "{7906E143-EAB9-40EE-B6F1-95E82AF2F212}"
+ EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Ollama.Tests", "src\\Providers\\Shoots.Providers.Ollama.Tests\\Shoots.Providers.Ollama.Tests.csproj", "{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}"
++EndProject
+ Global
+ 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+ 		Debug|Any CPU = Debug|Any CPU
+@@ -106,6 +108,10 @@ Global
+ 		{7906E143-EAB9-40EE-B6F1-95E82AF2F212}.Debug|Any CPU.Build.0 = Debug|Any CPU
+ 		{7906E143-EAB9-40EE-B6F1-95E82AF2F212}.Release|Any CPU.ActiveCfg = Release|Any CPU
+ 		{7906E143-EAB9-40EE-B6F1-95E82AF2F212}.Release|Any CPU.Build.0 = Release|Any CPU
++		{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}.Release|Any CPU.Build.0 = Release|Any CPU
+ 	EndGlobalSection
+ 	GlobalSection(NestedProjects) = preSolution
+ 		{621484DB-F2E4-454F-82C4-A9A9FF05BF48} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
+@@ -126,5 +132,6 @@ Global
+ 		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
+ 		{A7363365-209B-4597-8CC3-36F386D4E2BA} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
+ 		{7906E143-EAB9-40EE-B6F1-95E82AF2F212} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
++		{7C18480D-4786-4EE3-ACC8-02B0301BA3E4} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
+ 	EndGlobalSection
+ EndGlobal
+diff --git a/src/Runtime/README.md b/src/Runtime/README.md
+index 3460c00..b0e92ee 100644
+--- a/src/Runtime/README.md
++++ b/src/Runtime/README.md
+@@ -109,6 +109,12 @@ The planner must emit complete routing steps for every Mermaid node.
+ 
+ Routing decisions are only accepted for SelectTool intents.
+ 
++Mermaid graph definitions are the sole routing authority.
++
++Providers select tools only; returning a tool does not advance the graph.
++
++Provider failures halt routing and are recorded in the routing trace.
++
+ Boundary diagram
+ 
+ Builder
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+index 5035216..7286175 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+@@ -252,9 +252,9 @@ public sealed class RoutingLoopTests
+         Assert.Equal(RoutingStatus.Halted, result.State.Status);
+         Assert.Equal("select", result.State.CurrentNodeId);
+         Assert.Empty(result.ToolResults);
++        Assert.Single(result.Trace.Entries.Where(entry => entry.Event == RoutingTraceEventKind.Halted));
+     }
+ 
+-    [Fact]
+     public void Routing_advances_without_provider_on_non_select_steps()
+     {
+         var workOrder = new WorkOrder(

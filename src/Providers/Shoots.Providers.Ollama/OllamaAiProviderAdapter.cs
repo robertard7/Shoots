@@ -9,14 +9,25 @@ namespace Shoots.Providers.Ollama;
 public sealed class OllamaAiProviderAdapter : IAiProviderAdapter
 {
     private readonly OllamaProviderSettings _settings;
+    private readonly OllamaPromptBuilder _promptBuilder;
+    private readonly OllamaOutputParser _parser;
+    private readonly OllamaHttpClient _client;
 
-    public OllamaAiProviderAdapter(OllamaProviderSettings settings)
+    public OllamaAiProviderAdapter(
+        OllamaProviderSettings settings,
+        OllamaPromptBuilder? promptBuilder = null,
+        OllamaOutputParser? parser = null,
+        OllamaHttpClient? client = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         if (string.IsNullOrWhiteSpace(_settings.Endpoint))
             throw new ArgumentException("endpoint is required", nameof(settings));
         if (string.IsNullOrWhiteSpace(_settings.Model))
             throw new ArgumentException("model is required", nameof(settings));
+
+        _promptBuilder = promptBuilder ?? new OllamaPromptBuilder();
+        _parser = parser ?? new OllamaOutputParser();
+        _client = client ?? new OllamaHttpClient("{\"toolId\":\"\",\"args\":{}}");
     }
 
     public ToolSelectionDecision? RequestDecision(
@@ -37,10 +48,14 @@ public sealed class OllamaAiProviderAdapter : IAiProviderAdapter
         if (catalog.Tools.Count == 0)
             return null;
 
-        var selected = catalog.Tools
-            .OrderBy(tool => tool.ToolId.Value, StringComparer.Ordinal)
-            .First();
+        var prompt = _promptBuilder.Build(workOrder, routeStep, graphHash, catalogHash, catalog);
+        var response = _client.SendPrompt(prompt);
+        var decision = _parser.Parse(response);
 
-        return new ToolSelectionDecision(selected.ToolId, new Dictionary<string, object?>());
+        var tool = catalog.Tools.FirstOrDefault(candidate => candidate.ToolId == decision.ToolId);
+        if (tool is null)
+            throw new InvalidOperationException("unknown tool selected");
+
+        return decision;
     }
 }
