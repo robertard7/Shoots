@@ -152,19 +152,17 @@ public sealed class RoutingLoopTests
 
     private sealed class RefusingAiDecisionProvider : IAiDecisionProvider
     {
-        public RouteDecision? RequestDecision(AiDecisionRequest request) => null;
+        public ToolSelectionDecision? RequestDecision(AiDecisionRequest request) => null;
     }
 
     private sealed class AcceptingAiDecisionProvider : IAiDecisionProvider
     {
-        public RouteDecision? RequestDecision(AiDecisionRequest request)
+        public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
         {
-            if (request.NodeKind != MermaidNodeKind.Tool && request.NodeKind != MermaidNodeKind.Start)
+            if (request.RouteStep.Intent != RouteIntent.SelectTool)
                 return null;
 
-            return new RouteDecision(
-                null,
-                new ToolSelectionDecision(new ToolId("tools.sample"), new Dictionary<string, object?>()));
+            return new ToolSelectionDecision(new ToolId("tools.sample"), new Dictionary<string, object?>());
         }
     }
 

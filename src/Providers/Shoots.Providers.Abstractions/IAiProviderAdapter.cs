@@ -5,10 +5,11 @@ namespace Shoots.Providers.Abstractions;
 
 public interface IAiProviderAdapter
 {
-    RouteDecision? RequestDecision(
+    ToolSelectionDecision? RequestDecision(
         WorkOrder workOrder,
-        string currentNodeId,
-        MermaidNodeKind nodeKind,
-        IReadOnlyList<string> allowedNextNodes,
+        RouteStep routeStep,
+        string graphHash,
+        string catalogHash,
+        IReadOnlyList<string> allowedNextNodeIds,
         ToolCatalogSnapshot catalog);
 }

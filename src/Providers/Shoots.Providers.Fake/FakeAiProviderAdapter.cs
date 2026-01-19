@@ -6,25 +6,18 @@ namespace Shoots.Providers.Fake;
 
 public sealed class FakeAiProviderAdapter : IAiProviderAdapter
 {
-    public RouteDecision? RequestDecision(
+    public ToolSelectionDecision? RequestDecision(
         WorkOrder workOrder,
-        string currentNodeId,
-        MermaidNodeKind nodeKind,
-        IReadOnlyList<string> allowedNextNodes,
+        RouteStep routeStep,
+        string graphHash,
+        string catalogHash,
+        IReadOnlyList<string> allowedNextNodeIds,
         ToolCatalogSnapshot catalog)
     {
-        ToolSelectionDecision? toolSelection = null;
-
-        if (nodeKind is MermaidNodeKind.Tool or MermaidNodeKind.Start)
-        {
-            var bindings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-            toolSelection = new ToolSelectionDecision(new ToolId("filesystem.read"), bindings);
-            return new RouteDecision(null, toolSelection);
-        }
-
-        if (allowedNextNodes.Count == 0)
+        if (routeStep.Intent != RouteIntent.SelectTool)
             return null;
 
-        return new RouteDecision(allowedNextNodes[0], null);
+        var bindings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        return new ToolSelectionDecision(new ToolId("filesystem.read"), bindings);
     }
 }

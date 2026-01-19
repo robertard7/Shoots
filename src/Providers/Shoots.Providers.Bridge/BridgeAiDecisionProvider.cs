@@ -19,7 +19,7 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
         _providerId = providerId;
     }
 
-    public RouteDecision? RequestDecision(AiDecisionRequest request)
+    public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
     {
         if (request is null)
             throw new ArgumentNullException(nameof(request));
@@ -30,9 +30,10 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
 
         return adapter.RequestDecision(
             request.WorkOrder,
-            request.CurrentNodeId,
-            request.NodeKind,
-            request.AllowedNextNodes,
+            request.RouteStep,
+            request.GraphHash,
+            request.CatalogHash,
+            request.AllowedNextNodeIds,
             request.Catalog);
     }
 }

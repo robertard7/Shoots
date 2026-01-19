@@ -8,8 +8,9 @@ namespace Shoots.Runtime.Abstractions;
 /// </summary>
 public sealed record AiDecisionRequest(
     WorkOrder WorkOrder,
-    string CurrentNodeId,
-    MermaidNodeKind NodeKind,
-    IReadOnlyList<string> AllowedNextNodes,
+    RouteStep RouteStep,
+    string GraphHash,
+    string CatalogHash,
+    IReadOnlyList<string> AllowedNextNodeIds,
     ToolCatalogSnapshot Catalog
 );

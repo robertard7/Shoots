@@ -1,0 +1,221 @@
+diff --git a/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
+index c8f04b5..a699af1 100644
+--- a/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
++++ b/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
+@@ -5,10 +5,11 @@ namespace Shoots.Providers.Abstractions;
+ 
+ public interface IAiProviderAdapter
+ {
+-    RouteDecision? RequestDecision(
++    ToolSelectionDecision? RequestDecision(
+         WorkOrder workOrder,
+-        string currentNodeId,
+-        MermaidNodeKind nodeKind,
+-        IReadOnlyList<string> allowedNextNodes,
++        RouteStep routeStep,
++        string graphHash,
++        string catalogHash,
++        IReadOnlyList<string> allowedNextNodeIds,
+         ToolCatalogSnapshot catalog);
+ }
+diff --git a/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs b/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs
+index 3994db9..56ce5b2 100644
+--- a/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs
++++ b/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs
+@@ -19,7 +19,7 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
+         _providerId = providerId;
+     }
+ 
+-    public RouteDecision? RequestDecision(AiDecisionRequest request)
++    public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
+     {
+         if (request is null)
+             throw new ArgumentNullException(nameof(request));
+@@ -30,9 +30,10 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
+ 
+         return adapter.RequestDecision(
+             request.WorkOrder,
+-            request.CurrentNodeId,
+-            request.NodeKind,
+-            request.AllowedNextNodes,
++            request.RouteStep,
++            request.GraphHash,
++            request.CatalogHash,
++            request.AllowedNextNodeIds,
+             request.Catalog);
+     }
+ }
+diff --git a/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs
+index 00aa241..e51abf7 100644
+--- a/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs
++++ b/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs
+@@ -6,25 +6,18 @@ namespace Shoots.Providers.Fake;
+ 
+ public sealed class FakeAiProviderAdapter : IAiProviderAdapter
+ {
+-    public RouteDecision? RequestDecision(
++    public ToolSelectionDecision? RequestDecision(
+         WorkOrder workOrder,
+-        string currentNodeId,
+-        MermaidNodeKind nodeKind,
+-        IReadOnlyList<string> allowedNextNodes,
++        RouteStep routeStep,
++        string graphHash,
++        string catalogHash,
++        IReadOnlyList<string> allowedNextNodeIds,
+         ToolCatalogSnapshot catalog)
+     {
+-        ToolSelectionDecision? toolSelection = null;
+-
+-        if (nodeKind is MermaidNodeKind.Tool or MermaidNodeKind.Start)
+-        {
+-            var bindings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+-            toolSelection = new ToolSelectionDecision(new ToolId("filesystem.read"), bindings);
+-            return new RouteDecision(null, toolSelection);
+-        }
+-
+-        if (allowedNextNodes.Count == 0)
++        if (routeStep.Intent != RouteIntent.SelectTool)
+             return null;
+ 
+-        return new RouteDecision(allowedNextNodes[0], null);
++        var bindings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
++        return new ToolSelectionDecision(new ToolId("filesystem.read"), bindings);
+     }
+ }
+diff --git a/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
+index 6c3fdf3..6e8e00c 100644
+--- a/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
++++ b/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
+@@ -9,11 +9,12 @@ public sealed class NullAiProviderAdapter : IAiProviderAdapter
+ {
+     public static readonly NullAiProviderAdapter Instance = new();
+ 
+-    public RouteDecision? RequestDecision(
++    public ToolSelectionDecision? RequestDecision(
+         WorkOrder workOrder,
+-        string currentNodeId,
+-        MermaidNodeKind nodeKind,
+-        IReadOnlyList<string> allowedNextNodes,
++        RouteStep routeStep,
++        string graphHash,
++        string catalogHash,
++        IReadOnlyList<string> allowedNextNodeIds,
+         ToolCatalogSnapshot catalog)
+     {
+         throw new InvalidOperationException("Null provider invoked");
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/AiDecisionRequest.cs b/src/Runtime/Shoots.Runtime.Abstractions/AiDecisionRequest.cs
+index 467ec38..7f21bcd 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/AiDecisionRequest.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/AiDecisionRequest.cs
+@@ -8,8 +8,9 @@ namespace Shoots.Runtime.Abstractions;
+ /// </summary>
+ public sealed record AiDecisionRequest(
+     WorkOrder WorkOrder,
+-    string CurrentNodeId,
+-    MermaidNodeKind NodeKind,
+-    IReadOnlyList<string> AllowedNextNodes,
++    RouteStep RouteStep,
++    string GraphHash,
++    string CatalogHash,
++    IReadOnlyList<string> AllowedNextNodeIds,
+     ToolCatalogSnapshot Catalog
+ );
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/IAiDecisionProvider.cs b/src/Runtime/Shoots.Runtime.Abstractions/IAiDecisionProvider.cs
+index 843cc89..3e6bbd2 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/IAiDecisionProvider.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/IAiDecisionProvider.cs
+@@ -4,5 +4,5 @@ namespace Shoots.Runtime.Abstractions;
+ 
+ public interface IAiDecisionProvider
+ {
+-    RouteDecision? RequestDecision(AiDecisionRequest request);
++    ToolSelectionDecision? RequestDecision(AiDecisionRequest request);
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Core/NullAiDecisionProvider.cs b/src/Runtime/Shoots.Runtime.Core/NullAiDecisionProvider.cs
+index c8194f2..50ca3aa 100644
+--- a/src/Runtime/Shoots.Runtime.Core/NullAiDecisionProvider.cs
++++ b/src/Runtime/Shoots.Runtime.Core/NullAiDecisionProvider.cs
+@@ -8,7 +8,7 @@ public sealed class NullAiDecisionProvider : IAiDecisionProvider
+ {
+     public static readonly NullAiDecisionProvider Instance = new();
+ 
+-    public RouteDecision? RequestDecision(AiDecisionRequest request)
++    public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
+     {
+         _ = request ?? throw new ArgumentNullException(nameof(request));
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+index 3d66b62..15d30fb 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+@@ -80,7 +80,10 @@ public sealed class RoutingLoop
+             while (true)
+             {
+                 var step = RequireRouteStep(_plan, State);
+-                var decision = ResolveDecision(step);
++                var selection = ResolveDecision(step);
++                var decision = selection is null
++                    ? null
++                    : new RouteDecision(null, selection);
+ 
+                 var advanced = RouteGate.TryAdvance(_plan, State, decision, _registry, out var nextState, out var error);
+                 State = nextState;
+@@ -134,21 +137,26 @@ public sealed class RoutingLoop
+         return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build(), _traceBuilder.BuildTelemetry());
+     }
+ 
+-    private RouteDecision? ResolveDecision(RouteStep step)
++    private ToolSelectionDecision? ResolveDecision(RouteStep step)
+     {
+         if (State.Status != RoutingStatus.Waiting)
+             return null;
+ 
+         var rule = _plan.Request.RouteRules
+             .FirstOrDefault(candidate => string.Equals(candidate.NodeId, step.NodeId, StringComparison.Ordinal));
+-        var nodeKind = rule?.NodeKind ?? MermaidNodeKind.Route;
+         var allowedNextNodes = rule?.AllowedNextNodes ?? Array.Empty<string>();
+         var snapshot = _registry.GetSnapshot()
+             .Select(entry => entry.Spec)
+             .OrderBy(spec => spec.ToolId.Value, StringComparer.Ordinal)
+             .ToArray();
+         var catalog = new ToolCatalogSnapshot(_catalogHash, snapshot);
+-        var request = new AiDecisionRequest(_plan.Request.WorkOrder!, step.NodeId, nodeKind, allowedNextNodes, catalog);
++        var request = new AiDecisionRequest(
++            _plan.Request.WorkOrder!,
++            step,
++            _plan.GraphStructureHash,
++            _catalogHash,
++            allowedNextNodes,
++            catalog);
+         return _aiDecisionProvider.RequestDecision(request);
+     }
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+index 68ff35f..47bf8cd 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+@@ -152,19 +152,17 @@ public sealed class RoutingLoopTests
+ 
+     private sealed class RefusingAiDecisionProvider : IAiDecisionProvider
+     {
+-        public RouteDecision? RequestDecision(AiDecisionRequest request) => null;
++        public ToolSelectionDecision? RequestDecision(AiDecisionRequest request) => null;
+     }
+ 
+     private sealed class AcceptingAiDecisionProvider : IAiDecisionProvider
+     {
+-        public RouteDecision? RequestDecision(AiDecisionRequest request)
++        public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
+         {
+-            if (request.NodeKind != MermaidNodeKind.Tool && request.NodeKind != MermaidNodeKind.Start)
++            if (request.RouteStep.Intent != RouteIntent.SelectTool)
+                 return null;
+ 
+-            return new RouteDecision(
+-                null,
+-                new ToolSelectionDecision(new ToolId("tools.sample"), new Dictionary<string, object?>()));
++            return new ToolSelectionDecision(new ToolId("tools.sample"), new Dictionary<string, object?>());
+         }
+     }
+ 

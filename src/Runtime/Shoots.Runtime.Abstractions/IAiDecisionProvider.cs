@@ -4,5 +4,5 @@ namespace Shoots.Runtime.Abstractions;
 
 public interface IAiDecisionProvider
 {
-    RouteDecision? RequestDecision(AiDecisionRequest request);
+    ToolSelectionDecision? RequestDecision(AiDecisionRequest request);
 }

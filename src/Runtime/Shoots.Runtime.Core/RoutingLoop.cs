@@ -80,7 +80,10 @@ public sealed class RoutingLoop
             while (true)
             {
                 var step = RequireRouteStep(_plan, State);
-                var decision = ResolveDecision(step);
+                var selection = ResolveDecision(step);
+                var decision = selection is null
+                    ? null
+                    : new RouteDecision(null, selection);
 
                 var advanced = RouteGate.TryAdvance(_plan, State, decision, _registry, out var nextState, out var error);
                 State = nextState;
@@ -134,21 +137,26 @@ public sealed class RoutingLoop
         return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build(), _traceBuilder.BuildTelemetry());
     }
 
-    private RouteDecision? ResolveDecision(RouteStep step)
+    private ToolSelectionDecision? ResolveDecision(RouteStep step)
     {
         if (State.Status != RoutingStatus.Waiting)
             return null;
 
         var rule = _plan.Request.RouteRules
             .FirstOrDefault(candidate => string.Equals(candidate.NodeId, step.NodeId, StringComparison.Ordinal));
-        var nodeKind = rule?.NodeKind ?? MermaidNodeKind.Route;
         var allowedNextNodes = rule?.AllowedNextNodes ?? Array.Empty<string>();
         var snapshot = _registry.GetSnapshot()
             .Select(entry => entry.Spec)
             .OrderBy(spec => spec.ToolId.Value, StringComparer.Ordinal)
             .ToArray();
         var catalog = new ToolCatalogSnapshot(_catalogHash, snapshot);
-        var request = new AiDecisionRequest(_plan.Request.WorkOrder!, step.NodeId, nodeKind, allowedNextNodes, catalog);
+        var request = new AiDecisionRequest(
+            _plan.Request.WorkOrder!,
+            step,
+            _plan.GraphStructureHash,
+            _catalogHash,
+            allowedNextNodes,
+            catalog);
         return _aiDecisionProvider.RequestDecision(request);
     }
 

@@ -9,11 +9,12 @@ public sealed class NullAiProviderAdapter : IAiProviderAdapter
 {
     public static readonly NullAiProviderAdapter Instance = new();
 
-    public RouteDecision? RequestDecision(
+    public ToolSelectionDecision? RequestDecision(
         WorkOrder workOrder,
-        string currentNodeId,
-        MermaidNodeKind nodeKind,
-        IReadOnlyList<string> allowedNextNodes,
+        RouteStep routeStep,
+        string graphHash,
+        string catalogHash,
+        IReadOnlyList<string> allowedNextNodeIds,
         ToolCatalogSnapshot catalog)
     {
         throw new InvalidOperationException("Null provider invoked");
