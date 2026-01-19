@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Shoots.Contracts.Core;
 using Shoots.Providers.Abstractions;
 
@@ -14,7 +13,6 @@ public sealed class NullAiProviderAdapter : IAiProviderAdapter
         RouteStep routeStep,
         string graphHash,
         string catalogHash,
-        IReadOnlyList<string> allowedNextNodeIds,
         ToolCatalogSnapshot catalog)
     {
         throw new InvalidOperationException("Null provider invoked");

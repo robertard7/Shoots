@@ -11,12 +11,8 @@ public sealed class FakeAiProviderAdapter : IAiProviderAdapter
         RouteStep routeStep,
         string graphHash,
         string catalogHash,
-        IReadOnlyList<string> allowedNextNodeIds,
         ToolCatalogSnapshot catalog)
     {
-        if (routeStep.Intent != RouteIntent.SelectTool)
-            return null;
-
         var bindings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         return new ToolSelectionDecision(new ToolId("filesystem.read"), bindings);
     }

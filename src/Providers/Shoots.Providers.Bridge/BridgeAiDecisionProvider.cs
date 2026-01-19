@@ -33,7 +33,6 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
             request.RouteStep,
             request.GraphHash,
             request.CatalogHash,
-            request.AllowedNextNodeIds,
             request.Catalog);
     }
 }

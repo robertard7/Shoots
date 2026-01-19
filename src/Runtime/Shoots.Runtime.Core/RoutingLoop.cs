@@ -142,9 +142,6 @@ public sealed class RoutingLoop
         if (State.Status != RoutingStatus.Waiting)
             return null;
 
-        var rule = _plan.Request.RouteRules
-            .FirstOrDefault(candidate => string.Equals(candidate.NodeId, step.NodeId, StringComparison.Ordinal));
-        var allowedNextNodes = rule?.AllowedNextNodes ?? Array.Empty<string>();
         var snapshot = _registry.GetSnapshot()
             .Select(entry => entry.Spec)
             .OrderBy(spec => spec.ToolId.Value, StringComparer.Ordinal)
@@ -155,7 +152,6 @@ public sealed class RoutingLoop
             step,
             _plan.GraphStructureHash,
             _catalogHash,
-            allowedNextNodes,
             catalog);
         return _aiDecisionProvider.RequestDecision(request);
     }

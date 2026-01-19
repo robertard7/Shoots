@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Shoots.Contracts.Core;
 
 namespace Shoots.Runtime.Abstractions;
@@ -11,6 +10,5 @@ public sealed record AiDecisionRequest(
     RouteStep RouteStep,
     string GraphHash,
     string CatalogHash,
-    IReadOnlyList<string> AllowedNextNodeIds,
     ToolCatalogSnapshot Catalog
 );
