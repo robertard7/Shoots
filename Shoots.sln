@@ -39,6 +39,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Bridge", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Fake", "src\\Providers\\Shoots.Providers.Fake\\Shoots.Providers.Fake.csproj", "{A7363365-209B-4597-8CC3-36F386D4E2BA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Ollama", "src\\Providers\\Shoots.Providers.Ollama\\Shoots.Providers.Ollama.csproj", "{7906E143-EAB9-40EE-B6F1-95E82AF2F212}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -100,6 +102,10 @@ Global
 		{A7363365-209B-4597-8CC3-36F386D4E2BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A7363365-209B-4597-8CC3-36F386D4E2BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A7363365-209B-4597-8CC3-36F386D4E2BA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7906E143-EAB9-40EE-B6F1-95E82AF2F212}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7906E143-EAB9-40EE-B6F1-95E82AF2F212}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7906E143-EAB9-40EE-B6F1-95E82AF2F212}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7906E143-EAB9-40EE-B6F1-95E82AF2F212}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{621484DB-F2E4-454F-82C4-A9A9FF05BF48} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
@@ -119,5 +125,6 @@ Global
 		{6E86F625-BE6A-4072-AADD-AD65542091C2} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
 		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
 		{A7363365-209B-4597-8CC3-36F386D4E2BA} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
+		{7906E143-EAB9-40EE-B6F1-95E82AF2F212} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
 	EndGlobalSection
 EndGlobal

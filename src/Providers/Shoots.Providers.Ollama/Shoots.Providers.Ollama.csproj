@@ -8,11 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
-    <ProjectReference Include="..\Shoots.Providers.Fake\Shoots.Providers.Fake.csproj" />
-    <ProjectReference Include="..\Shoots.Providers.Ollama\Shoots.Providers.Ollama.csproj" />
-    <ProjectReference Include="..\Shoots.Providers.Null\Shoots.Providers.Null.csproj" />
     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
-    <ProjectReference Include="..\..\Runtime\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

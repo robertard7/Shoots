@@ -1,16 +1,19 @@
 using Shoots.Providers.Abstractions;
 using Shoots.Providers.Fake;
+using Shoots.Providers.Ollama;
 using Shoots.Providers.Null;
 
 namespace Shoots.Providers.Bridge;
 
 public static class ProviderRegistryFactory
 {
-    public static ProviderRegistry CreateDefault()
+    public static ProviderRegistry CreateDefault(OllamaProviderSettings? ollamaSettings = null)
     {
         var registry = new ProviderRegistry();
         registry.Register("fake.local", new FakeAiProviderAdapter());
         registry.Register("null.local", NullAiProviderAdapter.Instance);
+        if (ollamaSettings is not null)
+            registry.Register("ollama.local", new OllamaAiProviderAdapter(ollamaSettings));
         return registry;
     }
 }
