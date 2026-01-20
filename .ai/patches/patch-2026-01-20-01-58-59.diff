@@ -1,0 +1,14 @@
+diff --git a/docs/VERIFICATION_POLICY.md b/docs/VERIFICATION_POLICY.md
+index c3aa1cd..a84c404 100644
+--- a/docs/VERIFICATION_POLICY.md
++++ b/docs/VERIFICATION_POLICY.md
+@@ -42,4 +42,9 @@ CI workflows must upload artifacts for both jobs:
+ - test: solution.trx
+ - determinism-guard: determinism-pass-1.trx and determinism-pass-2.trx
+ 
++## CI Visibility Check
++
++Verification requires the workflow run to be visible in GitHub Actions with both jobs present.
++Artifacts must be downloadable from the same run as evidence of execution.
++
+ The seal commit must reference the exact SHA that CI verified.
