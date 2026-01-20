@@ -46,5 +46,6 @@ CI workflows must upload artifacts for both jobs:
 
 Verification requires the workflow run to be visible in GitHub Actions with both jobs present.
 Artifacts must be downloadable from the same run as evidence of execution.
+Evidence review is a manual GitHub Actions UI step performed by an authorized reviewer.
 
 The seal commit must reference the exact SHA that CI verified.
