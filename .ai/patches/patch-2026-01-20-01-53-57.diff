@@ -1,0 +1,36 @@
+diff --git a/docs/UI_WPF_LAYOUT_DEFERRED.md b/docs/UI_WPF_LAYOUT_DEFERRED.md
+new file mode 100644
+index 0000000..85fab60
+--- /dev/null
++++ b/docs/UI_WPF_LAYOUT_DEFERRED.md
+@@ -0,0 +1,12 @@
++# Shoots – UI / WPF / Layout Integration (Deferred)
++
++This task board is intentionally deferred.
++
++## Scope Definition
++
++- UI / WPF
++- Settings screens
++- Application layout / shell
++- Visual orchestration tooling
++
++No tasks are scheduled until the runtime seal is complete and verified.
+diff --git a/src/Runtime/EXECUTION_CORE_FROZEN.md b/src/Runtime/EXECUTION_CORE_FROZEN.md
+index aca937c..2d16070 100644
+--- a/src/Runtime/EXECUTION_CORE_FROZEN.md
++++ b/src/Runtime/EXECUTION_CORE_FROZEN.md
+@@ -4,6 +4,13 @@ The runtime execution core is frozen. Mermaid-derived RouteRules are the sole ro
+ Tool selection is the only provider responsibility; tool choice never advances the graph.
+ Provider failures halt routing and are recorded in the routing trace.
+ 
++## Out of Scope for Runtime Seal
++
++- UI / WPF
++- Settings screens
++- Application layout / shell
++- Visual orchestration tooling
++
+ ## Replay Inspection
+ 
+ Replay summaries are derived from routing traces to aid inspection (provider decisions, failures, tool selections).

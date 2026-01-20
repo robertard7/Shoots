@@ -32,3 +32,4 @@
 | .ai/patches/patch-2026-01-20-01-29-53.diff | d42a382fd151559767f714b7a0272c3044fc93a0 | Phase V0-V1 (Verification) |
 | .ai/patches/patch-2026-01-20-01-35-11.diff | 7b8344e8ad71f38e39084f34c8c5e21c38f01e69 | Phase V1R-V2R (Verification) |
 | .ai/patches/patch-2026-01-20-01-49-19.diff | 23d78abd61d47f8f33417b2aa7223d1fe4df8304 | Phase V1F (Verification) |
+| .ai/patches/patch-2026-01-20-01-53-57.diff | 72ef55a0a8c89f80a7f6f780e5f638fca655b15a | Phase SC0-SC3 (Scope) |
