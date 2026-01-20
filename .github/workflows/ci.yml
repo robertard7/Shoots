@@ -26,6 +26,16 @@ jobs:
       - name: Test
         run: dotnet test Shoots.sln -c Release --no-build
 
+      - name: Test (trx)
+        run: dotnet test Shoots.sln -c Release --no-build --logger "trx;LogFileName=solution.trx"
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: |
+            **/*.trx
+
   determinism-guard:
     name: determinism-guard
     runs-on: [self-hosted, Windows, X64, Shoots]
@@ -49,3 +59,25 @@ jobs:
 
       - name: Determinism pass 2
         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "FullyQualifiedName~Trace_replays_deterministically"
+
+      - name: Determinism pass 1 (trx)
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-1.trx"
+
+      - name: Determinism pass 2 (trx)
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-2.trx"
+
+      - name: Compare determinism outputs
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -Filter "determinism-pass-*.trx" | Sort-Object FullName
+          if ($files.Count -ne 2) { throw "Expected two determinism trx files, found $($files.Count)" }
+          $hash1 = (Get-FileHash $files[0].FullName -Algorithm SHA256).Hash
+          $hash2 = (Get-FileHash $files[1].FullName -Algorithm SHA256).Hash
+          if ($hash1 -ne $hash2) { throw "Determinism TRX hashes differ: $hash1 vs $hash2" }
+
+      - name: Upload determinism artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinism-artifacts
+          path: |
+            **/determinism-pass-*.trx

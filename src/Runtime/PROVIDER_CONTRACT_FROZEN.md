@@ -20,5 +20,5 @@ Failures are reported only. Classification does not alter routing, traversal, or
 
 Seal Version: 0.1.0
 Seal Commit: PENDING
-Seal Status: Verification pending (local tests prohibited).
+Seal Status: Verification pending. (See docs/VERIFICATION_POLICY.md)
 Post-seal changes require a new task board and explicit approval.
