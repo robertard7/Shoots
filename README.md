@@ -119,6 +119,7 @@ Codex and other agents are not allowed to execute code locally or in containers.
 
 The runner is the single source of truth.
 
+
 CODEX COMMAND CONTRACT
 ----------------------
 
