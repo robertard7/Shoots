@@ -1,0 +1,44 @@
+diff --git a/docs/EXECUTION_CORE_FROZEN.md b/docs/EXECUTION_CORE_FROZEN.md
+index 3aaf344..6efd228 100644
+--- a/docs/EXECUTION_CORE_FROZEN.md
++++ b/docs/EXECUTION_CORE_FROZEN.md
+@@ -18,5 +18,5 @@ Correlation identifiers are deterministic and do not introduce new routing input
+ 
+ Seal Version: 0.1.0
+ Seal Commit: PENDING
+-Seal Status: Verification pending.
++Seal Status: Verification pending (local tests prohibited).
+ Post-seal changes require a new task board and explicit approval.
+diff --git a/docs/PROVIDER_CONTRACT_FROZEN.md b/docs/PROVIDER_CONTRACT_FROZEN.md
+index b408d06..5c4de55 100644
+--- a/docs/PROVIDER_CONTRACT_FROZEN.md
++++ b/docs/PROVIDER_CONTRACT_FROZEN.md
+@@ -20,5 +20,5 @@ Failures are reported only. Classification does not alter routing, traversal, or
+ 
+ Seal Version: 0.1.0
+ Seal Commit: PENDING
+-Seal Status: Verification pending.
++Seal Status: Verification pending (local tests prohibited).
+ Post-seal changes require a new task board and explicit approval.
+diff --git a/src/Runtime/EXECUTION_CORE_FROZEN.md b/src/Runtime/EXECUTION_CORE_FROZEN.md
+index 3aaf344..6efd228 100644
+--- a/src/Runtime/EXECUTION_CORE_FROZEN.md
++++ b/src/Runtime/EXECUTION_CORE_FROZEN.md
+@@ -18,5 +18,5 @@ Correlation identifiers are deterministic and do not introduce new routing input
+ 
+ Seal Version: 0.1.0
+ Seal Commit: PENDING
+-Seal Status: Verification pending.
++Seal Status: Verification pending (local tests prohibited).
+ Post-seal changes require a new task board and explicit approval.
+diff --git a/src/Runtime/PROVIDER_CONTRACT_FROZEN.md b/src/Runtime/PROVIDER_CONTRACT_FROZEN.md
+index b408d06..5c4de55 100644
+--- a/src/Runtime/PROVIDER_CONTRACT_FROZEN.md
++++ b/src/Runtime/PROVIDER_CONTRACT_FROZEN.md
+@@ -20,5 +20,5 @@ Failures are reported only. Classification does not alter routing, traversal, or
+ 
+ Seal Version: 0.1.0
+ Seal Commit: PENDING
+-Seal Status: Verification pending.
++Seal Status: Verification pending (local tests prohibited).
+ Post-seal changes require a new task board and explicit approval.
