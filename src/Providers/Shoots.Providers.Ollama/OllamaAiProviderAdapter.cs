@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Providers.Abstractions;
@@ -11,13 +10,13 @@ public sealed class OllamaAiProviderAdapter : IAiProviderAdapter
     private readonly OllamaProviderSettings _settings;
     private readonly OllamaPromptBuilder _promptBuilder;
     private readonly OllamaOutputParser _parser;
-    private readonly OllamaHttpClient _client;
+    private readonly OllamaStubClient _client;
 
     public OllamaAiProviderAdapter(
         OllamaProviderSettings settings,
         OllamaPromptBuilder? promptBuilder = null,
         OllamaOutputParser? parser = null,
-        OllamaHttpClient? client = null)
+        OllamaStubClient? client = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         if (string.IsNullOrWhiteSpace(_settings.Endpoint))
@@ -27,7 +26,7 @@ public sealed class OllamaAiProviderAdapter : IAiProviderAdapter
 
         _promptBuilder = promptBuilder ?? new OllamaPromptBuilder();
         _parser = parser ?? new OllamaOutputParser();
-        _client = client ?? new OllamaHttpClient("{\"toolId\":\"\",\"args\":{}}");
+        _client = client ?? new OllamaStubClient("{\"toolId\":\"\",\"args\":{}}");
     }
 
     public ToolSelectionDecision? RequestDecision(

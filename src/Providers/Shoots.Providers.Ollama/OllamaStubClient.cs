@@ -2,11 +2,11 @@ using System;
 
 namespace Shoots.Providers.Ollama;
 
-public sealed class OllamaHttpClient
+public sealed class OllamaStubClient
 {
     private readonly string _stubResponse;
 
-    public OllamaHttpClient(string stubResponse)
+    public OllamaStubClient(string stubResponse)
     {
         if (string.IsNullOrWhiteSpace(stubResponse))
             throw new ArgumentException("stub response is required", nameof(stubResponse));

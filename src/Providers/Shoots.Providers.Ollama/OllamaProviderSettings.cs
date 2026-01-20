@@ -1,5 +1,8 @@
 namespace Shoots.Providers.Ollama;
 
+/// <summary>
+/// Validated runtime settings for the Ollama provider.
+/// </summary>
 public sealed record OllamaProviderSettings(
     string Endpoint,
     string Model);
