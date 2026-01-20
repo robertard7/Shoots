@@ -17,5 +17,5 @@ Correlation identifiers are deterministic and do not introduce new routing input
 ## Runtime Seal
 
 Seal Version: 0.1.0
-Seal Commit: 8310b79acf8e892afe7d9b5c0f158a11be0379cc
+Seal Commit: PENDING
 Post-seal changes require a new task board and explicit approval.
