@@ -1,0 +1,160 @@
+diff --git a/src/Runtime/EXECUTION_CORE_FROZEN.md b/src/Runtime/EXECUTION_CORE_FROZEN.md
+index 5b85cb1..08fb906 100644
+--- a/src/Runtime/EXECUTION_CORE_FROZEN.md
++++ b/src/Runtime/EXECUTION_CORE_FROZEN.md
+@@ -8,3 +8,8 @@ Provider failures halt routing and are recorded in the routing trace.
+ 
+ Replay summaries are derived from routing traces to aid inspection (provider decisions, failures, tool selections).
+ Summaries are read-only views that do not affect determinism, routing, or provider behavior.
++
++## Error Correlation
++
++Runtime errors include derived correlation identifiers that match trace entries.
++Correlation identifiers are deterministic and do not introduce new routing inputs.
+diff --git a/src/Runtime/ROUTING_AUTHORITY_FROZEN.md b/src/Runtime/ROUTING_AUTHORITY_FROZEN.md
+index 08a1f63..9527e4e 100644
+--- a/src/Runtime/ROUTING_AUTHORITY_FROZEN.md
++++ b/src/Runtime/ROUTING_AUTHORITY_FROZEN.md
+@@ -3,3 +3,9 @@
+ Mermaid graph definitions compile into RouteRules that fully govern routing advancement.
+ RouteGate is the sole authority for node transitions; provider/tool output cannot select the next node.
+ Routing determinism is enforced via graph hashes and intent tokens.
++
++## Configuration Boundaries
++
++The runtime core does not read configuration during routing. Configuration may only affect
++non-authoritative concerns such as logging, provider enablement, and timeouts outside the
++routing loop. No configuration value can alter node choice, advancement, or intent tokens.
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/RuntimeError.cs b/src/Runtime/Shoots.Runtime.Abstractions/RuntimeError.cs
+index 7f95494..ea97a5b 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/RuntimeError.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/RuntimeError.cs
+@@ -1,24 +1,43 @@
+ using System;
++using System.Text.Json.Serialization;
+ 
+ namespace Shoots.Runtime.Abstractions;
+-
++
+ public sealed record RuntimeError(
+     string Code,
+     string Message,
+     object? Details = null)
+ {
++    public string? CorrelationId { get; init; }
++
++    [JsonIgnore]
++    public Exception? Cause { get; init; }
++
+     public RuntimeError
+     {
+         if (!RuntimeErrorCatalog.IsKnown(Code))
+             throw new ArgumentException($"Runtime error code '{Code}' is not registered.", nameof(Code));
+     }
+ 
+-    public static RuntimeError UnknownCommand(string commandId) =>
+-        new("unknown_command", $"Unknown command '{commandId}'");
+-
+-    public static RuntimeError InvalidArguments(string message, object? details = null) =>
+-        new("invalid_arguments", message, details);
+-
+-    public static RuntimeError Internal(string message, object? details = null) =>
+-        new("internal_error", message, details);
+-}
++    public static RuntimeError UnknownCommand(string commandId) =>
++        new("unknown_command", $"Unknown command '{commandId}'");
++
++    public static RuntimeError InvalidArguments(string message, object? details = null) =>
++        new("invalid_arguments", message, details);
++
++    public static RuntimeError Internal(string message, object? details = null) =>
++        new("internal_error", message, details);
++
++    public static RuntimeError Internal(string message, Exception cause) =>
++        new("internal_error", message) { Cause = cause };
++
++    public static string CreateCorrelationId(int tick, string code)
++    {
++        if (tick < 0)
++            throw new ArgumentOutOfRangeException(nameof(tick));
++        if (string.IsNullOrWhiteSpace(code))
++            throw new ArgumentException("code is required", nameof(code));
++
++        return $"{code}:{tick}";
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+index 47a0397..ef49f61 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+@@ -254,7 +254,7 @@ public sealed class RoutingLoop
+     private static string BuildProviderDecisionDetail(RouteIntentToken intentToken)
+     {
+         var decisionId = RouteIntentTokenFactory.ComputeTokenHash(intentToken);
+-        return $"decision.id={decisionId}|provider.invoked";
++        return $"decision.id={decisionId}|intent={decisionId}|provider.invoked";
+     }
+ 
+     private static string BuildProviderFailureDetail(ProviderFailure failure)
+diff --git a/src/Runtime/Shoots.Runtime.Core/RoutingTraceBuilder.cs b/src/Runtime/Shoots.Runtime.Core/RoutingTraceBuilder.cs
+index 73528ee..f7b38a1 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RoutingTraceBuilder.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RoutingTraceBuilder.cs
+@@ -46,6 +46,31 @@ internal sealed class RoutingTraceBuilder
+         RouteStep? step = null,
+         RuntimeError? error = null)
+     {
+-        _entries.Add(new RoutingTraceEntry(_nextTick++, kind, detail, fromNodeId, toNodeId, decisionSource, state, step, error));
++        var tick = _nextTick++;
++        if (error is not null)
++        {
++            var correlationId = string.IsNullOrWhiteSpace(error.CorrelationId)
++                ? RuntimeError.CreateCorrelationId(tick, error.Code)
++                : error.CorrelationId;
++            if (!string.Equals(error.CorrelationId, correlationId, StringComparison.Ordinal))
++                error = error with { CorrelationId = correlationId };
++            detail = EnsureCorrelationDetail(detail, correlationId);
++        }
++
++        _entries.Add(new RoutingTraceEntry(tick, kind, detail, fromNodeId, toNodeId, decisionSource, state, step, error));
++    }
++
++    private static string EnsureCorrelationDetail(string? detail, string correlationId)
++    {
++        if (string.IsNullOrWhiteSpace(correlationId))
++            return detail ?? string.Empty;
++
++        if (detail is null)
++            return $"correlation={correlationId}";
++
++        if (detail.Contains("correlation=", StringComparison.Ordinal))
++            return detail;
++
++        return $"{detail}|correlation={correlationId}";
+     }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Core/RuntimeEngine.cs b/src/Runtime/Shoots.Runtime.Core/RuntimeEngine.cs
+index ed23934..0937c2f 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RuntimeEngine.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RuntimeEngine.cs
+@@ -86,13 +86,13 @@ public sealed class RuntimeEngine :
+             _narrator.OnError(err);
+             return RuntimeResult.Fail(err);
+         }
+-        catch (Exception ex)
+-        {
+-            var err = RuntimeError.Internal("Unhandled exception", ex.ToString());
+-            _narrator.OnError(err);
+-            return RuntimeResult.Fail(err);
+-        }
+-    }
++        catch (Exception ex)
++        {
++            var err = RuntimeError.Internal("Unhandled exception", ex);
++            _narrator.OnError(err);
++            return RuntimeResult.Fail(err);
++        }
++    }
+ 
+     public IReadOnlyList<RuntimeCommandSpec> GetAllCommands() =>
+         _index.Values

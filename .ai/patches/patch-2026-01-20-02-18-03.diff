@@ -1,0 +1,11 @@
+diff --git a/docs/VERIFICATION_POLICY.md b/docs/VERIFICATION_POLICY.md
+index a84c404..0384f61 100644
+--- a/docs/VERIFICATION_POLICY.md
++++ b/docs/VERIFICATION_POLICY.md
+@@ -46,5 +46,6 @@ CI workflows must upload artifacts for both jobs:
+ 
+ Verification requires the workflow run to be visible in GitHub Actions with both jobs present.
+ Artifacts must be downloadable from the same run as evidence of execution.
++Evidence review is a manual GitHub Actions UI step performed by an authorized reviewer.
+ 
+ The seal commit must reference the exact SHA that CI verified.

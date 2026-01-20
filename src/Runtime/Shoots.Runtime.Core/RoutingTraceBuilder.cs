@@ -46,6 +46,31 @@ internal sealed class RoutingTraceBuilder
         RouteStep? step = null,
         RuntimeError? error = null)
     {
-        _entries.Add(new RoutingTraceEntry(_nextTick++, kind, detail, fromNodeId, toNodeId, decisionSource, state, step, error));
+        var tick = _nextTick++;
+        if (error is not null)
+        {
+            var correlationId = string.IsNullOrWhiteSpace(error.CorrelationId)
+                ? RuntimeError.CreateCorrelationId(tick, error.Code)
+                : error.CorrelationId;
+            if (!string.Equals(error.CorrelationId, correlationId, StringComparison.Ordinal))
+                error = error with { CorrelationId = correlationId };
+            detail = EnsureCorrelationDetail(detail, correlationId);
+        }
+
+        _entries.Add(new RoutingTraceEntry(tick, kind, detail, fromNodeId, toNodeId, decisionSource, state, step, error));
+    }
+
+    private static string EnsureCorrelationDetail(string? detail, string correlationId)
+    {
+        if (string.IsNullOrWhiteSpace(correlationId))
+            return detail ?? string.Empty;
+
+        if (detail is null)
+            return $"correlation={correlationId}";
+
+        if (detail.Contains("correlation=", StringComparison.Ordinal))
+            return detail;
+
+        return $"{detail}|correlation={correlationId}";
     }
 }

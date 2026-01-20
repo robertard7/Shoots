@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 
@@ -123,7 +124,7 @@ internal sealed class TracingRuntimeNarrator : IRuntimeNarrator
     {
         var nextNodes = allowedNextNodes.Count == 0
             ? string.Empty
-            : string.Join(",", allowedNextNodes);
+            : string.Join(",", allowedNextNodes.OrderBy(node => node, StringComparer.Ordinal));
         var tokenHash = RouteIntentTokenFactory.ComputeTokenHash(intentToken);
         var detail = $"node={nodeId}|intent={tokenHash}|next={nextNodes}";
         return selectedNextNodeId is null ? detail : $"{detail}|selected={selectedNextNodeId}";

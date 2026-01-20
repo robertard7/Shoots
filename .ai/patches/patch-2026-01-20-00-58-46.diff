@@ -1,0 +1,30 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 3ff29d4..e6bcad1 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -6,6 +6,7 @@ on:
+ 
+ jobs:
+   test:
++    name: test
+     runs-on: [self-hosted, Windows, X64, Shoots]
+     steps:
+       - name: Checkout
+@@ -26,6 +27,7 @@ jobs:
+         run: dotnet test Shoots.sln -c Release --no-build
+ 
+   determinism-guard:
++    name: determinism-guard
+     runs-on: [self-hosted, Windows, X64, Shoots]
+     steps:
+       - name: Checkout
+@@ -43,7 +45,7 @@ jobs:
+         run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore
+ 
+       - name: Determinism pass 1
+-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "Trace_replays_deterministically"
++        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "FullyQualifiedName~Trace_replays_deterministically"
+ 
+       - name: Determinism pass 2
+-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "Trace_replays_deterministically"
++        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "FullyQualifiedName~Trace_replays_deterministically"

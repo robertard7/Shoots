@@ -76,4 +76,40 @@ public sealed class OllamaAiProviderAdapterTests
         Assert.Equal(first!.ToolId, second!.ToolId);
         Assert.Equal(first.Bindings.Count, second.Bindings.Count);
     }
+
+    [Fact]
+    public void Malformed_output_throws_format_exception()
+    {
+        var stub = new OllamaStubClient("not-json");
+        var adapter = new OllamaAiProviderAdapter(
+            new OllamaProviderSettings("http://localhost:11434", "stub"),
+            client: stub);
+        var workOrder = new WorkOrder(
+            new WorkOrderId("wo-ollama"),
+            "Original request.",
+            "Ollama provider.",
+            new List<string>(),
+            new List<string>());
+        var routeStep = new RouteStep(
+            "select",
+            "Select tool.",
+            "select",
+            RouteIntent.SelectTool,
+            DecisionOwner.Ai,
+            workOrder.Id);
+        var catalog = new ToolCatalogSnapshot(
+            "catalog",
+            new[]
+            {
+                new ToolSpec(
+                    new ToolId("tools.sample"),
+                    "Sample.",
+                    new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+                    new List<ToolInputSpec>(),
+                    new List<ToolOutputSpec>(),
+                    Array.Empty<string>())
+            });
+
+        Assert.Throws<FormatException>(() => adapter.RequestDecision(workOrder, routeStep, "graph", "catalog", catalog));
+    }
 }

@@ -87,8 +87,10 @@ public sealed class RoutingLoop
                 }
                 catch (Exception ex)
                 {
-                    var error = new RuntimeError("internal_error", "Provider failure.", ex.Message);
-                    _traceBuilder.Add(RoutingTraceEventKind.Error, "provider.failure", state: State, step: step, error: error);
+                    var failure = ProviderFailure.FromException(ex);
+                    var error = new RuntimeError("internal_error", "Provider failure.", failure.Message);
+                    var detail = BuildProviderFailureDetail(failure);
+                    _traceBuilder.Add(RoutingTraceEventKind.Error, detail, state: State, step: step, error: error);
                     State = State with { Status = RoutingStatus.Halted };
                     _tracingNarrator.OnHalted(State, error);
                     break;
@@ -162,7 +164,8 @@ public sealed class RoutingLoop
             .OrderBy(spec => spec.ToolId.Value, StringComparer.Ordinal)
             .ToArray();
         var catalog = new ToolCatalogSnapshot(_catalogHash, snapshot);
-        _traceBuilder.Add(RoutingTraceEventKind.DecisionRequired, "provider.invoked", state: State, step: step);
+        var decisionDetail = BuildProviderDecisionDetail(State.IntentToken);
+        _traceBuilder.Add(RoutingTraceEventKind.DecisionRequired, decisionDetail, state: State, step: step);
         var request = new AiDecisionRequest(
             _plan.Request.WorkOrder!,
             step,
@@ -248,6 +251,18 @@ public sealed class RoutingLoop
         return "tool_missing";
     }
 
+    private static string BuildProviderDecisionDetail(RouteIntentToken intentToken)
+    {
+        var decisionId = RouteIntentTokenFactory.ComputeTokenHash(intentToken);
+        return $"decision.id={decisionId}|intent={decisionId}|provider.invoked";
+    }
+
+    private static string BuildProviderFailureDetail(ProviderFailure failure)
+    {
+        var provider = string.IsNullOrWhiteSpace(failure.ProviderId) ? "unknown" : failure.ProviderId;
+        return $"provider.failure|kind={failure.Kind}|provider={provider}";
+    }
+
     private static ExecutionFinalStatus ResolveFinalStatus(RoutingState state)
     {
         return state.Status switch
@@ -257,6 +272,7 @@ public sealed class RoutingLoop
             _ => ExecutionFinalStatus.Aborted
         };
     }
+
     private static RouteStep RequireRouteStep(BuildPlan plan, RoutingState state)
     {
         if (plan.Steps is null || plan.Steps.Count == 0)

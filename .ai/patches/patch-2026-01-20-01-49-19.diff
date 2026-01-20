@@ -1,0 +1,13 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index a2cd8a3..620b389 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -31,7 +31,7 @@ jobs:
+         with:
+           name: test-artifacts
+           path: |
+-            **/*.trx
++            **/solution.trx
+ 
+   determinism-guard:
+     name: determinism-guard
