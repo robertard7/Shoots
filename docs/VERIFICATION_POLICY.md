@@ -31,15 +31,15 @@ Verification requires GitHub Actions runs on the Windows self-hosted runner:
 A seal is VERIFIED (CI) only when all conditions are met:
 
 - Both jobs (test, determinism-guard) succeed on the same commit.
-- Determinism guard passes twice with identical deterministic outputs.
-- CI artifacts include full test logs (console output) and test result files (TRX).
+- Determinism guard runs the same replay test twice and both passes succeed.
+- CI artifacts include test result files (TRX) for both jobs.
 - Artifacts are retained per CI configuration.
 
 ## Evidence Retention
 
 CI workflows must upload artifacts for both jobs:
 
-- test: full solution test output
-- determinism-guard: both determinism pass outputs
+- test: solution.trx
+- determinism-guard: determinism-pass-1.trx and determinism-pass-2.trx
 
 The seal commit must reference the exact SHA that CI verified.
