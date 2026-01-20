@@ -254,7 +254,7 @@ public sealed class RoutingLoop
     private static string BuildProviderDecisionDetail(RouteIntentToken intentToken)
     {
         var decisionId = RouteIntentTokenFactory.ComputeTokenHash(intentToken);
-        return $"decision.id={decisionId}|provider.invoked";
+        return $"decision.id={decisionId}|intent={decisionId}|provider.invoked";
     }
 
     private static string BuildProviderFailureDetail(ProviderFailure failure)

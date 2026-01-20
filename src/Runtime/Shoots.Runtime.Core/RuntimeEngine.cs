@@ -88,7 +88,7 @@ public sealed class RuntimeEngine :
         }
         catch (Exception ex)
         {
-            var err = RuntimeError.Internal("Unhandled exception", ex.ToString());
+            var err = RuntimeError.Internal("Unhandled exception", ex);
             _narrator.OnError(err);
             return RuntimeResult.Fail(err);
         }

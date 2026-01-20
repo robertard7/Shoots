@@ -8,3 +8,8 @@ Provider failures halt routing and are recorded in the routing trace.
 
 Replay summaries are derived from routing traces to aid inspection (provider decisions, failures, tool selections).
 Summaries are read-only views that do not affect determinism, routing, or provider behavior.
+
+## Error Correlation
+
+Runtime errors include derived correlation identifiers that match trace entries.
+Correlation identifiers are deterministic and do not introduce new routing inputs.
