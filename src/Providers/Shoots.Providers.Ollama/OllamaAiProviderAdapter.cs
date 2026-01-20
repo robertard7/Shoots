@@ -36,10 +36,11 @@ public sealed class OllamaAiProviderAdapter : IAiProviderAdapter
         string catalogHash,
         ToolCatalogSnapshot catalog)
     {
-        if (routeStep is null)
-            throw new ArgumentNullException(nameof(routeStep));
-        if (catalog is null)
-            throw new ArgumentNullException(nameof(catalog));
+        ProviderGuards.AgainstNull(workOrder, nameof(workOrder));
+        ProviderGuards.AgainstNull(routeStep, nameof(routeStep));
+        ProviderGuards.AgainstNullOrWhiteSpace(graphHash, nameof(graphHash));
+        ProviderGuards.AgainstNullOrWhiteSpace(catalogHash, nameof(catalogHash));
+        ProviderGuards.RequireCatalog(catalog);
 
         if (routeStep.Intent != RouteIntent.SelectTool || routeStep.Owner != DecisionOwner.Ai)
             throw new InvalidOperationException("Ollama provider invoked outside SelectTool.");

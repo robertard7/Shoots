@@ -28,11 +28,19 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
         if (adapter is null)
             throw new InvalidOperationException($"Provider '{_providerId}' is not registered.");
 
-        return adapter.RequestDecision(
-            request.WorkOrder,
-            request.RouteStep,
-            request.GraphHash,
-            request.CatalogHash,
-            request.Catalog);
+        try
+        {
+            return adapter.RequestDecision(
+                request.WorkOrder,
+                request.RouteStep,
+                request.GraphHash,
+                request.CatalogHash,
+                request.Catalog);
+        }
+        catch (Exception ex) when (ex is not ProviderFailureException)
+        {
+            var failure = ProviderFailure.FromException(ex, _providerId);
+            throw new ProviderFailureException(failure, ex);
+        }
     }
 }
