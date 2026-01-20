@@ -20,4 +20,5 @@ Failures are reported only. Classification does not alter routing, traversal, or
 
 Seal Version: 0.1.0
 Seal Commit: PENDING
+Seal Status: Verification pending.
 Post-seal changes require a new task board and explicit approval.
