@@ -11,12 +11,18 @@ namespace Shoots.Contracts.Core;
 /// </summary>
 /// <param name="PlanId">Derived hash identifier for the plan (deterministic).</param>
 /// <param name="Request">Input request used to derive the plan.</param>
+/// <param name="GraphStructureHash">Deterministic hash of the Mermaid graph structure.</param>
+/// <param name="NodeSetHash">Deterministic hash of the Mermaid node set.</param>
+/// <param name="EdgeSetHash">Deterministic hash of the Mermaid edge set.</param>
 /// <param name="Authority">Immutable authority assigned at planning time.</param>
 /// <param name="Steps">Ordered steps derived deterministically from the request.</param>
 /// <param name="Artifacts">Ordered artifacts expected from executing the plan.</param>
 public sealed record BuildPlan(
     string PlanId,
     BuildRequest Request,
+    string GraphStructureHash,
+    string NodeSetHash,
+    string EdgeSetHash,
     DelegationAuthority Authority,
     IReadOnlyList<BuildStep> Steps,
     IReadOnlyList<BuildArtifact> Artifacts,

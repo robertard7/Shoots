@@ -143,7 +143,7 @@ for (var i = 0; i < args.Length; i++)
             return 1;
         }
 
-        routeRules.Add(new RouteRule(parts[0], intent, owner, parts[3]));
+        routeRules.Add(new RouteRule(parts[0], intent, owner, parts[3], MermaidNodeKind.Route, Array.Empty<string>()));
         continue;
     }
 

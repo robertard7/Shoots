@@ -13,7 +13,7 @@ namespace Shoots.Runtime.Abstractions;
 /// - request.WorkOrder fields
 /// - authority.ProviderId, authority.Kind, authority.PolicyId, authority.AllowsDelegation
 /// - request.Args ordered by key (case-insensitive), normalized key/value tokens (including plan.graph)
-/// - request.RouteRules ordered by node id (including allowed output kind)
+/// - request.RouteRules ordered by node id (including allowed output kind, node kind, and allowed next nodes)
 /// - steps ordered as provided (id + description, plus AI prompt/schema when present)
 /// - tool steps include tool id + normalized input bindings + declared outputs
 /// - route steps include node id + intent + owner + work order id
@@ -97,8 +97,19 @@ public static class BuildPlanHasher
               .Append(rule.Intent.ToString())
               .Append(':')
               .Append(rule.Owner.ToString())
+              .Append(':')
+              .Append(rule.NodeKind.ToString())
               .Append('=')
               .Append(NormalizeToken(rule.AllowedOutputKind));
+
+            foreach (var nextNode in rule.AllowedNextNodes
+                         .OrderBy(node => node, StringComparer.Ordinal))
+            {
+                sb.Append("|route.edge=")
+                  .Append(NormalizeToken(rule.NodeId))
+                  .Append("->")
+                  .Append(NormalizeToken(nextNode));
+            }
         }
 
         foreach (var step in steps)

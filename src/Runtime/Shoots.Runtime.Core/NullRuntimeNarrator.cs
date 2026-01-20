@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 
@@ -42,22 +43,63 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
         if (workOrder is null) throw new ArgumentNullException(nameof(workOrder));
     }
 
-    public void OnRouteEntered(RoutingState state, RouteStep step)
+    public void OnRouteEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes)
     {
         if (state is null) throw new ArgumentNullException(nameof(state));
         if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
     }
 
-    public void OnDecisionRequired(RoutingState state, RouteStep step)
+    public void OnNodeEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes)
     {
         if (state is null) throw new ArgumentNullException(nameof(state));
         if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
     }
 
-    public void OnDecisionAccepted(RoutingState state, RouteStep step)
+    public void OnDecisionRequired(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes)
     {
         if (state is null) throw new ArgumentNullException(nameof(state));
         if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
+    }
+
+    public void OnDecisionAccepted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
+    }
+
+    public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
+        if (nextNodeId is null) throw new ArgumentNullException(nameof(nextNodeId));
+    }
+
+    public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
+        if (nextNodeId is null) throw new ArgumentNullException(nameof(nextNodeId));
+    }
+
+    public void OnNodeHalted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, RuntimeError error)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
+        if (error is null) throw new ArgumentNullException(nameof(error));
     }
 
     public void OnHalted(RoutingState state, RuntimeError error)
@@ -66,9 +108,11 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
         if (error is null) throw new ArgumentNullException(nameof(error));
     }
 
-    public void OnCompleted(RoutingState state, RouteStep step)
+    public void OnCompleted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes)
     {
         if (state is null) throw new ArgumentNullException(nameof(state));
         if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
     }
 }

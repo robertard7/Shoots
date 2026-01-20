@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Shoots.Contracts.Core;
 
 namespace Shoots.Runtime.Abstractions;
@@ -8,8 +7,8 @@ namespace Shoots.Runtime.Abstractions;
 /// </summary>
 public sealed record AiDecisionRequest(
     WorkOrder WorkOrder,
-    RouteStep Step,
-    RoutingState State,
+    RouteStep RouteStep,
+    string GraphHash,
     string CatalogHash,
-    IReadOnlyList<RoutingTraceEventKind> TraceSummary
+    ToolCatalogSnapshot Catalog
 );

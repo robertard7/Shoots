@@ -4,9 +4,14 @@ namespace Shoots.Providers.Abstractions;
 
 public interface IAiProviderAdapter
 {
+    /// <summary>
+    /// Request a deterministic tool selection. Providers do not control routing and returning
+    /// a tool does not advance the graph.
+    /// </summary>
     ToolSelectionDecision? RequestDecision(
         WorkOrder workOrder,
-        RouteStep step,
+        RouteStep routeStep,
+        string graphHash,
         string catalogHash,
-        string routingTraceSummary);
+        ToolCatalogSnapshot catalog);
 }

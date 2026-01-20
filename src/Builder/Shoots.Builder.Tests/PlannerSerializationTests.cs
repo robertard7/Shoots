@@ -23,16 +23,16 @@ public sealed class PlannerSerializationTests
         var planner = new DeterministicBuildPlanner(services, new StubDelegationPolicy());
         var request = CreateRequest(
             " core.ping ",
-            "graph TD; select --> validate --> review --> terminate",
+            "graph TD; select:::start --> validate --> review --> terminate:::terminal",
             new Dictionary<string, object?>
             {
                 ["b"] = "2",
                 ["a"] = "1"
             },
-            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
-            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination"));
+            new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Route, Array.Empty<string>()),
+            new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Route, Array.Empty<string>()));
 
         var plan = planner.Plan(request);
         var planText = BuildPlanRenderer.RenderText(plan);

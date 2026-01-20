@@ -27,10 +27,10 @@ public sealed class BuilderContractTests
             },
             RouteRules: new[]
             {
-                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection"),
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation"),
-                new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review"),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination")
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Route, Array.Empty<string>()),
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Route, Array.Empty<string>()),
+                new RouteRule("review", RouteIntent.Review, DecisionOwner.Human, "review", MermaidNodeKind.Route, Array.Empty<string>()),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Route, Array.Empty<string>())
             }
         );
 
@@ -162,6 +162,9 @@ public sealed class BuilderContractTests
             return new BuildPlan(
                 PlanId: "stub-plan",
                 Request: request,
+                GraphStructureHash: HashTools.ComputeSha256Hash("graph"),
+                NodeSetHash: HashTools.ComputeSha256Hash("nodes"),
+                EdgeSetHash: HashTools.ComputeSha256Hash("edges"),
                 Authority: new DelegationAuthority(
                     ProviderId: new ProviderId("local"),
                     Kind: ProviderKind.Local,

@@ -23,17 +23,10 @@ public sealed class BuildPlanSerializationToolResultTests
             new Dictionary<string, object?> { ["value"] = "alpha" },
             true);
 
-        var plan = new BuildPlan(
-            "plan",
+        var plan = BuildPlanTestFactory.CreatePlan(
             request,
-            new DelegationAuthority(
-                ProviderId: new ProviderId("local"),
-                Kind: ProviderKind.Local,
-                PolicyId: "local-only",
-                AllowsDelegation: false),
             new BuildStep[] { new BuildStep("step-1", "Step") },
-            new[] { new BuildArtifact("plan.json", "Plan payload.") },
-            toolResult);
+            toolResult: toolResult);
 
         var json = BuildPlanRenderer.RenderJson(plan);
         var roundTrip = JsonSerializer.Deserialize<BuildPlan>(json);

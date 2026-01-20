@@ -1,0 +1,101 @@
+diff --git a/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
+index a699af1..db4a24c 100644
+--- a/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
++++ b/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
+@@ -1,4 +1,3 @@
+-using System.Collections.Generic;
+ using Shoots.Contracts.Core;
+ 
+ namespace Shoots.Providers.Abstractions;
+@@ -10,6 +9,5 @@ public interface IAiProviderAdapter
+         RouteStep routeStep,
+         string graphHash,
+         string catalogHash,
+-        IReadOnlyList<string> allowedNextNodeIds,
+         ToolCatalogSnapshot catalog);
+ }
+diff --git a/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs b/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs
+index 56ce5b2..d98d80d 100644
+--- a/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs
++++ b/src/Providers/Shoots.Providers.Bridge/BridgeAiDecisionProvider.cs
+@@ -33,7 +33,6 @@ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
+             request.RouteStep,
+             request.GraphHash,
+             request.CatalogHash,
+-            request.AllowedNextNodeIds,
+             request.Catalog);
+     }
+ }
+diff --git a/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs
+index e51abf7..76f9937 100644
+--- a/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs
++++ b/src/Providers/Shoots.Providers.Fake/FakeAiProviderAdapter.cs
+@@ -11,12 +11,8 @@ public sealed class FakeAiProviderAdapter : IAiProviderAdapter
+         RouteStep routeStep,
+         string graphHash,
+         string catalogHash,
+-        IReadOnlyList<string> allowedNextNodeIds,
+         ToolCatalogSnapshot catalog)
+     {
+-        if (routeStep.Intent != RouteIntent.SelectTool)
+-            return null;
+-
+         var bindings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+         return new ToolSelectionDecision(new ToolId("filesystem.read"), bindings);
+     }
+diff --git a/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
+index 6e8e00c..3afefe2 100644
+--- a/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
++++ b/src/Providers/Shoots.Providers.Null/NullAiProviderAdapter.cs
+@@ -1,5 +1,4 @@
+ using System;
+-using System.Collections.Generic;
+ using Shoots.Contracts.Core;
+ using Shoots.Providers.Abstractions;
+ 
+@@ -14,7 +13,6 @@ public sealed class NullAiProviderAdapter : IAiProviderAdapter
+         RouteStep routeStep,
+         string graphHash,
+         string catalogHash,
+-        IReadOnlyList<string> allowedNextNodeIds,
+         ToolCatalogSnapshot catalog)
+     {
+         throw new InvalidOperationException("Null provider invoked");
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/AiDecisionRequest.cs b/src/Runtime/Shoots.Runtime.Abstractions/AiDecisionRequest.cs
+index 7f21bcd..f2a7ac2 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/AiDecisionRequest.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/AiDecisionRequest.cs
+@@ -1,4 +1,3 @@
+-using System.Collections.Generic;
+ using Shoots.Contracts.Core;
+ 
+ namespace Shoots.Runtime.Abstractions;
+@@ -11,6 +10,5 @@ public sealed record AiDecisionRequest(
+     RouteStep RouteStep,
+     string GraphHash,
+     string CatalogHash,
+-    IReadOnlyList<string> AllowedNextNodeIds,
+     ToolCatalogSnapshot Catalog
+ );
+diff --git a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+index 15d30fb..8384d38 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+@@ -142,9 +142,6 @@ public sealed class RoutingLoop
+         if (State.Status != RoutingStatus.Waiting)
+             return null;
+ 
+-        var rule = _plan.Request.RouteRules
+-            .FirstOrDefault(candidate => string.Equals(candidate.NodeId, step.NodeId, StringComparison.Ordinal));
+-        var allowedNextNodes = rule?.AllowedNextNodes ?? Array.Empty<string>();
+         var snapshot = _registry.GetSnapshot()
+             .Select(entry => entry.Spec)
+             .OrderBy(spec => spec.ToolId.Value, StringComparer.Ordinal)
+@@ -155,7 +152,6 @@ public sealed class RoutingLoop
+             step,
+             _plan.GraphStructureHash,
+             _catalogHash,
+-            allowedNextNodes,
+             catalog);
+         return _aiDecisionProvider.RequestDecision(request);
+     }

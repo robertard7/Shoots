@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
+using Shoots.Providers.Bridge;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Runtime.Core;
@@ -65,7 +66,7 @@ public sealed class RuntimeOrchestrator
     public static ExecutionEnvelope Run(
         BuildPlan plan,
         IToolRegistry registry,
-        IAiDecisionProvider aiDecisionProvider,
+        IAiDecisionProvider? aiDecisionProvider = null,
         IRuntimePersistence? persistence = null,
         IRuntimeNarrator? narrator = null)
     {
@@ -73,12 +74,12 @@ public sealed class RuntimeOrchestrator
             throw new ArgumentNullException(nameof(plan));
         if (registry is null)
             throw new ArgumentNullException(nameof(registry));
-        if (aiDecisionProvider is null)
-            throw new ArgumentNullException(nameof(aiDecisionProvider));
+        var resolvedAiDecisionProvider = aiDecisionProvider
+            ?? new BridgeAiDecisionProvider(ProviderRegistryFactory.CreateDefault(), "fake.local");
 
         var orchestrator = new RuntimeOrchestrator(
             registry,
-            aiDecisionProvider,
+            resolvedAiDecisionProvider,
             narrator ?? NullRuntimeNarrator.Instance,
             new DeterministicToolExecutor(registry),
             persistence);
@@ -115,6 +116,112 @@ public sealed class RuntimeOrchestrator
 
         var resumeState = ResolveLastNonTerminalState(trace) ?? lastState ?? RoutingState.CreateInitial(trace.Plan);
 
+        if (string.IsNullOrWhiteSpace(resumeState.IntentToken.WorkOrderId.Value) ||
+            string.IsNullOrWhiteSpace(resumeState.IntentToken.CurrentNodeId) ||
+            resumeState.IntentToken.AllowedNextNodeIds is null ||
+            string.IsNullOrWhiteSpace(resumeState.IntentToken.GraphStructureHash))
+        {
+            return HaltFromTrace(trace, registry, toolResults, resumeState, "route_intent_token_missing", "Intent token is required.");
+        }
+
+        if (trace.Plan.Request.WorkOrder is null)
+            return HaltFromTrace(trace, registry, toolResults, resumeState, "route_workorder_missing", "Work order is required for routing.");
+
+        if (string.IsNullOrWhiteSpace(trace.Plan.GraphStructureHash) ||
+            string.IsNullOrWhiteSpace(trace.Plan.NodeSetHash) ||
+            string.IsNullOrWhiteSpace(trace.Plan.EdgeSetHash))
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_graph_hash_missing",
+                "Graph hashes are required to resume routing.");
+        }
+
+        if (!string.Equals(resumeState.IntentToken.GraphStructureHash, trace.Plan.GraphStructureHash, StringComparison.Ordinal))
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_graph_hash_mismatch",
+                "Graph hash mismatch.");
+        }
+
+        if (string.IsNullOrWhiteSpace(resumeState.CurrentNodeId))
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_node_missing",
+                "Current node id is required to resume routing.");
+        }
+
+        var resumeStep = ResolveRouteStep(trace.Plan, resumeState.CurrentNodeId);
+        if (resumeStep is null)
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_node_missing",
+                $"Route node '{resumeState.CurrentNodeId}' is not present in the plan.");
+        }
+        var resumeRule = trace.Plan.Request.RouteRules
+            .FirstOrDefault(rule => string.Equals(rule.NodeId, resumeStep.NodeId, StringComparison.Ordinal));
+        if (resumeRule is null)
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_rule_missing",
+                "Route rule is missing for the current node.");
+        }
+
+        var expectedToken = RouteIntentTokenFactory.Create(trace.Plan, resumeRule);
+        var expectedHash = RouteIntentTokenFactory.ComputeTokenHash(expectedToken);
+        var actualHash = RouteIntentTokenFactory.ComputeTokenHash(resumeState.IntentToken);
+        if (!string.Equals(expectedHash, actualHash, StringComparison.Ordinal))
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_intent_token_mismatch",
+                "Intent token hash mismatch.");
+        }
+
+        if (trace.Plan.Request.RouteRules is null)
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_rules_missing",
+                "Route rules are required to resume routing.");
+        }
+
+        if (!trace.Plan.Request.RouteRules.Any(rule => string.Equals(rule.NodeId, resumeStep.NodeId, StringComparison.Ordinal)))
+        {
+            return HaltFromTrace(
+                trace,
+                registry,
+                toolResults,
+                resumeState,
+                "route_node_missing",
+                $"Route node '{resumeStep.NodeId}' is not present in the Mermaid graph.");
+        }
+
         var loop = new RoutingLoop(
             trace.Plan,
             registry,
@@ -138,6 +245,18 @@ public sealed class RuntimeOrchestrator
             result.Telemetry,
             registry.CatalogHash,
             finalStatus);
+    }
+
+    private static RouteStep? ResolveRouteStep(BuildPlan plan, string nodeId)
+    {
+        if (plan.Steps is null || plan.Steps.Count == 0)
+            throw new ArgumentException("route steps are required", nameof(plan));
+        if (string.IsNullOrWhiteSpace(nodeId))
+            throw new ArgumentException("route node id is required", nameof(nodeId));
+
+        return plan.Steps
+            .OfType<RouteStep>()
+            .FirstOrDefault(candidate => string.Equals(candidate.NodeId, nodeId, StringComparison.Ordinal));
     }
 
     private static ExecutionFinalStatus ResolveFinalStatus(RoutingState state)

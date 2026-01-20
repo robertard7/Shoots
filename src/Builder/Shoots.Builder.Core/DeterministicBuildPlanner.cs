@@ -74,13 +74,6 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             .ThenBy(rule => rule.AllowedOutputKind, StringComparer.Ordinal)
             .ToList();
 
-        var normalizedRequest = request with
-        {
-            CommandId = normalizedCommandId,
-            Args = normalizedArgs,
-            RouteRules = normalizedRouteRules
-        };
-
         // Deterministic steps
         var stepsById = new Dictionary<string, BuildStep>(StringComparer.Ordinal);
         var routeRulesByNode = normalizedRouteRules.ToDictionary(
@@ -93,10 +86,50 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         if (spec is null)
             throw new InvalidOperationException($"unknown command '{normalizedCommandId}'");
 
+        var startNodes = MermaidPlanGraph.GetStartNodes(graph);
+        if (startNodes.Count != 1)
+            throw new InvalidOperationException($"graph must have exactly one start node (found {startNodes.Count}).");
+
+        var terminalNodes = MermaidPlanGraph.GetTerminalNodes(graph);
+        if (terminalNodes.Count == 0)
+            throw new InvalidOperationException("graph must include at least one terminal node.");
+
+        var inboundCounts = graph.Nodes.ToDictionary(node => node.Id, _ => 0, StringComparer.Ordinal);
+        foreach (var (from, to) in graph.Edges)
+        {
+            if (inboundCounts.ContainsKey(to))
+                inboundCounts[to] += 1;
+        }
+
+        foreach (var startNode in startNodes)
+        {
+            if (inboundCounts.TryGetValue(startNode, out var inbound) && inbound > 0)
+                throw new InvalidOperationException($"start node '{startNode}' must not have inbound edges.");
+        }
+
         foreach (var nodeId in orderedStepIds)
         {
             if (!routeRulesByNode.TryGetValue(nodeId, out var rule))
                 continue;
+
+            var allowedNextNodes = graph.Adjacency.TryGetValue(nodeId, out var adjacency)
+                ? adjacency
+                : Array.Empty<string>();
+
+            var nodeDefinition = graph.Nodes.First(def => string.Equals(def.Id, nodeId, StringComparison.Ordinal));
+            var nodeKind = nodeDefinition.Kind;
+
+            if (nodeKind == MermaidNodeKind.Terminal && allowedNextNodes.Count > 0)
+                throw new InvalidOperationException($"terminal node '{nodeId}' must not have outbound edges.");
+
+            if (nodeKind != MermaidNodeKind.Terminal && allowedNextNodes.Count == 0)
+                throw new InvalidOperationException($"node '{nodeId}' must declare outbound edges.");
+
+            if (allowedNextNodes.Count > 1 && nodeKind != MermaidNodeKind.Gate)
+                throw new InvalidOperationException($"node '{nodeId}' must be annotated as gate for multiple outbound edges.");
+
+            if (nodeKind == MermaidNodeKind.Gate && allowedNextNodes.Count < 2)
+                throw new InvalidOperationException($"gate node '{nodeId}' must declare multiple outbound edges.");
 
             stepsById[nodeId] = new RouteStep(
                 Id: nodeId,
@@ -106,6 +139,12 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
                 Owner: rule.Owner,
                 WorkOrderId: request.WorkOrder.Id
             );
+
+            routeRulesByNode[nodeId] = rule with
+            {
+                NodeKind = nodeKind,
+                AllowedNextNodes = allowedNextNodes
+            };
         }
 
         var unknownRouteNodes = routeRulesByNode.Keys
@@ -126,15 +165,22 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         if (missingIntents.Length > 0)
             throw new InvalidOperationException($"route rules missing required intents: {string.Join(", ", missingIntents)}");
 
-        var startNodes = MermaidPlanGraph.GetStartNodes(graph);
-        if (startNodes.Count != 1)
-            throw new InvalidOperationException($"graph must have exactly one start node (found {startNodes.Count}).");
-
-        var terminalNodes = MermaidPlanGraph.GetTerminalNodes(graph);
         var hasTerminalIntent = terminalNodes.Any(
             nodeId => routeRulesByNode.TryGetValue(nodeId, out var rule) && rule.Intent == RouteIntent.Terminate);
         if (!hasTerminalIntent)
             throw new InvalidOperationException("graph must include at least one terminal node with Terminate intent.");
+
+        var normalizedRequest = request with
+        {
+            CommandId = normalizedCommandId,
+            Args = normalizedArgs,
+            RouteRules = routeRulesByNode.Values
+                .OrderBy(rule => rule.NodeId, StringComparer.Ordinal)
+                .ThenBy(rule => rule.Intent)
+                .ThenBy(rule => rule.Owner)
+                .ThenBy(rule => rule.AllowedOutputKind, StringComparer.Ordinal)
+                .ToList()
+        };
 
         var steps = orderedStepIds
             .Select(stepId => stepsById[stepId])
@@ -167,6 +213,9 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         var provisionalPlan = new BuildPlan(
             PlanId: string.Empty,
             Request: normalizedRequest,
+            GraphStructureHash: graph.Hashes.GraphStructureHash,
+            NodeSetHash: graph.Hashes.NodeSetHash,
+            EdgeSetHash: graph.Hashes.EdgeSetHash,
             Authority: provisionalAuthority,
             Steps: steps,
             Artifacts: artifacts
@@ -181,6 +230,9 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         return new BuildPlan(
             PlanId: planId,
             Request: normalizedRequest,
+            GraphStructureHash: graph.Hashes.GraphStructureHash,
+            NodeSetHash: graph.Hashes.NodeSetHash,
+            EdgeSetHash: graph.Hashes.EdgeSetHash,
             Authority: decision.Authority,
             Steps: steps,
             Artifacts: artifacts

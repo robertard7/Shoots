@@ -39,10 +39,13 @@ internal sealed class RoutingTraceBuilder
     public void Add(
         RoutingTraceEventKind kind,
         string? detail = null,
+        string? fromNodeId = null,
+        string? toNodeId = null,
+        RoutingDecisionSource? decisionSource = null,
         RoutingState? state = null,
         RouteStep? step = null,
         RuntimeError? error = null)
     {
-        _entries.Add(new RoutingTraceEntry(_nextTick++, kind, detail, state, step, error));
+        _entries.Add(new RoutingTraceEntry(_nextTick++, kind, detail, fromNodeId, toNodeId, decisionSource, state, step, error));
     }
 }

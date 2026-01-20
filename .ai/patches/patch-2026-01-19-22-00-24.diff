@@ -1,0 +1,300 @@
+diff --git a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+index 8384d38..631d5e5 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+@@ -80,7 +80,19 @@ public sealed class RoutingLoop
+             while (true)
+             {
+                 var step = RequireRouteStep(_plan, State);
+-                var selection = ResolveDecision(step);
++                ToolSelectionDecision? selection;
++                try
++                {
++                    selection = ResolveDecision(step);
++                }
++                catch (Exception ex)
++                {
++                    var error = new RuntimeError("internal_error", "Provider failure.", ex.Message);
++                    _traceBuilder.Add(RoutingTraceEventKind.Error, "provider.failure", state: State, step: step, error: error);
++                    State = State with { Status = RoutingStatus.Halted };
++                    _tracingNarrator.OnHalted(State, error);
++                    break;
++                }
+                 var decision = selection is null
+                     ? null
+                     : new RouteDecision(null, selection);
+@@ -142,11 +154,15 @@ public sealed class RoutingLoop
+         if (State.Status != RoutingStatus.Waiting)
+             return null;
+ 
++        if (step.Intent != RouteIntent.SelectTool || step.Owner != DecisionOwner.Ai)
++            return null;
++
+         var snapshot = _registry.GetSnapshot()
+             .Select(entry => entry.Spec)
+             .OrderBy(spec => spec.ToolId.Value, StringComparer.Ordinal)
+             .ToArray();
+         var catalog = new ToolCatalogSnapshot(_catalogHash, snapshot);
++        _traceBuilder.Add(RoutingTraceEventKind.DecisionRequired, "provider.invoked", state: State, step: step);
+         var request = new AiDecisionRequest(
+             _plan.Request.WorkOrder!,
+             step,
+diff --git a/src/Runtime/Shoots.Runtime.Tests/BuildPlanSerializationToolResultTests.cs b/src/Runtime/Shoots.Runtime.Tests/BuildPlanSerializationToolResultTests.cs
+index 37ba689..27efdc2 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/BuildPlanSerializationToolResultTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/BuildPlanSerializationToolResultTests.cs
+@@ -23,20 +23,10 @@ public sealed class BuildPlanSerializationToolResultTests
+             new Dictionary<string, object?> { ["value"] = "alpha" },
+             true);
+ 
+-        var plan = new BuildPlan(
+-            "plan",
++        var plan = BuildPlanTestFactory.CreatePlan(
+             request,
+-            HashTools.ComputeSha256Hash("graph"),
+-            HashTools.ComputeSha256Hash("nodes"),
+-            HashTools.ComputeSha256Hash("edges"),
+-            new DelegationAuthority(
+-                ProviderId: new ProviderId("local"),
+-                Kind: ProviderKind.Local,
+-                PolicyId: "local-only",
+-                AllowsDelegation: false),
+             new BuildStep[] { new BuildStep("step-1", "Step") },
+-            new[] { new BuildArtifact("plan.json", "Plan payload.") },
+-            toolResult);
++            toolResult: toolResult);
+ 
+         var json = BuildPlanRenderer.RenderJson(plan);
+         var roundTrip = JsonSerializer.Deserialize<BuildPlan>(json);
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+index ead7f5e..9024188 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+@@ -408,22 +408,10 @@ public sealed class RouteGateTests
+                 workOrderId));
+         }
+ 
+-        var authority = new DelegationAuthority(
+-            ProviderId: new ProviderId("local"),
+-            Kind: ProviderKind.Local,
+-            PolicyId: "local-only",
+-            AllowsDelegation: false);
+-
+-        return new BuildPlan(
+-            "plan",
++        return BuildPlanTestFactory.CreatePlan(
+             request,
+-            HashTools.ComputeSha256Hash("graph"),
+-            HashTools.ComputeSha256Hash("nodes"),
+-            HashTools.ComputeSha256Hash("edges"),
+-            authority,
+             steps,
+-            new[] { new BuildArtifact("plan.json", "Plan payload.") },
+-            toolResult);
++            toolResult: toolResult);
+     }
+ 
+     private sealed class StubToolRegistry : IToolRegistry
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+index 3205199..587289a 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+@@ -48,19 +48,7 @@ public sealed class RoutingLoopTests
+                 workOrder.Id)
+         };
+ 
+-        var plan = new BuildPlan(
+-            "plan",
+-            request,
+-            HashTools.ComputeSha256Hash("graph"),
+-            HashTools.ComputeSha256Hash("nodes"),
+-            HashTools.ComputeSha256Hash("edges"),
+-            new DelegationAuthority(
+-                ProviderId: new ProviderId("local"),
+-                Kind: ProviderKind.Local,
+-                PolicyId: "local-only",
+-                AllowsDelegation: false),
+-            steps,
+-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
++        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
+ 
+         var loop = new RoutingLoop(
+             plan,
+@@ -115,19 +103,7 @@ public sealed class RoutingLoopTests
+                 workOrder.Id)
+         };
+ 
+-        var plan = new BuildPlan(
+-            "plan",
+-            request,
+-            HashTools.ComputeSha256Hash("graph"),
+-            HashTools.ComputeSha256Hash("nodes"),
+-            HashTools.ComputeSha256Hash("edges"),
+-            new DelegationAuthority(
+-                ProviderId: new ProviderId("local"),
+-                Kind: ProviderKind.Local,
+-                PolicyId: "local-only",
+-                AllowsDelegation: false),
+-            steps,
+-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
++        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
+ 
+         var loop = new RoutingLoop(
+             plan,
+@@ -188,19 +164,7 @@ public sealed class RoutingLoopTests
+                 workOrder.Id)
+         };
+ 
+-        var plan = new BuildPlan(
+-            "plan",
+-            request,
+-            HashTools.ComputeSha256Hash("graph"),
+-            HashTools.ComputeSha256Hash("nodes"),
+-            HashTools.ComputeSha256Hash("edges"),
+-            new DelegationAuthority(
+-                ProviderId: new ProviderId("local"),
+-                Kind: ProviderKind.Local,
+-                PolicyId: "local-only",
+-                AllowsDelegation: false),
+-            steps,
+-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
++        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
+ 
+         var first = new RoutingLoop(
+             plan,
+@@ -234,6 +198,62 @@ public sealed class RoutingLoopTests
+         Assert.Equal("terminate", second.State.CurrentNodeId);
+     }
+ 
++    [Fact]
++    public void Provider_failure_halts_with_trace_error()
++    {
++        var workOrder = new WorkOrder(
++            new WorkOrderId("wo-fail"),
++            "Original request.",
++            "Route loop provider failure.",
++            new List<string>(),
++            new List<string>());
++
++        var request = new BuildRequest(
++            workOrder,
++            "core.route",
++            new Dictionary<string, object?>(),
++            new[]
++            {
++                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
++                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
++            });
++
++        var steps = new BuildStep[]
++        {
++            new RouteStep(
++                "select",
++                "Select tool.",
++                "select",
++                RouteIntent.SelectTool,
++                DecisionOwner.Ai,
++                workOrder.Id),
++            new RouteStep(
++                "terminate",
++                "Terminate route.",
++                "terminate",
++                RouteIntent.Terminate,
++                DecisionOwner.Rule,
++                workOrder.Id)
++        };
++
++        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
++
++        var loop = new RoutingLoop(
++            plan,
++            new EmptyToolRegistry(),
++            new ThrowingAiDecisionProvider(),
++            NullRuntimeNarrator.Instance,
++            new NullToolExecutor());
++
++        var result = loop.Run();
++
++        var errorEntry = Assert.Single(result.Trace.Entries.Where(entry => entry.Event == RoutingTraceEventKind.Error));
++        Assert.Equal("internal_error", errorEntry.Error?.Code);
++        Assert.Equal(RoutingStatus.Halted, result.State.Status);
++        Assert.Equal("select", result.State.CurrentNodeId);
++        Assert.Empty(result.ToolResults);
++    }
++
+     [Fact]
+     public void Routing_advances_without_provider_on_non_select_steps()
+     {
+@@ -272,19 +292,7 @@ public sealed class RoutingLoopTests
+                 workOrder.Id)
+         };
+ 
+-        var plan = new BuildPlan(
+-            "plan",
+-            request,
+-            HashTools.ComputeSha256Hash("graph"),
+-            HashTools.ComputeSha256Hash("nodes"),
+-            HashTools.ComputeSha256Hash("edges"),
+-            new DelegationAuthority(
+-                ProviderId: new ProviderId("local"),
+-                Kind: ProviderKind.Local,
+-                PolicyId: "local-only",
+-                AllowsDelegation: false),
+-            steps,
+-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
++        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
+ 
+         var loop = new RoutingLoop(
+             plan,
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RoutingStateTests.cs b/src/Runtime/Shoots.Runtime.Tests/RoutingStateTests.cs
+index 8657289..e1e71e3 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RoutingStateTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RoutingStateTests.cs
+@@ -74,20 +74,6 @@ public sealed class RoutingStateTests
+                 workOrder.Id)
+         };
+ 
+-        var authority = new DelegationAuthority(
+-            ProviderId: new ProviderId("local"),
+-            Kind: ProviderKind.Local,
+-            PolicyId: "local-only",
+-            AllowsDelegation: false);
+-
+-        return new BuildPlan(
+-            "plan",
+-            request,
+-            HashTools.ComputeSha256Hash("graph"),
+-            HashTools.ComputeSha256Hash("nodes"),
+-            HashTools.ComputeSha256Hash("edges"),
+-            authority,
+-            steps,
+-            new[] { new BuildArtifact("plan.json", "Plan payload.") });
++        return BuildPlanTestFactory.CreatePlan(request, steps);
+     }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs b/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
+index dddf252..d82f859 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ToolAuthorityValidatorTests.cs
+@@ -113,15 +113,12 @@ public sealed class ToolAuthorityValidatorTests
+         };
+         var artifacts = new[] { new BuildArtifact("plan.json", "Plan payload.") };
+ 
+-        return new BuildPlan(
+-            PlanId: "plan",
+-            Request: request,
+-            GraphStructureHash: HashTools.ComputeSha256Hash("graph"),
+-            NodeSetHash: HashTools.ComputeSha256Hash("nodes"),
+-            EdgeSetHash: HashTools.ComputeSha256Hash("edges"),
+-            Authority: authority,
+-            Steps: steps,
+-            Artifacts: artifacts);
++        return BuildPlanTestFactory.CreatePlan(
++            request,
++            steps,
++            authority: authority,
++            useDefaultAuthority: false,
++            artifacts: artifacts);
+     }
+ 
+     private sealed class StubToolRegistry : IToolRegistry

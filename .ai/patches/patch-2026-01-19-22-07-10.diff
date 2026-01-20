@@ -1,0 +1,41 @@
+diff --git a/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
+index db4a24c..668dd5c 100644
+--- a/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
++++ b/src/Providers/Shoots.Providers.Abstractions/IAiProviderAdapter.cs
+@@ -4,6 +4,10 @@ namespace Shoots.Providers.Abstractions;
+ 
+ public interface IAiProviderAdapter
+ {
++    /// <summary>
++    /// Request a deterministic tool selection. Providers do not control routing and returning
++    /// a tool does not advance the graph.
++    /// </summary>
+     ToolSelectionDecision? RequestDecision(
+         WorkOrder workOrder,
+         RouteStep routeStep,
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/IAiDecisionProvider.cs b/src/Runtime/Shoots.Runtime.Abstractions/IAiDecisionProvider.cs
+index 3e6bbd2..a29d8fe 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/IAiDecisionProvider.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/IAiDecisionProvider.cs
+@@ -4,5 +4,9 @@ namespace Shoots.Runtime.Abstractions;
+ 
+ public interface IAiDecisionProvider
+ {
++    /// <summary>
++    /// Request a deterministic tool selection. Providers do not control routing and returning
++    /// a tool does not advance the graph.
++    /// </summary>
+     ToolSelectionDecision? RequestDecision(AiDecisionRequest request);
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+index 587289a..5035216 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+@@ -305,6 +305,7 @@ public sealed class RoutingLoopTests
+ 
+         Assert.Equal(RoutingStatus.Completed, result.State.Status);
+         Assert.Equal("terminate", result.State.CurrentNodeId);
++        Assert.DoesNotContain(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.DecisionRequired);
+     }
+ 
+     private sealed class RefusingAiDecisionProvider : IAiDecisionProvider

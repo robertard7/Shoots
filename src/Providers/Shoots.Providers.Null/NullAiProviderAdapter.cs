@@ -1,3 +1,4 @@
+using System;
 using Shoots.Contracts.Core;
 using Shoots.Providers.Abstractions;
 
@@ -9,10 +10,11 @@ public sealed class NullAiProviderAdapter : IAiProviderAdapter
 
     public ToolSelectionDecision? RequestDecision(
         WorkOrder workOrder,
-        RouteStep step,
+        RouteStep routeStep,
+        string graphHash,
         string catalogHash,
-        string routingTraceSummary)
+        ToolCatalogSnapshot catalog)
     {
-        return null;
+        throw new InvalidOperationException("Null provider invoked");
     }
 }
