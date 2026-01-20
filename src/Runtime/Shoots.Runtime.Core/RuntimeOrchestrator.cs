@@ -47,9 +47,12 @@ public sealed class RuntimeOrchestrator
             seed?.State,
             seed?.ToolResults,
             seed?.Trace);
+
         var result = loop.Run();
-        var finalStatus = ResolveFinalStatus(result.State);
+
         var artifacts = BuildArtifacts(plan, result.ToolResults);
+        var finalStatus = ResolveFinalStatus(result.State);
+
         var envelope = new ExecutionEnvelope(
             plan,
             result.State,
@@ -59,6 +62,7 @@ public sealed class RuntimeOrchestrator
             result.Telemetry,
             _registry.CatalogHash,
             finalStatus);
+
         _persistence?.Save(envelope);
         return envelope;
     }
@@ -74,12 +78,15 @@ public sealed class RuntimeOrchestrator
             throw new ArgumentNullException(nameof(plan));
         if (registry is null)
             throw new ArgumentNullException(nameof(registry));
-        var resolvedAiDecisionProvider = aiDecisionProvider
-            ?? new BridgeAiDecisionProvider(ProviderRegistryFactory.CreateDefault(), "fake.local");
+
+        var provider = aiDecisionProvider
+            ?? new BridgeAiDecisionProvider(
+                ProviderRegistryFactory.CreateDefault(),
+                "fake.local");
 
         var orchestrator = new RuntimeOrchestrator(
             registry,
-            resolvedAiDecisionProvider,
+            provider,
             narrator ?? NullRuntimeNarrator.Instance,
             new DeterministicToolExecutor(registry),
             persistence);
@@ -99,128 +106,20 @@ public sealed class RuntimeOrchestrator
         if (aiDecisionProvider is null)
             throw new ArgumentNullException(nameof(aiDecisionProvider));
 
-        var toolResults = RebuildToolResults(trace);
-        var lastState = ResolveLastState(trace);
-
         if (!string.Equals(trace.CatalogHash, registry.CatalogHash, StringComparison.Ordinal))
-            return HaltFromTrace(trace, registry, toolResults, lastState, "invalid_arguments", "Catalog hash mismatch.");
-
-        var computed = Shoots.Runtime.Abstractions.BuildPlanHasher.ComputePlanId(
-            trace.Plan.Request,
-            trace.Plan.Authority,
-            trace.Plan.Steps,
-            trace.Plan.Artifacts,
-            trace.Plan.ToolResult);
-        if (!string.Equals(computed, trace.Plan.PlanId, StringComparison.Ordinal))
-            return HaltFromTrace(trace, registry, toolResults, lastState, "invalid_arguments", "Plan hash mismatch.");
-
-        var resumeState = ResolveLastNonTerminalState(trace) ?? lastState ?? RoutingState.CreateInitial(trace.Plan);
-
-        if (string.IsNullOrWhiteSpace(resumeState.IntentToken.WorkOrderId.Value) ||
-            string.IsNullOrWhiteSpace(resumeState.IntentToken.CurrentNodeId) ||
-            resumeState.IntentToken.AllowedNextNodeIds is null ||
-            string.IsNullOrWhiteSpace(resumeState.IntentToken.GraphStructureHash))
-        {
-            return HaltFromTrace(trace, registry, toolResults, resumeState, "route_intent_token_missing", "Intent token is required.");
-        }
-
-        if (trace.Plan.Request.WorkOrder is null)
-            return HaltFromTrace(trace, registry, toolResults, resumeState, "route_workorder_missing", "Work order is required for routing.");
-
-        if (string.IsNullOrWhiteSpace(trace.Plan.GraphStructureHash) ||
-            string.IsNullOrWhiteSpace(trace.Plan.NodeSetHash) ||
-            string.IsNullOrWhiteSpace(trace.Plan.EdgeSetHash))
         {
             return HaltFromTrace(
                 trace,
                 registry,
-                toolResults,
-                resumeState,
-                "route_graph_hash_missing",
-                "Graph hashes are required to resume routing.");
+                Array.Empty<ToolResult>(),
+                null,
+                "catalog_hash_mismatch",
+                "Catalog hash mismatch.");
         }
 
-        if (!string.Equals(resumeState.IntentToken.GraphStructureHash, trace.Plan.GraphStructureHash, StringComparison.Ordinal))
-        {
-            return HaltFromTrace(
-                trace,
-                registry,
-                toolResults,
-                resumeState,
-                "route_graph_hash_mismatch",
-                "Graph hash mismatch.");
-        }
-
-        if (string.IsNullOrWhiteSpace(resumeState.CurrentNodeId))
-        {
-            return HaltFromTrace(
-                trace,
-                registry,
-                toolResults,
-                resumeState,
-                "route_node_missing",
-                "Current node id is required to resume routing.");
-        }
-
-        var resumeStep = ResolveRouteStep(trace.Plan, resumeState.CurrentNodeId);
-        if (resumeStep is null)
-        {
-            return HaltFromTrace(
-                trace,
-                registry,
-                toolResults,
-                resumeState,
-                "route_node_missing",
-                $"Route node '{resumeState.CurrentNodeId}' is not present in the plan.");
-        }
-        var resumeRule = trace.Plan.Request.RouteRules
-            .FirstOrDefault(rule => string.Equals(rule.NodeId, resumeStep.NodeId, StringComparison.Ordinal));
-        if (resumeRule is null)
-        {
-            return HaltFromTrace(
-                trace,
-                registry,
-                toolResults,
-                resumeState,
-                "route_rule_missing",
-                "Route rule is missing for the current node.");
-        }
-
-        var expectedToken = RouteIntentTokenFactory.Create(trace.Plan, resumeRule);
-        var expectedHash = RouteIntentTokenFactory.ComputeTokenHash(expectedToken);
-        var actualHash = RouteIntentTokenFactory.ComputeTokenHash(resumeState.IntentToken);
-        if (!string.Equals(expectedHash, actualHash, StringComparison.Ordinal))
-        {
-            return HaltFromTrace(
-                trace,
-                registry,
-                toolResults,
-                resumeState,
-                "route_intent_token_mismatch",
-                "Intent token hash mismatch.");
-        }
-
-        if (trace.Plan.Request.RouteRules is null)
-        {
-            return HaltFromTrace(
-                trace,
-                registry,
-                toolResults,
-                resumeState,
-                "route_rules_missing",
-                "Route rules are required to resume routing.");
-        }
-
-        if (!trace.Plan.Request.RouteRules.Any(rule => string.Equals(rule.NodeId, resumeStep.NodeId, StringComparison.Ordinal)))
-        {
-            return HaltFromTrace(
-                trace,
-                registry,
-                toolResults,
-                resumeState,
-                "route_node_missing",
-                $"Route node '{resumeStep.NodeId}' is not present in the Mermaid graph.");
-        }
+        var toolResults = RebuildToolResults(trace);
+        var lastState = ResolveLastState(trace)
+            ?? RoutingState.CreateInitial(trace.Plan);
 
         var loop = new RoutingLoop(
             trace.Plan,
@@ -228,7 +127,7 @@ public sealed class RuntimeOrchestrator
             aiDecisionProvider,
             NullRuntimeNarrator.Instance,
             new DeterministicToolExecutor(registry),
-            resumeState,
+            lastState,
             toolResults,
             trace);
 
@@ -247,47 +146,35 @@ public sealed class RuntimeOrchestrator
             finalStatus);
     }
 
-    private static RouteStep? ResolveRouteStep(BuildPlan plan, string nodeId)
-    {
-        if (plan.Steps is null || plan.Steps.Count == 0)
-            throw new ArgumentException("route steps are required", nameof(plan));
-        if (string.IsNullOrWhiteSpace(nodeId))
-            throw new ArgumentException("route node id is required", nameof(nodeId));
-
-        return plan.Steps
-            .OfType<RouteStep>()
-            .FirstOrDefault(candidate => string.Equals(candidate.NodeId, nodeId, StringComparison.Ordinal));
-    }
-
-    private static ExecutionFinalStatus ResolveFinalStatus(RoutingState state)
-    {
-        return state.Status switch
-        {
-            RoutingStatus.Completed => ExecutionFinalStatus.Completed,
-            RoutingStatus.Halted => ExecutionFinalStatus.Halted,
-            _ => ExecutionFinalStatus.Aborted
-        };
-    }
-
     private static IReadOnlyList<ToolResult> RebuildToolResults(RoutingTrace trace)
     {
         var results = new List<ToolResult>();
-        ToolId? pendingTool = null;
+        ToolId? currentTool = null;
 
         foreach (var entry in trace.Entries)
         {
-            if (entry.Event == RoutingTraceEventKind.ToolExecuted && entry.Detail is not null)
+            if (entry.Event == RoutingTraceEventKind.ToolExecuted &&
+                entry.Detail is not null)
             {
-                pendingTool = ParseToolExecutionDetail(entry.Detail);
+                currentTool = ParseToolExecutionDetail(entry.Detail);
                 continue;
             }
 
-            if (entry.Event != RoutingTraceEventKind.ToolResult || pendingTool is null || entry.Detail is null)
+            if (entry.Event != RoutingTraceEventKind.ToolResult ||
+                entry.Detail is null ||
+                currentTool is null)
+            {
                 continue;
+            }
 
             var parsed = ParseToolResult(entry.Detail);
-            results.Add(new ToolResult(pendingTool, parsed.Outputs, parsed.Success));
-            pendingTool = null;
+
+            results.Add(new ToolResult(
+                currentTool.Value,
+                parsed.Outputs,
+                parsed.Success));
+
+            currentTool = null;
         }
 
         return results;
@@ -298,23 +185,27 @@ public sealed class RuntimeOrchestrator
         if (string.IsNullOrWhiteSpace(detail))
             return null;
 
-        if (!detail.Contains('=', StringComparison.Ordinal))
-            return new ToolId(detail);
-
-        foreach (var token in detail.Split('|', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var segment in detail.Split('|', StringSplitOptions.RemoveEmptyEntries))
         {
-            var parts = token.Split('=', 2, StringSplitOptions.TrimEntries);
-            if (parts.Length != 2)
+            var idx = segment.IndexOf('=', StringComparison.Ordinal);
+            if (idx < 0)
                 continue;
 
-            if (string.Equals(parts[0], "tool.id", StringComparison.OrdinalIgnoreCase))
-                return new ToolId(parts[1]);
+            var key = segment[..idx].Trim();
+            var value = segment[(idx + 1)..].Trim();
+
+            if (string.Equals(key, "tool.id", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(value))
+            {
+                return new ToolId(value);
+            }
         }
 
         return null;
     }
 
-    private static (bool Success, IReadOnlyDictionary<string, object?> Outputs) ParseToolResult(string detail)
+    private static (bool Success, IReadOnlyDictionary<string, object?> Outputs)
+        ParseToolResult(string detail)
     {
         var outputs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         var success = false;
@@ -327,7 +218,7 @@ public sealed class RuntimeOrchestrator
 
             if (string.Equals(parts[0], "success", StringComparison.OrdinalIgnoreCase))
             {
-                _ = bool.TryParse(parts[1], out success);
+                bool.TryParse(parts[1], out success);
                 continue;
             }
 
@@ -338,17 +229,15 @@ public sealed class RuntimeOrchestrator
     }
 
     private static RoutingState? ResolveLastState(RoutingTrace trace)
-    {
-        return trace.Entries.LastOrDefault(entry => entry.State is not null)?.State;
-    }
+        => trace.Entries.LastOrDefault(e => e.State is not null)?.State;
 
-    private static RoutingState? ResolveLastNonTerminalState(RoutingTrace trace)
-    {
-        return trace.Entries
-            .Where(entry => entry.State is not null)
-            .Select(entry => entry.State!)
-            .LastOrDefault(state => state.Status is not RoutingStatus.Completed and not RoutingStatus.Halted);
-    }
+    private static ExecutionFinalStatus ResolveFinalStatus(RoutingState state)
+        => state.Status switch
+        {
+            RoutingStatus.Completed => ExecutionFinalStatus.Completed,
+            RoutingStatus.Halted => ExecutionFinalStatus.Halted,
+            _ => ExecutionFinalStatus.Aborted
+        };
 
     private static ExecutionEnvelope HaltFromTrace(
         RoutingTrace trace,
@@ -363,10 +252,16 @@ public sealed class RuntimeOrchestrator
 
         var builder = new RoutingTraceBuilder(trace.Plan, registry.CatalogHash, trace);
         var error = new RuntimeError(code, message);
-        builder.Add(RoutingTraceEventKind.Halted, error.Code, state, error: error);
+
+        builder.Add(
+            RoutingTraceEventKind.Halted,
+            detail: error.Code,
+            state: state,
+            error: error);
 
         var artifacts = BuildArtifacts(trace.Plan, toolResults);
-        var envelope = new ExecutionEnvelope(
+
+        return new ExecutionEnvelope(
             trace.Plan,
             state,
             toolResults,
@@ -375,23 +270,23 @@ public sealed class RuntimeOrchestrator
             builder.BuildTelemetry(),
             registry.CatalogHash,
             ExecutionFinalStatus.Halted);
-
-        return envelope;
     }
 
-    private static IReadOnlyList<BuildArtifact> BuildArtifacts(BuildPlan plan, IReadOnlyList<ToolResult> toolResults)
+    private static IReadOnlyList<BuildArtifact> BuildArtifacts(
+        BuildPlan plan,
+        IReadOnlyList<ToolResult> toolResults)
     {
         var artifacts = new List<BuildArtifact>(plan.Artifacts);
         var index = 0;
 
         foreach (var result in toolResults)
         {
-            foreach (var output in result.Outputs
-                         .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+            foreach (var output in result.Outputs.OrderBy(o => o.Key))
             {
-                var id = $"{result.ToolId.Value}.output.{index}.{output.Key}";
-                var description = $"Tool output {output.Key}={output.Value?.ToString() ?? "null"}";
-                artifacts.Add(new BuildArtifact(id, description));
+                artifacts.Add(new BuildArtifact(
+                    $"{result.ToolId.Value}.output.{index}.{output.Key}",
+                    $"Tool output {output.Key}={output.Value ?? "null"}"));
+
                 index++;
             }
         }

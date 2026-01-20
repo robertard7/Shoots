@@ -17,6 +17,7 @@ public sealed class RoutingLoop
     private readonly RoutingTraceBuilder _traceBuilder;
     private readonly TracingRuntimeNarrator _tracingNarrator;
     private readonly string _catalogHash;
+	private readonly bool _isReplay;
 
     public RoutingState State { get; private set; }
     public IReadOnlyList<ToolResult> ToolResults => _toolResults;
@@ -40,6 +41,7 @@ public sealed class RoutingLoop
         _catalogHash = registry.CatalogHash;
         _traceBuilder = new RoutingTraceBuilder(_plan, _catalogHash, trace);
         _tracingNarrator = new TracingRuntimeNarrator(_narrator, _traceBuilder);
+		_isReplay = trace is not null;
 
         if (_plan.Request.WorkOrder is null)
             throw new ArgumentException("work order is required", nameof(plan));
@@ -67,113 +69,202 @@ public sealed class RoutingLoop
         State = initialState ?? RoutingState.CreateInitial(_plan);
     }
 
-    public RoutingLoopResult Run()
-    {
-        if (State.Status == RoutingStatus.Completed || State.Status == RoutingStatus.Halted)
-            return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build(), _traceBuilder.BuildTelemetry());
+	public RoutingLoopResult Run()
+	{
+		if (State.Status is RoutingStatus.Completed or RoutingStatus.Halted)
+			return new RoutingLoopResult(
+				State,
+				_toolResults.ToArray(),
+				_traceBuilder.Build(),
+				_traceBuilder.BuildTelemetry());
 
-        var previousNarrator = RouteGate.Narrator;
-        RouteGate.Narrator = _tracingNarrator;
+		var previousNarrator = RouteGate.Narrator;
 
-        try
-        {
-            while (true)
-            {
-                var step = RequireRouteStep(_plan, State);
-                ToolSelectionDecision? selection;
-                try
-                {
-                    selection = ResolveDecision(step);
-                }
-                catch (Exception ex)
-                {
-                    var failure = ProviderFailure.FromException(ex);
-                    var error = new RuntimeError("internal_error", "Provider failure.", failure.Message);
-                    var detail = BuildProviderFailureDetail(failure);
-                    _traceBuilder.Add(RoutingTraceEventKind.Error, detail, state: State, step: step, error: error);
-                    State = State with { Status = RoutingStatus.Halted };
-                    _tracingNarrator.OnHalted(State, error);
-                    break;
-                }
-                var decision = selection is null
-                    ? null
-                    : new RouteDecision(null, selection);
+		// Only attach tracing narrator for fresh runs.
+		// Replay must not append new trace entries.
+		if (!_isReplay)
+			RouteGate.Narrator = _tracingNarrator;
 
-                var advanced = RouteGate.TryAdvance(_plan, State, decision, _registry, out var nextState, out var error);
-                State = nextState;
+		try
+		{
+			while (true)
+			{
+				var step = RequireRouteStep(_plan, State);
 
-                if (!advanced)
-                {
-                    if (decision is not null && error is not null)
-                        _traceBuilder.Add(RoutingTraceEventKind.DecisionRejected, detail: error.Code, state: State, step: step, error: error);
-                    if (State.Status == RoutingStatus.Waiting)
-                        continue;
-                    break;
-                }
+				ToolSelectionDecision? selection = null;
 
-                if (step.Intent == RouteIntent.SelectTool)
-                {
-                    var invocation = step.ToolInvocation
-                                     ?? (decision?.ToolSelection is null
-                                         ? null
-                                         : new ToolInvocation(decision.ToolSelection.ToolId, decision.ToolSelection.Bindings, State.WorkOrderId));
+				// Providers are only invoked when the graph is WAITING and the step requires it.
+				// In replay, the trace should already carry the decision path; provider invocation should not
+				// generate new trace entries, but ResolveDecision already gates by State.Status.
+				try
+				{
+					selection = ResolveDecision(step);
+				}
+				catch (Exception ex)
+				{
+					// Provider failures halt deterministically.
+					var failure = ProviderFailure.FromException(ex);
+					var providerError = new RuntimeError("internal_error", "Provider failure.", failure.Message);
+					var detail = BuildProviderFailureDetail(failure);
 
-                    if (invocation is not null)
-                    {
-                        var envelope = BuildEnvelope();
-                        var toolDetail = BuildToolExecutionDetail(invocation.ToolId);
-                        _traceBuilder.Add(RoutingTraceEventKind.ToolExecuted, detail: toolDetail, state: State, step: step);
-                        var result = _toolExecutor.Execute(invocation, envelope);
-                        _toolResults.Add(result);
-                        var resultDetail = SerializeToolResult(result);
-                        _traceBuilder.Add(RoutingTraceEventKind.ToolResult, detail: resultDetail, state: State, step: step);
+					// This is an actual error condition; even on replay, halting is allowed.
+					_traceBuilder.Add(RoutingTraceEventKind.Error, detail, state: State, step: step, error: providerError);
 
-                        if (!result.Success)
-                        {
-                            var code = ResolveToolFailureCode(result);
-                            var failure = new RuntimeError(code, $"Tool '{result.ToolId.Value}' failed.");
-                            State = State with { Status = RoutingStatus.Halted };
-                            _tracingNarrator.OnHalted(State, failure);
-                            break;
-                        }
-                    }
-                }
+					State = State with { Status = RoutingStatus.Halted };
+					_tracingNarrator.OnHalted(State, providerError);
+					break;
+				}
 
-                if (State.Status == RoutingStatus.Completed || State.Status == RoutingStatus.Halted)
-                    break;
-            }
-        }
-        finally
-        {
-            RouteGate.Narrator = previousNarrator;
-        }
+				var decision = selection is null ? null : new RouteDecision(null, selection);
 
-        return new RoutingLoopResult(State, _toolResults.ToArray(), _traceBuilder.Build(), _traceBuilder.BuildTelemetry());
-    }
+				var advanced = RouteGate.TryAdvance(
+					_plan,
+					State,
+					decision,
+					_registry,
+					out var nextState,
+					out var routeError);
 
-    private ToolSelectionDecision? ResolveDecision(RouteStep step)
-    {
-        if (State.Status != RoutingStatus.Waiting)
-            return null;
+				State = nextState;
 
-        if (step.Intent != RouteIntent.SelectTool || step.Owner != DecisionOwner.Ai)
-            return null;
+				if (!advanced)
+				{
+					if (!_isReplay && decision is not null && routeError is not null)
+					{
+						_traceBuilder.Add(
+							RoutingTraceEventKind.DecisionRejected,
+							detail: routeError.Code,
+							state: State,
+							step: step,
+							error: routeError);
+					}
 
-        var snapshot = _registry.GetSnapshot()
-            .Select(entry => entry.Spec)
-            .OrderBy(spec => spec.ToolId.Value, StringComparer.Ordinal)
-            .ToArray();
-        var catalog = new ToolCatalogSnapshot(_catalogHash, snapshot);
-        var decisionDetail = BuildProviderDecisionDetail(State.IntentToken);
-        _traceBuilder.Add(RoutingTraceEventKind.DecisionRequired, decisionDetail, state: State, step: step);
-        var request = new AiDecisionRequest(
-            _plan.Request.WorkOrder!,
-            step,
-            _plan.GraphStructureHash,
-            _catalogHash,
-            catalog);
-        return _aiDecisionProvider.RequestDecision(request);
-    }
+					if (State.Status == RoutingStatus.Waiting)
+						continue;
+
+					break;
+				}
+
+				if (step.Intent == RouteIntent.SelectTool)
+				{
+					var invocation =
+						step.ToolInvocation
+						?? (decision?.ToolSelection is null
+							? null
+							: new ToolInvocation(
+								decision.ToolSelection.ToolId,
+								decision.ToolSelection.Bindings,
+								State.WorkOrderId));
+
+					if (invocation is not null)
+					{
+						// FRESH RUN: execute + trace tool events
+						if (!_isReplay)
+						{
+							var envelope = BuildEnvelope();
+							var toolDetail = BuildToolExecutionDetail(invocation.ToolId);
+
+							_traceBuilder.Add(
+								RoutingTraceEventKind.ToolExecuted,
+								detail: toolDetail,
+								state: State,
+								step: step);
+
+							var result = _toolExecutor.Execute(invocation, envelope);
+							_toolResults.Add(result);
+
+							var resultDetail = SerializeToolResult(result);
+							_traceBuilder.Add(
+								RoutingTraceEventKind.ToolResult,
+								detail: resultDetail,
+								state: State,
+								step: step);
+
+							if (!result.Success)
+							{
+								var code = ResolveToolFailureCode(result);
+								var failure = new RuntimeError(code, $"Tool '{result.ToolId.Value}' failed.");
+								State = State with { Status = RoutingStatus.Halted };
+								_tracingNarrator.OnHalted(State, failure);
+								break;
+							}
+						}
+						else
+						{
+							// REPLAY: reuse recorded tool results, do not execute, do not trace
+							var recorded = RequireRecordedToolResult(invocation.ToolId);
+
+							// IMPORTANT: hydrate execution memory during replay
+							_toolResults.Add(recorded);
+
+							if (!recorded.Success)
+							{
+								var code = ResolveToolFailureCode(recorded);
+								var failure = new RuntimeError(code, $"Tool '{recorded.ToolId.Value}' failed.");
+								State = State with { Status = RoutingStatus.Halted };
+								_tracingNarrator.OnHalted(State, failure);
+								break;
+							}
+						}
+					}
+				}
+
+				if (State.Status is RoutingStatus.Completed or RoutingStatus.Halted)
+					break;
+			}
+		}
+		finally
+		{
+			RouteGate.Narrator = previousNarrator;
+		}
+
+		return new RoutingLoopResult(
+			State,
+			_toolResults.ToArray(),
+			_traceBuilder.Build(),
+			_traceBuilder.BuildTelemetry());
+	}
+
+	private ToolSelectionDecision? ResolveDecision(RouteStep step)
+	{
+		if (State.Status != RoutingStatus.Waiting)
+			return null;
+
+		if (step.Intent != RouteIntent.SelectTool || step.Owner != DecisionOwner.Ai)
+			return null;
+
+		// IMPORTANT:
+		// Runtime snapshot uses ToolRegistryEntry, NOT ToolSpec
+		var runtimeEntries = _registry
+			.GetSnapshot()
+			.OrderBy(e => e.Spec.ToolId.Value, StringComparer.Ordinal)
+			.ToArray();
+
+		var runtimeCatalog =
+			new Shoots.Runtime.Abstractions.ToolCatalogSnapshot(
+				_catalogHash,
+				runtimeEntries);
+
+		if (!_isReplay)
+		{
+			var decisionDetail = BuildProviderDecisionDetail(State.IntentToken);
+			_traceBuilder.Add(
+				RoutingTraceEventKind.DecisionRequired,
+				decisionDetail,
+				state: State,
+				step: step);
+		}
+
+		var request = new AiDecisionRequest(
+			_plan.Request.WorkOrder!,
+			step,
+			_plan.GraphStructureHash,
+			_catalogHash,
+			runtimeCatalog);
+
+		return _aiDecisionProvider.RequestDecision(request);
+	}
+
 
     private ExecutionEnvelope BuildEnvelope()
     {
@@ -210,21 +301,35 @@ public sealed class RoutingLoop
         return artifacts;
     }
 
-    private static string SerializeToolResult(ToolResult result)
-    {
-        var builder = new List<string>
-        {
-            $"success={result.Success.ToString()}"
-        };
+	private static string SerializeToolResult(ToolResult result)
+	{
+		if (result is null)
+			throw new ArgumentNullException(nameof(result));
 
-        foreach (var output in result.Outputs
-                     .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
-        {
-            builder.Add($"{output.Key}={output.Value?.ToString() ?? "null"}");
-        }
+		var parts = new List<string>
+		{
+			$"tool.id={result.ToolId.Value}",
+			result.Success ? "success=true" : "success=false"
+		};
 
-        return string.Join("|", builder);
-    }
+		foreach (var kvp in result.Outputs
+			.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+		{
+			if (string.IsNullOrWhiteSpace(kvp.Key))
+				continue;
+
+			var value = kvp.Value switch
+			{
+				null => "null",
+				string s => s,
+				_ => kvp.Value.ToString() ?? "null"
+			};
+
+			parts.Add($"{kvp.Key}={value}");
+		}
+
+		return string.Join("|", parts);
+	}
 
     private string BuildToolExecutionDetail(ToolId toolId)
     {
@@ -272,6 +377,70 @@ public sealed class RoutingLoop
             _ => ExecutionFinalStatus.Aborted
         };
     }
+
+	private ToolResult RequireRecordedToolResult(ToolId toolId)
+	{
+		var trace = _traceBuilder.Build();
+		var entries = trace.Entries;
+
+		for (var i = 0; i < entries.Count; i++)
+		{
+			var e = entries[i];
+
+			if (e.Event != RoutingTraceEventKind.ToolExecuted || string.IsNullOrWhiteSpace(e.Detail))
+				continue;
+
+			// ToolExecuted detail is already "tool.id=..."
+			if (!e.Detail.Contains($"tool.id={toolId.Value}", StringComparison.Ordinal))
+				continue;
+
+			// The next ToolResult after this ToolExecuted is the one we need
+			for (var j = i + 1; j < entries.Count; j++)
+			{
+				var r = entries[j];
+				if (r.Event != RoutingTraceEventKind.ToolResult)
+					continue;
+
+				if (string.IsNullOrWhiteSpace(r.Detail))
+					break; // malformed trace segment
+
+				return ToolResultParser.Parse(r.Detail, toolId);
+			}
+
+			break;
+		}
+
+		throw new InvalidOperationException($"Replay is missing tool result for '{toolId.Value}'.");
+	}
+
+	private static class ToolResultParser
+	{
+		public static ToolResult Parse(string detail, ToolId toolId)
+		{
+			var outputs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+			var success = false;
+
+			foreach (var token in detail.Split('|', StringSplitOptions.RemoveEmptyEntries))
+			{
+				var parts = token.Split('=', 2);
+				if (parts.Length != 2)
+					continue;
+
+				if (string.Equals(parts[0], "tool.id", StringComparison.OrdinalIgnoreCase))
+					continue;
+
+				if (string.Equals(parts[0], "success", StringComparison.OrdinalIgnoreCase))
+				{
+					success = string.Equals(parts[1], "true", StringComparison.OrdinalIgnoreCase);
+					continue;
+				}
+
+				outputs[parts[0]] = parts[1] == "null" ? null : parts[1];
+			}
+
+			return new ToolResult(toolId, outputs, success);
+		}
+	}
 
     private static RouteStep RequireRouteStep(BuildPlan plan, RoutingState state)
     {
