@@ -1,0 +1,201 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..3ff29d4
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,49 @@
++name: ci
++
++on:
++  push:
++  pull_request:
++
++jobs:
++  test:
++    runs-on: [self-hosted, Windows, X64, Shoots]
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup .NET
++        uses: actions/setup-dotnet@v4
++        with:
++          dotnet-version: '8.0.x'
++
++      - name: Restore
++        run: dotnet restore Shoots.sln
++
++      - name: Build
++        run: dotnet build Shoots.sln -c Release --no-restore
++
++      - name: Test
++        run: dotnet test Shoots.sln -c Release --no-build
++
++  determinism-guard:
++    runs-on: [self-hosted, Windows, X64, Shoots]
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup .NET
++        uses: actions/setup-dotnet@v4
++        with:
++          dotnet-version: '8.0.x'
++
++      - name: Restore
++        run: dotnet restore src/Runtime/Shoots.Runtime.sln
++
++      - name: Build
++        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore
++
++      - name: Determinism pass 1
++        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "Trace_replays_deterministically"
++
++      - name: Determinism pass 2
++        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "Trace_replays_deterministically"
+diff --git a/README.md b/README.md
+index 414efe8..2288b17 100644
+--- a/README.md
++++ b/README.md
+@@ -59,6 +59,25 @@ These laws are enforced mechanically, not by convention.
+ 
+ ---
+ 
++WHAT THIS SYSTEM GUARANTEES
++---------------------------
++
++- Deterministic execution based on the committed runtime and plan inputs
++- Provider output cannot advance routing or override graph authority
++- Failures surface as classified runtime errors with traceability
++- Replays remain stable when inputs and runtime versions match
++
++---
++
++WHAT THIS SYSTEM WILL NOT DO
++----------------------------
++
++- Execute with untrusted or mutable routing authority
++- Accept configuration that alters node choice or graph traversal
++- Mask failures, auto-retry without instruction, or infer success
++
++---
++
+ REPOSITORY STRUCTURE
+ --------------------
+ 
+diff --git a/docs/EXECUTION_CORE_FROZEN.md b/docs/EXECUTION_CORE_FROZEN.md
+new file mode 100644
+index 0000000..290ffdb
+--- /dev/null
++++ b/docs/EXECUTION_CORE_FROZEN.md
+@@ -0,0 +1,21 @@
++# Execution Core Frozen
++
++The runtime execution core is frozen. Mermaid-derived RouteRules are the sole routing authority.
++Tool selection is the only provider responsibility; tool choice never advances the graph.
++Provider failures halt routing and are recorded in the routing trace.
++
++## Replay Inspection
++
++Replay summaries are derived from routing traces to aid inspection (provider decisions, failures, tool selections).
++Summaries are read-only views that do not affect determinism, routing, or provider behavior.
++
++## Error Correlation
++
++Runtime errors include derived correlation identifiers that match trace entries.
++Correlation identifiers are deterministic and do not introduce new routing inputs.
++
++## Runtime Seal
++
++Seal Version: 0.1.0
++Seal Commit: 8310b79acf8e892afe7d9b5c0f158a11be0379cc
++Post-seal changes require a new task board and explicit approval.
+diff --git a/docs/PATCH_INDEX.md b/docs/PATCH_INDEX.md
+new file mode 100644
+index 0000000..b08856a
+--- /dev/null
++++ b/docs/PATCH_INDEX.md
+@@ -0,0 +1,26 @@
++# Patch Artifact Index
++
++| Patch Artifact | Commit | Task Board Phase |
++| --- | --- | --- |
++| .ai/patches/patch-2026-01-17-03-06-25.diff | fef1d017d8ffd994140ae525ee38f7600b902467 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-17-03-16-59.diff | 788f298259420424f66ea8a74b15e6f6aa8e0bfd | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-17-03-23-00.diff | 1033cc785dc68307ea2008b7a89e2242aaa9e9b7 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-17-03-29-45.diff | d0c91e4b8afe223d3e20605421c8e86fde1dd4ac | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-17-17-23-08.diff | ae96a718cddb157ec4cd7f8203d14ecd3d488adb | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-17-17-27-43.diff | 1613e3c48163a4512eea710b66fcc49e5a630d90 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-17-17-34-54.diff | fc496397a47bd342cab6fe6dcac1e76dac82cbd0 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-18-01-07-58.diff | 57755cb1e7e929e1d5360b432309a4ae7bb01e5c | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-18-01-15-14.diff | f26db2c607befaedca6621570d1ff8fa6163ec10 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-18-01-28-41.diff | 43298134ac96ac9b1c3f0d1713dff06e7badff32 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-18-15-56-37.diff | 69e691bb36f18e806a97a1a26ef24305cf14c4fd | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-18-19-45-18.diff | 992d23bea14441a3297610128b51b2c42b5a09fa | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-18-22-27-34.diff | b8c8087625d0f13f3e3a2ccffbf11b928be76c65 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-19-21-20-08.diff | 87e12c5cf7b471bca3eb5fbf425bc23b69586e87 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-19-21-26-36.diff | 83565e72db72ca94c17ea588b9207f84c68edf68 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-19-21-41-32.diff | b9180b0c877e4d9bae14e0ae8b8d5ac7a01ff36e | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-19-21-49-25.diff | 1057092a2f83b7a08410476332c7cde71157261e | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-19-22-00-24.diff | d4a3743424d0e007dc165c6af6cb297a14be7fb2 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-19-22-07-10.diff | 733b0a306fcbc3af51d50a3ffe42fcafa243d020 | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-19-22-48-16.diff | daba8e42b852ed2413801ce9f439b2a81540e41a | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-19-22-58-52.diff | 49a96f291a524cca4971c98dccf08e7fa4337b0e | Pre-closure (historical) |
++| .ai/patches/patch-2026-01-20-00-46-21.diff | 8310b79acf8e892afe7d9b5c0f158a11be0379cc | Phase 12-13 (Closure) |
+diff --git a/docs/PROVIDER_CONTRACT_FROZEN.md b/docs/PROVIDER_CONTRACT_FROZEN.md
+new file mode 100644
+index 0000000..c8e2e34
+--- /dev/null
++++ b/docs/PROVIDER_CONTRACT_FROZEN.md
+@@ -0,0 +1,23 @@
++# Provider Contract Frozen
++
++Providers receive only WorkOrder, RouteStep, graph hash, catalog hash, and a tool catalog snapshot.
++Providers return a ToolSelectionDecision or null. Providers do not route and do not influence node transitions.
++Any provider failure halts routing deterministically and records an error in the trace.
++
++## Failure Taxonomy
++
++Provider failures are reported with a stable classification:
++
++- Transport
++- Timeout
++- InvalidOutput
++- ContractViolation
++- Unknown
++
++Failures are reported only. Classification does not alter routing, traversal, or node advancement.
++
++## Runtime Seal
++
++Seal Version: 0.1.0
++Seal Commit: 8310b79acf8e892afe7d9b5c0f158a11be0379cc
++Post-seal changes require a new task board and explicit approval.
+diff --git a/src/Runtime/EXECUTION_CORE_FROZEN.md b/src/Runtime/EXECUTION_CORE_FROZEN.md
+index 08fb906..290ffdb 100644
+--- a/src/Runtime/EXECUTION_CORE_FROZEN.md
++++ b/src/Runtime/EXECUTION_CORE_FROZEN.md
+@@ -13,3 +13,9 @@ Summaries are read-only views that do not affect determinism, routing, or provid
+ 
+ Runtime errors include derived correlation identifiers that match trace entries.
+ Correlation identifiers are deterministic and do not introduce new routing inputs.
++
++## Runtime Seal
++
++Seal Version: 0.1.0
++Seal Commit: 8310b79acf8e892afe7d9b5c0f158a11be0379cc
++Post-seal changes require a new task board and explicit approval.
+diff --git a/src/Runtime/PROVIDER_CONTRACT_FROZEN.md b/src/Runtime/PROVIDER_CONTRACT_FROZEN.md
+index 3ebc72a..c8e2e34 100644
+--- a/src/Runtime/PROVIDER_CONTRACT_FROZEN.md
++++ b/src/Runtime/PROVIDER_CONTRACT_FROZEN.md
+@@ -15,3 +15,9 @@ Provider failures are reported with a stable classification:
+ - Unknown
+ 
+ Failures are reported only. Classification does not alter routing, traversal, or node advancement.
++
++## Runtime Seal
++
++Seal Version: 0.1.0
++Seal Commit: 8310b79acf8e892afe7d9b5c0f158a11be0379cc
++Post-seal changes require a new task board and explicit approval.

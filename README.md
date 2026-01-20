@@ -59,6 +59,25 @@ These laws are enforced mechanically, not by convention.
 
 ---
 
+WHAT THIS SYSTEM GUARANTEES
+---------------------------
+
+- Deterministic execution based on the committed runtime and plan inputs
+- Provider output cannot advance routing or override graph authority
+- Failures surface as classified runtime errors with traceability
+- Replays remain stable when inputs and runtime versions match
+
+---
+
+WHAT THIS SYSTEM WILL NOT DO
+----------------------------
+
+- Execute with untrusted or mutable routing authority
+- Accept configuration that alters node choice or graph traversal
+- Mask failures, auto-retry without instruction, or infer success
+
+---
+
 REPOSITORY STRUCTURE
 --------------------
 

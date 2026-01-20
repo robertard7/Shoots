@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: [self-hosted, Windows, X64, Shoots]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore Shoots.sln
+
+      - name: Build
+        run: dotnet build Shoots.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Shoots.sln -c Release --no-build
+
+  determinism-guard:
+    runs-on: [self-hosted, Windows, X64, Shoots]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore src/Runtime/Shoots.Runtime.sln
+
+      - name: Build
+        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore
+
+      - name: Determinism pass 1
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "Trace_replays_deterministically"
+
+      - name: Determinism pass 2
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "Trace_replays_deterministically"
