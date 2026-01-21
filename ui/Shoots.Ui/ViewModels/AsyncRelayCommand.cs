@@ -5,11 +5,16 @@ namespace Shoots.UI.ViewModels;
 
 public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
 {
-    private readonly Func<Task> _executeAsync;
+    private readonly Func<object?, Task> _executeAsync;
     private readonly Func<bool>? _canExecute;
     private bool _isExecuting;
 
     public AsyncRelayCommand(Func<Task> executeAsync, Func<bool>? canExecute = null)
+        : this(_ => executeAsync(), canExecute)
+    {
+    }
+
+    public AsyncRelayCommand(Func<object?, Task> executeAsync, Func<bool>? canExecute = null)
     {
         _executeAsync = executeAsync ?? throw new ArgumentNullException(nameof(executeAsync));
         _canExecute = canExecute;
@@ -37,7 +42,7 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
             _isExecuting = true;
             OnPropertyChanged(nameof(IsExecuting));
             RaiseCanExecuteChanged();
-            await _executeAsync().ConfigureAwait(true);
+            await _executeAsync(parameter).ConfigureAwait(true);
         }
         finally
         {

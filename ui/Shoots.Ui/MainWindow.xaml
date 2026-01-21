@@ -8,7 +8,24 @@
     <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
   </Window.Resources>
   <Grid Margin="24">
-    <TabControl>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="220" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+    <StackPanel Grid.Column="0" Margin="0,0,16,0">
+      <TextBlock Text="Project Workspace" FontWeight="SemiBold" />
+      <Button Margin="0,8,0,0" Content="New Project" IsEnabled="False" />
+      <TextBlock Margin="0,16,0,0" Text="Recent Projects" FontWeight="SemiBold" />
+      <ListBox ItemsSource="{Binding RecentWorkspaces}" DisplayMemberPath="Name" Margin="0,8,0,0">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <Button Content="{Binding Name}" Command="{Binding DataContext.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" />
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <TextBlock Margin="0,16,0,0" Text="{Binding ActiveWorkspaceName}" />
+    </StackPanel>
+    <TabControl Grid.Column="1">
       <TabItem Header="Execution">
         <Grid Margin="16">
           <Grid.RowDefinitions>
@@ -88,6 +105,7 @@
           <StackPanel Grid.Row="4" Margin="0,12,0,0">
             <GroupBox Header="Script Preview" Margin="0,0,0,12" Visibility="{Binding ScriptPreview, Converter={StaticResource NullToVisibilityConverter}}">
               <StackPanel Margin="12">
+                <TextBlock Text="{Binding ScriptSearchPath}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding ScriptPreview.Name}" FontWeight="SemiBold" />
                 <TextBlock Margin="0,4,0,0" Text="{Binding ScriptPreview.Description}" TextWrapping="Wrap" />
                 <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding ScriptCapabilities}">

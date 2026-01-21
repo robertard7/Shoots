@@ -5,6 +5,7 @@ using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Ui.Abstractions;
 using Shoots.UI.Environment;
+using Shoots.UI.Projects;
 using Shoots.UI.Services;
 
 namespace Shoots.UI.ViewModels;
@@ -16,6 +17,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly IEnvironmentCapabilityProvider _capabilityProvider;
     private readonly IEnvironmentProfilePrompt _profilePrompt;
     private readonly EnvironmentScriptLoader _scriptLoader;
+    private readonly IProjectWorkspaceProvider _workspaceProvider;
     private ExecutionState _state;
     private BuildPlan? _plan;
     private IEnvironmentProfile? _selectedProfile;
@@ -24,19 +26,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private EnvironmentScript? _environmentScript;
     private string? _environmentErrorMessage;
     private string? _environmentInfoMessage;
+    private ProjectWorkspace? _activeWorkspace;
+    private string _scriptSearchPath = string.Empty;
 
     public MainWindowViewModel(
         IExecutionCommandService commandService,
         IEnvironmentProfileService environmentService,
         IEnvironmentCapabilityProvider capabilityProvider,
         IEnvironmentProfilePrompt profilePrompt,
-        EnvironmentScriptLoader scriptLoader)
+        EnvironmentScriptLoader scriptLoader,
+        IProjectWorkspaceProvider workspaceProvider)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
         _capabilityProvider = capabilityProvider ?? throw new ArgumentNullException(nameof(capabilityProvider));
         _profilePrompt = profilePrompt ?? throw new ArgumentNullException(nameof(profilePrompt));
         _scriptLoader = scriptLoader ?? throw new ArgumentNullException(nameof(scriptLoader));
+        _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
         _state = ExecutionState.Idle;
 
         StartCommand = new AsyncRelayCommand(StartAsync, CanStart);
@@ -44,6 +50,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RefreshStatusCommand = new AsyncRelayCommand(RefreshStatusAsync);
         ApplyEnvironmentCommand = new AsyncRelayCommand(ApplyEnvironmentAsync, CanApplyEnvironment);
         ApplyScriptCommand = new AsyncRelayCommand(ApplyScriptAsync, CanApplyScript);
+        SelectWorkspaceCommand = new AsyncRelayCommand(SelectWorkspaceAsync);
 
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
@@ -51,6 +58,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         EnvironmentCreatedPaths = Array.Empty<string>();
         EnvironmentAppliedCapabilities = Array.Empty<string>();
 
+        RecentWorkspaces = new ReadOnlyCollection<ProjectWorkspace>(_workspaceProvider.GetRecentWorkspaces().ToList());
+        ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
         LoadEnvironmentScript();
     }
 
@@ -99,6 +108,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public AsyncRelayCommand ApplyEnvironmentCommand { get; }
 
     public AsyncRelayCommand ApplyScriptCommand { get; }
+
+    public AsyncRelayCommand SelectWorkspaceCommand { get; }
 
     public IReadOnlyList<IEnvironmentProfile> Profiles { get; }
 
@@ -164,6 +175,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public IReadOnlyList<string> ScriptSteps => _environmentScript?.SandboxSteps.Select(step => step.RelativePath).ToList()
         ?? Array.Empty<string>();
+
+    public string ScriptSearchPath => _scriptSearchPath;
+
+    public IReadOnlyList<ProjectWorkspace> RecentWorkspaces { get; }
+
+    public ProjectWorkspace? ActiveWorkspace
+    {
+        get => _activeWorkspace;
+        private set
+        {
+            if (Equals(_activeWorkspace, value))
+                return;
+
+            _activeWorkspace = value;
+            OnPropertyChanged(nameof(ActiveWorkspace));
+            OnPropertyChanged(nameof(ActiveWorkspaceName));
+            LoadEnvironmentScript();
+        }
+    }
+
+    public string ActiveWorkspaceName => ActiveWorkspace?.Name ?? "No project selected";
 
     public bool RestartRequired
     {
@@ -364,22 +396,32 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void LoadEnvironmentScript()
     {
-        var directory = AppDomain.CurrentDomain.BaseDirectory;
+        var directory = ActiveWorkspace?.RootPath ?? AppDomain.CurrentDomain.BaseDirectory;
+        _scriptSearchPath = Path.Combine(directory, EnvironmentScriptLoader.FileName);
         if (_scriptLoader.TryLoad(directory, out var script, out var error))
         {
             _environmentScript = script;
-            EnvironmentInfoMessage = "Environment script loaded.";
+            EnvironmentInfoMessage = $"Environment script loaded from {_scriptSearchPath}.";
             EnvironmentErrorMessage = null;
         }
         else if (!string.IsNullOrWhiteSpace(error))
         {
             _environmentScript = null;
             EnvironmentErrorMessage = error;
+            EnvironmentInfoMessage = null;
+        }
+        else
+        {
+            _environmentScript = null;
+            EnvironmentInfoMessage = null;
+            EnvironmentErrorMessage = null;
         }
 
         OnPropertyChanged(nameof(ScriptPreview));
         OnPropertyChanged(nameof(ScriptCapabilities));
         OnPropertyChanged(nameof(ScriptSteps));
+        OnPropertyChanged(nameof(ScriptSearchPath));
+        RaiseCommandCanExecute();
     }
 
     private static string GetSandboxRoot()
@@ -397,6 +439,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RefreshStatusCommand.RaiseCanExecuteChanged();
         ApplyEnvironmentCommand.RaiseCanExecuteChanged();
         ApplyScriptCommand.RaiseCanExecuteChanged();
+        SelectWorkspaceCommand.RaiseCanExecuteChanged();
+    }
+
+    private Task SelectWorkspaceAsync(object? parameter)
+    {
+        if (parameter is ProjectWorkspace workspace)
+            SelectWorkspace(workspace);
+
+        return Task.CompletedTask;
+    }
+
+    public void SelectWorkspace(ProjectWorkspace workspace)
+    {
+        _workspaceProvider.SetActiveWorkspace(workspace);
+        ActiveWorkspace = workspace;
     }
 
     private void OnPropertyChanged(string propertyName) =>

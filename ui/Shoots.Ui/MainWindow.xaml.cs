@@ -1,5 +1,6 @@
 using System.Windows;
 using Shoots.UI.Environment;
+using Shoots.UI.Projects;
 using Shoots.UI.Services;
 using Shoots.UI.ViewModels;
 
@@ -15,6 +16,7 @@ public partial class MainWindow : Window
             new EnvironmentProfileService(),
             new EnvironmentCapabilityProvider(),
             new EnvironmentProfilePrompt(),
-            new EnvironmentScriptLoader());
+            new EnvironmentScriptLoader(),
+            new ProjectWorkspaceProvider());
     }
 }
