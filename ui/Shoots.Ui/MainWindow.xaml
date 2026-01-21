@@ -1,8 +1,29 @@
 <Window x:Class="Shoots.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Shoots" Height="480" Width="720">
+        Title="Shoots" Height="520" Width="760">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+  </Window.Resources>
   <Grid Margin="24">
-    <TextBlock Text="Shoots UI Shell" FontSize="20" FontWeight="SemiBold" />
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+    <Border Background="#FFEFF6FF" Padding="12" CornerRadius="4">
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <TextBlock Text="Execution State:" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding StateLabel}" Margin="8,0,0,0" />
+        <TextBlock Text="Replay Mode" Margin="16,0,0,0"
+                   Visibility="{Binding IsReplayMode, Converter={StaticResource BooleanToVisibilityConverter}}" />
+      </StackPanel>
+    </Border>
+    <StackPanel Grid.Row="1" Margin="0,16,0,0" Orientation="Horizontal" HorizontalAlignment="Left">
+      <Button Width="110" Content="Start" Command="{Binding StartCommand}" />
+      <Button Width="110" Margin="8,0,0,0" Content="Cancel" Command="{Binding CancelCommand}" />
+      <Button Width="140" Margin="8,0,0,0" Content="Refresh Status" Command="{Binding RefreshStatusCommand}" />
+    </StackPanel>
+    <TextBlock Grid.Row="2" Margin="0,24,0,0" Text="Shoots UI Shell" FontSize="20" FontWeight="SemiBold" />
   </Grid>
 </Window>
