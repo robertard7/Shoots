@@ -92,6 +92,19 @@ Shoots/
 
 Do not restructure this layout unless explicitly instructed.
 
+ENVIRONMENT PROFILES EXPLAINED
+------------------------------
+
+Shoots includes UI-only Environment Profiles that prepare local sandbox folders
+and declare optional capabilities for UI affordances.
+
+These profiles:
+- Are declarative and inspectable
+- Perform only idempotent file operations
+- Do not alter runtime determinism or execution logic
+
+Applying a profile is a user-driven UI action and is always optional.
+
 ---
 
 AI / CODEX USAGE

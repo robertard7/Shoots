@@ -2,7 +2,7 @@ using System.IO;
 
 namespace Shoots.UI.Environment;
 
-// UI-only environment profiles. These do not affect runtime execution or determinism.
+// UI-only. Declarative. Non-executable. Not runtime-affecting.
 // Sandbox preparation is limited to idempotent file operations.
 public sealed class EnvironmentProfileService
 {

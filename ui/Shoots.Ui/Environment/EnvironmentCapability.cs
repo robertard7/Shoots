@@ -1,3 +1,4 @@
+// UI-only. Declarative. Non-executable. Not runtime-affecting.
 namespace Shoots.UI.Environment;
 
 [Flags]

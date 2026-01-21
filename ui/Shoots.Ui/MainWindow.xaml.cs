@@ -1,4 +1,5 @@
 using System.Windows;
+using Shoots.UI.Environment;
 using Shoots.UI.Services;
 using Shoots.UI.ViewModels;
 
@@ -9,6 +10,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new MainWindowViewModel(new NullExecutionCommandService());
+        DataContext = new MainWindowViewModel(
+            new NullExecutionCommandService(),
+            new EnvironmentProfileService(),
+            new EnvironmentCapabilityProvider());
     }
 }
