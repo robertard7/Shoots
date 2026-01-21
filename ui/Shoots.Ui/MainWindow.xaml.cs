@@ -13,6 +13,8 @@ public partial class MainWindow : Window
         DataContext = new MainWindowViewModel(
             new NullExecutionCommandService(),
             new EnvironmentProfileService(),
-            new EnvironmentCapabilityProvider());
+            new EnvironmentCapabilityProvider(),
+            new EnvironmentProfilePrompt(),
+            new EnvironmentScriptLoader());
     }
 }

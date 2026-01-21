@@ -4,7 +4,7 @@ namespace Shoots.UI.Environment;
 
 // UI-only. Declarative. Non-executable. Not runtime-affecting.
 // Sandbox preparation is limited to idempotent file operations.
-public sealed class EnvironmentProfileService
+public sealed class EnvironmentProfileService : IEnvironmentProfileService
 {
     private readonly IReadOnlyList<IEnvironmentProfile> _profiles;
     private readonly IEnvironmentProfileLogger _logger;
@@ -30,6 +30,8 @@ public sealed class EnvironmentProfileService
     public IReadOnlyList<IEnvironmentProfile> Profiles => _profiles;
 
     public EnvironmentCapability AvailableCapabilities { get; private set; } = EnvironmentCapability.None;
+
+    public EnvironmentProfileResult? LastResult => _lastResult;
 
     public EnvironmentProfileResult ApplyProfile(string sandboxRoot, IEnvironmentProfile profile)
     {

@@ -12,33 +12,46 @@ namespace Shoots.UI.ViewModels;
 public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
     private readonly IExecutionCommandService _commandService;
-    private readonly EnvironmentProfileService _environmentService;
+    private readonly IEnvironmentProfileService _environmentService;
     private readonly IEnvironmentCapabilityProvider _capabilityProvider;
+    private readonly IEnvironmentProfilePrompt _profilePrompt;
+    private readonly EnvironmentScriptLoader _scriptLoader;
     private ExecutionState _state;
     private BuildPlan? _plan;
     private IEnvironmentProfile? _selectedProfile;
     private EnvironmentProfileResult? _lastEnvironmentResult;
     private bool _restartRequired;
+    private EnvironmentScript? _environmentScript;
+    private string? _environmentErrorMessage;
+    private string? _environmentInfoMessage;
 
     public MainWindowViewModel(
         IExecutionCommandService commandService,
-        EnvironmentProfileService environmentService,
-        IEnvironmentCapabilityProvider capabilityProvider)
+        IEnvironmentProfileService environmentService,
+        IEnvironmentCapabilityProvider capabilityProvider,
+        IEnvironmentProfilePrompt profilePrompt,
+        EnvironmentScriptLoader scriptLoader)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
         _capabilityProvider = capabilityProvider ?? throw new ArgumentNullException(nameof(capabilityProvider));
+        _profilePrompt = profilePrompt ?? throw new ArgumentNullException(nameof(profilePrompt));
+        _scriptLoader = scriptLoader ?? throw new ArgumentNullException(nameof(scriptLoader));
         _state = ExecutionState.Idle;
 
         StartCommand = new AsyncRelayCommand(StartAsync, CanStart);
         CancelCommand = new AsyncRelayCommand(CancelAsync, CanCancel);
         RefreshStatusCommand = new AsyncRelayCommand(RefreshStatusAsync);
         ApplyEnvironmentCommand = new AsyncRelayCommand(ApplyEnvironmentAsync, CanApplyEnvironment);
+        ApplyScriptCommand = new AsyncRelayCommand(ApplyScriptAsync, CanApplyScript);
 
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
         EnvironmentCapabilities = Array.Empty<string>();
         EnvironmentCreatedPaths = Array.Empty<string>();
+        EnvironmentAppliedCapabilities = Array.Empty<string>();
+
+        LoadEnvironmentScript();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -85,6 +98,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public AsyncRelayCommand ApplyEnvironmentCommand { get; }
 
+    public AsyncRelayCommand ApplyScriptCommand { get; }
+
     public IReadOnlyList<IEnvironmentProfile> Profiles { get; }
 
     public IEnvironmentProfile? SelectedProfile
@@ -114,6 +129,41 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string EnvironmentAppliedAtUtc { get; private set; } = "Not applied";
 
     public string EnvironmentAppliedProfileName { get; private set; } = "None";
+
+    public string? EnvironmentErrorMessage
+    {
+        get => _environmentErrorMessage;
+        private set
+        {
+            if (_environmentErrorMessage == value)
+                return;
+
+            _environmentErrorMessage = value;
+            OnPropertyChanged(nameof(EnvironmentErrorMessage));
+        }
+    }
+
+    public string? EnvironmentInfoMessage
+    {
+        get => _environmentInfoMessage;
+        private set
+        {
+            if (_environmentInfoMessage == value)
+                return;
+
+            _environmentInfoMessage = value;
+            OnPropertyChanged(nameof(EnvironmentInfoMessage));
+        }
+    }
+
+    public EnvironmentScript? ScriptPreview => _environmentScript;
+
+    public IReadOnlyList<string> ScriptCapabilities => _environmentScript is null
+        ? Array.Empty<string>()
+        : DescribeCapabilities(_environmentScript.DeclaredCapabilities);
+
+    public IReadOnlyList<string> ScriptSteps => _environmentScript?.SandboxSteps.Select(step => step.RelativePath).ToList()
+        ?? Array.Empty<string>();
 
     public bool RestartRequired
     {
@@ -156,6 +206,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return !string.Equals(_lastEnvironmentResult.ProfileName, SelectedProfile.Name, StringComparison.Ordinal);
     }
 
+    private bool CanApplyScript()
+    {
+        if (_environmentScript is null)
+            return false;
+
+        if (State is ExecutionState.Running or ExecutionState.Waiting or ExecutionState.Replaying)
+            return false;
+
+        if (_lastEnvironmentResult is null)
+            return true;
+
+        return !string.Equals(_lastEnvironmentResult.ProfileName, _environmentScript.Name, StringComparison.Ordinal);
+    }
+
     private Task StartAsync()
     {
         if (Plan is null)
@@ -182,9 +246,75 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (SelectedProfile is null)
             return;
 
-        var sandboxRoot = EnsureSandboxRoot();
+        EnvironmentErrorMessage = null;
+        EnvironmentInfoMessage = null;
+
+        var sandboxRoot = GetSandboxRoot();
+        if (!Directory.Exists(sandboxRoot))
+        {
+            EnvironmentErrorMessage = $"Sandbox root missing: {sandboxRoot}";
+            return;
+        }
+
         var previousCapabilities = _capabilityProvider.AvailableCapabilities;
-        var result = _environmentService.ApplyProfile(sandboxRoot, SelectedProfile);
+        if (previousCapabilities != SelectedProfile.DeclaredCapabilities)
+        {
+            if (!_profilePrompt.ConfirmCapabilityChange(previousCapabilities, SelectedProfile.DeclaredCapabilities))
+                return;
+        }
+
+        try
+        {
+            var result = _environmentService.ApplyProfile(sandboxRoot, SelectedProfile);
+            ApplyEnvironmentResult(result, previousCapabilities);
+        }
+        catch (Exception ex)
+        {
+            EnvironmentErrorMessage = ex.Message;
+            EnvironmentInfoMessage = null;
+        }
+
+        await Task.CompletedTask.ConfigureAwait(true);
+    }
+
+    private async Task ApplyScriptAsync()
+    {
+        if (_environmentScript is null)
+            return;
+
+        EnvironmentErrorMessage = null;
+        EnvironmentInfoMessage = null;
+
+        var sandboxRoot = GetSandboxRoot();
+        if (!Directory.Exists(sandboxRoot))
+        {
+            EnvironmentErrorMessage = $"Sandbox root missing: {sandboxRoot}";
+            return;
+        }
+
+        var previousCapabilities = _capabilityProvider.AvailableCapabilities;
+        if (previousCapabilities != _environmentScript.DeclaredCapabilities)
+        {
+            if (!_profilePrompt.ConfirmCapabilityChange(previousCapabilities, _environmentScript.DeclaredCapabilities))
+                return;
+        }
+
+        try
+        {
+            var result = _environmentService.ApplyProfile(sandboxRoot, new EnvironmentScriptProfile(_environmentScript));
+            ApplyEnvironmentResult(result, previousCapabilities);
+        }
+        catch (Exception ex)
+        {
+            EnvironmentErrorMessage = ex.Message;
+            EnvironmentInfoMessage = null;
+        }
+
+        await Task.CompletedTask.ConfigureAwait(true);
+    }
+
+    private void ApplyEnvironmentResult(EnvironmentProfileResult result, EnvironmentCapability previousCapabilities)
+    {
         _lastEnvironmentResult = result;
         _capabilityProvider.Update(result.DeclaredCapabilities);
 
@@ -193,6 +323,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         EnvironmentAppliedAtUtc = $"{result.AppliedAtUtc:yyyy-MM-dd HH:mm:ss} UTC";
         EnvironmentAppliedProfileName = result.ProfileName;
         RestartRequired = previousCapabilities != result.DeclaredCapabilities;
+        EnvironmentInfoMessage = "Environment applied successfully.";
 
         OnPropertyChanged(nameof(EnvironmentCreatedPaths));
         OnPropertyChanged(nameof(EnvironmentAppliedCapabilities));
@@ -204,8 +335,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         UpdateProfileCapabilities();
         RaiseCommandCanExecute();
-
-        await Task.CompletedTask.ConfigureAwait(true);
     }
 
     private void UpdateProfileCapabilities()
@@ -233,14 +362,32 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return labels;
     }
 
-    private static string EnsureSandboxRoot()
+    private void LoadEnvironmentScript()
     {
-        var root = Path.Combine(
+        var directory = AppDomain.CurrentDomain.BaseDirectory;
+        if (_scriptLoader.TryLoad(directory, out var script, out var error))
+        {
+            _environmentScript = script;
+            EnvironmentInfoMessage = "Environment script loaded.";
+            EnvironmentErrorMessage = null;
+        }
+        else if (!string.IsNullOrWhiteSpace(error))
+        {
+            _environmentScript = null;
+            EnvironmentErrorMessage = error;
+        }
+
+        OnPropertyChanged(nameof(ScriptPreview));
+        OnPropertyChanged(nameof(ScriptCapabilities));
+        OnPropertyChanged(nameof(ScriptSteps));
+    }
+
+    private static string GetSandboxRoot()
+    {
+        return Path.Combine(
             System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
             "Shoots",
             "Sandbox");
-        Directory.CreateDirectory(root);
-        return root;
     }
 
     private void RaiseCommandCanExecute()
@@ -249,6 +396,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         CancelCommand.RaiseCanExecuteChanged();
         RefreshStatusCommand.RaiseCanExecuteChanged();
         ApplyEnvironmentCommand.RaiseCanExecuteChanged();
+        ApplyScriptCommand.RaiseCanExecuteChanged();
     }
 
     private void OnPropertyChanged(string propertyName) =>

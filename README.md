@@ -105,6 +105,14 @@ These profiles:
 
 Applying a profile is a user-driven UI action and is always optional.
 
+WHAT UI IS NOT ALLOWED TO DO
+----------------------------
+
+- Execute commands or scripts
+- Modify runtime routing, traces, or determinism inputs
+- Require source control, databases, or external services
+- Touch Runtime.Core directly
+
 ---
 
 AI / CODEX USAGE
