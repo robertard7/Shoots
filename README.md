@@ -105,6 +105,20 @@ These profiles:
 
 Applying a profile is a user-driven UI action and is always optional.
 
+PROJECT WORKSPACES
+------------------
+
+Shoots includes a UI-only Project Workspace experience for organizing context.
+
+Workspaces:
+- Are pure UI data (name, root path, last opened time)
+- Never execute commands or scripts
+- Do not require GitHub, a database, or any external service
+- Persist only recent selections in a JSON file under LocalAppData
+
+Workspace isolation is strictly visual: each selection scopes UI context and
+environment script previews without mutating runtime behavior or determinism.
+
 WHAT UI IS NOT ALLOWED TO DO
 ----------------------------
 

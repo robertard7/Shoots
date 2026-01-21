@@ -11,12 +11,15 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        var workspaceStore = new ProjectWorkspaceStore();
+        var workspaceProvider = new ProjectWorkspaceProvider(workspaceStore.LoadRecentWorkspaces());
         DataContext = new MainWindowViewModel(
             new NullExecutionCommandService(),
             new EnvironmentProfileService(),
             new EnvironmentCapabilityProvider(),
             new EnvironmentProfilePrompt(),
             new EnvironmentScriptLoader(),
-            new ProjectWorkspaceProvider());
+            workspaceProvider,
+            workspaceStore);
     }
 }

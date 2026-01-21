@@ -14,14 +14,18 @@
     </Grid.ColumnDefinitions>
     <StackPanel Grid.Column="0" Margin="0,0,16,0">
       <TextBlock Text="Project Workspace" FontWeight="SemiBold" />
-      <Button Margin="0,8,0,0" Content="New Project" IsEnabled="False" />
+      <Button Margin="0,8,0,0" Content="New Project" IsEnabled="False" ToolTip="Coming later" />
       <TextBlock Margin="0,16,0,0" Text="Recent Projects" FontWeight="SemiBold" />
-      <ListBox ItemsSource="{Binding RecentWorkspaces}" DisplayMemberPath="Name" Margin="0,8,0,0">
-        <ListBox.ItemTemplate>
-          <DataTemplate>
-            <Button Content="{Binding Name}" Command="{Binding DataContext.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" />
-          </DataTemplate>
-        </ListBox.ItemTemplate>
+      <ListBox ItemsSource="{Binding RecentWorkspaces}"
+               SelectedItem="{Binding SelectedWorkspace, Mode=TwoWay}"
+               DisplayMemberPath="Name"
+               Margin="0,8,0,0">
+        <ListBox.ItemContainerStyle>
+          <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="Margin" Value="0,2,0,0" />
+          </Style>
+        </ListBox.ItemContainerStyle>
       </ListBox>
       <TextBlock Margin="0,16,0,0" Text="{Binding ActiveWorkspaceName}" />
     </StackPanel>

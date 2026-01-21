@@ -1,4 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace Shoots.UI.Projects;
+
+// UI-only. Declarative. Non-executable. Not runtime-affecting.
 
 public interface IProjectWorkspaceProvider
 {
@@ -12,19 +18,34 @@ public interface IProjectWorkspaceProvider
 public sealed class ProjectWorkspaceProvider : IProjectWorkspaceProvider
 {
     private ProjectWorkspace? _activeWorkspace;
-    private readonly IReadOnlyList<ProjectWorkspace> _recentWorkspaces;
+    private readonly List<ProjectWorkspace> _recentWorkspaces;
 
-    public ProjectWorkspaceProvider()
+    public ProjectWorkspaceProvider(IEnumerable<ProjectWorkspace>? recentWorkspaces)
     {
-        _recentWorkspaces = Array.Empty<ProjectWorkspace>();
+        _recentWorkspaces = recentWorkspaces?.ToList() ?? new List<ProjectWorkspace>();
+        _recentWorkspaces = _recentWorkspaces
+            .OrderByDescending(workspace => workspace.LastOpenedUtc)
+            .ToList();
+        _activeWorkspace = _recentWorkspaces.FirstOrDefault();
     }
 
-    public IReadOnlyList<ProjectWorkspace> GetRecentWorkspaces() => _recentWorkspaces;
+    public IReadOnlyList<ProjectWorkspace> GetRecentWorkspaces() => _recentWorkspaces.AsReadOnly();
 
     public ProjectWorkspace? GetActiveWorkspace() => _activeWorkspace;
 
     public void SetActiveWorkspace(ProjectWorkspace workspace)
     {
-        _activeWorkspace = workspace;
+        if (workspace is null)
+            throw new ArgumentNullException(nameof(workspace));
+
+        var updatedWorkspace = workspace with { LastOpenedUtc = DateTimeOffset.UtcNow };
+
+        _recentWorkspaces.RemoveAll(existing =>
+            string.Equals(existing.RootPath, updatedWorkspace.RootPath, StringComparison.OrdinalIgnoreCase));
+        _recentWorkspaces.Insert(0, updatedWorkspace);
+        if (_recentWorkspaces.Count > ProjectWorkspaceStore.MaxRecentWorkspaces)
+            _recentWorkspaces.RemoveRange(ProjectWorkspaceStore.MaxRecentWorkspaces, _recentWorkspaces.Count - ProjectWorkspaceStore.MaxRecentWorkspaces);
+
+        _activeWorkspace = updatedWorkspace;
     }
 }
