@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace Shoots.Ui;
+namespace Shoots.UI;
 
 public partial class MainWindow : Window
 {

@@ -1,20 +1,29 @@
-<Window x:Class="Shoots.Ui.RuntimeErrorWindow"
+<Window x:Class="Shoots.UI.FatalErrorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Runtime Error" Height="360" Width="640"
+        Title="Fatal Error" Height="420" Width="720"
         WindowStartupLocation="CenterOwner">
   <Grid Margin="16">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
     <TextBlock Text="A fatal UI error occurred." FontWeight="SemiBold" />
-    <TextBox Grid.Row="1"
+    <StackPanel Grid.Row="1" Margin="0,12,0,0">
+      <TextBlock Text="Log path:" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding LogPath}" TextWrapping="Wrap" />
+    </StackPanel>
+    <TextBox Grid.Row="2"
              Margin="0,12,0,0"
              IsReadOnly="True"
              TextWrapping="Wrap"
              VerticalScrollBarVisibility="Auto"
              HorizontalScrollBarVisibility="Auto"
              Text="{Binding ErrorText}" />
+    <StackPanel Grid.Row="3" Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Width="90" Content="Exit" Click="OnExitClick" />
+    </StackPanel>
   </Grid>
 </Window>

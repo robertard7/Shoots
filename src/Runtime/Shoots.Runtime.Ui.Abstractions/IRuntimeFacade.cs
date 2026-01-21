@@ -5,20 +5,13 @@ namespace Shoots.Runtime.Ui.Abstractions;
 
 public interface IRuntimeFacade
 {
-    IRuntimeCommandSurface Commands { get; }
+    Task<RuntimeResult> StartExecution(BuildPlan plan, CancellationToken ct = default);
 
-    IRuntimeStatusSnapshot GetStatusSnapshot();
+    Task<IRuntimeStatusSnapshot> QueryStatus(CancellationToken ct = default);
 
-    RoutingTrace? GetTraceSnapshot();
-}
+    IAsyncEnumerable<RoutingTraceEntry> SubscribeTrace(CancellationToken ct = default);
 
-public interface IRuntimeCommandSurface
-{
-    RuntimeResult Run(BuildPlan plan, CancellationToken ct = default);
-
-    RuntimeResult Replay(RoutingTrace trace, CancellationToken ct = default);
-
-    ToolCatalogSnapshot LoadCatalog();
+    Task CancelExecution(CancellationToken ct = default);
 }
 
 public interface IRuntimeStatusSnapshot
