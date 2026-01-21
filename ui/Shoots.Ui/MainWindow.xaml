@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:converters="clr-namespace:Shoots.UI.Converters"
-        Title="Shoots" Height="640" Width="860">
+        Title="{Binding WindowTitle}" Height="640" Width="860">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
@@ -13,7 +13,7 @@
       <ColumnDefinition Width="*" />
     </Grid.ColumnDefinitions>
     <StackPanel Grid.Column="0" Margin="0,0,16,0">
-      <TextBlock Text="Project Workspace" FontWeight="SemiBold" />
+      <TextBlock Text="Project Workspace" FontWeight="SemiBold" ToolTip="{Binding WorkspaceIsolationTooltip}" />
       <Button Margin="0,8,0,0" Content="New Project" IsEnabled="False" ToolTip="Project creation is coming later" />
       <TextBlock Margin="0,16,0,0" Text="Recent Projects" FontWeight="SemiBold" />
       <ListBox ItemsSource="{Binding RecentWorkspaces}"
@@ -43,6 +43,14 @@
           </Style>
         </ListBox.ItemContainerStyle>
       </ListBox>
+      <TextBlock Margin="0,8,0,0"
+                 Text="No recent projects yet."
+                 Foreground="#FF6B7280"
+                 Visibility="{Binding HasNoWorkspaces, Converter={StaticResource BooleanToVisibilityConverter}}" />
+      <TextBlock Margin="0,8,0,0"
+                 Text="Select a project to preview workspace scripts."
+                 Foreground="#FF6B7280"
+                 Visibility="{Binding HasNoActiveWorkspace, Converter={StaticResource BooleanToVisibilityConverter}}" />
       <TextBlock Margin="0,16,0,0" Text="{Binding ActiveWorkspaceName}" />
     </StackPanel>
     <TabControl Grid.Column="1">
@@ -63,7 +71,11 @@
             </StackPanel>
           </Border>
           <StackPanel Grid.Row="1" Margin="0,16,0,0" Orientation="Horizontal" HorizontalAlignment="Left">
-            <Button Width="110" Content="Start" Command="{Binding StartCommand}" />
+            <Button Width="110"
+                    Content="Start"
+                    Command="{Binding StartCommand}"
+                    ToolTip="{Binding StartDisabledReason}"
+                    ToolTipService.ShowOnDisabled="True" />
             <Button Width="110" Margin="8,0,0,0" Content="Cancel" Command="{Binding CancelCommand}" />
             <Button Width="140" Margin="8,0,0,0" Content="Refresh Status" Command="{Binding RefreshStatusCommand}" />
           </StackPanel>
@@ -98,7 +110,11 @@
             </StackPanel>
           </GroupBox>
           <StackPanel Grid.Row="2" Margin="0,12,0,0" Orientation="Horizontal">
-            <Button Width="160" Content="Apply Environment" Command="{Binding ApplyEnvironmentCommand}" />
+            <Button Width="160"
+                    Content="Apply Environment"
+                    Command="{Binding ApplyEnvironmentCommand}"
+                    ToolTip="{Binding ApplyEnvironmentDisabledReason}"
+                    ToolTipService.ShowOnDisabled="True" />
             <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="{Binding EnvironmentAppliedProfileName}" />
           </StackPanel>
           <GroupBox Grid.Row="3" Margin="0,12,0,0" Header="Last Applied">
@@ -135,6 +151,11 @@
                 <TextBlock Text="{Binding ScriptSearchPath}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding ScriptPreview.Name}" FontWeight="SemiBold" />
                 <TextBlock Margin="0,4,0,0" Text="{Binding ScriptPreview.Description}" TextWrapping="Wrap" />
+                <TextBlock Margin="0,6,0,0"
+                           Text="{Binding ScriptUnsupportedCapabilitiesMessage}"
+                           Foreground="DarkRed"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding ScriptUnsupportedCapabilitiesMessage, Converter={StaticResource NullToVisibilityConverter}}" />
                 <GroupBox Margin="0,8,0,0" Header="Validation Summary">
                   <StackPanel Margin="8">
                     <TextBlock Text="{Binding ScriptFolderCountLabel}" />
@@ -154,11 +175,20 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Button Width="160" Margin="0,8,0,0" Content="Apply Script" Command="{Binding ApplyScriptCommand}" />
+                <TextBlock Margin="0,8,0,0"
+                           Foreground="#FF6B7280"
+                           Text="Scripts are declarative previews. They do not install tools or execute commands."
+                           TextWrapping="Wrap" />
+                <Button Width="160"
+                        Margin="0,8,0,0"
+                        Content="Apply Script"
+                        Command="{Binding ApplyScriptCommand}"
+                        ToolTip="{Binding ApplyScriptDisabledReason}"
+                        ToolTipService.ShowOnDisabled="True" />
               </StackPanel>
             </GroupBox>
             <GroupBox Header="Source Control" Visibility="{Binding HasSourceControl, Converter={StaticResource BooleanToVisibilityConverter}}">
-              <TextBlock Margin="12" Text="Source control integration is available when enabled by the environment profile." TextWrapping="Wrap" />
+              <TextBlock Margin="12" Text="Source control integration is optional and enabled only by the environment profile." TextWrapping="Wrap" />
             </GroupBox>
             <GroupBox Margin="0,12,0,0" Header="Artifact Export" Visibility="{Binding HasArtifactExport, Converter={StaticResource BooleanToVisibilityConverter}}">
               <StackPanel Margin="12">
@@ -177,7 +207,8 @@
               <StackPanel Margin="12">
                 <ListBox ItemsSource="{Binding DatabaseIntents}"
                          SelectedItem="{Binding SelectedDatabaseIntent}"
-                         BorderThickness="0">
+                         BorderThickness="0"
+                         IsEnabled="{Binding HasActiveWorkspace}">
                   <ListBox.ItemTemplate>
                     <DataTemplate>
                       <StackPanel Margin="0,0,0,8">
@@ -188,6 +219,9 @@
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
+                <TextBlock Margin="0,4,0,0"
+                           Foreground="#FF6B7280"
+                           Text="Database support is not implemented by design." />
               </StackPanel>
             </GroupBox>
           </StackPanel>

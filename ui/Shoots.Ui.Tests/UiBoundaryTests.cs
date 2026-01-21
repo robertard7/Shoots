@@ -33,6 +33,27 @@ public sealed class UiBoundaryTests
     }
 
     [Fact]
+    public void UiDoesNotReferenceGitHubSdk()
+    {
+        var references = typeof(App).Assembly.GetReferencedAssemblies();
+        Assert.DoesNotContain(references, reference =>
+            reference.Name is not null &&
+            (reference.Name.Contains("Octokit", StringComparison.OrdinalIgnoreCase) ||
+             reference.Name.Contains("GitHub", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public void UiReferencesRuntimeFacadeOnly()
+    {
+        var references = typeof(App).Assembly.GetReferencedAssemblies()
+            .Select(reference => reference.Name)
+            .Where(name => name is not null && name.StartsWith("Shoots.Runtime", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.DoesNotContain(references, name => name != "Shoots.Runtime.Ui.Abstractions");
+    }
+
+    [Fact]
     public void EnvironmentNamespaceAvoidsRuntimeTypes()
     {
         var environmentTypes = typeof(EnvironmentProfileService).Assembly

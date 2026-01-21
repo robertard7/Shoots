@@ -9,6 +9,7 @@ namespace Shoots.UI.Environment;
 public sealed class EnvironmentScriptLoader
 {
     public const string FileName = ".shoots-env.json";
+    public const int SupportedSchemaVersion = 1;
 
     public bool TryLoad(string directory, out EnvironmentScript? script, out string? error)
     {
@@ -42,6 +43,11 @@ public sealed class EnvironmentScriptLoader
 
             return true;
         }
+        catch (JsonException)
+        {
+            error = "Script payload contains unknown or invalid fields.";
+            return false;
+        }
         catch (Exception ex)
         {
             error = ex.Message;
@@ -52,10 +58,12 @@ public sealed class EnvironmentScriptLoader
     private static JsonSerializerOptions JsonOptions() =>
         new()
         {
-            PropertyNameCaseInsensitive = true
+            PropertyNameCaseInsensitive = true,
+            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
         };
 
     private sealed record EnvironmentScriptDocument(
+        int SchemaVersion,
         string Name,
         string Description,
         string[]? DeclaredCapabilities,
@@ -65,6 +73,12 @@ public sealed class EnvironmentScriptLoader
         {
             script = null;
             error = null;
+
+            if (SchemaVersion != SupportedSchemaVersion)
+            {
+                error = $"Unsupported script schema version: {SchemaVersion}.";
+                return false;
+            }
 
             var caps = EnvironmentCapability.None;
             var unknownCaps = new List<string>();

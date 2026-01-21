@@ -21,6 +21,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly EnvironmentScriptLoader _scriptLoader;
     private readonly IProjectWorkspaceProvider _workspaceProvider;
     private readonly IWorkspaceShellService _workspaceShell;
+    private readonly IDatabaseIntentStore _databaseIntentStore;
+    private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private ExecutionState _state;
     private BuildPlan? _plan;
     private IEnvironmentProfile? _selectedProfile;
@@ -31,7 +33,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string? _environmentInfoMessage;
     private ProjectWorkspace? _activeWorkspace;
     private string _scriptSearchPath = string.Empty;
-    private IDatabaseIntent? _selectedDatabaseIntent;
+    private string? _scriptUnsupportedCapabilitiesMessage;
+    private DatabaseIntentOption? _selectedDatabaseIntent;
 
     public MainWindowViewModel(
         IExecutionCommandService commandService,
@@ -40,7 +43,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         IEnvironmentProfilePrompt profilePrompt,
         EnvironmentScriptLoader scriptLoader,
         IProjectWorkspaceProvider workspaceProvider,
-        IWorkspaceShellService workspaceShell)
+        IWorkspaceShellService workspaceShell,
+        IDatabaseIntentStore databaseIntentStore)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
@@ -49,6 +53,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _scriptLoader = scriptLoader ?? throw new ArgumentNullException(nameof(scriptLoader));
         _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
         _workspaceShell = workspaceShell ?? throw new ArgumentNullException(nameof(workspaceShell));
+        _databaseIntentStore = databaseIntentStore ?? throw new ArgumentNullException(nameof(databaseIntentStore));
         _state = ExecutionState.Idle;
 
         StartCommand = new AsyncRelayCommand(StartAsync, CanStart);
@@ -56,24 +61,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RefreshStatusCommand = new AsyncRelayCommand(RefreshStatusAsync);
         ApplyEnvironmentCommand = new AsyncRelayCommand(ApplyEnvironmentAsync, CanApplyEnvironment);
         ApplyScriptCommand = new AsyncRelayCommand(ApplyScriptAsync, CanApplyScript);
-        RemoveWorkspaceCommand = new AsyncRelayCommand(RemoveWorkspaceAsync);
-        OpenWorkspaceCommand = new AsyncRelayCommand(OpenWorkspaceAsync);
+        RemoveWorkspaceCommand = new AsyncRelayCommand(RemoveWorkspaceAsync, CanRemoveWorkspace);
+        OpenWorkspaceCommand = new AsyncRelayCommand(OpenWorkspaceAsync, CanOpenWorkspace);
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
         EnvironmentCapabilities = Array.Empty<string>();
         EnvironmentCreatedPaths = Array.Empty<string>();
         EnvironmentAppliedCapabilities = Array.Empty<string>();
 
-        RecentWorkspaces = new ObservableCollection<ProjectWorkspace>();
+        _recentWorkspaces = new ObservableCollection<ProjectWorkspace>();
+        RecentWorkspaces = new ReadOnlyObservableCollection<ProjectWorkspace>(_recentWorkspaces);
         RefreshRecentWorkspaces();
         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
-        DatabaseIntents = new ReadOnlyCollection<IDatabaseIntent>(new IDatabaseIntent[]
+        DatabaseIntents = new ReadOnlyCollection<DatabaseIntentOption>(new[]
         {
-            new DatabaseIntentNone(),
-            new DatabaseIntentLocalFile(),
-            new DatabaseIntentExternalService()
+            new DatabaseIntentOption(DatabaseIntent.None, "None", "No database intent declared."),
+            new DatabaseIntentOption(DatabaseIntent.Local, "Local file-based (future)", "Reserve space for a future file-backed database option."),
+            new DatabaseIntentOption(DatabaseIntent.External, "External service (future)", "Reserve space for a future external database service option."),
+            new DatabaseIntentOption(DatabaseIntent.Undecided, "Undecided", "Explicitly defer any database intent selection.")
         });
-        SelectedDatabaseIntent = DatabaseIntents.FirstOrDefault();
+        SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
+            ?? DatabaseIntents.FirstOrDefault();
         LoadEnvironmentScript();
     }
 
@@ -194,11 +202,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string ScriptSearchPath => _scriptSearchPath;
 
+    public string? ScriptUnsupportedCapabilitiesMessage => _scriptUnsupportedCapabilitiesMessage;
+
     public string ScriptFolderCountLabel => $"Folders to create: {ScriptFolderCount}";
 
     public int ScriptFolderCount => _environmentScript?.SandboxSteps.Count(step => step.Kind == SandboxPreparationKind.CreateDirectory) ?? 0;
 
-    public ObservableCollection<ProjectWorkspace> RecentWorkspaces { get; }
+    public ReadOnlyObservableCollection<ProjectWorkspace> RecentWorkspaces { get; }
 
     public ProjectWorkspace? ActiveWorkspace
     {
@@ -211,13 +221,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _activeWorkspace = value;
             OnPropertyChanged(nameof(ActiveWorkspace));
             OnPropertyChanged(nameof(ActiveWorkspaceName));
+            OnPropertyChanged(nameof(HasActiveWorkspace));
+            OnPropertyChanged(nameof(HasNoActiveWorkspace));
             OnPropertyChanged(nameof(SelectedWorkspace));
+            OnPropertyChanged(nameof(WindowTitle));
             LoadEnvironmentScript();
             UpdateProfileCapabilities();
+            UpdateDatabaseIntentSelection();
+            RaiseCommandCanExecute();
         }
     }
 
     public string ActiveWorkspaceName => ActiveWorkspace?.Name ?? "No project selected";
+
+    public bool HasActiveWorkspace => ActiveWorkspace is not null;
+
+    public bool HasNoActiveWorkspace => !HasActiveWorkspace;
 
     public ProjectWorkspace? SelectedWorkspace
     {
@@ -250,9 +269,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public bool HasArtifactExport => _capabilityProvider.HasCapability(EnvironmentCapability.ArtifactExport);
 
-    public IReadOnlyList<IDatabaseIntent> DatabaseIntents { get; }
+    public IReadOnlyList<DatabaseIntentOption> DatabaseIntents { get; }
 
-    public IDatabaseIntent? SelectedDatabaseIntent
+    public DatabaseIntentOption? SelectedDatabaseIntent
     {
         get => _selectedDatabaseIntent;
         set
@@ -262,8 +281,26 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             _selectedDatabaseIntent = value;
             OnPropertyChanged(nameof(SelectedDatabaseIntent));
+            if (ActiveWorkspace is not null && value is not null)
+                _databaseIntentStore.SetIntent(ActiveWorkspace.RootPath, value.Intent);
         }
     }
+
+    public string WindowTitle => ActiveWorkspace is null
+        ? "Shoots"
+        : $"Shoots — {ActiveWorkspace.Name}";
+
+    public string WorkspaceIsolationTooltip => "Workspace selection is UI-only. It never executes scripts or changes runtime determinism.";
+
+    public bool HasNoWorkspaces => _recentWorkspaces.Count == 0;
+
+    public bool HasWorkspaces => _recentWorkspaces.Count > 0;
+
+    public string StartDisabledReason => GetStartDisabledReason();
+
+    public string ApplyEnvironmentDisabledReason => GetApplyEnvironmentDisabledReason();
+
+    public string ApplyScriptDisabledReason => GetApplyScriptDisabledReason();
 
     public void SetPlan(BuildPlan? plan) => Plan = plan;
 
@@ -456,26 +493,31 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _environmentScript = script;
             EnvironmentInfoMessage = $"Environment script loaded from {_scriptSearchPath}.";
             EnvironmentErrorMessage = null;
+            _scriptUnsupportedCapabilitiesMessage = DescribeUnsupportedCapabilities(script.DeclaredCapabilities);
         }
         else if (!string.IsNullOrWhiteSpace(error))
         {
             _environmentScript = null;
             EnvironmentErrorMessage = error;
             EnvironmentInfoMessage = null;
+            _scriptUnsupportedCapabilitiesMessage = null;
         }
         else
         {
             _environmentScript = null;
             EnvironmentInfoMessage = null;
             EnvironmentErrorMessage = null;
+            _scriptUnsupportedCapabilitiesMessage = null;
         }
 
         OnPropertyChanged(nameof(ScriptPreview));
         OnPropertyChanged(nameof(ScriptCapabilities));
         OnPropertyChanged(nameof(ScriptSteps));
         OnPropertyChanged(nameof(ScriptSearchPath));
+        OnPropertyChanged(nameof(ScriptUnsupportedCapabilitiesMessage));
         OnPropertyChanged(nameof(ScriptFolderCount));
         OnPropertyChanged(nameof(ScriptFolderCountLabel));
+        OnPropertyChanged(nameof(ApplyScriptDisabledReason));
         RaiseCommandCanExecute();
     }
 
@@ -496,6 +538,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ApplyScriptCommand.RaiseCanExecuteChanged();
         RemoveWorkspaceCommand.RaiseCanExecuteChanged();
         OpenWorkspaceCommand.RaiseCanExecuteChanged();
+        OnPropertyChanged(nameof(StartDisabledReason));
+        OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));
+        OnPropertyChanged(nameof(ApplyScriptDisabledReason));
+    }
+
+    private bool CanRemoveWorkspace()
+    {
+        return SelectedWorkspace is not null;
     }
 
     private Task RemoveWorkspaceAsync(object? parameter)
@@ -508,6 +558,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         return Task.CompletedTask;
+    }
+
+    private bool CanOpenWorkspace()
+    {
+        return SelectedWorkspace is not null && !string.IsNullOrWhiteSpace(SelectedWorkspace.RootPath);
     }
 
     private Task OpenWorkspaceAsync(object? parameter)
@@ -527,10 +582,81 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void RefreshRecentWorkspaces()
     {
-        RecentWorkspaces.Clear();
+        _recentWorkspaces.Clear();
         foreach (var workspace in _workspaceProvider.GetRecentWorkspaces())
-            RecentWorkspaces.Add(workspace);
+            _recentWorkspaces.Add(workspace);
+
+        OnPropertyChanged(nameof(HasNoWorkspaces));
+        OnPropertyChanged(nameof(HasWorkspaces));
     }
+
+    private void UpdateDatabaseIntentSelection()
+    {
+        if (ActiveWorkspace is null)
+        {
+            SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
+                ?? DatabaseIntents.FirstOrDefault();
+            return;
+        }
+
+        var intent = _databaseIntentStore.GetIntent(ActiveWorkspace.RootPath);
+        SelectedDatabaseIntent = DatabaseIntents.FirstOrDefault(option => option.Intent == intent)
+            ?? DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
+            ?? DatabaseIntents.FirstOrDefault();
+    }
+
+    private string? DescribeUnsupportedCapabilities(EnvironmentCapability declared)
+    {
+        var supported = EnvironmentCapability.SourceControl | EnvironmentCapability.Database | EnvironmentCapability.ArtifactExport;
+        var unsupported = declared & ~supported;
+        if (unsupported == EnvironmentCapability.None)
+            return null;
+
+        return $"Script declares capabilities not supported by this UI: {unsupported}.";
+    }
+
+    private string GetStartDisabledReason()
+    {
+        if (Plan is null)
+            return "No execution plan is loaded.";
+
+        if (State is ExecutionState.Running or ExecutionState.Waiting or ExecutionState.Replaying)
+            return "Execution is already in progress.";
+
+        return "Ready to start execution.";
+    }
+
+    private string GetApplyEnvironmentDisabledReason()
+    {
+        if (SelectedProfile is null)
+            return "Select an environment profile to apply.";
+
+        if (State is ExecutionState.Running or ExecutionState.Waiting or ExecutionState.Replaying)
+            return "Stop execution before applying an environment.";
+
+        if (_lastEnvironmentResult is not null &&
+            string.Equals(_lastEnvironmentResult.ProfileName, SelectedProfile.Name, StringComparison.Ordinal))
+            return "This environment profile is already applied.";
+
+        return "Apply the selected environment profile.";
+    }
+
+    private string GetApplyScriptDisabledReason()
+    {
+        if (_environmentScript is null)
+            return "No script preview is loaded.";
+
+        if (State is ExecutionState.Running or ExecutionState.Waiting or ExecutionState.Replaying)
+            return "Stop execution before applying a script.";
+
+        if (_lastEnvironmentResult is not null &&
+            string.Equals(_lastEnvironmentResult.ProfileName, _environmentScript.Name, StringComparison.Ordinal))
+            return "This script is already applied.";
+
+        return "Apply the previewed script.";
+    }
+
+    public ISourceControlIntent? SourceControlIntent => null;
 
     private void OnPropertyChanged(string propertyName) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

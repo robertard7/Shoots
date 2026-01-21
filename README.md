@@ -127,12 +127,26 @@ PROJECT WORKSPACE GUARANTEES
 - Switching workspaces is reversible and non-destructive
 - Recent workspace files can be deleted safely
 
+DATABASE INTENT (NO SHIPPED DATABASE)
+-------------------------------------
+
+Shoots does not ship or configure a database by design. The UI exposes a
+database intent selector only to record future intent, not to provision
+storage, connections, or vendor dependencies.
+
 WHAT SHOOTS WILL NEVER DO
 -------------------------
 
 - Force GitHub or any source control provider
 - Force database usage of any kind
 - Hide automation or background execution
+
+NON-GOALS
+---------
+
+- Provide built-in database servers or migrations
+- Automate environment provisioning or installation
+- Require GitHub, authentication, or cloud services
 
 WHAT UI IS NOT ALLOWED TO DO
 ----------------------------
