@@ -14,16 +14,32 @@
     </Grid.ColumnDefinitions>
     <StackPanel Grid.Column="0" Margin="0,0,16,0">
       <TextBlock Text="Project Workspace" FontWeight="SemiBold" />
-      <Button Margin="0,8,0,0" Content="New Project" IsEnabled="False" ToolTip="Coming later" />
+      <Button Margin="0,8,0,0" Content="New Project" IsEnabled="False" ToolTip="Project creation is coming later" />
       <TextBlock Margin="0,16,0,0" Text="Recent Projects" FontWeight="SemiBold" />
       <ListBox ItemsSource="{Binding RecentWorkspaces}"
                SelectedItem="{Binding SelectedWorkspace, Mode=TwoWay}"
                DisplayMemberPath="Name"
                Margin="0,8,0,0">
+        <ListBox.ContextMenu>
+          <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="Remove from list"
+                      Command="{Binding RemoveWorkspaceCommand}"
+                      CommandParameter="{Binding SelectedWorkspace}" />
+            <MenuItem Header="Open folder"
+                      Command="{Binding OpenWorkspaceCommand}"
+                      CommandParameter="{Binding SelectedWorkspace}" />
+          </ContextMenu>
+        </ListBox.ContextMenu>
         <ListBox.ItemContainerStyle>
           <Style TargetType="ListBoxItem">
             <Setter Property="Padding" Value="6,4" />
             <Setter Property="Margin" Value="0,2,0,0" />
+            <Style.Triggers>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="#FF2B6CB0" />
+              </Trigger>
+            </Style.Triggers>
           </Style>
         </ListBox.ItemContainerStyle>
       </ListBox>
@@ -107,18 +123,30 @@
             </StackPanel>
           </GroupBox>
           <StackPanel Grid.Row="4" Margin="0,12,0,0">
+            <Border Background="#FFFDECC8"
+                    CornerRadius="4"
+                    Margin="0,0,0,8"
+                    Padding="8"
+                    Visibility="{Binding ScriptPreview, Converter={StaticResource NullToVisibilityConverter}}">
+              <TextBlock Text="Preview only until applied." FontWeight="SemiBold" />
+            </Border>
             <GroupBox Header="Script Preview" Margin="0,0,0,12" Visibility="{Binding ScriptPreview, Converter={StaticResource NullToVisibilityConverter}}">
               <StackPanel Margin="12">
                 <TextBlock Text="{Binding ScriptSearchPath}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding ScriptPreview.Name}" FontWeight="SemiBold" />
                 <TextBlock Margin="0,4,0,0" Text="{Binding ScriptPreview.Description}" TextWrapping="Wrap" />
-                <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding ScriptCapabilities}">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                      <TextBlock Text="{Binding}" />
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <GroupBox Margin="0,8,0,0" Header="Validation Summary">
+                  <StackPanel Margin="8">
+                    <TextBlock Text="{Binding ScriptFolderCountLabel}" />
+                    <ItemsControl Margin="0,6,0,0" ItemsSource="{Binding ScriptCapabilities}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </GroupBox>
                 <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding ScriptSteps}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -144,10 +172,22 @@
       <TabItem Header="Database" Visibility="{Binding HasDatabase, Converter={StaticResource BooleanToVisibilityConverter}}">
         <Grid Margin="16">
           <StackPanel>
-            <TextBlock Text="Database access is optional and never required for Shoots execution." TextWrapping="Wrap" />
-            <GroupBox Margin="0,12,0,0" Header="Configuration">
+            <TextBlock Text="Database intent is optional and never required for Shoots execution." TextWrapping="Wrap" />
+            <GroupBox Margin="0,12,0,0" Header="Intent">
               <StackPanel Margin="12">
-                <TextBlock Text="No database configured." />
+                <ListBox ItemsSource="{Binding DatabaseIntents}"
+                         SelectedItem="{Binding SelectedDatabaseIntent}"
+                         BorderThickness="0">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Margin="0,0,0,8">
+                        <RadioButton Content="{Binding Name}"
+                                     IsChecked="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=IsSelected}" />
+                        <TextBlock Margin="24,2,0,0" Text="{Binding Description}" TextWrapping="Wrap" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
               </StackPanel>
             </GroupBox>
           </StackPanel>

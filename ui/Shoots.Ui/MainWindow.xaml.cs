@@ -12,7 +12,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         var workspaceStore = new ProjectWorkspaceStore();
-        var workspaceProvider = new ProjectWorkspaceProvider(workspaceStore.LoadRecentWorkspaces());
+        var workspaceProvider = new ProjectWorkspaceProvider(workspaceStore);
+        var workspaceShell = new WorkspaceShellService();
         DataContext = new MainWindowViewModel(
             new NullExecutionCommandService(),
             new EnvironmentProfileService(),
@@ -20,6 +21,6 @@ public partial class MainWindow : Window
             new EnvironmentProfilePrompt(),
             new EnvironmentScriptLoader(),
             workspaceProvider,
-            workspaceStore);
+            workspaceShell);
     }
 }

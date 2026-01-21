@@ -7,10 +7,10 @@ using System.Text.Json;
 namespace Shoots.UI.Projects;
 
 // UI-only. Declarative. Non-executable. Not runtime-affecting.
-public sealed class ProjectWorkspaceStore
+public sealed class ProjectWorkspaceStore : IProjectWorkspaceStore
 {
     public const int MaxRecentWorkspaces = 10;
-    public const string FileName = "recent-workspaces.json";
+    public const string FileName = "workspaces.json";
 
     private readonly string _storePath;
 
@@ -29,14 +29,21 @@ public sealed class ProjectWorkspaceStore
         if (!File.Exists(_storePath))
             return Array.Empty<ProjectWorkspace>();
 
-        var json = File.ReadAllText(_storePath);
-        var workspaces = JsonSerializer.Deserialize<List<ProjectWorkspace>>(json, JsonOptions())
-            ?? new List<ProjectWorkspace>();
+        try
+        {
+            var json = File.ReadAllText(_storePath);
+            var workspaces = JsonSerializer.Deserialize<List<ProjectWorkspace>>(json, JsonOptions())
+                ?? new List<ProjectWorkspace>();
 
-        return workspaces
-            .OrderByDescending(workspace => workspace.LastOpenedUtc)
-            .Take(MaxRecentWorkspaces)
-            .ToList();
+            return workspaces
+                .OrderByDescending(workspace => workspace.LastOpenedUtc)
+                .Take(MaxRecentWorkspaces)
+                .ToList();
+        }
+        catch (Exception)
+        {
+            return Array.Empty<ProjectWorkspace>();
+        }
     }
 
     public void SaveRecentWorkspaces(IEnumerable<ProjectWorkspace> workspaces)
