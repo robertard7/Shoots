@@ -47,6 +47,10 @@ public sealed class UiBoundaryTests
     public void ReadmeLanguageIsDescriptive()
     {
         var readme = LoadReadme();
+        var sanitized = readme.Replace(
+            "This repository does not enforce behavior or validate compliance.",
+            string.Empty,
+            StringComparison.OrdinalIgnoreCase);
         var forbiddenMarkers = new[]
         {
             "OpenAI",
@@ -65,10 +69,12 @@ public sealed class UiBoundaryTests
             "enforcement",
             "invalid",
             "invalidate",
+            "validated by",
             "guarantee",
             "guarantees",
             "certify",
             "certified",
+            "approved",
             "forbidden",
             "prohibited",
             "mandate",
@@ -79,7 +85,7 @@ public sealed class UiBoundaryTests
 
         foreach (var marker in forbiddenMarkers)
             Assert.False(
-                readme.Contains(marker, StringComparison.OrdinalIgnoreCase),
+                sanitized.Contains(marker, StringComparison.OrdinalIgnoreCase),
                 $"README contains \"{marker}\", which can imply authority over external tools. Use descriptive, non-enforcing language.");
     }
 

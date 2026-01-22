@@ -170,18 +170,25 @@ Shoots does not validate agents, control execution, or assert correctness.
 
 ---
 
-BUILD & VALIDATION
-------------------
+DISCLAIMER
+----------
+
+This repository does not enforce behavior or validate compliance.
+
+---
+
+BUILD & CHECKS
+--------------
 
 Builds and tests are typically executed via CI workflows.
 
-Validation results are useful context when a workflow has run and completed.
+Workflow results are useful context when a workflow has run and completed.
 
 
-VALIDATION WORKFLOW (TYPICAL)
------------------------------
+CHECK WORKFLOW (TYPICAL)
+------------------------
 
-When validation is needed, a typical sequence is:
+When checks are needed, a typical sequence is:
 
     dotnet restore
     dotnet build Shoots.sln -c Release
