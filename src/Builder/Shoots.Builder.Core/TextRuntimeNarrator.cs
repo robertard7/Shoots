@@ -8,7 +8,7 @@ namespace Shoots.Builder.Core;
 /// </summary>
 public sealed class TextRuntimeNarrator : IRuntimeNarrator
 {
-    private static readonly Action<string> Noop = _ => { };
+    private static readonly Action<string> Noop = static _ => { };
     private readonly Action<string> _emit;
 
     public TextRuntimeNarrator(Action<string> emit)
