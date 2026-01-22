@@ -1,6 +1,10 @@
+using System;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Shoots.UI;
 using Shoots.UI.Environment;
+using Shoots.UI.Projects;
 using Xunit;
 
 namespace Shoots.UI.Tests;
@@ -19,6 +23,69 @@ public sealed class UiBoundaryTests
     {
         var references = typeof(App).Assembly.GetReferencedAssemblies();
         Assert.DoesNotContain(references, reference => reference.Name == "Shoots.Runtime.Loader");
+    }
+
+    [Fact]
+    public void UiDoesNotReferenceSystemDiagnosticsProcess()
+    {
+        var references = typeof(App).Assembly.GetReferencedAssemblies();
+        Assert.DoesNotContain(references, reference => reference.Name == "System.Diagnostics.Process");
+    }
+
+    [Fact]
+    public void UiDoesNotReferenceGitHubSdk()
+    {
+        var references = typeof(App).Assembly.GetReferencedAssemblies();
+        Assert.DoesNotContain(references, reference =>
+            reference.Name is not null &&
+            (reference.Name.Contains("Octokit", StringComparison.OrdinalIgnoreCase) ||
+             reference.Name.Contains("GitHub", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public void ReadmeAvoidsAiVendorAndEnforcementClaims()
+    {
+        var readme = LoadReadme();
+        var sanitized = readme.Replace("Documentation only. No enforcement implied.", string.Empty, StringComparison.OrdinalIgnoreCase);
+        var forbiddenMarkers = new[]
+        {
+            "OpenAI",
+            "Anthropic",
+            "Codex",
+            "GPT",
+            "GitHub",
+            "Octokit",
+            "invalid output",
+            "must comply",
+            "must",
+            "shall",
+            "required",
+            "enforce",
+            "enforcement",
+            "invalidate",
+            "forbidden",
+            "prohibited",
+            "mandate",
+            "violation",
+            "exclusive",
+            "exclusively"
+        };
+
+        foreach (var marker in forbiddenMarkers)
+            Assert.False(
+                sanitized.Contains(marker, StringComparison.OrdinalIgnoreCase),
+                $"README contains \"{marker}\", which implies external control or enforcement. Use descriptive language only.");
+    }
+
+    [Fact]
+    public void UiReferencesRuntimeFacadeOnly()
+    {
+        var references = typeof(App).Assembly.GetReferencedAssemblies()
+            .Select(reference => reference.Name)
+            .Where(name => name is not null && name.StartsWith("Shoots.Runtime", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.DoesNotContain(references, name => name != "Shoots.Runtime.Ui.Abstractions");
     }
 
     [Fact]
@@ -48,5 +115,123 @@ public sealed class UiBoundaryTests
                 Assert.DoesNotContain("Shoots.Runtime", memberType.Namespace);
             }
         }
+    }
+
+    [Fact]
+    public void EnvironmentNamespaceAvoidsExecutableDelegatesAndAsyncMethods()
+    {
+        var environmentTypes = typeof(EnvironmentProfileService).Assembly
+            .GetTypes()
+            .Where(type => type.Namespace == "Shoots.UI.Environment")
+            .ToList();
+
+        foreach (var type in environmentTypes)
+        {
+            var members = type.GetMembers();
+            foreach (var member in members)
+            {
+                var memberType = member switch
+                {
+                    System.Reflection.PropertyInfo property => property.PropertyType,
+                    System.Reflection.FieldInfo field => field.FieldType,
+                    System.Reflection.MethodInfo method => method.ReturnType,
+                    _ => null
+                };
+
+                if (memberType is null)
+                    continue;
+
+                Assert.False(typeof(Delegate).IsAssignableFrom(memberType), $"Delegate type found: {memberType.FullName}");
+                Assert.False(IsAsyncReturnType(memberType), $"Async method return type found: {memberType.FullName}");
+            }
+        }
+    }
+
+    [Fact]
+    public void ProjectsNamespaceAvoidsRuntimeTypes()
+    {
+        var projectTypes = typeof(ProjectWorkspaceProvider).Assembly
+            .GetTypes()
+            .Where(type => type.Namespace == "Shoots.UI.Projects")
+            .ToList();
+
+        foreach (var type in projectTypes)
+        {
+            var members = type.GetMembers();
+            foreach (var member in members)
+            {
+                var memberType = member switch
+                {
+                    System.Reflection.PropertyInfo property => property.PropertyType,
+                    System.Reflection.FieldInfo field => field.FieldType,
+                    System.Reflection.MethodInfo method => method.ReturnType,
+                    _ => null
+                };
+
+                if (memberType is null || memberType.Namespace is null)
+                    continue;
+
+                Assert.DoesNotContain("Shoots.Runtime", memberType.Namespace);
+            }
+        }
+    }
+
+    [Fact]
+    public void EnvironmentScriptLoaderDoesNotCreateDirectories()
+    {
+        var loader = new EnvironmentScriptLoader();
+        var tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+
+        var result = loader.TryLoad(tempRoot, out _, out _);
+
+        Assert.False(result);
+        Assert.False(Directory.Exists(tempRoot));
+    }
+
+    [Fact]
+    public void ProjectWorkspaceStorePersistsRecentWorkspaces()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var store = new ProjectWorkspaceStore(tempRoot);
+        var now = DateTimeOffset.UtcNow;
+        var workspaces = new[]
+        {
+            new ProjectWorkspace("Alpha", "C:\\Alpha", now.AddHours(-2)),
+            new ProjectWorkspace("Beta", "C:\\Beta", now)
+        };
+
+        store.SaveRecentWorkspaces(workspaces);
+        var loaded = store.LoadRecentWorkspaces().ToList();
+
+        Assert.Equal(2, loaded.Count);
+        Assert.Equal("Beta", loaded[0].Name);
+        Assert.Equal("Alpha", loaded[1].Name);
+    }
+
+    private static bool IsAsyncReturnType(Type type)
+    {
+        if (type == typeof(Task) || type == typeof(ValueTask))
+            return true;
+
+        if (!type.IsGenericType)
+            return false;
+
+        var definition = type.GetGenericTypeDefinition();
+        return definition == typeof(Task<>) || definition == typeof(ValueTask<>);
+    }
+
+    private static string LoadReadme()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "README.md");
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("README.md not found.");
     }
 }

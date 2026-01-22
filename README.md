@@ -12,7 +12,7 @@ WHAT THIS IS
 
 Shoots is a sealed execution and orchestration system designed around one core principle:
 
-    The system must be correct before it is convenient.
+    The system should be correct before it is convenient.
 
 Shoots is composed of two primary components:
 
@@ -20,7 +20,7 @@ Shoots is composed of two primary components:
   The authoritative execution engine. It defines what can be executed, how commands are described, and how results are produced.
 
 - Shoots.Builder
-  The orchestrator. It loads modules, invokes the runtime, emits artifacts, and enforces system laws.
+  The orchestrator. It loads modules, invokes the runtime, emits artifacts, and follows system laws.
 
 Both components live in this repository as submodules and are versioned together to eliminate drift.
 
@@ -41,7 +41,7 @@ If something fails, it fails loudly and with classification.
 CORE LAWS
 ---------
 
-Shoots enforces several non-negotiable laws:
+Shoots defines several non-negotiable laws:
 
 1. Runtime Authority
    The runtime is the sole authority on execution. Nothing bypasses it.
@@ -53,14 +53,14 @@ Shoots enforces several non-negotiable laws:
    Failures are categorized (Success, Invalid, Blocked). Errors are not dead ends.
 
 4. No Phantom Success
-   Nothing is considered successful unless confirmed by the build runner.
+   Success is reported only when confirmed by build output.
 
-These laws are enforced mechanically, not by convention.
+These laws are mechanical, not conventional.
 
 ---
 
-WHAT THIS SYSTEM GUARANTEES
----------------------------
+WHAT THIS SYSTEM AIMS FOR
+-------------------------
 
 - Deterministic execution based on the committed runtime and plan inputs
 - Provider output cannot advance routing or override graph authority
@@ -84,13 +84,13 @@ REPOSITORY STRUCTURE
 Shoots/
 ├─ Shoots.Runtime/     (execution engine)
 ├─ Shoots.Builder/     (orchestrator)
-├─ .ai/                (agent patches and policy enforcement)
+├─ .ai/                (agent patches and guidance)
 ├─ tools/              (tooling and handlers)
 ├─ etc/                (configuration)
 ├─ ui/                 (user interface)
-└─ Agent.md            (AI agent operating law)
+└─ Agent.md            (contributor guidance)
 
-Do not restructure this layout unless explicitly instructed.
+This layout is intended to stay stable unless explicitly instructed.
 
 ENVIRONMENT PROFILES EXPLAINED
 ------------------------------
@@ -105,46 +105,82 @@ These profiles:
 
 Applying a profile is a user-driven UI action and is always optional.
 
-WHAT UI IS NOT ALLOWED TO DO
+PROJECT WORKSPACES
+------------------
+
+Shoots includes a UI-only Project Workspace experience for organizing context.
+
+Workspaces:
+- Are pure UI data (name, root path, last opened time)
+- Never execute commands or scripts
+- Do not depend on any source control provider, database, or external service
+- Persist only recent selections in LocalAppData/Shoots/workspaces.json
+
+Workspace isolation is strictly visual: each selection scopes UI context and
+environment script previews without mutating runtime behavior or determinism.
+
+PROJECT WORKSPACE GUARANTEES
 ----------------------------
+
+- Workspaces never execute commands or scripts
+- Workspace data stays out of runtime assemblies
+- Switching workspaces is reversible and non-destructive
+- Recent workspace files can be deleted safely
+
+DATABASE INTENT (NO SHIPPED DATABASE)
+-------------------------------------
+
+Shoots does not ship or configure a database by design. The UI exposes a
+database intent selector only to record future intent, not to provision
+storage, connections, or vendor dependencies.
+
+WHAT SHOOTS DOES NOT AIM TO DO
+------------------------------
+
+- Force any source control provider
+- Force database usage of any kind
+- Hide automation or background execution
+
+NON-GOALS
+---------
+
+- AI governance or policy control
+- Output validation or tool control
+- Security guarantees or compliance certification
+- Built-in database servers or migrations
+- Automated environment provisioning or installation
+
+WHAT UI DOES NOT DO
+-------------------
 
 - Execute commands or scripts
 - Modify runtime routing, traces, or determinism inputs
-- Require source control, databases, or external services
+- Depend on source control, databases, or external services
 - Touch Runtime.Core directly
 
 ---
 
-AI / CODEX USAGE
-----------------
-
-This repository includes a strict Agent.md file.
-
-Any AI agent interacting with this repo must:
-
-- Operate only within the repository root
-- Produce unified diffs only
-- Never claim execution or fabricate results
-- Rely exclusively on the Windows self-hosted GitHub Actions runner for validation
-
-Agents that violate these rules produce invalid output by definition.
+AI & AUTOMATION NOTES
+---------------------
+Documentation only. No enforcement implied.
+Shoots may be explored, modified, or reviewed using automated tools.
+This repository does not define, restrict, or validate the behavior of such tools.
+All automation behavior is external and user-controlled.
 
 ---
 
 BUILD & VALIDATION
 ------------------
 
-All builds and tests are executed via GitHub Actions using a Windows self-hosted runner.
+Builds and tests are typically executed via CI workflows.
 
-Codex and other agents are not allowed to execute code locally or in containers.
-
-The runner is the single source of truth.
+Validation results are useful context when a workflow has run and completed.
 
 
-CODEX COMMAND CONTRACT
-----------------------
+VALIDATION WORKFLOW (TYPICAL)
+-----------------------------
 
-Codex validation must follow this exact sequence:
+When validation is needed, a typical sequence is:
 
     dotnet restore
     dotnet build Shoots.sln -c Release
@@ -165,7 +201,7 @@ Contributions are not accepted casually.
 This project prioritizes:
 - Determinism over convenience
 - Explicit structure over flexibility
-- Enforcement over documentation
+- Clarity over documentation
 
 If you do not agree with those priorities, this repository will be frustrating.
 
@@ -176,7 +212,7 @@ LICENSE / OWNERSHIP
 
 This repository represents significant original work.
 
-Reuse, redistribution, or derivative systems must respect the author’s intent and licensing terms.
+Reuse, redistribution, or derivative systems should respect the author’s intent and licensing terms.
 
 ---
 

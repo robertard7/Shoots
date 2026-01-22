@@ -1,0 +1,198 @@
+diff --git a/README.md b/README.md
+index d48b516..d8bd084 100644
+--- a/README.md
++++ b/README.md
+@@ -20,7 +20,7 @@ Shoots is composed of two primary components:
+   The authoritative execution engine. It defines what can be executed, how commands are described, and how results are produced.
+ 
+ - Shoots.Builder
+-  The orchestrator. It loads modules, invokes the runtime, emits artifacts, and enforces system laws.
++  The orchestrator. It loads modules, invokes the runtime, emits artifacts, and follows system laws.
+ 
+ Both components live in this repository as submodules and are versioned together to eliminate drift.
+ 
+@@ -41,7 +41,7 @@ If something fails, it fails loudly and with classification.
+ CORE LAWS
+ ---------
+ 
+-Shoots enforces several non-negotiable laws:
++Shoots defines several non-negotiable laws:
+ 
+ 1. Runtime Authority
+    The runtime is the sole authority on execution. Nothing bypasses it.
+@@ -53,14 +53,14 @@ Shoots enforces several non-negotiable laws:
+    Failures are categorized (Success, Invalid, Blocked). Errors are not dead ends.
+ 
+ 4. No Phantom Success
+-   Nothing is considered successful unless confirmed by the build runner.
++   Success is reported only when confirmed by build output.
+ 
+-These laws are enforced mechanically, not by convention.
++These laws are mechanical, not conventional.
+ 
+ ---
+ 
+-WHAT THIS SYSTEM GUARANTEES
+----------------------------
++WHAT THIS SYSTEM AIMS FOR
++-------------------------
+ 
+ - Deterministic execution based on the committed runtime and plan inputs
+ - Provider output cannot advance routing or override graph authority
+@@ -84,13 +84,13 @@ REPOSITORY STRUCTURE
+ Shoots/
+ ├─ Shoots.Runtime/     (execution engine)
+ ├─ Shoots.Builder/     (orchestrator)
+-├─ .ai/                (agent patches and policy enforcement)
++├─ .ai/                (agent patches and guidance)
+ ├─ tools/              (tooling and handlers)
+ ├─ etc/                (configuration)
+ ├─ ui/                 (user interface)
+-└─ Agent.md            (AI agent operating law)
++└─ Agent.md            (contributor guidance)
+ 
+-Do not restructure this layout unless explicitly instructed.
++This layout is intended to stay stable unless explicitly instructed.
+ 
+ ENVIRONMENT PROFILES EXPLAINED
+ ------------------------------
+@@ -113,7 +113,7 @@ Shoots includes a UI-only Project Workspace experience for organizing context.
+ Workspaces:
+ - Are pure UI data (name, root path, last opened time)
+ - Never execute commands or scripts
+-- Do not require GitHub, a database, or any external service
++- Do not depend on any source control provider, database, or external service
+ - Persist only recent selections in LocalAppData/Shoots/workspaces.json
+ 
+ Workspace isolation is strictly visual: each selection scopes UI context and
+@@ -134,51 +134,47 @@ Shoots does not ship or configure a database by design. The UI exposes a
+ database intent selector only to record future intent, not to provision
+ storage, connections, or vendor dependencies.
+ 
+-WHAT SHOOTS WILL NEVER DO
+--------------------------
++WHAT SHOOTS DOES NOT AIM TO DO
++------------------------------
+ 
+-- Force GitHub or any source control provider
++- Force any source control provider
+ - Force database usage of any kind
+ - Hide automation or background execution
+ 
+ NON-GOALS
+ ---------
+ 
+-- Provide built-in database servers or migrations
+-- Automate environment provisioning or installation
+-- Require GitHub, authentication, or cloud services
++- AI governance or policy control
++- Output validation or tool control
++- Security guarantees or compliance certification
++- Built-in database servers or migrations
++- Automated environment provisioning or installation
+ 
+ WHAT UI DOES NOT DO
+ -------------------
+ 
+ - Execute commands or scripts
+ - Modify runtime routing, traces, or determinism inputs
+-- Require source control, databases, or external services
++- Depend on source control, databases, or external services
+ - Touch Runtime.Core directly
+ 
+ ---
+ 
+-AI / AUTOMATION USAGE
++AI & AUTOMATION NOTES
+ ---------------------
+ Documentation only. No enforcement implied.
+-
+-This repository includes guidance in Agent.md for contributors who use AI tools.
+-
+-Suggested expectations for contributions:
+-
+-- Keep changes within the repository root
+-- Provide clean, reviewable diffs
+-- Avoid claiming execution results without evidence
+-- Treat CI results as authoritative only when they run
++Shoots may be explored, modified, or reviewed using automated tools.
++This repository does not define, restrict, or validate the behavior of such tools.
++All automation behavior is external and user-controlled.
+ 
+ ---
+ 
+ BUILD & VALIDATION
+ ------------------
+ 
+-Builds and tests are typically executed via GitHub Actions using a Windows self-hosted runner.
++Builds and tests are typically executed via CI workflows.
+ 
+-Validation results are authoritative when the workflow has run and completed.
++Validation results are useful context when a workflow has run and completed.
+ 
+ 
+ VALIDATION WORKFLOW (TYPICAL)
+@@ -205,7 +201,7 @@ Contributions are not accepted casually.
+ This project prioritizes:
+ - Determinism over convenience
+ - Explicit structure over flexibility
+-- Enforcement over documentation
++- Clarity over documentation
+ 
+ If you do not agree with those priorities, this repository will be frustrating.
+ 
+diff --git a/ui/Shoots.Ui.Tests/UiBoundaryTests.cs b/ui/Shoots.Ui.Tests/UiBoundaryTests.cs
+index 9bd1737..04921c8 100644
+--- a/ui/Shoots.Ui.Tests/UiBoundaryTests.cs
++++ b/ui/Shoots.Ui.Tests/UiBoundaryTests.cs
+@@ -46,18 +46,35 @@ public sealed class UiBoundaryTests
+     public void ReadmeAvoidsAiVendorAndEnforcementClaims()
+     {
+         var readme = LoadReadme();
++        var sanitized = readme.Replace("Documentation only. No enforcement implied.", string.Empty, StringComparison.OrdinalIgnoreCase);
+         var forbiddenMarkers = new[]
+         {
+             "OpenAI",
+             "Anthropic",
+             "Codex",
+             "GPT",
++            "GitHub",
++            "Octokit",
+             "invalid output",
++            "must comply",
++            "must",
++            "shall",
++            "required",
++            "enforce",
++            "enforcement",
++            "invalidate",
++            "forbidden",
++            "prohibited",
++            "mandate",
++            "violation",
++            "exclusive",
+             "exclusively"
+         };
+ 
+         foreach (var marker in forbiddenMarkers)
+-            Assert.DoesNotContain(marker, readme, StringComparison.OrdinalIgnoreCase);
++            Assert.False(
++                sanitized.Contains(marker, StringComparison.OrdinalIgnoreCase),
++                $"README contains \"{marker}\", which implies external control or enforcement. Use descriptive language only.");
+     }
+ 
+     [Fact]
+diff --git a/ui/Shoots.Ui/App.xaml.cs b/ui/Shoots.Ui/App.xaml.cs
+index a73328b..9cbfc24 100644
+--- a/ui/Shoots.Ui/App.xaml.cs
++++ b/ui/Shoots.Ui/App.xaml.cs
+@@ -8,7 +8,8 @@ using System.Windows.Threading;
+ 
+ namespace Shoots.UI;
+ 
+-// UI documents behavior. It does not enforce policy.
++// This UI documents and visualizes state.
++// It does not enforce policy, validate tools, or control external systems.
+ 
+ public partial class App : Application
+ {
