@@ -1,7 +1,7 @@
 # SHOOTS
 ======
 
-Authoritative build system for deterministic, law-driven software execution.
+Deterministic build system for law-driven software execution.
 
 This repository is intentionally strict. If you are looking for a flexible, opinionated, or beginner-friendly framework, this is not it.
 
@@ -17,7 +17,7 @@ Shoots is a sealed execution and orchestration system designed around one core p
 Shoots is composed of two primary components:
 
 - Shoots.Runtime
-  The authoritative execution engine. It defines what can be executed, how commands are described, and how results are produced.
+  The primary execution engine. It defines what can be executed, how commands are described, and how results are produced.
 
 - Shoots.Builder
   The orchestrator. It loads modules, invokes the runtime, emits artifacts, and follows system laws.
@@ -34,17 +34,17 @@ WHAT THIS IS NOT
 - Not a self-modifying AI system
 - Not a framework that guesses, retries silently, or smooths over errors
 
-If something fails, it fails loudly and with classification.
+If something fails, it is intended to surface loudly and with classification.
 
 ---
 
-CORE LAWS
----------
+CORE PRINCIPLES
+---------------
 
-Shoots defines several non-negotiable laws:
+Shoots defines several core principles:
 
 1. Runtime Authority
-   The runtime is the sole authority on execution. Nothing bypasses it.
+   The runtime is the intended authority on execution. Other components route through it.
 
 2. No Dead Structure
    Unused methods, dead paths, and unnecessary abstractions are removed, not ignored.
@@ -55,7 +55,7 @@ Shoots defines several non-negotiable laws:
 4. No Phantom Success
    Success is reported only when confirmed by build output.
 
-These laws are mechanical, not conventional.
+These principles are mechanical, not conventional.
 
 ---
 
@@ -63,14 +63,14 @@ WHAT THIS SYSTEM AIMS FOR
 -------------------------
 
 - Deterministic execution based on the committed runtime and plan inputs
-- Provider output cannot advance routing or override graph authority
-- Failures surface as classified runtime errors with traceability
-- Replays remain stable when inputs and runtime versions match
+- Provider output that is not intended to advance routing or override graph authority
+- Failures that surface as classified runtime errors with traceability
+- Replays that remain stable when inputs and runtime versions match
 
 ---
 
-WHAT THIS SYSTEM WILL NOT DO
-----------------------------
+WHAT THIS SYSTEM DOES NOT AIM TO DO
+-----------------------------------
 
 - Execute with untrusted or mutable routing authority
 - Accept configuration that alters node choice or graph traversal
@@ -90,7 +90,7 @@ Shoots/
 ├─ ui/                 (user interface)
 └─ Agent.md            (contributor guidance)
 
-This layout is intended to stay stable unless explicitly instructed.
+This layout is intended to stay stable unless explicitly requested otherwise.
 
 ENVIRONMENT PROFILES EXPLAINED
 ------------------------------
@@ -119,10 +119,10 @@ Workspaces:
 Workspace isolation is strictly visual: each selection scopes UI context and
 environment script previews without mutating runtime behavior or determinism.
 
-PROJECT WORKSPACE GUARANTEES
-----------------------------
+PROJECT WORKSPACE NOTES
+-----------------------
 
-- Workspaces never execute commands or scripts
+- Workspaces do not execute commands or scripts
 - Workspace data stays out of runtime assemblies
 - Switching workspaces is reversible and non-destructive
 - Recent workspace files can be deleted safely
@@ -144,9 +144,10 @@ WHAT SHOOTS DOES NOT AIM TO DO
 NON-GOALS
 ---------
 
-- AI governance or policy control
+- Policy control or agent governance
 - Output validation or tool control
-- Security guarantees or compliance certification
+- Execution or correctness claims
+- Security assurances or compliance certification
 - Built-in database servers or migrations
 - Automated environment provisioning or installation
 
@@ -162,10 +163,10 @@ WHAT UI DOES NOT DO
 
 AI & AUTOMATION NOTES
 ---------------------
-Documentation only. No enforcement implied.
 Shoots may be explored, modified, or reviewed using automated tools.
 This repository does not define, restrict, or validate the behavior of such tools.
 All automation behavior is external and user-controlled.
+Shoots does not validate agents, control execution, or assert correctness.
 
 ---
 

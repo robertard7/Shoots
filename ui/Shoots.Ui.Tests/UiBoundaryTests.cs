@@ -42,11 +42,11 @@ public sealed class UiBoundaryTests
              reference.Name.Contains("GitHub", StringComparison.OrdinalIgnoreCase)));
     }
 
+    // Language hygiene guard: keep documentation descriptive and avoid implying authority over external tools.
     [Fact]
-    public void ReadmeAvoidsAiVendorAndEnforcementClaims()
+    public void ReadmeLanguageIsDescriptive()
     {
         var readme = LoadReadme();
-        var sanitized = readme.Replace("Documentation only. No enforcement implied.", string.Empty, StringComparison.OrdinalIgnoreCase);
         var forbiddenMarkers = new[]
         {
             "OpenAI",
@@ -59,10 +59,16 @@ public sealed class UiBoundaryTests
             "must comply",
             "must",
             "shall",
+            "require",
             "required",
             "enforce",
             "enforcement",
+            "invalid",
             "invalidate",
+            "guarantee",
+            "guarantees",
+            "certify",
+            "certified",
             "forbidden",
             "prohibited",
             "mandate",
@@ -73,8 +79,8 @@ public sealed class UiBoundaryTests
 
         foreach (var marker in forbiddenMarkers)
             Assert.False(
-                sanitized.Contains(marker, StringComparison.OrdinalIgnoreCase),
-                $"README contains \"{marker}\", which implies external control or enforcement. Use descriptive language only.");
+                readme.Contains(marker, StringComparison.OrdinalIgnoreCase),
+                $"README contains \"{marker}\", which can imply authority over external tools. Use descriptive, non-enforcing language.");
     }
 
     [Fact]
