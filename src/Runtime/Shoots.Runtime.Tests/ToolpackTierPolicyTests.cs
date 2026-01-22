@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Shoots.Runtime.Loader.Toolpacks;
 using Shoots.Runtime.Ui.Abstractions;
 using Xunit;
@@ -66,6 +67,37 @@ public sealed class ToolpackTierPolicyTests
         Assert.Contains(snapshot.Entries, entry => entry.Spec.ToolId.Value == "system.tool");
     }
 
+
+    [Fact]
+    public void ToolpackFilteringIsOrderIndependent()
+    {
+        var toolpacks = CreateSampleToolpacks();
+        var reversed = toolpacks.Reverse().ToList();
+        var policy = new ToolTierPolicy(
+            ToolTier.Developer,
+            new[] { ToolpackCapability.FileSystem, ToolpackCapability.Build });
+        var loader = new ToolpackLoader();
+
+        var first = loader.LoadFromToolpacks(toolpacks, policy);
+        var second = loader.LoadFromToolpacks(reversed, policy);
+
+        Assert.Equal(first.Hash, second.Hash);
+        Assert.Equal(first.Entries.Count, second.Entries.Count);
+    }
+
+    [Fact]
+    public void SystemTierToolpacksAreNotExposedByDefault()
+    {
+        var toolpacks = CreateSampleToolpacks();
+        var policy = new ToolTierPolicy(
+            ToolTier.Public,
+            new[] { ToolpackCapability.FileSystem });
+        var loader = new ToolpackLoader();
+
+        var snapshot = loader.LoadFromToolpacks(toolpacks, policy);
+
+        Assert.DoesNotContain(snapshot.Entries, entry => entry.Spec.ToolId.Value == "system.tool");
+    }
     [Fact]
     public void LoaderDoesNotCreateToolsWithoutToolpacks()
     {

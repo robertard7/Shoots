@@ -39,6 +39,9 @@ public sealed class ToolpackLoader
             throw new ArgumentNullException(nameof(policy));
 
         var filtered = policy.Filter(toolpacks);
+        if (filtered.Any(pack => !policy.Allows(pack.Tier)))
+            throw new InvalidOperationException("Toolpack tier exceeds workspace tier.");
+
         var entries = filtered
             .SelectMany(BuildEntries)
             .OrderBy(entry => entry.Spec.ToolId.Value, StringComparer.Ordinal)

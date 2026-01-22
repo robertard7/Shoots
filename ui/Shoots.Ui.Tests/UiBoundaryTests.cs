@@ -82,7 +82,15 @@ public sealed class UiBoundaryTests
             "mandate",
             "violation",
             "exclusive",
-            "exclusively"
+            "exclusively",
+            "warranty",
+            "warrant",
+            "liable",
+            "liability",
+            "audit",
+            "attest",
+            "attestation",
+            "obligation"
         };
 
         foreach (var marker in forbiddenMarkers)
@@ -111,6 +119,20 @@ public sealed class UiBoundaryTests
     }
 
     // Architecture guard: AI help receives read-only snapshots only.
+    [Fact]
+    public void AiHelpRequestDoesNotExposeExecutionServices()
+    {
+        var properties = typeof(Shoots.Runtime.Ui.Abstractions.AiHelpRequest)
+            .GetProperties();
+
+        foreach (var property in properties)
+        {
+            var typeName = property.PropertyType.FullName ?? property.PropertyType.Name;
+            Assert.DoesNotContain("IRuntimeFacade", typeName, StringComparison.Ordinal);
+            Assert.DoesNotContain("ExecutionCommand", typeName, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     [Fact]
     public void AiHelpFacadeDoesNotAcceptExecutionServices()
     {

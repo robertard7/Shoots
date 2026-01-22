@@ -50,7 +50,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _newBlueprintDescription = string.Empty;
     private string _newBlueprintIntents = string.Empty;
     private string _newBlueprintArtifacts = string.Empty;
-    private ExecutionEnvironmentSettings _executionSettings = new("none", Array.Empty<RootFsDescriptor>());
+    private ExecutionEnvironmentSettings _executionSettings = new("none", Array.Empty<RootFsDescriptor>(), string.Empty);
 
     public MainWindowViewModel(
         IExecutionCommandService commandService,
@@ -325,7 +325,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string ActiveRootFsLabel => ActiveRootFs?.DisplayName ?? "No rootfs selected";
 
-    public string ActiveRootFsSource => ActiveRootFs?.DefaultUrl ?? "No source set";
+    public string ActiveRootFsSource => string.IsNullOrWhiteSpace(ResolvedRootFsSource)
+        ? "No source set"
+        : ResolvedRootFsSource;
+
+    public string RootFsSourceOverride
+    {
+        get => GetRootFsSourceOverride() ?? string.Empty;
+        set => UpdateRootFsSourceOverride(value);
+    }
 
     public string ActiveRootFsLicense => ActiveRootFs?.License ?? "No license details";
 
@@ -333,7 +341,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public bool HasRootFsCatalog => RootFsCatalog.Count > 0;
 
-    public string RootFsNotice => "Shoots does not provide or modify Linux.";
+    public string RootFsNotice => "Shoots does not provide or modify Linux. Rootfs entries are replaceable.";
+
+    public string RootFsFallbackNotice => "If the source is unavailable, Shoots stays idle and keeps your selection.";
 
     public ProjectWorkspace? SelectedWorkspace
     {
@@ -489,7 +499,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string SystemTierNote => IsSystemTierEnabled
         ? "System tier is enabled for this workspace."
-        : "System tier is disabled by default.";
+        : "System tier is restricted to prevent privileged tools from appearing by default.";
 
     public bool CanSelectToolpackTier => HasActiveWorkspace && !IsSystemTierEnabled;
 
@@ -941,9 +951,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ActiveRootFs));
         OnPropertyChanged(nameof(ActiveRootFsLabel));
         OnPropertyChanged(nameof(ActiveRootFsSource));
+        OnPropertyChanged(nameof(RootFsSourceOverride));
         OnPropertyChanged(nameof(ActiveRootFsLicense));
         OnPropertyChanged(nameof(ActiveRootFsNotes));
         OnPropertyChanged(nameof(HasRootFsCatalog));
+        OnPropertyChanged(nameof(RootFsNotice));
+        OnPropertyChanged(nameof(RootFsFallbackNotice));
     }
 
     private void UpdateRootFsSelection(RootFsDescriptor? descriptor)
@@ -962,6 +975,45 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var updated = ActiveWorkspace with { RootFsId = descriptor.Id };
         _workspaceProvider.UpdateWorkspace(updated);
         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+    }
+
+    private void UpdateRootFsSourceOverride(string? value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        if (ActiveWorkspace is null)
+        {
+            if (string.Equals(_executionSettings.RootFsSourceOverride ?? string.Empty, normalized, StringComparison.Ordinal))
+                return;
+
+            _executionSettings = _executionSettings with { RootFsSourceOverride = normalized };
+            _executionEnvironmentStore.Save(_executionSettings);
+            UpdateExecutionEnvironmentSelection();
+            return;
+        }
+
+        if (string.Equals(ActiveWorkspace.RootFsSourceOverride ?? string.Empty, normalized, StringComparison.Ordinal))
+            return;
+
+        var updated = ActiveWorkspace with { RootFsSourceOverride = normalized };
+        _workspaceProvider.UpdateWorkspace(updated);
+        ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+    }
+
+    private string? GetRootFsSourceOverride()
+    {
+        return ActiveWorkspace?.RootFsSourceOverride ?? _executionSettings.RootFsSourceOverride;
+    }
+
+    private string? ResolvedRootFsSource
+    {
+        get
+        {
+            var overrideValue = GetRootFsSourceOverride();
+            if (!string.IsNullOrWhiteSpace(overrideValue))
+                return overrideValue;
+
+            return ActiveRootFs?.DefaultUrl;
+        }
     }
 
     private RootFsDescriptor? GetRootFsById(string? id)

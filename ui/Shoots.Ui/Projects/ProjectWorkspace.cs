@@ -8,5 +8,6 @@ public sealed record ProjectWorkspace(
     DateTimeOffset LastOpenedUtc,
     Shoots.Runtime.Ui.Abstractions.ToolpackTier AllowedTier = Shoots.Runtime.Ui.Abstractions.ToolpackTier.Public,
     IReadOnlyList<Shoots.Runtime.Ui.Abstractions.ToolpackCapability>? AllowedCapabilities = null,
-    string? RootFsId = null
+    string? RootFsId = null,
+    string? RootFsSourceOverride = null
 );

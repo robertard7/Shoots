@@ -5,7 +5,8 @@ namespace Shoots.UI.ExecutionEnvironments;
 // UI-only. Declarative. Non-executable. Not runtime-affecting.
 public sealed record ExecutionEnvironmentSettings(
     string ActiveRootFsId,
-    IReadOnlyList<RootFsDescriptor> RootFsCatalog
+    IReadOnlyList<RootFsDescriptor> RootFsCatalog,
+    string? RootFsSourceOverride
 );
 
 public sealed record RootFsDescriptor(

@@ -142,7 +142,7 @@
             </GroupBox>
             <TextBlock Margin="0,12,0,0"
                        Foreground="#FF6B7280"
-                       Text="AI Help is descriptive and does not control execution."
+                       Text="AI Help is descriptive and does not execute actions."
                        TextWrapping="Wrap" />
           </StackPanel>
         </Grid>
@@ -229,6 +229,9 @@
               <StackPanel Margin="12">
                 <TextBlock Text="{Binding ActiveRootFsLabel}" FontWeight="SemiBold" />
                 <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsSource}" TextWrapping="Wrap" />
+                <TextBlock Margin="0,10,0,0" Text="Execution distro source override (URL or local path)" />
+                <TextBox Margin="0,4,0,0" Text="{Binding RootFsSourceOverride, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Margin="0,6,0,0" Foreground="#FF6B7280" Text="{Binding RootFsFallbackNotice}" TextWrapping="Wrap" />
                 <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsLicense}" TextWrapping="Wrap" />
                 <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsNotes}" TextWrapping="Wrap" />
               </StackPanel>

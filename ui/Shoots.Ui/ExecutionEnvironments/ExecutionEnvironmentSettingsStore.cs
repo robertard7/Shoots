@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 
 namespace Shoots.UI.ExecutionEnvironments;
@@ -63,16 +61,16 @@ public sealed class ExecutionEnvironmentSettingsStore : IExecutionEnvironmentSet
         var catalog = new[]
         {
             new RootFsDescriptor(
-                "alpine",
-                "Alpine Linux",
-                "http",
-                "https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-minirootfs-3.19.0-x86_64.tar.gz",
-                "sha256:TODO",
-                "GPLv2 + others",
-                "Official Alpine minirootfs")
+                "custom",
+                "User-provided RootFS",
+                "config",
+                null,
+                null,
+                "User-supplied license",
+                "Provide a source override to select a distro archive or local path.")
         };
 
-        return new ExecutionEnvironmentSettings("alpine", catalog);
+        return new ExecutionEnvironmentSettings("custom", catalog, string.Empty);
     }
 
     private static JsonSerializerOptions JsonOptions() =>

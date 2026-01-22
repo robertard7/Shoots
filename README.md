@@ -147,9 +147,18 @@ NON-GOALS
 - Control or agent governance
 - Output validation or tool control
 - Execution or correctness claims
-- Security assurances or certification
+- Security assurances or formal reviews
 - Built-in database servers or migrations
 - Automated environment provisioning or installation
+
+WHAT SHOOTS EXPLICITLY DOES NOT DO
+----------------------------------
+
+- Provide or distribute Linux images
+- Control tool usage or external behavior
+- Check outputs or issue approvals
+- Claim safety or authority over external systems
+- Modify user environments without explicit, local action
 
 WHAT UI DOES NOT DO
 -------------------
@@ -188,10 +197,13 @@ It does not validate, decide, or execute actions.
 EXECUTION ENVIRONMENTS
 ----------------------
 
-Shoots does not ship or distribute Linux.
-Execution environments are user-provisioned rootfs descriptors that point to
-external sources you control. Rootfs entries can be updated in settings and
-selected per workspace without changing code.
+Shoots does not ship or distribute Linux. Execution environments are
+user-provisioned rootfs descriptors that point to external sources you control.
+Rootfs entries are replaceable and configured in settings, including optional
+source overrides per workspace.
+
+If a distro source is unavailable, Shoots stays idle and keeps the last selected
+configuration so you can update the source and try again.
 
 ---
 
