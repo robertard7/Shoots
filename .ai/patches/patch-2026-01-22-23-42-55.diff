@@ -1,0 +1,26 @@
+diff --git a/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs b/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
+index 2144653..a83eaf7 100644
+--- a/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
++++ b/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
+@@ -8,11 +8,12 @@ namespace Shoots.Builder.Core;
+ /// </summary>
+ public sealed class TextRuntimeNarrator : IRuntimeNarrator
+ {
+-    private readonly Action<string>? _emit;
++    private static readonly Action<string> Noop = _ => { };
++    private readonly Action<string> _emit;
+ 
+     public TextRuntimeNarrator(Action<string> emit)
+     {
+-        _emit = emit;
++        _emit = emit ?? Noop;
+     }
+ 
+     public void OnPlan(string text) => Emit("[plan]");
+@@ -82,5 +83,5 @@ public sealed class TextRuntimeNarrator : IRuntimeNarrator
+         RouteIntentToken intentToken,
+         IReadOnlyList<string> allowedNextNodes) => Emit("[route.completed]");
+ 
+-    private void Emit(string message) => _emit?.Invoke(message);
++    private void Emit(string message) => _emit(message);
+ }

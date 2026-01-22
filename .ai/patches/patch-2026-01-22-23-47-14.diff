@@ -1,0 +1,13 @@
+diff --git a/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs b/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
+index a83eaf7..28db61f 100644
+--- a/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
++++ b/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
+@@ -8,7 +8,7 @@ namespace Shoots.Builder.Core;
+ /// </summary>
+ public sealed class TextRuntimeNarrator : IRuntimeNarrator
+ {
+-    private static readonly Action<string> Noop = _ => { };
++    private static readonly Action<string> Noop = static _ => { };
+     private readonly Action<string> _emit;
+ 
+     public TextRuntimeNarrator(Action<string> emit)

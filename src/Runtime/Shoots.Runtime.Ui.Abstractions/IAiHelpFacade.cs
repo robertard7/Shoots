@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
+using RuntimeCatalogSnapshot = Shoots.Runtime.Abstractions.ToolCatalogSnapshot;
 
 namespace Shoots.Runtime.Ui.Abstractions;
 
@@ -18,7 +19,7 @@ public interface IAiHelpFacade
 public sealed record AiHelpRequest(
     AiWorkspaceSnapshot Workspace,
     BuildPlan? Plan,
-    ToolCatalogSnapshot? ToolCatalog,
+    RuntimeCatalogSnapshot? ToolCatalog,
     string? ExecutionState,
     string? EnvironmentProfile,
     string? LastAppliedProfile,
