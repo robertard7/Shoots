@@ -1,7 +1,7 @@
 # SHOOTS
 ======
 
-Authoritative build system for deterministic, law-driven software execution.
+Deterministic build system for law-driven software execution.
 
 This repository is intentionally strict. If you are looking for a flexible, opinionated, or beginner-friendly framework, this is not it.
 
@@ -12,15 +12,15 @@ WHAT THIS IS
 
 Shoots is a sealed execution and orchestration system designed around one core principle:
 
-    The system must be correct before it is convenient.
+    The system should be correct before it is convenient.
 
 Shoots is composed of two primary components:
 
 - Shoots.Runtime
-  The authoritative execution engine. It defines what can be executed, how commands are described, and how results are produced.
+  The primary execution engine. It defines what can be executed, how commands are described, and how results are produced.
 
 - Shoots.Builder
-  The orchestrator. It loads modules, invokes the runtime, emits artifacts, and enforces system laws.
+  The orchestrator. It loads modules, invokes the runtime, emits artifacts, and follows system laws.
 
 Both components live in this repository as submodules and are versioned together to eliminate drift.
 
@@ -34,17 +34,17 @@ WHAT THIS IS NOT
 - Not a self-modifying AI system
 - Not a framework that guesses, retries silently, or smooths over errors
 
-If something fails, it fails loudly and with classification.
+If something fails, it is intended to surface loudly and with classification.
 
 ---
 
-CORE LAWS
----------
+CORE PRINCIPLES
+---------------
 
-Shoots enforces several non-negotiable laws:
+Shoots defines several core principles:
 
 1. Runtime Authority
-   The runtime is the sole authority on execution. Nothing bypasses it.
+   The runtime is the intended authority on execution. Other components route through it.
 
 2. No Dead Structure
    Unused methods, dead paths, and unnecessary abstractions are removed, not ignored.
@@ -53,24 +53,24 @@ Shoots enforces several non-negotiable laws:
    Failures are categorized (Success, Invalid, Blocked). Errors are not dead ends.
 
 4. No Phantom Success
-   Nothing is considered successful unless confirmed by the build runner.
+   Success is reported only when confirmed by build output.
 
-These laws are enforced mechanically, not by convention.
+These principles are mechanical, not conventional.
 
 ---
 
-WHAT THIS SYSTEM GUARANTEES
----------------------------
+WHAT THIS SYSTEM AIMS FOR
+-------------------------
 
 - Deterministic execution based on the committed runtime and plan inputs
-- Provider output cannot advance routing or override graph authority
-- Failures surface as classified runtime errors with traceability
-- Replays remain stable when inputs and runtime versions match
+- Provider output that is not intended to advance routing or override graph authority
+- Failures that surface as classified runtime errors with traceability
+- Replays that remain stable when inputs and runtime versions match
 
 ---
 
-WHAT THIS SYSTEM WILL NOT DO
-----------------------------
+WHAT THIS SYSTEM DOES NOT AIM TO DO
+-----------------------------------
 
 - Execute with untrusted or mutable routing authority
 - Accept configuration that alters node choice or graph traversal
@@ -84,13 +84,13 @@ REPOSITORY STRUCTURE
 Shoots/
 ├─ Shoots.Runtime/     (execution engine)
 ├─ Shoots.Builder/     (orchestrator)
-├─ .ai/                (agent patches and policy enforcement)
+├─ .ai/                (agent patches and guidance)
 ├─ tools/              (tooling and handlers)
 ├─ etc/                (configuration)
 ├─ ui/                 (user interface)
-└─ Agent.md            (AI agent operating law)
+└─ Agent.md            (contributor guidance)
 
-Do not restructure this layout unless explicitly instructed.
+This layout is intended to stay stable unless explicitly requested otherwise.
 
 ENVIRONMENT PROFILES EXPLAINED
 ------------------------------
@@ -113,16 +113,16 @@ Shoots includes a UI-only Project Workspace experience for organizing context.
 Workspaces:
 - Are pure UI data (name, root path, last opened time)
 - Never execute commands or scripts
-- Do not require GitHub, a database, or any external service
+- Do not depend on any source control provider, database, or external service
 - Persist only recent selections in LocalAppData/Shoots/workspaces.json
 
 Workspace isolation is strictly visual: each selection scopes UI context and
 environment script previews without mutating runtime behavior or determinism.
 
-PROJECT WORKSPACE GUARANTEES
-----------------------------
+PROJECT WORKSPACE NOTES
+-----------------------
 
-- Workspaces never execute commands or scripts
+- Workspaces do not execute commands or scripts
 - Workspace data stays out of runtime assemblies
 - Switching workspaces is reversible and non-destructive
 - Recent workspace files can be deleted safely
@@ -134,60 +134,105 @@ Shoots does not ship or configure a database by design. The UI exposes a
 database intent selector only to record future intent, not to provision
 storage, connections, or vendor dependencies.
 
-WHAT SHOOTS WILL NEVER DO
--------------------------
+WHAT SHOOTS DOES NOT AIM TO DO
+------------------------------
 
-- Force GitHub or any source control provider
+- Force any source control provider
 - Force database usage of any kind
 - Hide automation or background execution
 
 NON-GOALS
 ---------
 
-- Provide built-in database servers or migrations
-- Automate environment provisioning or installation
-- Require GitHub, authentication, or cloud services
+- Control or agent governance
+- Output validation or tool control
+- Execution or correctness claims
+- Security assurances or formal reviews
+- Built-in database servers or migrations
+- Automated environment provisioning or installation
 
-WHAT UI IS NOT ALLOWED TO DO
-----------------------------
+WHAT SHOOTS EXPLICITLY DOES NOT DO
+----------------------------------
+
+- Provide or distribute Linux images
+- Control tool usage or external behavior
+- Check outputs or issue approvals
+- Claim safety or authority over external systems
+- Modify user environments without explicit, local action
+
+WHAT UI DOES NOT DO
+-------------------
 
 - Execute commands or scripts
 - Modify runtime routing, traces, or determinism inputs
-- Require source control, databases, or external services
+- Depend on source control, databases, or external services
 - Touch Runtime.Core directly
 
 ---
 
-AI / CODEX USAGE
-----------------
-
-This repository includes a strict Agent.md file.
-
-Any AI agent interacting with this repo must:
-
-- Operate only within the repository root
-- Produce unified diffs only
-- Never claim execution or fabricate results
-- Rely exclusively on the Windows self-hosted GitHub Actions runner for validation
-
-Agents that violate these rules produce invalid output by definition.
+AI & AUTOMATION NOTES
+---------------------
+Shoots may be explored, modified, or reviewed using automated tools.
+This repository does not define, restrict, or validate the behavior of such tools.
+All automation behavior is external and user-controlled.
+Shoots does not validate agents, control execution, or assert correctness.
 
 ---
 
-BUILD & VALIDATION
-------------------
+DISCLAIMER
+----------
 
-All builds and tests are executed via GitHub Actions using a Windows self-hosted runner.
+This repository describes behavior and does not assert validation.
 
-Codex and other agents are not allowed to execute code locally or in containers.
+---
 
-The runner is the single source of truth.
+AI HELP IS DESCRIPTIVE ONLY
+---------------------------
 
+AI Help text is informational and optional.
+It does not validate, decide, or execute actions.
 
-CODEX COMMAND CONTRACT
+---
+
+EXECUTION ENVIRONMENTS
 ----------------------
 
-Codex validation must follow this exact sequence:
+Shoots does not ship or distribute Linux. Execution environments are
+user-provisioned rootfs descriptors that point to external sources you control.
+Rootfs entries are replaceable and configured in settings, including optional
+source overrides per workspace.
+
+If a distro source is unavailable, Shoots stays idle and keeps the last selected
+configuration so you can update the source and try again.
+
+---
+
+HOW SHOOTS HELPS BUILD AN OS
+----------------------------
+
+Shoots can guide OS work by capturing System Blueprints that list ordered intents
+and expected artifacts. Blueprints are UI-only, descriptive notes that help
+structure the work without executing scripts.
+
+Suggested flow:
+- Capture a blueprint name, intent list, and expected artifacts.
+- Use plans to map intents into deterministic steps.
+- Review artifacts and iterate as the system evolves.
+
+---
+
+BUILD & CHECKS
+--------------
+
+Builds and tests are typically executed via CI workflows.
+
+Workflow results are useful context when a workflow has run and completed.
+
+
+CHECK WORKFLOW (TYPICAL)
+------------------------
+
+When checks are needed, a typical sequence is:
 
     dotnet restore
     dotnet build Shoots.sln -c Release
@@ -208,7 +253,7 @@ Contributions are not accepted casually.
 This project prioritizes:
 - Determinism over convenience
 - Explicit structure over flexibility
-- Enforcement over documentation
+- Clarity over documentation
 
 If you do not agree with those priorities, this repository will be frustrating.
 
@@ -219,7 +264,7 @@ LICENSE / OWNERSHIP
 
 This repository represents significant original work.
 
-Reuse, redistribution, or derivative systems must respect the author’s intent and licensing terms.
+Reuse, redistribution, or derivative systems should respect the author’s intent and licensing terms.
 
 ---
 

@@ -5,9 +5,12 @@ using System.IO;
 using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Ui.Abstractions;
+using Shoots.UI.Blueprints;
+using Shoots.UI.ExecutionEnvironments;
 using Shoots.UI.Environment;
 using Shoots.UI.Intents;
 using Shoots.UI.Projects;
+using Shoots.UI.Roles;
 using Shoots.UI.Services;
 
 namespace Shoots.UI.ViewModels;
@@ -22,7 +25,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly IProjectWorkspaceProvider _workspaceProvider;
     private readonly IWorkspaceShellService _workspaceShell;
     private readonly IDatabaseIntentStore _databaseIntentStore;
+    private readonly IToolTierPrompt _toolTierPrompt;
+    private readonly ISystemBlueprintStore _blueprintStore;
+    private readonly IExecutionEnvironmentSettingsStore _executionEnvironmentStore;
+    private readonly IAiHelpFacade _aiHelpFacade;
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
+    private readonly ObservableCollection<SystemBlueprint> _blueprints;
+    private readonly ObservableCollection<RootFsDescriptor> _rootFsCatalog;
     private ExecutionState _state;
     private BuildPlan? _plan;
     private IEnvironmentProfile? _selectedProfile;
@@ -35,6 +44,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _scriptSearchPath = string.Empty;
     private string? _scriptUnsupportedCapabilitiesMessage;
     private DatabaseIntentOption? _selectedDatabaseIntent;
+    private ToolpackTier _lastNonSystemTier = ToolpackTier.Public;
+    private RoleDescriptor? _selectedRole;
+    private string _newBlueprintName = string.Empty;
+    private string _newBlueprintDescription = string.Empty;
+    private string _newBlueprintIntents = string.Empty;
+    private string _newBlueprintArtifacts = string.Empty;
+    private ExecutionEnvironmentSettings _executionSettings = new("none", Array.Empty<RootFsDescriptor>(), string.Empty);
 
     public MainWindowViewModel(
         IExecutionCommandService commandService,
@@ -44,7 +60,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         EnvironmentScriptLoader scriptLoader,
         IProjectWorkspaceProvider workspaceProvider,
         IWorkspaceShellService workspaceShell,
-        IDatabaseIntentStore databaseIntentStore)
+        IDatabaseIntentStore databaseIntentStore,
+        IToolTierPrompt toolTierPrompt,
+        ISystemBlueprintStore blueprintStore,
+        IExecutionEnvironmentSettingsStore executionEnvironmentStore,
+        IAiHelpFacade aiHelpFacade)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
@@ -54,6 +74,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
         _workspaceShell = workspaceShell ?? throw new ArgumentNullException(nameof(workspaceShell));
         _databaseIntentStore = databaseIntentStore ?? throw new ArgumentNullException(nameof(databaseIntentStore));
+        _toolTierPrompt = toolTierPrompt ?? throw new ArgumentNullException(nameof(toolTierPrompt));
+        _blueprintStore = blueprintStore ?? throw new ArgumentNullException(nameof(blueprintStore));
+        _executionEnvironmentStore = executionEnvironmentStore ?? throw new ArgumentNullException(nameof(executionEnvironmentStore));
+        _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
         _state = ExecutionState.Idle;
 
         StartCommand = new AsyncRelayCommand(StartAsync, CanStart);
@@ -63,6 +87,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ApplyScriptCommand = new AsyncRelayCommand(ApplyScriptAsync, CanApplyScript);
         RemoveWorkspaceCommand = new AsyncRelayCommand(RemoveWorkspaceAsync, CanRemoveWorkspace);
         OpenWorkspaceCommand = new AsyncRelayCommand(OpenWorkspaceAsync, CanOpenWorkspace);
+        ToggleSystemTierCommand = new AsyncRelayCommand(ToggleSystemTierAsync, CanToggleSystemTier);
+        RefreshAiHelpCommand = new AsyncRelayCommand(RefreshAiHelpAsync, CanRefreshAiHelp);
+        AddBlueprintCommand = new AsyncRelayCommand(AddBlueprintAsync, CanAddBlueprint);
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
         EnvironmentCapabilities = Array.Empty<string>();
@@ -71,8 +98,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         _recentWorkspaces = new ObservableCollection<ProjectWorkspace>();
         RecentWorkspaces = new ReadOnlyObservableCollection<ProjectWorkspace>(_recentWorkspaces);
+        _blueprints = new ObservableCollection<SystemBlueprint>();
+        Blueprints = new ReadOnlyObservableCollection<SystemBlueprint>(_blueprints);
+        _rootFsCatalog = new ObservableCollection<RootFsDescriptor>();
+        RootFsCatalog = new ReadOnlyObservableCollection<RootFsDescriptor>(_rootFsCatalog);
         RefreshRecentWorkspaces();
         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+        LoadExecutionEnvironments();
+        RoleOptions = new ReadOnlyCollection<RoleDescriptor>(RoleCatalog.GetDefaultRoles().ToList());
+        SelectedRole = RoleOptions.FirstOrDefault();
         DatabaseIntents = new ReadOnlyCollection<DatabaseIntentOption>(new[]
         {
             new DatabaseIntentOption(DatabaseIntent.None, "None", "No database intent declared."),
@@ -83,6 +117,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
             ?? DatabaseIntents.FirstOrDefault();
         LoadEnvironmentScript();
+        _ = RefreshAiHelpAsync();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -134,6 +169,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public AsyncRelayCommand RemoveWorkspaceCommand { get; }
 
     public AsyncRelayCommand OpenWorkspaceCommand { get; }
+
+    public AsyncRelayCommand ToggleSystemTierCommand { get; }
+
+    public AsyncRelayCommand RefreshAiHelpCommand { get; }
+
+    public AsyncRelayCommand AddBlueprintCommand { get; }
 
     public IReadOnlyList<IEnvironmentProfile> Profiles { get; }
 
@@ -210,6 +251,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public ReadOnlyObservableCollection<ProjectWorkspace> RecentWorkspaces { get; }
 
+    public ReadOnlyObservableCollection<SystemBlueprint> Blueprints { get; }
+
+    public ReadOnlyObservableCollection<RootFsDescriptor> RootFsCatalog { get; }
+
+    public ReadOnlyCollection<RoleDescriptor> RoleOptions { get; }
+
     public ProjectWorkspace? ActiveWorkspace
     {
         get => _activeWorkspace;
@@ -228,6 +275,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             LoadEnvironmentScript();
             UpdateProfileCapabilities();
             UpdateDatabaseIntentSelection();
+            UpdateExecutionEnvironmentSelection();
+            LoadBlueprints();
+            OnToolpackTierChanged();
+            _ = RefreshAiHelpAsync();
             RaiseCommandCanExecute();
         }
     }
@@ -237,6 +288,62 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public bool HasActiveWorkspace => ActiveWorkspace is not null;
 
     public bool HasNoActiveWorkspace => !HasActiveWorkspace;
+
+    public RoleDescriptor? SelectedRole
+    {
+        get => _selectedRole;
+        set
+        {
+            if (ReferenceEquals(_selectedRole, value))
+                return;
+
+            _selectedRole = value;
+            OnPropertyChanged(nameof(SelectedRole));
+            OnPropertyChanged(nameof(SelectedRoleDescription));
+            _ = RefreshAiHelpAsync();
+        }
+    }
+
+    public string SelectedRoleDescription => SelectedRole?.Description ?? "No role selected.";
+
+    public RootFsDescriptor? SelectedRootFs
+    {
+        get => ActiveRootFs;
+        set => UpdateRootFsSelection(value);
+    }
+
+    public RootFsDescriptor? ActiveRootFs
+    {
+        get
+        {
+            if (ActiveWorkspace is null)
+                return GetRootFsById(_executionSettings.ActiveRootFsId);
+
+            return GetRootFsById(ActiveWorkspace.RootFsId ?? _executionSettings.ActiveRootFsId);
+        }
+    }
+
+    public string ActiveRootFsLabel => ActiveRootFs?.DisplayName ?? "No rootfs selected";
+
+    public string ActiveRootFsSource => string.IsNullOrWhiteSpace(ResolvedRootFsSource)
+        ? "No source set"
+        : ResolvedRootFsSource;
+
+    public string RootFsSourceOverride
+    {
+        get => GetRootFsSourceOverride() ?? string.Empty;
+        set => UpdateRootFsSourceOverride(value);
+    }
+
+    public string ActiveRootFsLicense => ActiveRootFs?.License ?? "No license details";
+
+    public string ActiveRootFsNotes => ActiveRootFs?.Notes ?? "No notes";
+
+    public bool HasRootFsCatalog => RootFsCatalog.Count > 0;
+
+    public string RootFsNotice => "Shoots does not provide or modify Linux. Rootfs entries are replaceable.";
+
+    public string RootFsFallbackNotice => "If the source is unavailable, Shoots stays idle and keeps your selection.";
 
     public ProjectWorkspace? SelectedWorkspace
     {
@@ -302,7 +409,111 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string ApplyScriptDisabledReason => GetApplyScriptDisabledReason();
 
-    public void SetPlan(BuildPlan? plan) => Plan = plan;
+    public string AiHelpDisabledReason => GetAiHelpDisabledReason();
+
+    public string AiHelpContextSummary { get; private set; } = "AI Help is descriptive only.";
+
+    public string AiHelpStateExplanation { get; private set; } = "No runtime context is available.";
+
+    public string AiHelpNextSteps { get; private set; } = "Select a workspace to view help.";
+
+    public string NewBlueprintName
+    {
+        get => _newBlueprintName;
+        set
+        {
+            if (_newBlueprintName == value)
+                return;
+
+            _newBlueprintName = value;
+            OnPropertyChanged(nameof(NewBlueprintName));
+            RaiseCommandCanExecute();
+        }
+    }
+
+    public string NewBlueprintDescription
+    {
+        get => _newBlueprintDescription;
+        set
+        {
+            if (_newBlueprintDescription == value)
+                return;
+
+            _newBlueprintDescription = value;
+            OnPropertyChanged(nameof(NewBlueprintDescription));
+        }
+    }
+
+    public string NewBlueprintIntents
+    {
+        get => _newBlueprintIntents;
+        set
+        {
+            if (_newBlueprintIntents == value)
+                return;
+
+            _newBlueprintIntents = value;
+            OnPropertyChanged(nameof(NewBlueprintIntents));
+        }
+    }
+
+    public string NewBlueprintArtifacts
+    {
+        get => _newBlueprintArtifacts;
+        set
+        {
+            if (_newBlueprintArtifacts == value)
+                return;
+
+            _newBlueprintArtifacts = value;
+            OnPropertyChanged(nameof(NewBlueprintArtifacts));
+        }
+    }
+
+    public IReadOnlyList<ToolpackTier> ToolpackTierOptions { get; } =
+        new[] { ToolpackTier.Public, ToolpackTier.Developer };
+
+    public ToolpackTier SelectedToolpackTier
+    {
+        get => IsSystemTierEnabled ? _lastNonSystemTier : ActiveToolpackTier;
+        set => UpdateToolpackTier(value);
+    }
+
+    public string ActiveToolpackTierLabel => $"Active Tier: {ActiveToolpackTier}";
+
+    public string ActiveToolpackTierTooltip => ActiveToolpackTier switch
+    {
+        ToolpackTier.Public => "Public tools only.",
+        ToolpackTier.Developer => "Public and developer toolpacks.",
+        ToolpackTier.System => "All tiers, including system toolpacks.",
+        _ => "Tier status."
+    };
+
+    public ToolpackTier ActiveToolpackTier => _activeWorkspace?.AllowedTier ?? ToolpackTier.Public;
+
+    public bool IsSystemTierEnabled => ActiveToolpackTier == ToolpackTier.System;
+
+    public string SystemTierActionLabel => IsSystemTierEnabled
+        ? "Disable System Tier"
+        : "Enable System Tier";
+
+    public string SystemTierNote => IsSystemTierEnabled
+        ? "System tier is enabled for this workspace."
+        : "System tier is restricted to prevent privileged tools from appearing by default.";
+
+    public bool CanSelectToolpackTier => HasActiveWorkspace && !IsSystemTierEnabled;
+
+    public bool CanManageBlueprints => HasActiveWorkspace && IsSystemTierEnabled;
+
+    public string BlueprintStatusNote => CanManageBlueprints
+        ? "Blueprints are available for this workspace."
+        : "Blueprints are available when System tier is enabled.";
+
+    public void SetPlan(BuildPlan? plan)
+    {
+        Plan = plan;
+        _ = RefreshAiHelpAsync();
+    }
 
     public void SetState(ExecutionState state) => State = state;
 
@@ -538,9 +749,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ApplyScriptCommand.RaiseCanExecuteChanged();
         RemoveWorkspaceCommand.RaiseCanExecuteChanged();
         OpenWorkspaceCommand.RaiseCanExecuteChanged();
+        ToggleSystemTierCommand.RaiseCanExecuteChanged();
+        RefreshAiHelpCommand.RaiseCanExecuteChanged();
+        AddBlueprintCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(StartDisabledReason));
         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));
         OnPropertyChanged(nameof(ApplyScriptDisabledReason));
+        OnPropertyChanged(nameof(AiHelpDisabledReason));
+        OnPropertyChanged(nameof(SystemTierActionLabel));
     }
 
     private bool CanRemoveWorkspace()
@@ -573,11 +789,99 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    private bool CanRefreshAiHelp()
+    {
+        return HasActiveWorkspace && Plan is not null;
+    }
+
+    private bool CanToggleSystemTier()
+    {
+        return HasActiveWorkspace;
+    }
+
+    private Task ToggleSystemTierAsync()
+    {
+        if (!HasActiveWorkspace || _activeWorkspace is null)
+            return Task.CompletedTask;
+
+        if (IsSystemTierEnabled)
+        {
+            UpdateToolpackTier(_lastNonSystemTier);
+            return Task.CompletedTask;
+        }
+
+        if (!_toolTierPrompt.ConfirmSystemTier(ActiveToolpackTier))
+            return Task.CompletedTask;
+
+        UpdateToolpackTier(ToolpackTier.System);
+        return Task.CompletedTask;
+    }
+
+    private bool CanAddBlueprint()
+    {
+        return CanManageBlueprints && !string.IsNullOrWhiteSpace(NewBlueprintName);
+    }
+
+    private Task AddBlueprintAsync()
+    {
+        if (!CanAddBlueprint() || _activeWorkspace is null)
+            return Task.CompletedTask;
+
+        var blueprint = new SystemBlueprint(
+            NewBlueprintName.Trim(),
+            NewBlueprintDescription.Trim(),
+            ParseBlueprintLines(NewBlueprintIntents),
+            ParseBlueprintLines(NewBlueprintArtifacts),
+            DateTimeOffset.UtcNow);
+
+        _blueprints.Add(blueprint);
+        SaveBlueprints();
+
+        NewBlueprintName = string.Empty;
+        NewBlueprintDescription = string.Empty;
+        NewBlueprintIntents = string.Empty;
+        NewBlueprintArtifacts = string.Empty;
+
+        return Task.CompletedTask;
+    }
+
+    private async Task RefreshAiHelpAsync()
+    {
+        if (!CanRefreshAiHelp())
+        {
+            AiHelpContextSummary = "AI Help is descriptive only.";
+            AiHelpStateExplanation = "No runtime context is available.";
+            AiHelpNextSteps = "Select a workspace and load a plan to view help.";
+            OnPropertyChanged(nameof(AiHelpContextSummary));
+            OnPropertyChanged(nameof(AiHelpStateExplanation));
+            OnPropertyChanged(nameof(AiHelpNextSteps));
+            return;
+        }
+
+        var request = BuildAiHelpRequest();
+        try
+        {
+            AiHelpContextSummary = await _aiHelpFacade.GetContextSummaryAsync(request).ConfigureAwait(true);
+            AiHelpStateExplanation = await _aiHelpFacade.ExplainStateAsync(request).ConfigureAwait(true);
+            AiHelpNextSteps = await _aiHelpFacade.SuggestNextStepsAsync(request).ConfigureAwait(true);
+        }
+        catch (Exception)
+        {
+            AiHelpContextSummary = "AI Help is offline.";
+            AiHelpStateExplanation = "No runtime context is available.";
+            AiHelpNextSteps = "AI Help is descriptive only.";
+        }
+        OnPropertyChanged(nameof(AiHelpContextSummary));
+        OnPropertyChanged(nameof(AiHelpStateExplanation));
+        OnPropertyChanged(nameof(AiHelpNextSteps));
+    }
+
     public void SelectWorkspace(ProjectWorkspace workspace)
     {
         _workspaceProvider.SetActiveWorkspace(workspace);
         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
         RefreshRecentWorkspaces();
+        _ = RefreshAiHelpAsync();
     }
 
     private void RefreshRecentWorkspaces()
@@ -588,6 +892,187 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(HasNoWorkspaces));
         OnPropertyChanged(nameof(HasWorkspaces));
+    }
+
+    private AiHelpRequest BuildAiHelpRequest()
+    {
+        var workspace = ActiveWorkspace;
+        var allowedCapabilities = workspace?.AllowedCapabilities
+            ?? ToolpackPolicyDefaults.GetAllowedCapabilities(ActiveToolpackTier);
+
+        var snapshot = new AiWorkspaceSnapshot(
+            workspace?.Name,
+            workspace?.RootPath,
+            ActiveToolpackTier,
+            allowedCapabilities);
+
+        return new AiHelpRequest(
+            snapshot,
+            Plan,
+            null,
+            StateLabel,
+            SelectedProfile?.Name,
+            _lastEnvironmentResult?.ProfileName,
+            SelectedRole);
+    }
+
+    private void LoadBlueprints()
+    {
+        _blueprints.Clear();
+
+        if (_activeWorkspace is null || string.IsNullOrWhiteSpace(_activeWorkspace.RootPath))
+            return;
+
+        foreach (var blueprint in _blueprintStore.LoadForWorkspace(_activeWorkspace.RootPath))
+            _blueprints.Add(blueprint);
+    }
+
+    private void SaveBlueprints()
+    {
+        if (_activeWorkspace is null || string.IsNullOrWhiteSpace(_activeWorkspace.RootPath))
+            return;
+
+        _blueprintStore.SaveForWorkspace(_activeWorkspace.RootPath, _blueprints);
+    }
+
+    private void LoadExecutionEnvironments()
+    {
+        _executionSettings = _executionEnvironmentStore.Load();
+        _rootFsCatalog.Clear();
+        foreach (var entry in _executionSettings.RootFsCatalog)
+            _rootFsCatalog.Add(entry);
+
+        UpdateExecutionEnvironmentSelection();
+    }
+
+    private void UpdateExecutionEnvironmentSelection()
+    {
+        OnPropertyChanged(nameof(SelectedRootFs));
+        OnPropertyChanged(nameof(ActiveRootFs));
+        OnPropertyChanged(nameof(ActiveRootFsLabel));
+        OnPropertyChanged(nameof(ActiveRootFsSource));
+        OnPropertyChanged(nameof(RootFsSourceOverride));
+        OnPropertyChanged(nameof(ActiveRootFsLicense));
+        OnPropertyChanged(nameof(ActiveRootFsNotes));
+        OnPropertyChanged(nameof(HasRootFsCatalog));
+        OnPropertyChanged(nameof(RootFsNotice));
+        OnPropertyChanged(nameof(RootFsFallbackNotice));
+    }
+
+    private void UpdateRootFsSelection(RootFsDescriptor? descriptor)
+    {
+        if (descriptor is null)
+            return;
+
+        if (ActiveWorkspace is null)
+        {
+            _executionSettings = _executionSettings with { ActiveRootFsId = descriptor.Id };
+            _executionEnvironmentStore.Save(_executionSettings);
+            UpdateExecutionEnvironmentSelection();
+            return;
+        }
+
+        var updated = ActiveWorkspace with { RootFsId = descriptor.Id };
+        _workspaceProvider.UpdateWorkspace(updated);
+        ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+    }
+
+    private void UpdateRootFsSourceOverride(string? value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        if (ActiveWorkspace is null)
+        {
+            if (string.Equals(_executionSettings.RootFsSourceOverride ?? string.Empty, normalized, StringComparison.Ordinal))
+                return;
+
+            _executionSettings = _executionSettings with { RootFsSourceOverride = normalized };
+            _executionEnvironmentStore.Save(_executionSettings);
+            UpdateExecutionEnvironmentSelection();
+            return;
+        }
+
+        if (string.Equals(ActiveWorkspace.RootFsSourceOverride ?? string.Empty, normalized, StringComparison.Ordinal))
+            return;
+
+        var updated = ActiveWorkspace with { RootFsSourceOverride = normalized };
+        _workspaceProvider.UpdateWorkspace(updated);
+        ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+    }
+
+    private string? GetRootFsSourceOverride()
+    {
+        return ActiveWorkspace?.RootFsSourceOverride ?? _executionSettings.RootFsSourceOverride;
+    }
+
+    private string? ResolvedRootFsSource
+    {
+        get
+        {
+            var overrideValue = GetRootFsSourceOverride();
+            if (!string.IsNullOrWhiteSpace(overrideValue))
+                return overrideValue;
+
+            return ActiveRootFs?.DefaultUrl;
+        }
+    }
+
+    private RootFsDescriptor? GetRootFsById(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return null;
+
+        return _rootFsCatalog.FirstOrDefault(entry =>
+            string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IReadOnlyList<string> ParseBlueprintLines(string value)
+    {
+        return value
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
+    }
+
+    private void UpdateToolpackTier(ToolpackTier tier)
+    {
+        if (_activeWorkspace is null)
+            return;
+
+        if (tier != ToolpackTier.System)
+            _lastNonSystemTier = tier;
+
+        if (_activeWorkspace.AllowedTier == tier && _activeWorkspace.AllowedCapabilities is not null)
+            return;
+
+        var capabilities = ToolpackPolicyDefaults.GetAllowedCapabilities(tier);
+        var updated = _activeWorkspace with
+        {
+            AllowedTier = tier,
+            AllowedCapabilities = capabilities
+        };
+        _workspaceProvider.UpdateWorkspace(updated);
+        ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+    }
+
+    private void OnToolpackTierChanged()
+    {
+        if (_activeWorkspace is null)
+            _lastNonSystemTier = ToolpackTier.Public;
+        else if (_activeWorkspace.AllowedTier != ToolpackTier.System)
+            _lastNonSystemTier = _activeWorkspace.AllowedTier;
+
+        OnPropertyChanged(nameof(ActiveToolpackTier));
+        OnPropertyChanged(nameof(ActiveToolpackTierLabel));
+        OnPropertyChanged(nameof(ActiveToolpackTierTooltip));
+        OnPropertyChanged(nameof(IsSystemTierEnabled));
+        OnPropertyChanged(nameof(SelectedToolpackTier));
+        OnPropertyChanged(nameof(CanSelectToolpackTier));
+        OnPropertyChanged(nameof(SystemTierActionLabel));
+        OnPropertyChanged(nameof(SystemTierNote));
+        OnPropertyChanged(nameof(CanManageBlueprints));
+        OnPropertyChanged(nameof(BlueprintStatusNote));
+        RaiseCommandCanExecute();
     }
 
     private void UpdateDatabaseIntentSelection()
@@ -654,6 +1139,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return "This script is already applied.";
 
         return "Apply the previewed script.";
+    }
+
+    private string GetAiHelpDisabledReason()
+    {
+        if (ActiveWorkspace is null)
+            return "Select a workspace to view AI Help.";
+
+        if (Plan is null)
+            return "Load a plan to view AI Help.";
+
+        return "Refresh AI Help.";
     }
 
     public ISourceControlIntent? SourceControlIntent => null;

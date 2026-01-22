@@ -1,6 +1,8 @@
 using System.Windows;
 using Shoots.UI.Environment;
 using Shoots.UI.Intents;
+using Shoots.UI.Blueprints;
+using Shoots.UI.ExecutionEnvironments;
 using Shoots.UI.Projects;
 using Shoots.UI.Services;
 using Shoots.UI.ViewModels;
@@ -17,6 +19,8 @@ public partial class MainWindow : Window
         var workspaceProvider = new ProjectWorkspaceProvider(workspaceStore);
         var workspaceShell = new WorkspaceShellService();
         var databaseIntentStore = new DatabaseIntentStore();
+        var blueprintStore = new SystemBlueprintStore();
+        var executionEnvironmentStore = new ExecutionEnvironmentSettingsStore();
         DataContext = new MainWindowViewModel(
             new NullExecutionCommandService(),
             new EnvironmentProfileService(),
@@ -25,6 +29,10 @@ public partial class MainWindow : Window
             new EnvironmentScriptLoader(),
             workspaceProvider,
             workspaceShell,
-            databaseIntentStore);
+            databaseIntentStore,
+            new ToolTierPrompt(),
+            blueprintStore,
+            executionEnvironmentStore,
+            new NullAiHelpFacade());
     }
 }

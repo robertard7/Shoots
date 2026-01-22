@@ -1,0 +1,71 @@
+{
+  "toolpackId": "public.base",
+  "version": "1.0.0",
+  "tier": "Public",
+  "description": "Baseline workspace file operations.",
+  "capabilities": ["FileSystem"],
+  "riskNotes": "Workspace-only file metadata; no execution.",
+  "tools": [
+    {
+      "toolId": "fs.mkdir",
+      "description": "Declare a workspace directory creation.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "path", "type": "string", "description": "Relative directory path.", "required": true }
+      ],
+      "outputs": [
+        { "name": "created", "type": "boolean", "description": "Whether the directory is planned." }
+      ],
+      "tags": ["filesystem", "mkdir"]
+    },
+    {
+      "toolId": "fs.read",
+      "description": "Read a workspace file.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "path", "type": "string", "description": "Relative file path.", "required": true }
+      ],
+      "outputs": [
+        { "name": "contents", "type": "string", "description": "File contents." }
+      ],
+      "tags": ["filesystem", "read"]
+    },
+    {
+      "toolId": "fs.write",
+      "description": "Write a workspace file.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "path", "type": "string", "description": "Relative file path.", "required": true },
+        { "name": "contents", "type": "string", "description": "File contents.", "required": true }
+      ],
+      "outputs": [
+        { "name": "written", "type": "boolean", "description": "Whether the file was written." }
+      ],
+      "tags": ["filesystem", "write"]
+    },
+    {
+      "toolId": "fs.hash",
+      "description": "Hash a workspace file.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "path", "type": "string", "description": "Relative file path.", "required": true }
+      ],
+      "outputs": [
+        { "name": "hash", "type": "string", "description": "Content hash." }
+      ],
+      "tags": ["filesystem", "hash"]
+    },
+    {
+      "toolId": "archive.zip",
+      "description": "Bundle files into a zip metadata plan.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "paths", "type": "array", "description": "Relative paths to include.", "required": true }
+      ],
+      "outputs": [
+        { "name": "archiveId", "type": "string", "description": "Archive identifier." }
+      ],
+      "tags": ["archive", "zip"]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shoots Toolpack Manifest",
+  "type": "object",
+  "required": ["toolpackId", "version", "tier", "description", "capabilities", "tools", "riskNotes"],
+  "properties": {
+    "toolpackId": { "type": "string" },
+    "version": { "type": "string" },
+    "tier": { "type": "string", "enum": ["Public", "Developer", "System"] },
+    "description": { "type": "string" },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "riskNotes": { "type": "string" },
+    "requires": { "type": "object" },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["toolId", "authority"],
+        "properties": {
+          "toolId": { "type": "string" },
+          "description": { "type": "string" },
+          "authority": {
+            "type": "object",
+            "required": ["providerKind"],
+            "properties": {
+              "providerKind": { "type": "string" },
+              "capabilities": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" },
+                "description": { "type": "string" },
+                "required": { "type": "boolean" }
+              }
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" },
+                "description": { "type": "string" }
+              }
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

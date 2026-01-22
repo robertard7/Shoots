@@ -8,6 +8,9 @@ using System.Windows.Threading;
 
 namespace Shoots.UI;
 
+// This UI reflects and documents state.
+// It does not enforce policy, execute logic, validate tools, or control external systems.
+
 public partial class App : Application
 {
     private const string MutexName = "Shoots.UI.SingleInstance";

@@ -1,0 +1,777 @@
+commit 7630493763bd998dffdfd22c8a37a2563dedffe7
+Author: Codex <codex@openai.com>
+Date:   Thu Jan 22 18:30:51 2026 +0000
+
+    Add execution environment rootfs configuration
+
+diff --git a/README.md b/README.md
+index ec4af81..10db5a0 100644
+--- a/README.md
++++ b/README.md
+@@ -144,7 +144,7 @@ WHAT SHOOTS DOES NOT AIM TO DO
+ NON-GOALS
+ ---------
+ 
+-- Policy control or agent governance
++- Control or agent governance
+ - Output validation or tool control
+ - Execution or correctness claims
+ - Security assurances or certification
+@@ -185,6 +185,16 @@ It does not validate, decide, or execute actions.
+ 
+ ---
+ 
++EXECUTION ENVIRONMENTS
++----------------------
++
++Shoots does not ship or distribute Linux.
++Execution environments are user-provisioned rootfs descriptors that point to
++external sources you control. Rootfs entries can be updated in settings and
++selected per workspace without changing code.
++
++---
++
+ HOW SHOOTS HELPS BUILD AN OS
+ ----------------------------
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/ExecutionBackend.cs b/src/Runtime/Shoots.Runtime.Abstractions/ExecutionBackend.cs
+new file mode 100644
+index 0000000..4e6550d
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Abstractions/ExecutionBackend.cs
+@@ -0,0 +1,41 @@
++using System;
++using System.Collections.Generic;
++
++namespace Shoots.Runtime.Abstractions;
++
++public interface IExecutionBackend
++{
++    Task<ExecutionBackendSnapshot> PrepareAsync(
++        RootFsDescriptor descriptor,
++        CancellationToken ct = default);
++}
++
++public sealed record ExecutionBackendSnapshot(
++    RootFsDescriptor Descriptor,
++    string CachePath,
++    RootFsProvenance Provenance
++);
++
++public sealed record RootFsDescriptor(
++    string Id,
++    string DisplayName,
++    RootFsSourceType SourceType,
++    string? DefaultUrl,
++    string? Checksum,
++    string License,
++    string? Notes
++);
++
++public sealed record RootFsProvenance(
++    string ProviderId,
++    string Source,
++    string? Checksum,
++    DateTimeOffset PreparedUtc,
++    IReadOnlyDictionary<string, string> Metadata
++);
++
++public enum RootFsSourceType
++{
++    Http,
++    LocalPath
++}
+diff --git a/src/Runtime/Shoots.Runtime.Core/Backends/LinuxSandboxBackend.cs b/src/Runtime/Shoots.Runtime.Core/Backends/LinuxSandboxBackend.cs
+new file mode 100644
+index 0000000..11c6678
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Core/Backends/LinuxSandboxBackend.cs
+@@ -0,0 +1,48 @@
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Threading;
++using System.Threading.Tasks;
++using Shoots.Runtime.Abstractions;
++using Shoots.Runtime.Core.Backends.RootFs;
++
++namespace Shoots.Runtime.Core.Backends;
++
++public sealed class LinuxSandboxBackend : IExecutionBackend
++{
++    private readonly IReadOnlyList<IRootFsProvider> _providers;
++    private readonly RootFsCache _cache;
++
++    public LinuxSandboxBackend(IEnumerable<IRootFsProvider> providers, RootFsCache cache)
++    {
++        if (providers is null)
++            throw new ArgumentNullException(nameof(providers));
++        _providers = providers.ToList();
++        if (_providers.Count == 0)
++            throw new ArgumentException("at least one provider is required", nameof(providers));
++
++        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
++    }
++
++    public async Task<ExecutionBackendSnapshot> PrepareAsync(
++        RootFsDescriptor descriptor,
++        CancellationToken ct = default)
++    {
++        if (descriptor is null)
++            throw new ArgumentNullException(nameof(descriptor));
++
++        var cachePath = _cache.GetCachePath(descriptor);
++        if (_cache.TryLoadProvenance(cachePath, out var provenance))
++            return new ExecutionBackendSnapshot(descriptor, cachePath, provenance);
++
++        var provider = _providers.FirstOrDefault(p => p.CanHandle(descriptor));
++        if (provider is null)
++            throw new InvalidOperationException($"No provider for {descriptor.SourceType}.");
++
++        var request = new RootFsProvisionRequest(descriptor, cachePath);
++        var result = await provider.ProvideAsync(request, ct).ConfigureAwait(false);
++        _cache.SaveProvenance(cachePath, result.Provenance);
++
++        return new ExecutionBackendSnapshot(descriptor, cachePath, result.Provenance);
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/HttpRootFsProvider.cs b/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/HttpRootFsProvider.cs
+new file mode 100644
+index 0000000..616a8ba
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/HttpRootFsProvider.cs
+@@ -0,0 +1,84 @@
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Net.Http;
++using System.Security.Cryptography;
++using System.Text;
++using System.Threading;
++using System.Threading.Tasks;
++using Shoots.Runtime.Abstractions;
++
++namespace Shoots.Runtime.Core.Backends.RootFs;
++
++public sealed class HttpRootFsProvider : IRootFsProvider
++{
++    private readonly HttpClient _httpClient;
++
++    public HttpRootFsProvider(HttpClient httpClient)
++    {
++        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
++    }
++
++    public string ProviderId => "http";
++
++    public bool CanHandle(RootFsDescriptor descriptor) =>
++        descriptor.SourceType == RootFsSourceType.Http;
++
++    public async Task<RootFsProvisionResult> ProvideAsync(
++        RootFsProvisionRequest request,
++        CancellationToken ct = default)
++    {
++        if (string.IsNullOrWhiteSpace(request.Descriptor.DefaultUrl))
++            throw new ArgumentException("DefaultUrl is required for http rootfs.");
++
++        Directory.CreateDirectory(request.CachePath);
++        var archivePath = Path.Combine(request.CachePath, "rootfs.tar.gz");
++
++        using var response = await _httpClient.GetAsync(request.Descriptor.DefaultUrl, ct).ConfigureAwait(false);
++        response.EnsureSuccessStatusCode();
++        await using (var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
++        await using (var file = File.Create(archivePath))
++        {
++            await stream.CopyToAsync(file, ct).ConfigureAwait(false);
++        }
++
++        if (!string.IsNullOrWhiteSpace(request.Descriptor.Checksum))
++        {
++            var actual = ComputeSha256(archivePath);
++            var expected = NormalizeChecksum(request.Descriptor.Checksum);
++            if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
++                throw new InvalidOperationException("RootFS checksum mismatch.");
++        }
++
++        var metadata = new Dictionary<string, string>
++        {
++            ["url"] = request.Descriptor.DefaultUrl,
++            ["archivePath"] = archivePath
++        };
++
++        var provenance = new RootFsProvenance(
++            ProviderId,
++            request.Descriptor.DefaultUrl,
++            request.Descriptor.Checksum,
++            DateTimeOffset.UtcNow,
++            metadata);
++
++        return new RootFsProvisionResult(provenance);
++    }
++
++    private static string ComputeSha256(string path)
++    {
++        using var stream = File.OpenRead(path);
++        var hash = SHA256.HashData(stream);
++        return Convert.ToHexString(hash).ToLowerInvariant();
++    }
++
++    private static string NormalizeChecksum(string checksum)
++    {
++        const string prefix = "sha256:";
++        if (checksum.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
++            return checksum[prefix.Length..];
++
++        return checksum;
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/LocalRootFsProvider.cs b/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/LocalRootFsProvider.cs
+new file mode 100644
+index 0000000..b09232d
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/LocalRootFsProvider.cs
+@@ -0,0 +1,44 @@
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Threading;
++using System.Threading.Tasks;
++using Shoots.Runtime.Abstractions;
++
++namespace Shoots.Runtime.Core.Backends.RootFs;
++
++public sealed class LocalRootFsProvider : IRootFsProvider
++{
++    public string ProviderId => "local";
++
++    public bool CanHandle(RootFsDescriptor descriptor) =>
++        descriptor.SourceType == RootFsSourceType.LocalPath;
++
++    public Task<RootFsProvisionResult> ProvideAsync(
++        RootFsProvisionRequest request,
++        CancellationToken ct = default)
++    {
++        _ = ct;
++        if (string.IsNullOrWhiteSpace(request.Descriptor.DefaultUrl))
++            throw new ArgumentException("DefaultUrl is required for local rootfs.");
++
++        Directory.CreateDirectory(request.CachePath);
++        var pointerPath = Path.Combine(request.CachePath, "rootfs.path");
++        File.WriteAllText(pointerPath, request.Descriptor.DefaultUrl);
++
++        var metadata = new Dictionary<string, string>
++        {
++            ["path"] = request.Descriptor.DefaultUrl,
++            ["pointer"] = pointerPath
++        };
++
++        var provenance = new RootFsProvenance(
++            ProviderId,
++            request.Descriptor.DefaultUrl,
++            request.Descriptor.Checksum,
++            DateTimeOffset.UtcNow,
++            metadata);
++
++        return Task.FromResult(new RootFsProvisionResult(provenance));
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/RootFsCache.cs b/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/RootFsCache.cs
+new file mode 100644
+index 0000000..7bb8246
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/RootFsCache.cs
+@@ -0,0 +1,94 @@
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Security.Cryptography;
++using System.Text;
++using System.Text.Json;
++using Shoots.Runtime.Abstractions;
++
++namespace Shoots.Runtime.Core.Backends.RootFs;
++
++public sealed class RootFsCache
++{
++    private const string ProvenanceFileName = "provenance.json";
++    private readonly string _cacheRoot;
++
++    public RootFsCache(string? cacheRoot = null)
++    {
++        _cacheRoot = cacheRoot ?? Path.Combine(
++            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
++            "Shoots",
++            "RootFsCache");
++    }
++
++    public string CacheRoot => _cacheRoot;
++
++    public string GetCachePath(RootFsDescriptor descriptor)
++    {
++        var hash = ComputeDescriptorHash(descriptor);
++        return Path.Combine(_cacheRoot, hash);
++    }
++
++    public bool TryLoadProvenance(string cachePath, out RootFsProvenance provenance)
++    {
++        provenance = new RootFsProvenance(
++            "unknown",
++            "unknown",
++            null,
++            DateTimeOffset.UtcNow,
++            new Dictionary<string, string>());
++
++        var path = Path.Combine(cachePath, ProvenanceFileName);
++        if (!File.Exists(path))
++            return false;
++
++        try
++        {
++            var json = File.ReadAllText(path);
++            var loaded = JsonSerializer.Deserialize<RootFsProvenance>(json, JsonOptions());
++            if (loaded is null)
++                return false;
++
++            provenance = loaded;
++            return true;
++        }
++        catch (Exception)
++        {
++            return false;
++        }
++    }
++
++    public void SaveProvenance(string cachePath, RootFsProvenance provenance)
++    {
++        Directory.CreateDirectory(cachePath);
++        var json = JsonSerializer.Serialize(provenance, JsonOptions());
++        File.WriteAllText(Path.Combine(cachePath, ProvenanceFileName), json);
++    }
++
++    public void ClearCache(string cachePath)
++    {
++        if (Directory.Exists(cachePath))
++            Directory.Delete(cachePath, recursive: true);
++    }
++
++    private static string ComputeDescriptorHash(RootFsDescriptor descriptor)
++    {
++        var builder = new StringBuilder();
++        builder.Append(descriptor.Id).Append('|');
++        builder.Append(descriptor.DisplayName).Append('|');
++        builder.Append(descriptor.SourceType).Append('|');
++        builder.Append(descriptor.DefaultUrl ?? string.Empty).Append('|');
++        builder.Append(descriptor.Checksum ?? string.Empty).Append('|');
++        builder.Append(descriptor.License).Append('|');
++        builder.Append(descriptor.Notes ?? string.Empty).Append('|');
++        var bytes = Encoding.UTF8.GetBytes(builder.ToString());
++        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
++    }
++
++    private static JsonSerializerOptions JsonOptions() =>
++        new()
++        {
++            PropertyNameCaseInsensitive = true,
++            WriteIndented = true
++        };
++}
+diff --git a/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/RootFsProvisioning.cs b/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/RootFsProvisioning.cs
+new file mode 100644
+index 0000000..2b05b74
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Core/Backends/RootFs/RootFsProvisioning.cs
+@@ -0,0 +1,25 @@
++using System.Threading;
++using System.Threading.Tasks;
++using Shoots.Runtime.Abstractions;
++
++namespace Shoots.Runtime.Core.Backends.RootFs;
++
++public sealed record RootFsProvisionRequest(
++    RootFsDescriptor Descriptor,
++    string CachePath
++);
++
++public sealed record RootFsProvisionResult(
++    RootFsProvenance Provenance
++);
++
++public interface IRootFsProvider
++{
++    string ProviderId { get; }
++
++    bool CanHandle(RootFsDescriptor descriptor);
++
++    Task<RootFsProvisionResult> ProvideAsync(
++        RootFsProvisionRequest request,
++        CancellationToken ct = default);
++}
+diff --git a/ui/Shoots.Ui/ExecutionEnvironments/ExecutionEnvironmentSettings.cs b/ui/Shoots.Ui/ExecutionEnvironments/ExecutionEnvironmentSettings.cs
+new file mode 100644
+index 0000000..313b474
+--- /dev/null
++++ b/ui/Shoots.Ui/ExecutionEnvironments/ExecutionEnvironmentSettings.cs
+@@ -0,0 +1,19 @@
++using System.Collections.Generic;
++
++namespace Shoots.UI.ExecutionEnvironments;
++
++// UI-only. Declarative. Non-executable. Not runtime-affecting.
++public sealed record ExecutionEnvironmentSettings(
++    string ActiveRootFsId,
++    IReadOnlyList<RootFsDescriptor> RootFsCatalog
++);
++
++public sealed record RootFsDescriptor(
++    string Id,
++    string DisplayName,
++    string SourceType,
++    string? DefaultUrl,
++    string? Checksum,
++    string License,
++    string? Notes
++);
+diff --git a/ui/Shoots.Ui/ExecutionEnvironments/ExecutionEnvironmentSettingsStore.cs b/ui/Shoots.Ui/ExecutionEnvironments/ExecutionEnvironmentSettingsStore.cs
+new file mode 100644
+index 0000000..22aa4eb
+--- /dev/null
++++ b/ui/Shoots.Ui/ExecutionEnvironments/ExecutionEnvironmentSettingsStore.cs
+@@ -0,0 +1,84 @@
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Linq;
++using System.Text.Json;
++
++namespace Shoots.UI.ExecutionEnvironments;
++
++// UI-only. Declarative. Non-executable. Not runtime-affecting.
++public interface IExecutionEnvironmentSettingsStore
++{
++    ExecutionEnvironmentSettings Load();
++
++    void Save(ExecutionEnvironmentSettings settings);
++}
++
++public sealed class ExecutionEnvironmentSettingsStore : IExecutionEnvironmentSettingsStore
++{
++    public const string FileName = "execution-environments.json";
++
++    private readonly string _storePath;
++
++    public ExecutionEnvironmentSettingsStore(string? baseDirectory = null)
++    {
++        var root = baseDirectory ?? Path.Combine(
++            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
++            "Shoots");
++        _storePath = Path.Combine(root, FileName);
++    }
++
++    public ExecutionEnvironmentSettings Load()
++    {
++        if (!File.Exists(_storePath))
++            return CreateDefault();
++
++        try
++        {
++            var json = File.ReadAllText(_storePath);
++            var settings = JsonSerializer.Deserialize<ExecutionEnvironmentSettings>(json, JsonOptions());
++            return settings ?? CreateDefault();
++        }
++        catch (Exception)
++        {
++            return CreateDefault();
++        }
++    }
++
++    public void Save(ExecutionEnvironmentSettings settings)
++    {
++        if (settings is null)
++            throw new ArgumentNullException(nameof(settings));
++
++        var directory = Path.GetDirectoryName(_storePath);
++        if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
++            Directory.CreateDirectory(directory);
++
++        var json = JsonSerializer.Serialize(settings, JsonOptions());
++        File.WriteAllText(_storePath, json);
++    }
++
++    private static ExecutionEnvironmentSettings CreateDefault()
++    {
++        var catalog = new[]
++        {
++            new RootFsDescriptor(
++                "alpine",
++                "Alpine Linux",
++                "http",
++                "https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-minirootfs-3.19.0-x86_64.tar.gz",
++                "sha256:TODO",
++                "GPLv2 + others",
++                "Official Alpine minirootfs")
++        };
++
++        return new ExecutionEnvironmentSettings("alpine", catalog);
++    }
++
++    private static JsonSerializerOptions JsonOptions() =>
++        new()
++        {
++            PropertyNameCaseInsensitive = true,
++            WriteIndented = true
++        };
++}
+diff --git a/ui/Shoots.Ui/MainWindow.xaml b/ui/Shoots.Ui/MainWindow.xaml
+index ff500da..f472ca1 100644
+--- a/ui/Shoots.Ui/MainWindow.xaml
++++ b/ui/Shoots.Ui/MainWindow.xaml
+@@ -201,6 +201,41 @@
+           </Grid>
+         </Grid>
+       </TabItem>
++      <TabItem Header="Execution Environment">
++        <Grid Margin="16">
++          <Grid.RowDefinitions>
++            <RowDefinition Height="Auto" />
++            <RowDefinition Height="*" />
++          </Grid.RowDefinitions>
++          <StackPanel>
++            <TextBlock Text="Execution environments are user-provided rootfs entries." TextWrapping="Wrap" />
++            <TextBlock Margin="0,6,0,0"
++                       Foreground="#FF6B7280"
++                       Text="{Binding RootFsNotice}"
++                       TextWrapping="Wrap" />
++          </StackPanel>
++          <Grid Grid.Row="1" Margin="0,12,0,0">
++            <Grid.ColumnDefinitions>
++              <ColumnDefinition Width="240" />
++              <ColumnDefinition Width="*" />
++            </Grid.ColumnDefinitions>
++            <GroupBox Header="Rootfs Catalog">
++              <ListBox Margin="8"
++                       ItemsSource="{Binding RootFsCatalog}"
++                       SelectedItem="{Binding SelectedRootFs}"
++                       DisplayMemberPath="DisplayName" />
++            </GroupBox>
++            <GroupBox Grid.Column="1" Margin="12,0,0,0" Header="Selected Rootfs">
++              <StackPanel Margin="12">
++                <TextBlock Text="{Binding ActiveRootFsLabel}" FontWeight="SemiBold" />
++                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsSource}" TextWrapping="Wrap" />
++                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsLicense}" TextWrapping="Wrap" />
++                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsNotes}" TextWrapping="Wrap" />
++              </StackPanel>
++            </GroupBox>
++          </Grid>
++        </Grid>
++      </TabItem>
+       <TabItem Header="Environment">
+         <Grid Margin="16">
+           <Grid.RowDefinitions>
+diff --git a/ui/Shoots.Ui/MainWindow.xaml.cs b/ui/Shoots.Ui/MainWindow.xaml.cs
+index d57adb3..747e708 100644
+--- a/ui/Shoots.Ui/MainWindow.xaml.cs
++++ b/ui/Shoots.Ui/MainWindow.xaml.cs
+@@ -2,6 +2,7 @@ using System.Windows;
+ using Shoots.UI.Environment;
+ using Shoots.UI.Intents;
+ using Shoots.UI.Blueprints;
++using Shoots.UI.ExecutionEnvironments;
+ using Shoots.UI.Projects;
+ using Shoots.UI.Services;
+ using Shoots.UI.ViewModels;
+@@ -19,6 +20,7 @@ public partial class MainWindow : Window
+         var workspaceShell = new WorkspaceShellService();
+         var databaseIntentStore = new DatabaseIntentStore();
+         var blueprintStore = new SystemBlueprintStore();
++        var executionEnvironmentStore = new ExecutionEnvironmentSettingsStore();
+         DataContext = new MainWindowViewModel(
+             new NullExecutionCommandService(),
+             new EnvironmentProfileService(),
+@@ -30,6 +32,7 @@ public partial class MainWindow : Window
+             databaseIntentStore,
+             new ToolTierPrompt(),
+             blueprintStore,
++            executionEnvironmentStore,
+             new NullAiHelpFacade());
+     }
+ }
+diff --git a/ui/Shoots.Ui/Projects/ProjectWorkspace.cs b/ui/Shoots.Ui/Projects/ProjectWorkspace.cs
+index 58c58b3..3271b4c 100644
+--- a/ui/Shoots.Ui/Projects/ProjectWorkspace.cs
++++ b/ui/Shoots.Ui/Projects/ProjectWorkspace.cs
+@@ -7,5 +7,6 @@ public sealed record ProjectWorkspace(
+     string RootPath,
+     DateTimeOffset LastOpenedUtc,
+     Shoots.Runtime.Ui.Abstractions.ToolpackTier AllowedTier = Shoots.Runtime.Ui.Abstractions.ToolpackTier.Public,
+-    IReadOnlyList<Shoots.Runtime.Ui.Abstractions.ToolpackCapability>? AllowedCapabilities = null
++    IReadOnlyList<Shoots.Runtime.Ui.Abstractions.ToolpackCapability>? AllowedCapabilities = null,
++    string? RootFsId = null
+ );
+diff --git a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+index d9eb1e2..3ab442a 100644
+--- a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
++++ b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+@@ -6,6 +6,7 @@ using System.Linq;
+ using Shoots.Contracts.Core;
+ using Shoots.Runtime.Ui.Abstractions;
+ using Shoots.UI.Blueprints;
++using Shoots.UI.ExecutionEnvironments;
+ using Shoots.UI.Environment;
+ using Shoots.UI.Intents;
+ using Shoots.UI.Projects;
+@@ -26,9 +27,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+     private readonly IDatabaseIntentStore _databaseIntentStore;
+     private readonly IToolTierPrompt _toolTierPrompt;
+     private readonly ISystemBlueprintStore _blueprintStore;
++    private readonly IExecutionEnvironmentSettingsStore _executionEnvironmentStore;
+     private readonly IAiHelpFacade _aiHelpFacade;
+     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
+     private readonly ObservableCollection<SystemBlueprint> _blueprints;
++    private readonly ObservableCollection<RootFsDescriptor> _rootFsCatalog;
+     private ExecutionState _state;
+     private BuildPlan? _plan;
+     private IEnvironmentProfile? _selectedProfile;
+@@ -47,6 +50,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+     private string _newBlueprintDescription = string.Empty;
+     private string _newBlueprintIntents = string.Empty;
+     private string _newBlueprintArtifacts = string.Empty;
++    private ExecutionEnvironmentSettings _executionSettings = new("none", Array.Empty<RootFsDescriptor>());
+ 
+     public MainWindowViewModel(
+         IExecutionCommandService commandService,
+@@ -59,6 +63,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         IDatabaseIntentStore databaseIntentStore,
+         IToolTierPrompt toolTierPrompt,
+         ISystemBlueprintStore blueprintStore,
++        IExecutionEnvironmentSettingsStore executionEnvironmentStore,
+         IAiHelpFacade aiHelpFacade)
+     {
+         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
+@@ -71,6 +76,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         _databaseIntentStore = databaseIntentStore ?? throw new ArgumentNullException(nameof(databaseIntentStore));
+         _toolTierPrompt = toolTierPrompt ?? throw new ArgumentNullException(nameof(toolTierPrompt));
+         _blueprintStore = blueprintStore ?? throw new ArgumentNullException(nameof(blueprintStore));
++        _executionEnvironmentStore = executionEnvironmentStore ?? throw new ArgumentNullException(nameof(executionEnvironmentStore));
+         _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
+         _state = ExecutionState.Idle;
+ 
+@@ -94,8 +100,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         RecentWorkspaces = new ReadOnlyObservableCollection<ProjectWorkspace>(_recentWorkspaces);
+         _blueprints = new ObservableCollection<SystemBlueprint>();
+         Blueprints = new ReadOnlyObservableCollection<SystemBlueprint>(_blueprints);
++        _rootFsCatalog = new ObservableCollection<RootFsDescriptor>();
++        RootFsCatalog = new ReadOnlyObservableCollection<RootFsDescriptor>(_rootFsCatalog);
+         RefreshRecentWorkspaces();
+         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
++        LoadExecutionEnvironments();
+         RoleOptions = new ReadOnlyCollection<RoleDescriptor>(RoleCatalog.GetDefaultRoles().ToList());
+         SelectedRole = RoleOptions.FirstOrDefault();
+         DatabaseIntents = new ReadOnlyCollection<DatabaseIntentOption>(new[]
+@@ -244,6 +253,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+ 
+     public ReadOnlyObservableCollection<SystemBlueprint> Blueprints { get; }
+ 
++    public ReadOnlyObservableCollection<RootFsDescriptor> RootFsCatalog { get; }
++
+     public ReadOnlyCollection<RoleDescriptor> RoleOptions { get; }
+ 
+     public ProjectWorkspace? ActiveWorkspace
+@@ -264,6 +275,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+             LoadEnvironmentScript();
+             UpdateProfileCapabilities();
+             UpdateDatabaseIntentSelection();
++            UpdateExecutionEnvironmentSelection();
+             LoadBlueprints();
+             OnToolpackTierChanged();
+             _ = RefreshAiHelpAsync();
+@@ -294,6 +306,35 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+ 
+     public string SelectedRoleDescription => SelectedRole?.Description ?? "No role selected.";
+ 
++    public RootFsDescriptor? SelectedRootFs
++    {
++        get => ActiveRootFs;
++        set => UpdateRootFsSelection(value);
++    }
++
++    public RootFsDescriptor? ActiveRootFs
++    {
++        get
++        {
++            if (ActiveWorkspace is null)
++                return GetRootFsById(_executionSettings.ActiveRootFsId);
++
++            return GetRootFsById(ActiveWorkspace.RootFsId ?? _executionSettings.ActiveRootFsId);
++        }
++    }
++
++    public string ActiveRootFsLabel => ActiveRootFs?.DisplayName ?? "No rootfs selected";
++
++    public string ActiveRootFsSource => ActiveRootFs?.DefaultUrl ?? "No source set";
++
++    public string ActiveRootFsLicense => ActiveRootFs?.License ?? "No license details";
++
++    public string ActiveRootFsNotes => ActiveRootFs?.Notes ?? "No notes";
++
++    public bool HasRootFsCatalog => RootFsCatalog.Count > 0;
++
++    public string RootFsNotice => "Shoots does not provide or modify Linux.";
++
+     public ProjectWorkspace? SelectedWorkspace
+     {
+         get => _activeWorkspace;
+@@ -884,6 +925,54 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         _blueprintStore.SaveForWorkspace(_activeWorkspace.RootPath, _blueprints);
+     }
+ 
++    private void LoadExecutionEnvironments()
++    {
++        _executionSettings = _executionEnvironmentStore.Load();
++        _rootFsCatalog.Clear();
++        foreach (var entry in _executionSettings.RootFsCatalog)
++            _rootFsCatalog.Add(entry);
++
++        UpdateExecutionEnvironmentSelection();
++    }
++
++    private void UpdateExecutionEnvironmentSelection()
++    {
++        OnPropertyChanged(nameof(SelectedRootFs));
++        OnPropertyChanged(nameof(ActiveRootFs));
++        OnPropertyChanged(nameof(ActiveRootFsLabel));
++        OnPropertyChanged(nameof(ActiveRootFsSource));
++        OnPropertyChanged(nameof(ActiveRootFsLicense));
++        OnPropertyChanged(nameof(ActiveRootFsNotes));
++        OnPropertyChanged(nameof(HasRootFsCatalog));
++    }
++
++    private void UpdateRootFsSelection(RootFsDescriptor? descriptor)
++    {
++        if (descriptor is null)
++            return;
++
++        if (ActiveWorkspace is null)
++        {
++            _executionSettings = _executionSettings with { ActiveRootFsId = descriptor.Id };
++            _executionEnvironmentStore.Save(_executionSettings);
++            UpdateExecutionEnvironmentSelection();
++            return;
++        }
++
++        var updated = ActiveWorkspace with { RootFsId = descriptor.Id };
++        _workspaceProvider.UpdateWorkspace(updated);
++        ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
++    }
++
++    private RootFsDescriptor? GetRootFsById(string? id)
++    {
++        if (string.IsNullOrWhiteSpace(id))
++            return null;
++
++        return _rootFsCatalog.FirstOrDefault(entry =>
++            string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase));
++    }
++
+     private static IReadOnlyList<string> ParseBlueprintLines(string value)
+     {
+         return value

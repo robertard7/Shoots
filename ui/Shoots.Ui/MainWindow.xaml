@@ -52,6 +52,40 @@
                  Foreground="#FF6B7280"
                  Visibility="{Binding HasNoActiveWorkspace, Converter={StaticResource BooleanToVisibilityConverter}}" />
       <TextBlock Margin="0,16,0,0" Text="{Binding ActiveWorkspaceName}" />
+      <GroupBox Margin="0,12,0,0" Header="Tool Tier">
+        <StackPanel Margin="8">
+          <Border Background="#FFEFF6FF" CornerRadius="4" Padding="6">
+            <TextBlock Text="{Binding ActiveToolpackTierLabel}"
+                       ToolTip="{Binding ActiveToolpackTierTooltip}" />
+          </Border>
+          <TextBlock Margin="0,6,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding SystemTierNote}"
+                     TextWrapping="Wrap" />
+          <ComboBox Margin="0,6,0,0"
+                    ItemsSource="{Binding ToolpackTierOptions}"
+                    SelectedItem="{Binding SelectedToolpackTier}"
+                    IsEnabled="{Binding CanSelectToolpackTier}" />
+          <Button Margin="0,6,0,0"
+                  Content="{Binding SystemTierActionLabel}"
+                  Command="{Binding ToggleSystemTierCommand}"
+                  ToolTip="{Binding ActiveToolpackTierTooltip}"
+                  ToolTipService.ShowOnDisabled="True"
+                  IsEnabled="{Binding HasActiveWorkspace}" />
+        </StackPanel>
+      </GroupBox>
+      <GroupBox Margin="0,12,0,0" Header="Role">
+        <StackPanel Margin="8">
+          <ComboBox ItemsSource="{Binding RoleOptions}"
+                    SelectedItem="{Binding SelectedRole}"
+                    DisplayMemberPath="Name"
+                    IsEnabled="{Binding HasActiveWorkspace}" />
+          <TextBlock Margin="0,6,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding SelectedRoleDescription}"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+      </GroupBox>
     </StackPanel>
     <TabControl Grid.Column="1">
       <TabItem Header="Execution">
@@ -80,6 +114,129 @@
             <Button Width="140" Margin="8,0,0,0" Content="Refresh Status" Command="{Binding RefreshStatusCommand}" />
           </StackPanel>
           <TextBlock Grid.Row="2" Margin="0,24,0,0" Text="Shoots UI Shell" FontSize="20" FontWeight="SemiBold" />
+        </Grid>
+      </TabItem>
+      <TabItem Header="AI Help">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <Border Background="#FFFDF4D7" CornerRadius="4" Padding="10">
+            <TextBlock Text="Informational assistance only." FontWeight="SemiBold" />
+          </Border>
+          <StackPanel Grid.Row="1" Margin="0,12,0,0">
+            <Button Width="160"
+                    Content="Refresh AI Help"
+                    Command="{Binding RefreshAiHelpCommand}"
+                    ToolTip="{Binding AiHelpDisabledReason}"
+                    ToolTipService.ShowOnDisabled="True" />
+            <GroupBox Header="Context Summary" Margin="0,12,0,0">
+              <TextBlock Margin="12" Text="{Binding AiHelpContextSummary}" TextWrapping="Wrap" />
+            </GroupBox>
+            <GroupBox Header="State Explanation" Margin="0,12,0,0">
+              <TextBlock Margin="12" Text="{Binding AiHelpStateExplanation}" TextWrapping="Wrap" />
+            </GroupBox>
+            <GroupBox Header="Suggested Next Steps" Margin="0,12,0,0">
+              <TextBlock Margin="12" Text="{Binding AiHelpNextSteps}" TextWrapping="Wrap" />
+            </GroupBox>
+            <TextBlock Margin="0,12,0,0"
+                       Foreground="#FF6B7280"
+                       Text="AI Help is descriptive and does not execute actions."
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </TabItem>
+      <TabItem Header="Blueprints">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <StackPanel>
+            <TextBlock Text="Blueprints capture ordered intents and expected artifacts." TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="#FF6B7280"
+                       Text="{Binding BlueprintStatusNote}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,12,0">
+              <GroupBox Header="Register Blueprint" IsEnabled="{Binding CanManageBlueprints}">
+                <StackPanel Margin="12">
+                  <TextBlock Text="Name" />
+                  <TextBox Margin="0,4,0,0" Text="{Binding NewBlueprintName, UpdateSourceTrigger=PropertyChanged}" />
+                  <TextBlock Margin="0,8,0,0" Text="Description" />
+                  <TextBox Margin="0,4,0,0" Text="{Binding NewBlueprintDescription}" TextWrapping="Wrap" Height="60" />
+                  <TextBlock Margin="0,8,0,0" Text="Intents (one per line)" />
+                  <TextBox Margin="0,4,0,0" Text="{Binding NewBlueprintIntents}" AcceptsReturn="True" Height="80" />
+                  <TextBlock Margin="0,8,0,0" Text="Expected artifacts (one per line)" />
+                  <TextBox Margin="0,4,0,0" Text="{Binding NewBlueprintArtifacts}" AcceptsReturn="True" Height="80" />
+                  <Button Margin="0,12,0,0"
+                          Content="Add Blueprint"
+                          Command="{Binding AddBlueprintCommand}"
+                          IsEnabled="{Binding CanManageBlueprints}" />
+                </StackPanel>
+              </GroupBox>
+            </StackPanel>
+            <GroupBox Grid.Column="1" Header="Registered Blueprints">
+              <ListBox Margin="8" ItemsSource="{Binding Blueprints}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Margin="0,4,0,4">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding Description}" TextWrapping="Wrap" />
+                      <TextBlock Foreground="#FF6B7280"
+                                 Text="{Binding CreatedUtc}"
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </GroupBox>
+          </Grid>
+        </Grid>
+      </TabItem>
+      <TabItem Header="Execution Environment">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <StackPanel>
+            <TextBlock Text="Execution environments are user-provided rootfs entries." TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="#FF6B7280"
+                       Text="{Binding RootFsNotice}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="240" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <GroupBox Header="Rootfs Catalog">
+              <ListBox Margin="8"
+                       ItemsSource="{Binding RootFsCatalog}"
+                       SelectedItem="{Binding SelectedRootFs}"
+                       DisplayMemberPath="DisplayName" />
+            </GroupBox>
+            <GroupBox Grid.Column="1" Margin="12,0,0,0" Header="Selected Rootfs">
+              <StackPanel Margin="12">
+                <TextBlock Text="{Binding ActiveRootFsLabel}" FontWeight="SemiBold" />
+                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsSource}" TextWrapping="Wrap" />
+                <TextBlock Margin="0,10,0,0" Text="Execution distro source override (URL or local path)" />
+                <TextBox Margin="0,4,0,0" Text="{Binding RootFsSourceOverride, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Margin="0,6,0,0" Foreground="#FF6B7280" Text="{Binding RootFsFallbackNotice}" TextWrapping="Wrap" />
+                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsLicense}" TextWrapping="Wrap" />
+                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsNotes}" TextWrapping="Wrap" />
+              </StackPanel>
+            </GroupBox>
+          </Grid>
         </Grid>
       </TabItem>
       <TabItem Header="Environment">
@@ -134,7 +291,7 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-              <TextBlock Margin="0,8,0,0" Text="Restart required to pick up capability changes."
+              <TextBlock Margin="0,8,0,0" Text="Restart recommended to pick up capability changes."
                          Visibility="{Binding RestartRequired, Converter={StaticResource BooleanToVisibilityConverter}}" />
             </StackPanel>
           </GroupBox>
@@ -202,7 +359,7 @@
       <TabItem Header="Database" Visibility="{Binding HasDatabase, Converter={StaticResource BooleanToVisibilityConverter}}">
         <Grid Margin="16">
           <StackPanel>
-            <TextBlock Text="Database intent is optional and never required for Shoots execution." TextWrapping="Wrap" />
+            <TextBlock Text="Database intent is optional and never needed for Shoots execution." TextWrapping="Wrap" />
             <GroupBox Margin="0,12,0,0" Header="Intent">
               <StackPanel Margin="12">
                 <ListBox ItemsSource="{Binding DatabaseIntents}"

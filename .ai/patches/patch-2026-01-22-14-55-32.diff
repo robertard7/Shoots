@@ -1,0 +1,491 @@
+diff --git a/README.md b/README.md
+index bf2b7a6..6cdc50b 100644
+--- a/README.md
++++ b/README.md
+@@ -177,6 +177,14 @@ This repository does not enforce behavior or validate compliance.
+ 
+ ---
+ 
++AI HELP IS DESCRIPTIVE ONLY
++---------------------------
++
++AI Help text is informational and optional.
++It does not validate, decide, or execute actions.
++
++---
++
+ BUILD & CHECKS
+ --------------
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/IRuntimeNarratorSummary.cs b/src/Runtime/Shoots.Runtime.Abstractions/IRuntimeNarratorSummary.cs
+new file mode 100644
+index 0000000..e968c6b
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Abstractions/IRuntimeNarratorSummary.cs
+@@ -0,0 +1,6 @@
++namespace Shoots.Runtime.Abstractions;
++
++public interface IRuntimeNarratorSummary
++{
++    string DescribeRuntime(RuntimeVersion version);
++}
+diff --git a/src/Runtime/Shoots.Runtime.Core/DeterministicRuntimeNarratorSummary.cs b/src/Runtime/Shoots.Runtime.Core/DeterministicRuntimeNarratorSummary.cs
+new file mode 100644
+index 0000000..6049ece
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Core/DeterministicRuntimeNarratorSummary.cs
+@@ -0,0 +1,13 @@
++using Shoots.Runtime.Abstractions;
++
++namespace Shoots.Runtime.Core;
++
++public sealed class DeterministicRuntimeNarratorSummary : IRuntimeNarratorSummary
++{
++    public static readonly DeterministicRuntimeNarratorSummary Instance = new();
++
++    public string DescribeRuntime(RuntimeVersion version)
++    {
++        return $"Runtime version: {version.Major}.{version.Minor}.{version.Patch}.";
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Loader/AiHelpFacade.cs b/src/Runtime/Shoots.Runtime.Loader/AiHelpFacade.cs
+new file mode 100644
+index 0000000..0d66b43
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Loader/AiHelpFacade.cs
+@@ -0,0 +1,71 @@
++using System;
++using System.Collections.Generic;
++using System.Text;
++using Shoots.Runtime.Abstractions;
++using Shoots.Runtime.Ui.Abstractions;
++
++namespace Shoots.Runtime.Loader;
++
++public sealed class AiHelpFacade : IAiHelpFacade
++{
++    private readonly IRuntimeFacade _runtimeFacade;
++    private readonly IRuntimeNarratorSummary _narratorSummary;
++
++    public AiHelpFacade(IRuntimeFacade runtimeFacade, IRuntimeNarratorSummary narratorSummary)
++    {
++        _runtimeFacade = runtimeFacade ?? throw new ArgumentNullException(nameof(runtimeFacade));
++        _narratorSummary = narratorSummary ?? throw new ArgumentNullException(nameof(narratorSummary));
++    }
++
++    public async Task<string> GetContextSummaryAsync(AiHelpContext context, CancellationToken ct = default)
++    {
++        var status = await _runtimeFacade.QueryStatus(ct).ConfigureAwait(false);
++        var builder = new StringBuilder();
++        builder.AppendLine("Informational assistance only.");
++        builder.AppendLine(_narratorSummary.DescribeRuntime(status.Version));
++        builder.AppendLine(DescribeWorkspace(context));
++        return builder.ToString().Trim();
++    }
++
++    public async Task<string> ExplainStateAsync(AiHelpContext context, CancellationToken ct = default)
++    {
++        var status = await _runtimeFacade.QueryStatus(ct).ConfigureAwait(false);
++        var builder = new StringBuilder();
++        builder.AppendLine("State summary:");
++        builder.AppendLine(_narratorSummary.DescribeRuntime(status.Version));
++        if (!string.IsNullOrWhiteSpace(context.ExecutionState))
++            builder.AppendLine($"Execution state: {context.ExecutionState}.");
++        if (!string.IsNullOrWhiteSpace(context.EnvironmentProfile))
++            builder.AppendLine($"Environment profile: {context.EnvironmentProfile}.");
++        if (!string.IsNullOrWhiteSpace(context.LastAppliedProfile))
++            builder.AppendLine($"Last applied: {context.LastAppliedProfile}.");
++        return builder.ToString().Trim();
++    }
++
++    public Task<string> SuggestNextStepsAsync(AiHelpContext context, CancellationToken ct = default)
++    {
++        _ = ct;
++        var steps = new List<string>
++        {
++            "Review the current workspace and environment summary.",
++            "Confirm the execution plan before starting a run.",
++            "Apply environment profiles or scripts only when needed."
++        };
++
++        if (string.IsNullOrWhiteSpace(context.WorkspaceName))
++            steps.Insert(0, "Select a workspace to scope context.");
++
++        return Task.FromResult(string.Join(" ", steps));
++    }
++
++    private static string DescribeWorkspace(AiHelpContext context)
++    {
++        if (string.IsNullOrWhiteSpace(context.WorkspaceName))
++            return "Workspace: none selected.";
++
++        if (string.IsNullOrWhiteSpace(context.WorkspaceRootPath))
++            return $"Workspace: {context.WorkspaceName}.";
++
++        return $"Workspace: {context.WorkspaceName} ({context.WorkspaceRootPath}).";
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Tests/AiHelpNarrationTests.cs b/src/Runtime/Shoots.Runtime.Tests/AiHelpNarrationTests.cs
+new file mode 100644
+index 0000000..dfd45df
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Tests/AiHelpNarrationTests.cs
+@@ -0,0 +1,21 @@
++using Shoots.Runtime.Core;
++using Shoots.Runtime.Abstractions;
++using Xunit;
++
++namespace Shoots.Runtime.Tests;
++
++public sealed class AiHelpNarrationTests
++{
++    // Architecture guard: narration summaries are deterministic and do not alter execution flow.
++    [Fact]
++    public void DeterministicNarratorSummaryIsStable()
++    {
++        var summary = DeterministicRuntimeNarratorSummary.Instance;
++        var version = new RuntimeVersion(1, 2, 3);
++
++        var first = summary.DescribeRuntime(version);
++        var second = summary.DescribeRuntime(version);
++
++        Assert.Equal(first, second);
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Ui.Abstractions/IAiHelpFacade.cs b/src/Runtime/Shoots.Runtime.Ui.Abstractions/IAiHelpFacade.cs
+new file mode 100644
+index 0000000..2426ea4
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Ui.Abstractions/IAiHelpFacade.cs
+@@ -0,0 +1,21 @@
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace Shoots.Runtime.Ui.Abstractions;
++
++public interface IAiHelpFacade
++{
++    Task<string> GetContextSummaryAsync(AiHelpContext context, CancellationToken ct = default);
++
++    Task<string> ExplainStateAsync(AiHelpContext context, CancellationToken ct = default);
++
++    Task<string> SuggestNextStepsAsync(AiHelpContext context, CancellationToken ct = default);
++}
++
++public sealed record AiHelpContext(
++    string? WorkspaceName,
++    string? WorkspaceRootPath,
++    string? ExecutionState,
++    string? RuntimeVersion,
++    string? EnvironmentProfile,
++    string? LastAppliedProfile);
+diff --git a/ui/Shoots.Ui.Tests/UiBoundaryTests.cs b/ui/Shoots.Ui.Tests/UiBoundaryTests.cs
+index 19d1cc1..f003454 100644
+--- a/ui/Shoots.Ui.Tests/UiBoundaryTests.cs
++++ b/ui/Shoots.Ui.Tests/UiBoundaryTests.cs
+@@ -89,6 +89,25 @@ public sealed class UiBoundaryTests
+                 $"README contains \"{marker}\", which can imply authority over external tools. Use descriptive, non-enforcing language.");
+     }
+ 
++    // Architecture guard: AI help surface remains descriptive and read-only.
++    [Fact]
++    public void AiHelpFacadeUsesDescriptiveMethodsOnly()
++    {
++        var methods = typeof(Shoots.Runtime.Ui.Abstractions.IAiHelpFacade)
++            .GetMethods();
++
++        foreach (var method in methods)
++        {
++            Assert.Equal(typeof(Task<string>), method.ReturnType);
++            var name = method.Name;
++            Assert.DoesNotContain("Validate", name, StringComparison.OrdinalIgnoreCase);
++            Assert.DoesNotContain("Enforce", name, StringComparison.OrdinalIgnoreCase);
++            Assert.DoesNotContain("Execute", name, StringComparison.OrdinalIgnoreCase);
++            Assert.DoesNotContain("Approve", name, StringComparison.OrdinalIgnoreCase);
++            Assert.DoesNotContain("Decide", name, StringComparison.OrdinalIgnoreCase);
++        }
++    }
++
+     [Fact]
+     public void UiReferencesRuntimeFacadeOnly()
+     {
+diff --git a/ui/Shoots.Ui/MainWindow.xaml b/ui/Shoots.Ui/MainWindow.xaml
+index 48e80ac..f2bcbcb 100644
+--- a/ui/Shoots.Ui/MainWindow.xaml
++++ b/ui/Shoots.Ui/MainWindow.xaml
+@@ -82,6 +82,37 @@
+           <TextBlock Grid.Row="2" Margin="0,24,0,0" Text="Shoots UI Shell" FontSize="20" FontWeight="SemiBold" />
+         </Grid>
+       </TabItem>
++      <TabItem Header="AI Help">
++        <Grid Margin="16">
++          <Grid.RowDefinitions>
++            <RowDefinition Height="Auto" />
++            <RowDefinition Height="*" />
++          </Grid.RowDefinitions>
++          <Border Background="#FFFDF4D7" CornerRadius="4" Padding="10">
++            <TextBlock Text="Informational assistance only." FontWeight="SemiBold" />
++          </Border>
++          <StackPanel Grid.Row="1" Margin="0,12,0,0">
++            <Button Width="160"
++                    Content="Refresh AI Help"
++                    Command="{Binding RefreshAiHelpCommand}"
++                    ToolTip="{Binding AiHelpDisabledReason}"
++                    ToolTipService.ShowOnDisabled="True" />
++            <GroupBox Header="Context Summary" Margin="0,12,0,0">
++              <TextBlock Margin="12" Text="{Binding AiHelpContextSummary}" TextWrapping="Wrap" />
++            </GroupBox>
++            <GroupBox Header="State Explanation" Margin="0,12,0,0">
++              <TextBlock Margin="12" Text="{Binding AiHelpStateExplanation}" TextWrapping="Wrap" />
++            </GroupBox>
++            <GroupBox Header="Suggested Next Steps" Margin="0,12,0,0">
++              <TextBlock Margin="12" Text="{Binding AiHelpNextSteps}" TextWrapping="Wrap" />
++            </GroupBox>
++            <TextBlock Margin="0,12,0,0"
++                       Foreground="#FF6B7280"
++                       Text="AI Help is descriptive and does not control execution."
++                       TextWrapping="Wrap" />
++          </StackPanel>
++        </Grid>
++      </TabItem>
+       <TabItem Header="Environment">
+         <Grid Margin="16">
+           <Grid.RowDefinitions>
+@@ -134,7 +165,7 @@
+                   </DataTemplate>
+                 </ItemsControl.ItemTemplate>
+               </ItemsControl>
+-              <TextBlock Margin="0,8,0,0" Text="Restart required to pick up capability changes."
++              <TextBlock Margin="0,8,0,0" Text="Restart recommended to pick up capability changes."
+                          Visibility="{Binding RestartRequired, Converter={StaticResource BooleanToVisibilityConverter}}" />
+             </StackPanel>
+           </GroupBox>
+@@ -202,7 +233,7 @@
+       <TabItem Header="Database" Visibility="{Binding HasDatabase, Converter={StaticResource BooleanToVisibilityConverter}}">
+         <Grid Margin="16">
+           <StackPanel>
+-            <TextBlock Text="Database intent is optional and never required for Shoots execution." TextWrapping="Wrap" />
++            <TextBlock Text="Database intent is optional and never needed for Shoots execution." TextWrapping="Wrap" />
+             <GroupBox Margin="0,12,0,0" Header="Intent">
+               <StackPanel Margin="12">
+                 <ListBox ItemsSource="{Binding DatabaseIntents}"
+diff --git a/ui/Shoots.Ui/MainWindow.xaml.cs b/ui/Shoots.Ui/MainWindow.xaml.cs
+index 60d02f2..46ac4e5 100644
+--- a/ui/Shoots.Ui/MainWindow.xaml.cs
++++ b/ui/Shoots.Ui/MainWindow.xaml.cs
+@@ -25,6 +25,7 @@ public partial class MainWindow : Window
+             new EnvironmentScriptLoader(),
+             workspaceProvider,
+             workspaceShell,
+-            databaseIntentStore);
++            databaseIntentStore,
++            new NullAiHelpFacade());
+     }
+ }
+diff --git a/ui/Shoots.Ui/Services/NullAiHelpFacade.cs b/ui/Shoots.Ui/Services/NullAiHelpFacade.cs
+new file mode 100644
+index 0000000..b197d65
+--- /dev/null
++++ b/ui/Shoots.Ui/Services/NullAiHelpFacade.cs
+@@ -0,0 +1,29 @@
++using System.Threading;
++using System.Threading.Tasks;
++using Shoots.Runtime.Ui.Abstractions;
++
++namespace Shoots.UI.Services;
++
++public sealed class NullAiHelpFacade : IAiHelpFacade
++{
++    public Task<string> GetContextSummaryAsync(AiHelpContext context, CancellationToken ct = default)
++    {
++        _ = context;
++        _ = ct;
++        return Task.FromResult("AI Help is unavailable.");
++    }
++
++    public Task<string> ExplainStateAsync(AiHelpContext context, CancellationToken ct = default)
++    {
++        _ = context;
++        _ = ct;
++        return Task.FromResult("No runtime context is available.");
++    }
++
++    public Task<string> SuggestNextStepsAsync(AiHelpContext context, CancellationToken ct = default)
++    {
++        _ = context;
++        _ = ct;
++        return Task.FromResult("AI Help is informational only.");
++    }
++}
+diff --git a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+index a138fcc..b79b757 100644
+--- a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
++++ b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+@@ -22,6 +22,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+     private readonly IProjectWorkspaceProvider _workspaceProvider;
+     private readonly IWorkspaceShellService _workspaceShell;
+     private readonly IDatabaseIntentStore _databaseIntentStore;
++    private readonly IAiHelpFacade _aiHelpFacade;
+     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
+     private ExecutionState _state;
+     private BuildPlan? _plan;
+@@ -44,7 +45,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         EnvironmentScriptLoader scriptLoader,
+         IProjectWorkspaceProvider workspaceProvider,
+         IWorkspaceShellService workspaceShell,
+-        IDatabaseIntentStore databaseIntentStore)
++        IDatabaseIntentStore databaseIntentStore,
++        IAiHelpFacade aiHelpFacade)
+     {
+         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
+         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
+@@ -54,6 +56,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
+         _workspaceShell = workspaceShell ?? throw new ArgumentNullException(nameof(workspaceShell));
+         _databaseIntentStore = databaseIntentStore ?? throw new ArgumentNullException(nameof(databaseIntentStore));
++        _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
+         _state = ExecutionState.Idle;
+ 
+         StartCommand = new AsyncRelayCommand(StartAsync, CanStart);
+@@ -63,6 +66,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         ApplyScriptCommand = new AsyncRelayCommand(ApplyScriptAsync, CanApplyScript);
+         RemoveWorkspaceCommand = new AsyncRelayCommand(RemoveWorkspaceAsync, CanRemoveWorkspace);
+         OpenWorkspaceCommand = new AsyncRelayCommand(OpenWorkspaceAsync, CanOpenWorkspace);
++        RefreshAiHelpCommand = new AsyncRelayCommand(RefreshAiHelpAsync, CanRefreshAiHelp);
+         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
+         SelectedProfile = Profiles.FirstOrDefault();
+         EnvironmentCapabilities = Array.Empty<string>();
+@@ -83,6 +87,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
+             ?? DatabaseIntents.FirstOrDefault();
+         LoadEnvironmentScript();
++        _ = RefreshAiHelpAsync();
+     }
+ 
+     public event PropertyChangedEventHandler? PropertyChanged;
+@@ -135,6 +140,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+ 
+     public AsyncRelayCommand OpenWorkspaceCommand { get; }
+ 
++    public AsyncRelayCommand RefreshAiHelpCommand { get; }
++
+     public IReadOnlyList<IEnvironmentProfile> Profiles { get; }
+ 
+     public IEnvironmentProfile? SelectedProfile
+@@ -228,6 +235,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+             LoadEnvironmentScript();
+             UpdateProfileCapabilities();
+             UpdateDatabaseIntentSelection();
++            _ = RefreshAiHelpAsync();
+             RaiseCommandCanExecute();
+         }
+     }
+@@ -302,7 +310,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+ 
+     public string ApplyScriptDisabledReason => GetApplyScriptDisabledReason();
+ 
+-    public void SetPlan(BuildPlan? plan) => Plan = plan;
++    public string AiHelpDisabledReason => GetAiHelpDisabledReason();
++
++    public string AiHelpContextSummary { get; private set; } = "AI Help is informational only.";
++
++    public string AiHelpStateExplanation { get; private set; } = "No runtime context is available.";
++
++    public string AiHelpNextSteps { get; private set; } = "Select a workspace to view help.";
++
++    public void SetPlan(BuildPlan? plan)
++    {
++        Plan = plan;
++        _ = RefreshAiHelpAsync();
++    }
+ 
+     public void SetState(ExecutionState state) => State = state;
+ 
+@@ -538,9 +558,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         ApplyScriptCommand.RaiseCanExecuteChanged();
+         RemoveWorkspaceCommand.RaiseCanExecuteChanged();
+         OpenWorkspaceCommand.RaiseCanExecuteChanged();
++        RefreshAiHelpCommand.RaiseCanExecuteChanged();
+         OnPropertyChanged(nameof(StartDisabledReason));
+         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));
+         OnPropertyChanged(nameof(ApplyScriptDisabledReason));
++        OnPropertyChanged(nameof(AiHelpDisabledReason));
+     }
+ 
+     private bool CanRemoveWorkspace()
+@@ -573,11 +595,39 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         return Task.CompletedTask;
+     }
+ 
++    private bool CanRefreshAiHelp()
++    {
++        return HasActiveWorkspace && Plan is not null;
++    }
++
++    private async Task RefreshAiHelpAsync()
++    {
++        if (!CanRefreshAiHelp())
++        {
++            AiHelpContextSummary = "AI Help is informational only.";
++            AiHelpStateExplanation = "No runtime context is available.";
++            AiHelpNextSteps = "Select a workspace and load a plan to view help.";
++            OnPropertyChanged(nameof(AiHelpContextSummary));
++            OnPropertyChanged(nameof(AiHelpStateExplanation));
++            OnPropertyChanged(nameof(AiHelpNextSteps));
++            return;
++        }
++
++        var context = BuildAiHelpContext();
++        AiHelpContextSummary = await _aiHelpFacade.GetContextSummaryAsync(context).ConfigureAwait(true);
++        AiHelpStateExplanation = await _aiHelpFacade.ExplainStateAsync(context).ConfigureAwait(true);
++        AiHelpNextSteps = await _aiHelpFacade.SuggestNextStepsAsync(context).ConfigureAwait(true);
++        OnPropertyChanged(nameof(AiHelpContextSummary));
++        OnPropertyChanged(nameof(AiHelpStateExplanation));
++        OnPropertyChanged(nameof(AiHelpNextSteps));
++    }
++
+     public void SelectWorkspace(ProjectWorkspace workspace)
+     {
+         _workspaceProvider.SetActiveWorkspace(workspace);
+         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+         RefreshRecentWorkspaces();
++        _ = RefreshAiHelpAsync();
+     }
+ 
+     private void RefreshRecentWorkspaces()
+@@ -590,6 +640,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         OnPropertyChanged(nameof(HasWorkspaces));
+     }
+ 
++    private AiHelpContext BuildAiHelpContext()
++    {
++        return new AiHelpContext(
++            ActiveWorkspace?.Name,
++            ActiveWorkspace?.RootPath,
++            StateLabel,
++            null,
++            SelectedProfile?.Name,
++            _lastEnvironmentResult?.ProfileName);
++    }
++
+     private void UpdateDatabaseIntentSelection()
+     {
+         if (ActiveWorkspace is null)
+@@ -656,6 +717,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         return "Apply the previewed script.";
+     }
+ 
++    private string GetAiHelpDisabledReason()
++    {
++        if (ActiveWorkspace is null)
++            return "Select a workspace to view AI Help.";
++
++        if (Plan is null)
++            return "Load a plan to view AI Help.";
++
++        return "Refresh AI Help.";
++    }
++
+     public ISourceControlIntent? SourceControlIntent => null;
+ 
+     private void OnPropertyChanged(string propertyName) =>
