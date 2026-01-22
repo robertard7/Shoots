@@ -1,0 +1,46 @@
+{
+  "toolpackId": "developer.build",
+  "version": "1.0.0",
+  "tier": "Developer",
+  "description": "Developer build and status metadata.",
+  "riskNotes": "Build metadata only; execution remains external.",
+  "tools": [
+    {
+      "toolId": "dotnet.build",
+      "description": "Describe a dotnet build request.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "solution", "type": "string", "description": "Solution or project path.", "required": true },
+        { "name": "configuration", "type": "string", "description": "Build configuration.", "required": false }
+      ],
+      "outputs": [
+        { "name": "buildId", "type": "string", "description": "Build identifier." }
+      ],
+      "tags": ["dotnet", "build"]
+    },
+    {
+      "toolId": "dotnet.test",
+      "description": "Describe a dotnet test request.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "solution", "type": "string", "description": "Solution or project path.", "required": true }
+      ],
+      "outputs": [
+        { "name": "testId", "type": "string", "description": "Test run identifier." }
+      ],
+      "tags": ["dotnet", "test"]
+    },
+    {
+      "toolId": "git.status",
+      "description": "Describe a git status request.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "path", "type": "string", "description": "Repository root path.", "required": true }
+      ],
+      "outputs": [
+        { "name": "summary", "type": "string", "description": "Status summary." }
+      ],
+      "tags": ["git", "status"]
+    }
+  ]
+}

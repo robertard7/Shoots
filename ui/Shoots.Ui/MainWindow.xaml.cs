@@ -26,6 +26,7 @@ public partial class MainWindow : Window
             workspaceProvider,
             workspaceShell,
             databaseIntentStore,
+            new ToolTierPrompt(),
             new NullAiHelpFacade());
     }
 }

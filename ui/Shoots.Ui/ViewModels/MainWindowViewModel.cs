@@ -22,6 +22,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly IProjectWorkspaceProvider _workspaceProvider;
     private readonly IWorkspaceShellService _workspaceShell;
     private readonly IDatabaseIntentStore _databaseIntentStore;
+    private readonly IToolTierPrompt _toolTierPrompt;
     private readonly IAiHelpFacade _aiHelpFacade;
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private ExecutionState _state;
@@ -36,6 +37,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _scriptSearchPath = string.Empty;
     private string? _scriptUnsupportedCapabilitiesMessage;
     private DatabaseIntentOption? _selectedDatabaseIntent;
+    private ToolpackTier _lastNonSystemTier = ToolpackTier.Public;
 
     public MainWindowViewModel(
         IExecutionCommandService commandService,
@@ -46,6 +48,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         IProjectWorkspaceProvider workspaceProvider,
         IWorkspaceShellService workspaceShell,
         IDatabaseIntentStore databaseIntentStore,
+        IToolTierPrompt toolTierPrompt,
         IAiHelpFacade aiHelpFacade)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
@@ -56,6 +59,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
         _workspaceShell = workspaceShell ?? throw new ArgumentNullException(nameof(workspaceShell));
         _databaseIntentStore = databaseIntentStore ?? throw new ArgumentNullException(nameof(databaseIntentStore));
+        _toolTierPrompt = toolTierPrompt ?? throw new ArgumentNullException(nameof(toolTierPrompt));
         _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
         _state = ExecutionState.Idle;
 
@@ -66,6 +70,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ApplyScriptCommand = new AsyncRelayCommand(ApplyScriptAsync, CanApplyScript);
         RemoveWorkspaceCommand = new AsyncRelayCommand(RemoveWorkspaceAsync, CanRemoveWorkspace);
         OpenWorkspaceCommand = new AsyncRelayCommand(OpenWorkspaceAsync, CanOpenWorkspace);
+        ToggleSystemTierCommand = new AsyncRelayCommand(ToggleSystemTierAsync, CanToggleSystemTier);
         RefreshAiHelpCommand = new AsyncRelayCommand(RefreshAiHelpAsync, CanRefreshAiHelp);
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
@@ -139,6 +144,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public AsyncRelayCommand RemoveWorkspaceCommand { get; }
 
     public AsyncRelayCommand OpenWorkspaceCommand { get; }
+
+    public AsyncRelayCommand ToggleSystemTierCommand { get; }
 
     public AsyncRelayCommand RefreshAiHelpCommand { get; }
 
@@ -235,6 +242,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             LoadEnvironmentScript();
             UpdateProfileCapabilities();
             UpdateDatabaseIntentSelection();
+            OnToolpackTierChanged();
             _ = RefreshAiHelpAsync();
             RaiseCommandCanExecute();
         }
@@ -317,6 +325,39 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string AiHelpStateExplanation { get; private set; } = "No runtime context is available.";
 
     public string AiHelpNextSteps { get; private set; } = "Select a workspace to view help.";
+
+    public IReadOnlyList<ToolpackTier> ToolpackTierOptions { get; } =
+        new[] { ToolpackTier.Public, ToolpackTier.Developer };
+
+    public ToolpackTier SelectedToolpackTier
+    {
+        get => IsSystemTierEnabled ? _lastNonSystemTier : ActiveToolpackTier;
+        set => UpdateToolpackTier(value);
+    }
+
+    public string ActiveToolpackTierLabel => $"Active Tier: {ActiveToolpackTier}";
+
+    public string ActiveToolpackTierTooltip => ActiveToolpackTier switch
+    {
+        ToolpackTier.Public => "Public tools only.",
+        ToolpackTier.Developer => "Public and developer toolpacks.",
+        ToolpackTier.System => "All tiers, including system toolpacks.",
+        _ => "Tier status."
+    };
+
+    public ToolpackTier ActiveToolpackTier => _activeWorkspace?.AllowedTier ?? ToolpackTier.Public;
+
+    public bool IsSystemTierEnabled => ActiveToolpackTier == ToolpackTier.System;
+
+    public string SystemTierActionLabel => IsSystemTierEnabled
+        ? "Disable System Tier"
+        : "Enable System Tier";
+
+    public string SystemTierNote => IsSystemTierEnabled
+        ? "System tier is enabled for this workspace."
+        : "System tier is disabled by default.";
+
+    public bool CanSelectToolpackTier => HasActiveWorkspace && !IsSystemTierEnabled;
 
     public void SetPlan(BuildPlan? plan)
     {
@@ -558,11 +599,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ApplyScriptCommand.RaiseCanExecuteChanged();
         RemoveWorkspaceCommand.RaiseCanExecuteChanged();
         OpenWorkspaceCommand.RaiseCanExecuteChanged();
+        ToggleSystemTierCommand.RaiseCanExecuteChanged();
         RefreshAiHelpCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(StartDisabledReason));
         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));
         OnPropertyChanged(nameof(ApplyScriptDisabledReason));
         OnPropertyChanged(nameof(AiHelpDisabledReason));
+        OnPropertyChanged(nameof(SystemTierActionLabel));
     }
 
     private bool CanRemoveWorkspace()
@@ -598,6 +641,29 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private bool CanRefreshAiHelp()
     {
         return HasActiveWorkspace && Plan is not null;
+    }
+
+    private bool CanToggleSystemTier()
+    {
+        return HasActiveWorkspace;
+    }
+
+    private Task ToggleSystemTierAsync()
+    {
+        if (!HasActiveWorkspace || _activeWorkspace is null)
+            return Task.CompletedTask;
+
+        if (IsSystemTierEnabled)
+        {
+            UpdateToolpackTier(_lastNonSystemTier);
+            return Task.CompletedTask;
+        }
+
+        if (!_toolTierPrompt.ConfirmSystemTier(ActiveToolpackTier))
+            return Task.CompletedTask;
+
+        UpdateToolpackTier(ToolpackTier.System);
+        return Task.CompletedTask;
     }
 
     private async Task RefreshAiHelpAsync()
@@ -649,6 +715,39 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             null,
             SelectedProfile?.Name,
             _lastEnvironmentResult?.ProfileName);
+    }
+
+    private void UpdateToolpackTier(ToolpackTier tier)
+    {
+        if (_activeWorkspace is null)
+            return;
+
+        if (tier != ToolpackTier.System)
+            _lastNonSystemTier = tier;
+
+        if (_activeWorkspace.AllowedTier == tier)
+            return;
+
+        var updated = _activeWorkspace with { AllowedTier = tier };
+        _workspaceProvider.UpdateWorkspace(updated);
+        ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+    }
+
+    private void OnToolpackTierChanged()
+    {
+        if (_activeWorkspace is null)
+            _lastNonSystemTier = ToolpackTier.Public;
+        else if (_activeWorkspace.AllowedTier != ToolpackTier.System)
+            _lastNonSystemTier = _activeWorkspace.AllowedTier;
+
+        OnPropertyChanged(nameof(ActiveToolpackTier));
+        OnPropertyChanged(nameof(ActiveToolpackTierLabel));
+        OnPropertyChanged(nameof(ActiveToolpackTierTooltip));
+        OnPropertyChanged(nameof(IsSystemTierEnabled));
+        OnPropertyChanged(nameof(SelectedToolpackTier));
+        OnPropertyChanged(nameof(CanSelectToolpackTier));
+        OnPropertyChanged(nameof(SystemTierActionLabel));
+        OnPropertyChanged(nameof(SystemTierNote));
     }
 
     private void UpdateDatabaseIntentSelection()

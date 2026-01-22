@@ -52,6 +52,28 @@
                  Foreground="#FF6B7280"
                  Visibility="{Binding HasNoActiveWorkspace, Converter={StaticResource BooleanToVisibilityConverter}}" />
       <TextBlock Margin="0,16,0,0" Text="{Binding ActiveWorkspaceName}" />
+      <GroupBox Margin="0,12,0,0" Header="Tool Tier">
+        <StackPanel Margin="8">
+          <Border Background="#FFEFF6FF" CornerRadius="4" Padding="6">
+            <TextBlock Text="{Binding ActiveToolpackTierLabel}"
+                       ToolTip="{Binding ActiveToolpackTierTooltip}" />
+          </Border>
+          <TextBlock Margin="0,6,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding SystemTierNote}"
+                     TextWrapping="Wrap" />
+          <ComboBox Margin="0,6,0,0"
+                    ItemsSource="{Binding ToolpackTierOptions}"
+                    SelectedItem="{Binding SelectedToolpackTier}"
+                    IsEnabled="{Binding CanSelectToolpackTier}" />
+          <Button Margin="0,6,0,0"
+                  Content="{Binding SystemTierActionLabel}"
+                  Command="{Binding ToggleSystemTierCommand}"
+                  ToolTip="{Binding ActiveToolpackTierTooltip}"
+                  ToolTipService.ShowOnDisabled="True"
+                  IsEnabled="{Binding HasActiveWorkspace}" />
+        </StackPanel>
+      </GroupBox>
     </StackPanel>
     <TabControl Grid.Column="1">
       <TabItem Header="Execution">

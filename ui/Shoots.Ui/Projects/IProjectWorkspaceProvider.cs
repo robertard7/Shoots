@@ -15,6 +15,8 @@ public interface IProjectWorkspaceProvider
     void SetActiveWorkspace(ProjectWorkspace workspace);
 
     void RemoveWorkspace(ProjectWorkspace workspace);
+
+    void UpdateWorkspace(ProjectWorkspace workspace);
 }
 
 public sealed class ProjectWorkspaceProvider : IProjectWorkspaceProvider
@@ -73,6 +75,29 @@ public sealed class ProjectWorkspaceProvider : IProjectWorkspaceProvider
             _activeWorkspace = _recentWorkspaces.FirstOrDefault();
             _store.SaveRecentWorkspaces(_recentWorkspaces);
         }
+    }
+
+    public void UpdateWorkspace(ProjectWorkspace workspace)
+    {
+        if (workspace is null)
+            throw new ArgumentNullException(nameof(workspace));
+
+        EnsureLoaded();
+        var index = _recentWorkspaces.FindIndex(existing =>
+            string.Equals(existing.RootPath, workspace.RootPath, StringComparison.OrdinalIgnoreCase));
+
+        if (index < 0)
+            return;
+
+        _recentWorkspaces[index] = workspace;
+
+        if (_activeWorkspace is not null &&
+            string.Equals(_activeWorkspace.RootPath, workspace.RootPath, StringComparison.OrdinalIgnoreCase))
+        {
+            _activeWorkspace = workspace;
+        }
+
+        _store.SaveRecentWorkspaces(_recentWorkspaces);
     }
 
     private void EnsureLoaded()

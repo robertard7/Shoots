@@ -1,0 +1,45 @@
+{
+  "toolpackId": "system.os",
+  "version": "1.0.0",
+  "tier": "System",
+  "description": "System-level tooling stubs.",
+  "riskNotes": "Stubs only; no execution paths.",
+  "tools": [
+    {
+      "toolId": "iso.build",
+      "description": "Describe an ISO build stub.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "source", "type": "string", "description": "Source path.", "required": true }
+      ],
+      "outputs": [
+        { "name": "artifactId", "type": "string", "description": "ISO artifact identifier." }
+      ],
+      "tags": ["iso", "build"]
+    },
+    {
+      "toolId": "qemu.boot",
+      "description": "Describe a QEMU boot stub.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "image", "type": "string", "description": "Disk image path.", "required": true }
+      ],
+      "outputs": [
+        { "name": "sessionId", "type": "string", "description": "Session identifier." }
+      ],
+      "tags": ["qemu", "boot"]
+    },
+    {
+      "toolId": "disk.image",
+      "description": "Describe a disk image stub.",
+      "authority": { "providerKind": "Local", "capabilities": ["Plan"] },
+      "inputs": [
+        { "name": "source", "type": "string", "description": "Source path.", "required": true }
+      ],
+      "outputs": [
+        { "name": "imageId", "type": "string", "description": "Disk image identifier." }
+      ],
+      "tags": ["disk", "image"]
+    }
+  ]
+}

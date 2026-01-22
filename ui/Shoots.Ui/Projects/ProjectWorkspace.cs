@@ -5,5 +5,6 @@ namespace Shoots.UI.Projects;
 public sealed record ProjectWorkspace(
     string Name,
     string RootPath,
-    DateTimeOffset LastOpenedUtc
+    DateTimeOffset LastOpenedUtc,
+    Shoots.Runtime.Ui.Abstractions.ToolpackTier AllowedTier = Shoots.Runtime.Ui.Abstractions.ToolpackTier.Public
 );
