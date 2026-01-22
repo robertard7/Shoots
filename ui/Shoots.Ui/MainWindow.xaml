@@ -201,6 +201,41 @@
           </Grid>
         </Grid>
       </TabItem>
+      <TabItem Header="Execution Environment">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <StackPanel>
+            <TextBlock Text="Execution environments are user-provided rootfs entries." TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="#FF6B7280"
+                       Text="{Binding RootFsNotice}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="240" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <GroupBox Header="Rootfs Catalog">
+              <ListBox Margin="8"
+                       ItemsSource="{Binding RootFsCatalog}"
+                       SelectedItem="{Binding SelectedRootFs}"
+                       DisplayMemberPath="DisplayName" />
+            </GroupBox>
+            <GroupBox Grid.Column="1" Margin="12,0,0,0" Header="Selected Rootfs">
+              <StackPanel Margin="12">
+                <TextBlock Text="{Binding ActiveRootFsLabel}" FontWeight="SemiBold" />
+                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsSource}" TextWrapping="Wrap" />
+                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsLicense}" TextWrapping="Wrap" />
+                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsNotes}" TextWrapping="Wrap" />
+              </StackPanel>
+            </GroupBox>
+          </Grid>
+        </Grid>
+      </TabItem>
       <TabItem Header="Environment">
         <Grid Margin="16">
           <Grid.RowDefinitions>

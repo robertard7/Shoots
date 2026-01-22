@@ -6,6 +6,7 @@ using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Ui.Abstractions;
 using Shoots.UI.Blueprints;
+using Shoots.UI.ExecutionEnvironments;
 using Shoots.UI.Environment;
 using Shoots.UI.Intents;
 using Shoots.UI.Projects;
@@ -26,9 +27,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly IDatabaseIntentStore _databaseIntentStore;
     private readonly IToolTierPrompt _toolTierPrompt;
     private readonly ISystemBlueprintStore _blueprintStore;
+    private readonly IExecutionEnvironmentSettingsStore _executionEnvironmentStore;
     private readonly IAiHelpFacade _aiHelpFacade;
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private readonly ObservableCollection<SystemBlueprint> _blueprints;
+    private readonly ObservableCollection<RootFsDescriptor> _rootFsCatalog;
     private ExecutionState _state;
     private BuildPlan? _plan;
     private IEnvironmentProfile? _selectedProfile;
@@ -47,6 +50,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _newBlueprintDescription = string.Empty;
     private string _newBlueprintIntents = string.Empty;
     private string _newBlueprintArtifacts = string.Empty;
+    private ExecutionEnvironmentSettings _executionSettings = new("none", Array.Empty<RootFsDescriptor>());
 
     public MainWindowViewModel(
         IExecutionCommandService commandService,
@@ -59,6 +63,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         IDatabaseIntentStore databaseIntentStore,
         IToolTierPrompt toolTierPrompt,
         ISystemBlueprintStore blueprintStore,
+        IExecutionEnvironmentSettingsStore executionEnvironmentStore,
         IAiHelpFacade aiHelpFacade)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
@@ -71,6 +76,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _databaseIntentStore = databaseIntentStore ?? throw new ArgumentNullException(nameof(databaseIntentStore));
         _toolTierPrompt = toolTierPrompt ?? throw new ArgumentNullException(nameof(toolTierPrompt));
         _blueprintStore = blueprintStore ?? throw new ArgumentNullException(nameof(blueprintStore));
+        _executionEnvironmentStore = executionEnvironmentStore ?? throw new ArgumentNullException(nameof(executionEnvironmentStore));
         _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
         _state = ExecutionState.Idle;
 
@@ -94,8 +100,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RecentWorkspaces = new ReadOnlyObservableCollection<ProjectWorkspace>(_recentWorkspaces);
         _blueprints = new ObservableCollection<SystemBlueprint>();
         Blueprints = new ReadOnlyObservableCollection<SystemBlueprint>(_blueprints);
+        _rootFsCatalog = new ObservableCollection<RootFsDescriptor>();
+        RootFsCatalog = new ReadOnlyObservableCollection<RootFsDescriptor>(_rootFsCatalog);
         RefreshRecentWorkspaces();
         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+        LoadExecutionEnvironments();
         RoleOptions = new ReadOnlyCollection<RoleDescriptor>(RoleCatalog.GetDefaultRoles().ToList());
         SelectedRole = RoleOptions.FirstOrDefault();
         DatabaseIntents = new ReadOnlyCollection<DatabaseIntentOption>(new[]
@@ -244,6 +253,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public ReadOnlyObservableCollection<SystemBlueprint> Blueprints { get; }
 
+    public ReadOnlyObservableCollection<RootFsDescriptor> RootFsCatalog { get; }
+
     public ReadOnlyCollection<RoleDescriptor> RoleOptions { get; }
 
     public ProjectWorkspace? ActiveWorkspace
@@ -264,6 +275,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             LoadEnvironmentScript();
             UpdateProfileCapabilities();
             UpdateDatabaseIntentSelection();
+            UpdateExecutionEnvironmentSelection();
             LoadBlueprints();
             OnToolpackTierChanged();
             _ = RefreshAiHelpAsync();
@@ -293,6 +305,35 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     public string SelectedRoleDescription => SelectedRole?.Description ?? "No role selected.";
+
+    public RootFsDescriptor? SelectedRootFs
+    {
+        get => ActiveRootFs;
+        set => UpdateRootFsSelection(value);
+    }
+
+    public RootFsDescriptor? ActiveRootFs
+    {
+        get
+        {
+            if (ActiveWorkspace is null)
+                return GetRootFsById(_executionSettings.ActiveRootFsId);
+
+            return GetRootFsById(ActiveWorkspace.RootFsId ?? _executionSettings.ActiveRootFsId);
+        }
+    }
+
+    public string ActiveRootFsLabel => ActiveRootFs?.DisplayName ?? "No rootfs selected";
+
+    public string ActiveRootFsSource => ActiveRootFs?.DefaultUrl ?? "No source set";
+
+    public string ActiveRootFsLicense => ActiveRootFs?.License ?? "No license details";
+
+    public string ActiveRootFsNotes => ActiveRootFs?.Notes ?? "No notes";
+
+    public bool HasRootFsCatalog => RootFsCatalog.Count > 0;
+
+    public string RootFsNotice => "Shoots does not provide or modify Linux.";
 
     public ProjectWorkspace? SelectedWorkspace
     {
@@ -882,6 +923,54 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
 
         _blueprintStore.SaveForWorkspace(_activeWorkspace.RootPath, _blueprints);
+    }
+
+    private void LoadExecutionEnvironments()
+    {
+        _executionSettings = _executionEnvironmentStore.Load();
+        _rootFsCatalog.Clear();
+        foreach (var entry in _executionSettings.RootFsCatalog)
+            _rootFsCatalog.Add(entry);
+
+        UpdateExecutionEnvironmentSelection();
+    }
+
+    private void UpdateExecutionEnvironmentSelection()
+    {
+        OnPropertyChanged(nameof(SelectedRootFs));
+        OnPropertyChanged(nameof(ActiveRootFs));
+        OnPropertyChanged(nameof(ActiveRootFsLabel));
+        OnPropertyChanged(nameof(ActiveRootFsSource));
+        OnPropertyChanged(nameof(ActiveRootFsLicense));
+        OnPropertyChanged(nameof(ActiveRootFsNotes));
+        OnPropertyChanged(nameof(HasRootFsCatalog));
+    }
+
+    private void UpdateRootFsSelection(RootFsDescriptor? descriptor)
+    {
+        if (descriptor is null)
+            return;
+
+        if (ActiveWorkspace is null)
+        {
+            _executionSettings = _executionSettings with { ActiveRootFsId = descriptor.Id };
+            _executionEnvironmentStore.Save(_executionSettings);
+            UpdateExecutionEnvironmentSelection();
+            return;
+        }
+
+        var updated = ActiveWorkspace with { RootFsId = descriptor.Id };
+        _workspaceProvider.UpdateWorkspace(updated);
+        ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+    }
+
+    private RootFsDescriptor? GetRootFsById(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return null;
+
+        return _rootFsCatalog.FirstOrDefault(entry =>
+            string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase));
     }
 
     private static IReadOnlyList<string> ParseBlueprintLines(string value)

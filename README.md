@@ -144,7 +144,7 @@ WHAT SHOOTS DOES NOT AIM TO DO
 NON-GOALS
 ---------
 
-- Policy control or agent governance
+- Control or agent governance
 - Output validation or tool control
 - Execution or correctness claims
 - Security assurances or certification
@@ -182,6 +182,16 @@ AI HELP IS DESCRIPTIVE ONLY
 
 AI Help text is informational and optional.
 It does not validate, decide, or execute actions.
+
+---
+
+EXECUTION ENVIRONMENTS
+----------------------
+
+Shoots does not ship or distribute Linux.
+Execution environments are user-provisioned rootfs descriptors that point to
+external sources you control. Rootfs entries can be updated in settings and
+selected per workspace without changing code.
 
 ---
 
