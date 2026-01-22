@@ -89,6 +89,25 @@ public sealed class UiBoundaryTests
                 $"README contains \"{marker}\", which can imply authority over external tools. Use descriptive, non-enforcing language.");
     }
 
+    // Architecture guard: AI help surface remains descriptive and read-only.
+    [Fact]
+    public void AiHelpFacadeUsesDescriptiveMethodsOnly()
+    {
+        var methods = typeof(Shoots.Runtime.Ui.Abstractions.IAiHelpFacade)
+            .GetMethods();
+
+        foreach (var method in methods)
+        {
+            Assert.Equal(typeof(Task<string>), method.ReturnType);
+            var name = method.Name;
+            Assert.DoesNotContain("Validate", name, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Enforce", name, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Execute", name, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Approve", name, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Decide", name, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     [Fact]
     public void UiReferencesRuntimeFacadeOnly()
     {

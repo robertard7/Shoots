@@ -22,6 +22,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly IProjectWorkspaceProvider _workspaceProvider;
     private readonly IWorkspaceShellService _workspaceShell;
     private readonly IDatabaseIntentStore _databaseIntentStore;
+    private readonly IAiHelpFacade _aiHelpFacade;
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private ExecutionState _state;
     private BuildPlan? _plan;
@@ -44,7 +45,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         EnvironmentScriptLoader scriptLoader,
         IProjectWorkspaceProvider workspaceProvider,
         IWorkspaceShellService workspaceShell,
-        IDatabaseIntentStore databaseIntentStore)
+        IDatabaseIntentStore databaseIntentStore,
+        IAiHelpFacade aiHelpFacade)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
@@ -54,6 +56,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
         _workspaceShell = workspaceShell ?? throw new ArgumentNullException(nameof(workspaceShell));
         _databaseIntentStore = databaseIntentStore ?? throw new ArgumentNullException(nameof(databaseIntentStore));
+        _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
         _state = ExecutionState.Idle;
 
         StartCommand = new AsyncRelayCommand(StartAsync, CanStart);
@@ -63,6 +66,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ApplyScriptCommand = new AsyncRelayCommand(ApplyScriptAsync, CanApplyScript);
         RemoveWorkspaceCommand = new AsyncRelayCommand(RemoveWorkspaceAsync, CanRemoveWorkspace);
         OpenWorkspaceCommand = new AsyncRelayCommand(OpenWorkspaceAsync, CanOpenWorkspace);
+        RefreshAiHelpCommand = new AsyncRelayCommand(RefreshAiHelpAsync, CanRefreshAiHelp);
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
         EnvironmentCapabilities = Array.Empty<string>();
@@ -83,6 +87,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
             ?? DatabaseIntents.FirstOrDefault();
         LoadEnvironmentScript();
+        _ = RefreshAiHelpAsync();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -134,6 +139,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public AsyncRelayCommand RemoveWorkspaceCommand { get; }
 
     public AsyncRelayCommand OpenWorkspaceCommand { get; }
+
+    public AsyncRelayCommand RefreshAiHelpCommand { get; }
 
     public IReadOnlyList<IEnvironmentProfile> Profiles { get; }
 
@@ -228,6 +235,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             LoadEnvironmentScript();
             UpdateProfileCapabilities();
             UpdateDatabaseIntentSelection();
+            _ = RefreshAiHelpAsync();
             RaiseCommandCanExecute();
         }
     }
@@ -302,7 +310,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string ApplyScriptDisabledReason => GetApplyScriptDisabledReason();
 
-    public void SetPlan(BuildPlan? plan) => Plan = plan;
+    public string AiHelpDisabledReason => GetAiHelpDisabledReason();
+
+    public string AiHelpContextSummary { get; private set; } = "AI Help is informational only.";
+
+    public string AiHelpStateExplanation { get; private set; } = "No runtime context is available.";
+
+    public string AiHelpNextSteps { get; private set; } = "Select a workspace to view help.";
+
+    public void SetPlan(BuildPlan? plan)
+    {
+        Plan = plan;
+        _ = RefreshAiHelpAsync();
+    }
 
     public void SetState(ExecutionState state) => State = state;
 
@@ -538,9 +558,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ApplyScriptCommand.RaiseCanExecuteChanged();
         RemoveWorkspaceCommand.RaiseCanExecuteChanged();
         OpenWorkspaceCommand.RaiseCanExecuteChanged();
+        RefreshAiHelpCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(StartDisabledReason));
         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));
         OnPropertyChanged(nameof(ApplyScriptDisabledReason));
+        OnPropertyChanged(nameof(AiHelpDisabledReason));
     }
 
     private bool CanRemoveWorkspace()
@@ -573,11 +595,39 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    private bool CanRefreshAiHelp()
+    {
+        return HasActiveWorkspace && Plan is not null;
+    }
+
+    private async Task RefreshAiHelpAsync()
+    {
+        if (!CanRefreshAiHelp())
+        {
+            AiHelpContextSummary = "AI Help is informational only.";
+            AiHelpStateExplanation = "No runtime context is available.";
+            AiHelpNextSteps = "Select a workspace and load a plan to view help.";
+            OnPropertyChanged(nameof(AiHelpContextSummary));
+            OnPropertyChanged(nameof(AiHelpStateExplanation));
+            OnPropertyChanged(nameof(AiHelpNextSteps));
+            return;
+        }
+
+        var context = BuildAiHelpContext();
+        AiHelpContextSummary = await _aiHelpFacade.GetContextSummaryAsync(context).ConfigureAwait(true);
+        AiHelpStateExplanation = await _aiHelpFacade.ExplainStateAsync(context).ConfigureAwait(true);
+        AiHelpNextSteps = await _aiHelpFacade.SuggestNextStepsAsync(context).ConfigureAwait(true);
+        OnPropertyChanged(nameof(AiHelpContextSummary));
+        OnPropertyChanged(nameof(AiHelpStateExplanation));
+        OnPropertyChanged(nameof(AiHelpNextSteps));
+    }
+
     public void SelectWorkspace(ProjectWorkspace workspace)
     {
         _workspaceProvider.SetActiveWorkspace(workspace);
         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
         RefreshRecentWorkspaces();
+        _ = RefreshAiHelpAsync();
     }
 
     private void RefreshRecentWorkspaces()
@@ -588,6 +638,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(HasNoWorkspaces));
         OnPropertyChanged(nameof(HasWorkspaces));
+    }
+
+    private AiHelpContext BuildAiHelpContext()
+    {
+        return new AiHelpContext(
+            ActiveWorkspace?.Name,
+            ActiveWorkspace?.RootPath,
+            StateLabel,
+            null,
+            SelectedProfile?.Name,
+            _lastEnvironmentResult?.ProfileName);
     }
 
     private void UpdateDatabaseIntentSelection()
@@ -654,6 +715,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return "This script is already applied.";
 
         return "Apply the previewed script.";
+    }
+
+    private string GetAiHelpDisabledReason()
+    {
+        if (ActiveWorkspace is null)
+            return "Select a workspace to view AI Help.";
+
+        if (Plan is null)
+            return "Load a plan to view AI Help.";
+
+        return "Refresh AI Help.";
     }
 
     public ISourceControlIntent? SourceControlIntent => null;

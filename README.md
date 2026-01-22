@@ -177,6 +177,14 @@ This repository does not enforce behavior or validate compliance.
 
 ---
 
+AI HELP IS DESCRIPTIVE ONLY
+---------------------------
+
+AI Help text is informational and optional.
+It does not validate, decide, or execute actions.
+
+---
+
 BUILD & CHECKS
 --------------
 

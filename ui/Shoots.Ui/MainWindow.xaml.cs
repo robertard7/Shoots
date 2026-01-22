@@ -25,6 +25,7 @@ public partial class MainWindow : Window
             new EnvironmentScriptLoader(),
             workspaceProvider,
             workspaceShell,
-            databaseIntentStore);
+            databaseIntentStore,
+            new NullAiHelpFacade());
     }
 }

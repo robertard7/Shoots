@@ -82,6 +82,37 @@
           <TextBlock Grid.Row="2" Margin="0,24,0,0" Text="Shoots UI Shell" FontSize="20" FontWeight="SemiBold" />
         </Grid>
       </TabItem>
+      <TabItem Header="AI Help">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <Border Background="#FFFDF4D7" CornerRadius="4" Padding="10">
+            <TextBlock Text="Informational assistance only." FontWeight="SemiBold" />
+          </Border>
+          <StackPanel Grid.Row="1" Margin="0,12,0,0">
+            <Button Width="160"
+                    Content="Refresh AI Help"
+                    Command="{Binding RefreshAiHelpCommand}"
+                    ToolTip="{Binding AiHelpDisabledReason}"
+                    ToolTipService.ShowOnDisabled="True" />
+            <GroupBox Header="Context Summary" Margin="0,12,0,0">
+              <TextBlock Margin="12" Text="{Binding AiHelpContextSummary}" TextWrapping="Wrap" />
+            </GroupBox>
+            <GroupBox Header="State Explanation" Margin="0,12,0,0">
+              <TextBlock Margin="12" Text="{Binding AiHelpStateExplanation}" TextWrapping="Wrap" />
+            </GroupBox>
+            <GroupBox Header="Suggested Next Steps" Margin="0,12,0,0">
+              <TextBlock Margin="12" Text="{Binding AiHelpNextSteps}" TextWrapping="Wrap" />
+            </GroupBox>
+            <TextBlock Margin="0,12,0,0"
+                       Foreground="#FF6B7280"
+                       Text="AI Help is descriptive and does not control execution."
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </TabItem>
       <TabItem Header="Environment">
         <Grid Margin="16">
           <Grid.RowDefinitions>
@@ -134,7 +165,7 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-              <TextBlock Margin="0,8,0,0" Text="Restart required to pick up capability changes."
+              <TextBlock Margin="0,8,0,0" Text="Restart recommended to pick up capability changes."
                          Visibility="{Binding RestartRequired, Converter={StaticResource BooleanToVisibilityConverter}}" />
             </StackPanel>
           </GroupBox>
@@ -202,7 +233,7 @@
       <TabItem Header="Database" Visibility="{Binding HasDatabase, Converter={StaticResource BooleanToVisibilityConverter}}">
         <Grid Margin="16">
           <StackPanel>
-            <TextBlock Text="Database intent is optional and never required for Shoots execution." TextWrapping="Wrap" />
+            <TextBlock Text="Database intent is optional and never needed for Shoots execution." TextWrapping="Wrap" />
             <GroupBox Margin="0,12,0,0" Header="Intent">
               <StackPanel Margin="12">
                 <ListBox ItemsSource="{Binding DatabaseIntents}"
