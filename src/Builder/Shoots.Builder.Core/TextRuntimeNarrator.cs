@@ -3,6 +3,9 @@ using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Builder.Core;
 
+/// <summary>
+/// Passive adapter. Builder-only. No runtime authority.
+/// </summary>
 public sealed class TextRuntimeNarrator : IRuntimeNarrator
 {
     private readonly Action<string>? _emit;
