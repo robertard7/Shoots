@@ -1,4 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace Shoots.UI.Projects;
+
+// UI-only. Declarative. Non-executable. Not runtime-affecting.
 
 public interface IProjectWorkspaceProvider
 {
@@ -7,24 +13,77 @@ public interface IProjectWorkspaceProvider
     ProjectWorkspace? GetActiveWorkspace();
 
     void SetActiveWorkspace(ProjectWorkspace workspace);
+
+    void RemoveWorkspace(ProjectWorkspace workspace);
 }
 
 public sealed class ProjectWorkspaceProvider : IProjectWorkspaceProvider
 {
+    private readonly IProjectWorkspaceStore _store;
     private ProjectWorkspace? _activeWorkspace;
-    private readonly IReadOnlyList<ProjectWorkspace> _recentWorkspaces;
+    private readonly List<ProjectWorkspace> _recentWorkspaces;
+    private bool _isLoaded;
 
-    public ProjectWorkspaceProvider()
+    public ProjectWorkspaceProvider(IProjectWorkspaceStore store)
     {
-        _recentWorkspaces = Array.Empty<ProjectWorkspace>();
+        _store = store ?? throw new ArgumentNullException(nameof(store));
+        _recentWorkspaces = new List<ProjectWorkspace>();
     }
 
-    public IReadOnlyList<ProjectWorkspace> GetRecentWorkspaces() => _recentWorkspaces;
+    public IReadOnlyList<ProjectWorkspace> GetRecentWorkspaces()
+    {
+        EnsureLoaded();
+        return _recentWorkspaces.AsReadOnly();
+    }
 
-    public ProjectWorkspace? GetActiveWorkspace() => _activeWorkspace;
+    public ProjectWorkspace? GetActiveWorkspace()
+    {
+        EnsureLoaded();
+        return _activeWorkspace;
+    }
 
     public void SetActiveWorkspace(ProjectWorkspace workspace)
     {
-        _activeWorkspace = workspace;
+        if (workspace is null)
+            throw new ArgumentNullException(nameof(workspace));
+
+        EnsureLoaded();
+        var updatedWorkspace = workspace with { LastOpenedUtc = DateTimeOffset.UtcNow };
+
+        _recentWorkspaces.RemoveAll(existing =>
+            string.Equals(existing.RootPath, updatedWorkspace.RootPath, StringComparison.OrdinalIgnoreCase));
+        _recentWorkspaces.Insert(0, updatedWorkspace);
+        if (_recentWorkspaces.Count > ProjectWorkspaceStore.MaxRecentWorkspaces)
+            _recentWorkspaces.RemoveRange(ProjectWorkspaceStore.MaxRecentWorkspaces, _recentWorkspaces.Count - ProjectWorkspaceStore.MaxRecentWorkspaces);
+
+        _activeWorkspace = updatedWorkspace;
+        _store.SaveRecentWorkspaces(_recentWorkspaces);
+    }
+
+    public void RemoveWorkspace(ProjectWorkspace workspace)
+    {
+        if (workspace is null)
+            throw new ArgumentNullException(nameof(workspace));
+
+        EnsureLoaded();
+        var removed = _recentWorkspaces.RemoveAll(existing =>
+            string.Equals(existing.RootPath, workspace.RootPath, StringComparison.OrdinalIgnoreCase));
+        if (removed > 0)
+        {
+            _activeWorkspace = _recentWorkspaces.FirstOrDefault();
+            _store.SaveRecentWorkspaces(_recentWorkspaces);
+        }
+    }
+
+    private void EnsureLoaded()
+    {
+        if (_isLoaded)
+            return;
+
+        _recentWorkspaces.Clear();
+        _recentWorkspaces.AddRange(_store.LoadRecentWorkspaces()
+            .OrderByDescending(workspace => workspace.LastOpenedUtc));
+        _activeWorkspace = _recentWorkspaces.FirstOrDefault();
+        _isLoaded = true;
     }
 }

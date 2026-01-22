@@ -105,6 +105,49 @@ These profiles:
 
 Applying a profile is a user-driven UI action and is always optional.
 
+PROJECT WORKSPACES
+------------------
+
+Shoots includes a UI-only Project Workspace experience for organizing context.
+
+Workspaces:
+- Are pure UI data (name, root path, last opened time)
+- Never execute commands or scripts
+- Do not require GitHub, a database, or any external service
+- Persist only recent selections in LocalAppData/Shoots/workspaces.json
+
+Workspace isolation is strictly visual: each selection scopes UI context and
+environment script previews without mutating runtime behavior or determinism.
+
+PROJECT WORKSPACE GUARANTEES
+----------------------------
+
+- Workspaces never execute commands or scripts
+- Workspace data stays out of runtime assemblies
+- Switching workspaces is reversible and non-destructive
+- Recent workspace files can be deleted safely
+
+DATABASE INTENT (NO SHIPPED DATABASE)
+-------------------------------------
+
+Shoots does not ship or configure a database by design. The UI exposes a
+database intent selector only to record future intent, not to provision
+storage, connections, or vendor dependencies.
+
+WHAT SHOOTS WILL NEVER DO
+-------------------------
+
+- Force GitHub or any source control provider
+- Force database usage of any kind
+- Hide automation or background execution
+
+NON-GOALS
+---------
+
+- Provide built-in database servers or migrations
+- Automate environment provisioning or installation
+- Require GitHub, authentication, or cloud services
+
 WHAT UI IS NOT ALLOWED TO DO
 ----------------------------
 

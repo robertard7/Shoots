@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace Shoots.UI.Environment;
@@ -7,6 +9,7 @@ namespace Shoots.UI.Environment;
 public sealed class EnvironmentScriptLoader
 {
     public const string FileName = ".shoots-env.json";
+    public const int SupportedSchemaVersion = 1;
 
     public bool TryLoad(string directory, out EnvironmentScript? script, out string? error)
     {
@@ -35,8 +38,15 @@ public sealed class EnvironmentScriptLoader
                 return false;
             }
 
-            script = document.ToScript();
+            if (!document.TryCreateScript(out script, out error))
+                return false;
+
             return true;
+        }
+        catch (JsonException)
+        {
+            error = "Script payload contains unknown or invalid fields.";
+            return false;
         }
         catch (Exception ex)
         {
@@ -48,25 +58,51 @@ public sealed class EnvironmentScriptLoader
     private static JsonSerializerOptions JsonOptions() =>
         new()
         {
-            PropertyNameCaseInsensitive = true
+            PropertyNameCaseInsensitive = true,
+            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
         };
 
     private sealed record EnvironmentScriptDocument(
+        int SchemaVersion,
         string Name,
         string Description,
         string[]? DeclaredCapabilities,
         EnvironmentScriptStep[]? SandboxSteps)
     {
-        public EnvironmentScript ToScript()
+        public bool TryCreateScript(out EnvironmentScript? script, out string? error)
         {
+            script = null;
+            error = null;
+
+            if (SchemaVersion != SupportedSchemaVersion)
+            {
+                error = $"Unsupported script schema version: {SchemaVersion}.";
+                return false;
+            }
+
             var caps = EnvironmentCapability.None;
+            var unknownCaps = new List<string>();
             if (DeclaredCapabilities is not null)
             {
                 foreach (var value in DeclaredCapabilities)
                 {
+                    if (string.IsNullOrWhiteSpace(value))
+                        continue;
+
                     if (Enum.TryParse<EnvironmentCapability>(value, true, out var parsed))
+                    {
                         caps |= parsed;
+                        continue;
+                    }
+
+                    unknownCaps.Add(value);
                 }
+            }
+
+            if (unknownCaps.Count > 0)
+            {
+                error = $"Unknown capabilities: {string.Join(", ", unknownCaps)}.";
+                return false;
             }
 
             var steps = new List<SandboxPreparationStep>();
@@ -74,20 +110,58 @@ public sealed class EnvironmentScriptLoader
             {
                 foreach (var step in SandboxSteps)
                 {
-                    var kind = Enum.Parse<SandboxPreparationKind>(step.Kind, true);
+                    if (!TryValidatePath(step.RelativePath, out var pathError))
+                    {
+                        error = pathError;
+                        return false;
+                    }
+
+                    if (!Enum.TryParse<SandboxPreparationKind>(step.Kind, true, out var kind))
+                    {
+                        error = $"Unknown step kind: {step.Kind}.";
+                        return false;
+                    }
+
                     steps.Add(new SandboxPreparationStep(step.RelativePath, kind));
                 }
             }
 
-            return new EnvironmentScript(
+            script = new EnvironmentScript(
                 Name ?? "Unnamed",
                 Description ?? string.Empty,
                 caps,
                 steps);
+            return true;
         }
     }
 
     private sealed record EnvironmentScriptStep(
         string RelativePath,
         string Kind);
+
+    private static bool TryValidatePath(string? relativePath, out string? error)
+    {
+        error = null;
+
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            error = "Script step path is required.";
+            return false;
+        }
+
+        if (Path.IsPathRooted(relativePath))
+        {
+            error = $"Script step path must be relative: {relativePath}.";
+            return false;
+        }
+
+        var segments = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (segments.Any(segment => string.Equals(segment, "..", StringComparison.Ordinal)))
+        {
+            error = $"Script step path cannot contain traversal segments: {relativePath}.";
+            return false;
+        }
+
+        return true;
+    }
 }
