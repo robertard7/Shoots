@@ -1,7 +1,7 @@
 # Toolpacks
 
 Toolpacks are plug-in folders that describe tool metadata without executing tools.
-Each toolpack declares a tier and ships with a `toolpack.json` manifest.
+Each toolpack declares a tier, capabilities, and ships with a `toolpack.json` manifest.
 
 Tiers:
 - Public: default metadata surface for regular users.

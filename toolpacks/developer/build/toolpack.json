@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "tier": "Developer",
   "description": "Developer build and status metadata.",
+  "capabilities": ["Build", "Process"],
   "riskNotes": "Build metadata only; execution remains external.",
   "tools": [
     {

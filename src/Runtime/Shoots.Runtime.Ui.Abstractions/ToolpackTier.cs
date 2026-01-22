@@ -7,7 +7,19 @@ public enum ToolpackTier
     System
 }
 
+public enum ToolpackCapability
+{
+    FileSystem,
+    Process,
+    Network,
+    Kernel,
+    Build,
+    Deploy
+}
+
 public interface IToolpackPolicySnapshot
 {
     ToolpackTier AllowedTier { get; }
+
+    IReadOnlyList<ToolpackCapability> AllowedCapabilities { get; }
 }

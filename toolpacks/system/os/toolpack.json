@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "tier": "System",
   "description": "System-level tooling stubs.",
+  "capabilities": ["Kernel", "Deploy"],
   "riskNotes": "Stubs only; no execution paths.",
   "tools": [
     {

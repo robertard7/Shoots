@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using Shoots.Runtime.Ui.Abstractions;
 
 namespace Shoots.Runtime.Loader.Toolpacks;
 
@@ -44,6 +45,10 @@ public sealed class ToolpackDiscovery
             throw new ArgumentException("toolpack manifest is invalid", nameof(json));
 
         var tier = Enum.Parse<ToolTier>(parsed.Tier, ignoreCase: true);
+        var capabilities = parsed.Capabilities?
+            .Select(name => Enum.Parse<ToolpackCapability>(name, ignoreCase: true))
+            .ToArray()
+            ?? Array.Empty<ToolpackCapability>();
         var tools = parsed.Tools ?? Array.Empty<ToolpackTool>();
 
         return new ToolpackManifest(
@@ -51,6 +56,7 @@ public sealed class ToolpackDiscovery
             parsed.Version,
             tier,
             parsed.Description,
+            capabilities,
             tools,
             parsed.Requires,
             parsed.RiskNotes,
@@ -64,6 +70,14 @@ public sealed class ToolpackDiscovery
         RequireProperty(root, "tier", JsonValueKind.String, sourcePath);
         RequireProperty(root, "description", JsonValueKind.String, sourcePath);
         RequireProperty(root, "riskNotes", JsonValueKind.String, sourcePath);
+        RequireProperty(root, "capabilities", JsonValueKind.Array, sourcePath);
+
+        var capabilities = root.GetProperty("capabilities");
+        foreach (var capability in capabilities.EnumerateArray())
+        {
+            if (capability.ValueKind != JsonValueKind.String)
+                throw new ArgumentException($"capabilities must be strings in {sourcePath}");
+        }
 
         var tools = RequireProperty(root, "tools", JsonValueKind.Array, sourcePath);
         foreach (var tool in tools.EnumerateArray())
@@ -103,6 +117,7 @@ public sealed class ToolpackDiscovery
         string Version,
         string Tier,
         string Description,
+        IReadOnlyList<string>? Capabilities,
         IReadOnlyList<ToolpackTool>? Tools,
         JsonElement? Requires,
         string RiskNotes

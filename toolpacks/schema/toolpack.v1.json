@@ -2,12 +2,16 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Shoots Toolpack Manifest",
   "type": "object",
-  "required": ["toolpackId", "version", "tier", "description", "tools", "riskNotes"],
+  "required": ["toolpackId", "version", "tier", "description", "capabilities", "tools", "riskNotes"],
   "properties": {
     "toolpackId": { "type": "string" },
     "version": { "type": "string" },
     "tier": { "type": "string", "enum": ["Public", "Developer", "System"] },
     "description": { "type": "string" },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "riskNotes": { "type": "string" },
     "requires": { "type": "object" },
     "tools": {

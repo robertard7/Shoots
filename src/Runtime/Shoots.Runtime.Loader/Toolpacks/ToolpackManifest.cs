@@ -8,6 +8,7 @@ public sealed record ToolpackManifest(
     string Version,
     ToolTier Tier,
     string Description,
+    IReadOnlyList<Shoots.Runtime.Ui.Abstractions.ToolpackCapability> Capabilities,
     IReadOnlyList<ToolpackTool> Tools,
     JsonElement? Requires,
     string RiskNotes,

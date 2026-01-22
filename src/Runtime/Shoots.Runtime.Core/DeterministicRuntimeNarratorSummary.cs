@@ -8,6 +8,6 @@ public sealed class DeterministicRuntimeNarratorSummary : IRuntimeNarratorSummar
 
     public string DescribeRuntime(RuntimeVersion version)
     {
-        return $"Runtime version: {version.Major}.{version.Minor}.{version.Patch}.";
+        return $"Explanatory runtime version: {version.Major}.{version.Minor}.{version.Patch}.";
     }
 }

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "tier": "Public",
   "description": "Baseline workspace file operations.",
+  "capabilities": ["FileSystem"],
   "riskNotes": "Workspace-only file metadata; no execution.",
   "tools": [
     {

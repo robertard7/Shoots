@@ -67,6 +67,8 @@ public sealed class UiBoundaryTests
             "required",
             "enforce",
             "enforcement",
+            "policy",
+            "compliance",
             "invalid",
             "invalidate",
             "validated by",
@@ -105,6 +107,25 @@ public sealed class UiBoundaryTests
             Assert.DoesNotContain("Execute", name, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Approve", name, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Decide", name, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    // Architecture guard: AI help receives read-only snapshots only.
+    [Fact]
+    public void AiHelpFacadeDoesNotAcceptExecutionServices()
+    {
+        var methods = typeof(Shoots.Runtime.Ui.Abstractions.IAiHelpFacade)
+            .GetMethods();
+
+        foreach (var method in methods)
+        {
+            foreach (var parameter in method.GetParameters())
+            {
+                var type = parameter.ParameterType;
+                var typeName = type.FullName ?? type.Name;
+                Assert.DoesNotContain("IRuntimeFacade", typeName, StringComparison.Ordinal);
+                Assert.DoesNotContain("ExecutionCommand", typeName, StringComparison.OrdinalIgnoreCase);
+            }
         }
     }
 
@@ -239,6 +260,35 @@ public sealed class UiBoundaryTests
         Assert.Equal("Alpha", loaded[1].Name);
     }
 
+    // Language hygiene guard: UI strings stay descriptive.
+    [Fact]
+    public void UiStringsAreDescriptive()
+    {
+        var content = LoadMainWindowXaml();
+        var forbiddenMarkers = new[]
+        {
+            "must",
+            "shall",
+            "require",
+            "required",
+            "enforce",
+            "enforcement",
+            "policy",
+            "compliance",
+            "forbidden",
+            "prohibited",
+            "mandate",
+            "violation",
+            "invalidate",
+            "invalid"
+        };
+
+        foreach (var marker in forbiddenMarkers)
+            Assert.False(
+                content.Contains(marker, StringComparison.OrdinalIgnoreCase),
+                $"MainWindow.xaml contains \"{marker}\", which can imply authority. Use descriptive language.");
+    }
+
     private static bool IsAsyncReturnType(Type type)
     {
         if (type == typeof(Task) || type == typeof(ValueTask))
@@ -264,5 +314,20 @@ public sealed class UiBoundaryTests
         }
 
         throw new FileNotFoundException("README.md not found.");
+    }
+
+    private static string LoadMainWindowXaml()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "ui", "Shoots.Ui", "MainWindow.xaml");
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("MainWindow.xaml not found.");
     }
 }

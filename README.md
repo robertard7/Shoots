@@ -147,7 +147,7 @@ NON-GOALS
 - Policy control or agent governance
 - Output validation or tool control
 - Execution or correctness claims
-- Security assurances or compliance certification
+- Security assurances or certification
 - Built-in database servers or migrations
 - Automated environment provisioning or installation
 
@@ -173,7 +173,7 @@ Shoots does not validate agents, control execution, or assert correctness.
 DISCLAIMER
 ----------
 
-This repository does not enforce behavior or validate compliance.
+This repository describes behavior and does not assert validation.
 
 ---
 
@@ -182,6 +182,20 @@ AI HELP IS DESCRIPTIVE ONLY
 
 AI Help text is informational and optional.
 It does not validate, decide, or execute actions.
+
+---
+
+HOW SHOOTS HELPS BUILD AN OS
+----------------------------
+
+Shoots can guide OS work by capturing System Blueprints that list ordered intents
+and expected artifacts. Blueprints are UI-only, descriptive notes that help
+structure the work without executing scripts.
+
+Suggested flow:
+- Capture a blueprint name, intent list, and expected artifacts.
+- Use plans to map intents into deterministic steps.
+- Review artifacts and iterate as the system evolves.
 
 ---
 

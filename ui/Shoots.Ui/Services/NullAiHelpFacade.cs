@@ -6,24 +6,24 @@ namespace Shoots.UI.Services;
 
 public sealed class NullAiHelpFacade : IAiHelpFacade
 {
-    public Task<string> GetContextSummaryAsync(AiHelpContext context, CancellationToken ct = default)
+    public Task<string> GetContextSummaryAsync(AiHelpRequest request, CancellationToken ct = default)
     {
-        _ = context;
+        _ = request;
         _ = ct;
-        return Task.FromResult("AI Help is unavailable.");
+        return Task.FromResult("AI Help is offline.");
     }
 
-    public Task<string> ExplainStateAsync(AiHelpContext context, CancellationToken ct = default)
+    public Task<string> ExplainStateAsync(AiHelpRequest request, CancellationToken ct = default)
     {
-        _ = context;
+        _ = request;
         _ = ct;
         return Task.FromResult("No runtime context is available.");
     }
 
-    public Task<string> SuggestNextStepsAsync(AiHelpContext context, CancellationToken ct = default)
+    public Task<string> SuggestNextStepsAsync(AiHelpRequest request, CancellationToken ct = default)
     {
-        _ = context;
+        _ = request;
         _ = ct;
-        return Task.FromResult("AI Help is informational only.");
+        return Task.FromResult("AI Help is descriptive only.");
     }
 }

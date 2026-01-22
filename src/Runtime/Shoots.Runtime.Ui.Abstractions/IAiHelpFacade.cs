@@ -1,21 +1,32 @@
 using System.Threading;
 using System.Threading.Tasks;
+using Shoots.Contracts.Core;
+using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Runtime.Ui.Abstractions;
 
 public interface IAiHelpFacade
 {
-    Task<string> GetContextSummaryAsync(AiHelpContext context, CancellationToken ct = default);
+    // AI Help is descriptive only and never triggers execution.
+    Task<string> GetContextSummaryAsync(AiHelpRequest request, CancellationToken ct = default);
 
-    Task<string> ExplainStateAsync(AiHelpContext context, CancellationToken ct = default);
+    Task<string> ExplainStateAsync(AiHelpRequest request, CancellationToken ct = default);
 
-    Task<string> SuggestNextStepsAsync(AiHelpContext context, CancellationToken ct = default);
+    Task<string> SuggestNextStepsAsync(AiHelpRequest request, CancellationToken ct = default);
 }
 
-public sealed record AiHelpContext(
-    string? WorkspaceName,
-    string? WorkspaceRootPath,
+public sealed record AiHelpRequest(
+    AiWorkspaceSnapshot Workspace,
+    BuildPlan? Plan,
+    ToolCatalogSnapshot? ToolCatalog,
     string? ExecutionState,
-    string? RuntimeVersion,
     string? EnvironmentProfile,
-    string? LastAppliedProfile);
+    string? LastAppliedProfile,
+    RoleDescriptor? Role);
+
+public sealed record AiWorkspaceSnapshot(
+    string? Name,
+    string? RootPath,
+    ToolpackTier Tier,
+    IReadOnlyList<ToolpackCapability> AllowedCapabilities
+);

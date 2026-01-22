@@ -44,7 +44,7 @@ public sealed class ToolpackLoader
             .OrderBy(entry => entry.Spec.ToolId.Value, StringComparer.Ordinal)
             .ToList();
 
-        return new ToolCatalogSnapshot(ComputeHash(filtered, entries), entries);
+        return new ToolCatalogSnapshot(ComputeHash(filtered, entries, policy), entries);
     }
 
     private static IEnumerable<ToolRegistryEntry> BuildEntries(ToolpackManifest manifest)
@@ -107,9 +107,14 @@ public sealed class ToolpackLoader
 
     private static string ComputeHash(
         IReadOnlyList<ToolpackManifest> manifests,
-        IReadOnlyList<ToolRegistryEntry> entries)
+        IReadOnlyList<ToolRegistryEntry> entries,
+        ToolTierPolicy policy)
     {
         var builder = new StringBuilder();
+        builder.Append(policy.AllowedTier).Append('|');
+        foreach (var capability in policy.AllowedCapabilities.OrderBy(cap => cap))
+            builder.Append(capability).Append('|');
+
         foreach (var manifest in manifests.OrderBy(pack => pack.ToolpackId, StringComparer.Ordinal))
         {
             builder.Append(manifest.ToolpackId).Append('|');
@@ -117,6 +122,8 @@ public sealed class ToolpackLoader
             builder.Append(manifest.Tier).Append('|');
             builder.Append(manifest.Description).Append('|');
             builder.Append(manifest.RiskNotes).Append('|');
+            foreach (var capability in manifest.Capabilities.OrderBy(cap => cap))
+                builder.Append(capability).Append('|');
         }
 
         foreach (var entry in entries.OrderBy(e => e.Spec.ToolId.Value, StringComparer.Ordinal))

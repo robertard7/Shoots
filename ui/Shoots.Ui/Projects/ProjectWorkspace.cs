@@ -6,5 +6,6 @@ public sealed record ProjectWorkspace(
     string Name,
     string RootPath,
     DateTimeOffset LastOpenedUtc,
-    Shoots.Runtime.Ui.Abstractions.ToolpackTier AllowedTier = Shoots.Runtime.Ui.Abstractions.ToolpackTier.Public
+    Shoots.Runtime.Ui.Abstractions.ToolpackTier AllowedTier = Shoots.Runtime.Ui.Abstractions.ToolpackTier.Public,
+    IReadOnlyList<Shoots.Runtime.Ui.Abstractions.ToolpackCapability>? AllowedCapabilities = null
 );
