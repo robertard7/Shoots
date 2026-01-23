@@ -21,8 +21,10 @@ public sealed class ExecutionEnvironmentSettingsStore : IExecutionEnvironmentSet
     public ExecutionEnvironmentSettingsStore(string? baseDirectory = null)
     {
         var root = baseDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            System.Environment.GetFolderPath(
+                System.Environment.SpecialFolder.LocalApplicationData),
             "Shoots");
+
         _storePath = Path.Combine(root, FileName);
     }
 
@@ -37,7 +39,7 @@ public sealed class ExecutionEnvironmentSettingsStore : IExecutionEnvironmentSet
             var settings = JsonSerializer.Deserialize<ExecutionEnvironmentSettings>(json, JsonOptions());
             return settings ?? CreateDefault();
         }
-        catch (Exception)
+        catch
         {
             return CreateDefault();
         }
@@ -70,7 +72,10 @@ public sealed class ExecutionEnvironmentSettingsStore : IExecutionEnvironmentSet
                 "Provide a source override to select a distro archive or local path.")
         };
 
-        return new ExecutionEnvironmentSettings("custom", catalog, string.Empty);
+		return new ExecutionEnvironmentSettings(
+			"custom",
+			catalog,
+			string.Empty);
     }
 
     private static JsonSerializerOptions JsonOptions() =>

@@ -25,7 +25,7 @@ public sealed class SystemBlueprintStore : ISystemBlueprintStore
     public SystemBlueprintStore(string? baseDirectory = null)
     {
         _rootDirectory = baseDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
             "Shoots",
             FolderName);
     }
@@ -46,10 +46,10 @@ public sealed class SystemBlueprintStore : ISystemBlueprintStore
                 ?? new List<SystemBlueprint>();
 
             return blueprints
-                .OrderByDescending(blueprint => blueprint.CreatedUtc)
+                .OrderByDescending(b => b.CreatedUtc)
                 .ToList();
         }
-        catch (Exception)
+        catch
         {
             return Array.Empty<SystemBlueprint>();
         }

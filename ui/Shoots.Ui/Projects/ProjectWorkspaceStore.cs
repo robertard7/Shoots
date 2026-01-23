@@ -17,8 +17,9 @@ public sealed class ProjectWorkspaceStore : IProjectWorkspaceStore
     public ProjectWorkspaceStore(string? baseDirectory = null)
     {
         var root = baseDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
             "Shoots");
+
         _storePath = Path.Combine(root, FileName);
     }
 
@@ -40,7 +41,7 @@ public sealed class ProjectWorkspaceStore : IProjectWorkspaceStore
                 .Take(MaxRecentWorkspaces)
                 .ToList();
         }
-        catch (Exception)
+        catch
         {
             return Array.Empty<ProjectWorkspace>();
         }
@@ -58,6 +59,7 @@ public sealed class ProjectWorkspaceStore : IProjectWorkspaceStore
         var payload = workspaces
             .Take(MaxRecentWorkspaces)
             .ToList();
+
         var json = JsonSerializer.Serialize(payload, JsonOptions());
         File.WriteAllText(_storePath, json);
     }

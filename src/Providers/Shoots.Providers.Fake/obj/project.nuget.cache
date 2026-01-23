@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "EOmV4QZeXLk=",
+  "success": true,
+  "projectFilePath": "C:\\dev\\Shoots\\src\\Providers\\Shoots.Providers.Fake\\Shoots.Providers.Fake.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\robertard7\\.nuget\\packages\\microsoft.netcore.app.ref\\8.0.18\\microsoft.netcore.app.ref.8.0.18.nupkg.sha512",
+    "C:\\Users\\robertard7\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\8.0.18\\microsoft.windowsdesktop.app.ref.8.0.18.nupkg.sha512",
+    "C:\\Users\\robertard7\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\8.0.18\\microsoft.aspnetcore.app.ref.8.0.18.nupkg.sha512"
+  ],
+  "logs": []
+}

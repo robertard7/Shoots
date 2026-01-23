@@ -238,8 +238,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ? Array.Empty<string>()
         : DescribeCapabilities(_environmentScript.DeclaredCapabilities);
 
-    public IReadOnlyList<string> ScriptSteps => _environmentScript?.SandboxSteps.Select(step => step.RelativePath).ToList()
-        ?? Array.Empty<string>();
+	public IReadOnlyList<string> ScriptSteps => _environmentScript?.SandboxSteps
+		.Select(step => step.RelativePath)
+		.ToList()
+		?? new List<string>();
 
     public string ScriptSearchPath => _scriptSearchPath;
 
@@ -1075,20 +1077,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RaiseCommandCanExecute();
     }
 
-    private void UpdateDatabaseIntentSelection()
-    {
-        if (ActiveWorkspace is null)
-        {
-            SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
-                ?? DatabaseIntents.FirstOrDefault();
-            return;
-        }
+	private void UpdateDatabaseIntentSelection()
+	{
+		if (ActiveWorkspace is null || string.IsNullOrWhiteSpace(ActiveWorkspace.RootPath))
+		{
+			SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
+				?? DatabaseIntents.FirstOrDefault();
+			return;
+		}
 
-        var intent = _databaseIntentStore.GetIntent(ActiveWorkspace.RootPath);
-        SelectedDatabaseIntent = DatabaseIntents.FirstOrDefault(option => option.Intent == intent)
-            ?? DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
-            ?? DatabaseIntents.FirstOrDefault();
-    }
+		var intent = _databaseIntentStore.GetIntent(ActiveWorkspace.RootPath);
+
+		SelectedDatabaseIntent = DatabaseIntents.FirstOrDefault(option => option.Intent == intent)
+			?? DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
+			?? DatabaseIntents.FirstOrDefault();
+	}
 
     private string? DescribeUnsupportedCapabilities(EnvironmentCapability declared)
     {

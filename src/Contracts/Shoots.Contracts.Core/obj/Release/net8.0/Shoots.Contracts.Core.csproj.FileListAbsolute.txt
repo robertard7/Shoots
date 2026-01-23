@@ -1,0 +1,12 @@
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\bin\Release\net8.0\Shoots.Contracts.Core.deps.json
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\bin\Release\net8.0\Shoots.Contracts.Core.dll
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\bin\Release\net8.0\Shoots.Contracts.Core.pdb
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\obj\Release\net8.0\Shoots.Contracts.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\obj\Release\net8.0\Shoots.Contracts.Core.AssemblyInfoInputs.cache
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\obj\Release\net8.0\Shoots.Contracts.Core.AssemblyInfo.cs
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\obj\Release\net8.0\Shoots.Contracts.Core.csproj.CoreCompileInputs.cache
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\obj\Release\net8.0\Shoots.Contracts.Core.sourcelink.json
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\obj\Release\net8.0\Shoots.Contracts.Core.dll
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\obj\Release\net8.0\refint\Shoots.Contracts.Core.dll
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\obj\Release\net8.0\Shoots.Contracts.Core.pdb
+C:\dev\Shoots\src\Contracts\Shoots.Contracts.Core\obj\Release\net8.0\ref\Shoots.Contracts.Core.dll

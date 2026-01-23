@@ -1,6 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+#nullable enable
 using Shoots.Contracts.Core;
 
 namespace Shoots.Builder.Core;
@@ -38,7 +36,8 @@ internal static class MermaidPlanGraph
 
             if (segment.Contains("-->", StringComparison.Ordinal))
             {
-                var chain = segment.Split(new[] { "-->" }, StringSplitOptions.RemoveEmptyEntries)
+                var chain = segment
+                    .Split(new[] { "-->" }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(token => token.Trim())
                     .Where(token => token.Length > 0)
                     .ToArray();
@@ -69,8 +68,10 @@ internal static class MermaidPlanGraph
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => new NodeDefinition(pair.Key, pair.Value))
             .ToArray();
+
         var adjacency = BuildAdjacency(nodes.Keys, edges);
         var hashes = ComputeHashes(nodeDefinitions, edges);
+
         return new GraphDefinition(nodeDefinitions, edges, adjacency, hashes);
     }
 
@@ -126,8 +127,15 @@ internal static class MermaidPlanGraph
         IReadOnlyCollection<string> nodes,
         IReadOnlyCollection<(string From, string To)> edges)
     {
-        var adjacency = nodes.ToDictionary(node => node, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
-        var indegree = nodes.ToDictionary(node => node, _ => 0, StringComparer.Ordinal);
+        var adjacency = nodes.ToDictionary(
+            node => node,
+            _ => new HashSet<string>(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+
+        var indegree = nodes.ToDictionary(
+            node => node,
+            _ => 0,
+            StringComparer.Ordinal);
 
         foreach (var (from, to) in edges)
         {
@@ -137,7 +145,10 @@ internal static class MermaidPlanGraph
             indegree[to] = indegree[to] + 1;
         }
 
-        var ready = new SortedSet<string>(indegree.Where(pair => pair.Value == 0).Select(pair => pair.Key), StringComparer.Ordinal);
+        var ready = new SortedSet<string>(
+            indegree.Where(pair => pair.Value == 0).Select(pair => pair.Key),
+            StringComparer.Ordinal);
+
         var ordered = new List<string>(nodes.Count);
 
         while (ready.Count > 0)
@@ -171,10 +182,8 @@ internal static class MermaidPlanGraph
 
         foreach (var (from, to) in edges)
         {
-            if (!adjacency.TryGetValue(from, out var targets))
-                continue;
-
-            targets.Add(to);
+            if (adjacency.TryGetValue(from, out var targets))
+                targets.Add(to);
         }
 
         return adjacency.ToDictionary(
@@ -218,17 +227,19 @@ internal static class MermaidPlanGraph
         var stopIndex = token.IndexOfAny(new[] { '[', '(', '{', '<' });
         var id = stopIndex >= 0 ? token[..stopIndex] : token;
         id = id.Trim();
+
         if (id.Length == 0)
             throw new InvalidOperationException("graph node id is required");
+
         return id;
     }
 
-    private static void RegisterNode(IDictionary<string, MermaidNodeKind> nodes, NodeDefinition node)
+    private static void RegisterNode(
+        IDictionary<string, MermaidNodeKind> nodes,
+        NodeDefinition node)
     {
-        if (nodes.TryGetValue(node.Id, out var existingKind))
-        {
+        if (nodes.TryGetValue(node.Id, out _))
             throw new InvalidOperationException($"duplicate node '{node.Id}' detected in Mermaid graph.");
-        }
 
         nodes[node.Id] = node.Kind;
     }
@@ -241,6 +252,7 @@ internal static class MermaidPlanGraph
             .OrderBy(node => node.Id, StringComparer.Ordinal)
             .Select(node => $"{node.Id}|{node.Kind}")
             .ToArray();
+
         var edgeTokens = edges
             .OrderBy(edge => edge.From, StringComparer.Ordinal)
             .ThenBy(edge => edge.To, StringComparer.Ordinal)
@@ -250,6 +262,7 @@ internal static class MermaidPlanGraph
         var nodeSetHash = HashTools.ComputeSha256Hash(string.Join("|", nodeTokens));
         var edgeSetHash = HashTools.ComputeSha256Hash(string.Join("|", edgeTokens));
         var graphStructureHash = HashTools.ComputeSha256Hash($"{nodeSetHash}|{edgeSetHash}");
+
         return new GraphHashes(graphStructureHash, nodeSetHash, edgeSetHash);
     }
 

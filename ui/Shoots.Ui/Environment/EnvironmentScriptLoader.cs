@@ -24,9 +24,7 @@ public sealed class EnvironmentScriptLoader
 
         var path = Path.Combine(directory, FileName);
         if (!File.Exists(path))
-        {
             return false;
-        }
 
         try
         {
@@ -38,10 +36,7 @@ public sealed class EnvironmentScriptLoader
                 return false;
             }
 
-            if (!document.TryCreateScript(out script, out error))
-                return false;
-
-            return true;
+            return document.TryCreateScript(out script, out error);
         }
         catch (JsonException)
         {
@@ -59,7 +54,8 @@ public sealed class EnvironmentScriptLoader
         new()
         {
             PropertyNameCaseInsensitive = true,
-            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
+            UnmappedMemberHandling =
+                System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow
         };
 
     private sealed record EnvironmentScriptDocument(
@@ -81,7 +77,8 @@ public sealed class EnvironmentScriptLoader
             }
 
             var caps = EnvironmentCapability.None;
-            var unknownCaps = new List<string>();
+            var unknownCaps = new System.Collections.Generic.List<string>();
+
             if (DeclaredCapabilities is not null)
             {
                 foreach (var value in DeclaredCapabilities)
@@ -105,7 +102,7 @@ public sealed class EnvironmentScriptLoader
                 return false;
             }
 
-            var steps = new List<SandboxPreparationStep>();
+            var steps = new System.Collections.Generic.List<SandboxPreparationStep>();
             if (SandboxSteps is not null)
             {
                 foreach (var step in SandboxSteps)
@@ -131,6 +128,7 @@ public sealed class EnvironmentScriptLoader
                 Description ?? string.Empty,
                 caps,
                 steps);
+
             return true;
         }
     }
@@ -155,8 +153,11 @@ public sealed class EnvironmentScriptLoader
             return false;
         }
 
-        var segments = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (segments.Any(segment => string.Equals(segment, "..", StringComparison.Ordinal)))
+        var segments = relativePath.Split(
+            Path.DirectorySeparatorChar,
+            Path.AltDirectorySeparatorChar);
+
+        if (segments.Any(s => string.Equals(s, "..", StringComparison.Ordinal)))
         {
             error = $"Script step path cannot contain traversal segments: {relativePath}.";
             return false;

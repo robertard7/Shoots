@@ -1,7 +1,26 @@
+#nullable enable
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Shoots.Contracts.Core;
+using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
 
-namespace Shoots.UI.Services;
+namespace Shoots.Ui.Services;
+
+/// <summary>
+/// UI-facing execution command surface.
+/// Passive. Delegates all authority to RuntimeFacade.
+/// </summary>
+public interface IExecutionCommandService
+{
+    Task<RuntimeResult> StartAsync(BuildPlan plan, CancellationToken ct = default);
+
+    Task CancelAsync(CancellationToken ct = default);
+
+    Task<IRuntimeStatusSnapshot> RefreshStatusAsync(CancellationToken ct = default);
+}
 
 public sealed class ExecutionCommandService : IExecutionCommandService
 {
@@ -13,17 +32,11 @@ public sealed class ExecutionCommandService : IExecutionCommandService
     }
 
     public Task<RuntimeResult> StartAsync(BuildPlan plan, CancellationToken ct = default)
-    {
-        return _runtimeFacade.StartExecution(plan, ct);
-    }
+        => _runtimeFacade.StartExecution(plan, ct);
 
     public Task CancelAsync(CancellationToken ct = default)
-    {
-        return _runtimeFacade.CancelExecution(ct);
-    }
+        => _runtimeFacade.CancelExecution(ct);
 
     public Task<IRuntimeStatusSnapshot> RefreshStatusAsync(CancellationToken ct = default)
-    {
-        return _runtimeFacade.QueryStatus(ct);
-    }
+        => _runtimeFacade.QueryStatus(ct);
 }

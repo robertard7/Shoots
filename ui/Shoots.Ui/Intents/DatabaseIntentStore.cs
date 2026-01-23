@@ -17,8 +17,9 @@ public sealed class DatabaseIntentStore : IDatabaseIntentStore
     public DatabaseIntentStore(string? baseDirectory = null)
     {
         var root = baseDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
             "Shoots");
+
         _storePath = Path.Combine(root, FileName);
     }
 
@@ -38,7 +39,9 @@ public sealed class DatabaseIntentStore : IDatabaseIntentStore
         if (string.IsNullOrWhiteSpace(workspaceRoot))
             return;
 
-        var intents = LoadAll().ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+        var intents = LoadAll()
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+
         intents[workspaceRoot] = intent;
         SaveAll(intents);
     }
@@ -53,9 +56,10 @@ public sealed class DatabaseIntentStore : IDatabaseIntentStore
             var json = File.ReadAllText(_storePath);
             var payload = JsonSerializer.Deserialize<Dictionary<string, DatabaseIntent>>(json, JsonOptions())
                 ?? new Dictionary<string, DatabaseIntent>(StringComparer.OrdinalIgnoreCase);
+
             return new Dictionary<string, DatabaseIntent>(payload, StringComparer.OrdinalIgnoreCase);
         }
-        catch (Exception)
+        catch
         {
             return new Dictionary<string, DatabaseIntent>(StringComparer.OrdinalIgnoreCase);
         }

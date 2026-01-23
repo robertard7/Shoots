@@ -13,5 +13,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <NoWarn>IDE0005</NoWarn>
+  </PropertyGroup>
+
 </Project>
 

@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
+using RuntimeSnapshot = Shoots.Runtime.Abstractions.ToolCatalogSnapshot;
 
 namespace Shoots.Runtime.Loader.Toolpacks;
 
@@ -22,33 +23,37 @@ public sealed class ToolpackLoader
         _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
     }
 
-    public ToolCatalogSnapshot LoadFromDirectory(string toolpacksRoot, ToolTierPolicy policy)
-    {
-        if (policy is null)
-            throw new ArgumentNullException(nameof(policy));
+	public RuntimeSnapshot LoadFromDirectory(string toolpacksRoot, ToolTierPolicy policy)
+	{
+		if (policy is null)
+			throw new ArgumentNullException(nameof(policy));
 
-        var manifests = _discovery.Discover(toolpacksRoot);
-        return LoadFromToolpacks(manifests, policy);
-    }
+		var manifests = _discovery.Discover(toolpacksRoot);
+		return LoadFromToolpacks(manifests, policy);
+	}
 
-    public ToolCatalogSnapshot LoadFromToolpacks(IEnumerable<ToolpackManifest> toolpacks, ToolTierPolicy policy)
-    {
-        if (toolpacks is null)
-            throw new ArgumentNullException(nameof(toolpacks));
-        if (policy is null)
-            throw new ArgumentNullException(nameof(policy));
+	public RuntimeSnapshot LoadFromToolpacks(
+		IEnumerable<ToolpackManifest> toolpacks,
+		ToolTierPolicy policy)
+	{
+		if (toolpacks is null)
+			throw new ArgumentNullException(nameof(toolpacks));
+		if (policy is null)
+			throw new ArgumentNullException(nameof(policy));
 
-        var filtered = policy.Filter(toolpacks);
-        if (filtered.Any(pack => !policy.Allows(pack.Tier)))
-            throw new InvalidOperationException("Toolpack tier exceeds workspace tier.");
+		var filtered = policy.Filter(toolpacks);
+		if (filtered.Any(pack => !policy.Allows(pack.Tier)))
+			throw new InvalidOperationException("Toolpack tier exceeds workspace tier.");
 
-        var entries = filtered
-            .SelectMany(BuildEntries)
-            .OrderBy(entry => entry.Spec.ToolId.Value, StringComparer.Ordinal)
-            .ToList();
+		var entries = filtered
+			.SelectMany(BuildEntries)
+			.OrderBy(entry => entry.Spec.ToolId.Value, StringComparer.Ordinal)
+			.ToList();
 
-        return new ToolCatalogSnapshot(ComputeHash(filtered, entries, policy), entries);
-    }
+		return new RuntimeSnapshot(
+			ComputeHash(filtered, entries, policy),
+			entries);
+	}
 
     private static IEnumerable<ToolRegistryEntry> BuildEntries(ToolpackManifest manifest)
     {

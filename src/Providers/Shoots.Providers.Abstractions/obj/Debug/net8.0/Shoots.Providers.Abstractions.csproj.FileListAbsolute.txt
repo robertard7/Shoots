@@ -1,0 +1,16 @@
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\bin\Debug\net8.0\Shoots.Providers.Abstractions.deps.json
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\bin\Debug\net8.0\Shoots.Providers.Abstractions.dll
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\bin\Debug\net8.0\Shoots.Providers.Abstractions.pdb
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\bin\Debug\net8.0\Shoots.Contracts.Core.dll
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\bin\Debug\net8.0\Shoots.Contracts.Core.pdb
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\Shoots.Providers.Abstractions.csproj.AssemblyReference.cache
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\Shoots.Providers.Abstractions.GeneratedMSBuildEditorConfig.editorconfig
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\Shoots.Providers.Abstractions.AssemblyInfoInputs.cache
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\Shoots.Providers.Abstractions.AssemblyInfo.cs
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\Shoots.Providers.Abstractions.csproj.CoreCompileInputs.cache
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\Shoots.Providers.Abstractions.sourcelink.json
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\Shoots.P.F28CB52F.Up2Date
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\Shoots.Providers.Abstractions.dll
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\refint\Shoots.Providers.Abstractions.dll
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\Shoots.Providers.Abstractions.pdb
+C:\dev\Shoots\src\Providers\Shoots.Providers.Abstractions\obj\Debug\net8.0\ref\Shoots.Providers.Abstractions.dll

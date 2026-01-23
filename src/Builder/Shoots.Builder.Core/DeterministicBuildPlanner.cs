@@ -1,6 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+#nullable enable
+
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 
@@ -41,13 +40,8 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         var graph = MermaidPlanGraph.ParseGraph(normalizedGraph);
         var orderedStepIds = MermaidPlanGraph.OrderStepIds(normalizedGraph);
 
-        // Normalize command
         var normalizedCommandId = request.CommandId.Trim();
 
-        // Normalize args deterministically:
-        // - case-insensitive keys
-        // - stable ordering
-        // - no mutation of the request's original dictionary
         var normalizedArgs = new SortedDictionary<string, object?>(
             StringComparer.OrdinalIgnoreCase);
 
@@ -74,7 +68,6 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             .ThenBy(rule => rule.AllowedOutputKind, StringComparer.Ordinal)
             .ToList();
 
-        // Deterministic steps
         var stepsById = new Dictionary<string, BuildStep>(StringComparer.Ordinal);
         var routeRulesByNode = normalizedRouteRules.ToDictionary(
             rule => rule.NodeId,
@@ -82,7 +75,6 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             StringComparer.Ordinal);
 
         var spec = _services.GetCommand(normalizedCommandId);
-
         if (spec is null)
             throw new InvalidOperationException($"unknown command '{normalizedCommandId}'");
 
@@ -186,11 +178,9 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             .Select(stepId => stepsById[stepId])
             .ToList();
 
-        // Guardrail: steps must not embed execution metadata
         if (steps.Any(s => s.Id.Contains("execute:", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("Plan steps must not embed execution metadata.");
 
-        // Stable artifacts list
         var artifacts = new[]
         {
             new BuildArtifact("plan.txt", "Human-readable plan output."),
@@ -202,7 +192,6 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
         if (string.IsNullOrWhiteSpace(_policy.PolicyId))
             throw new InvalidOperationException("Delegation policy id is required.");
 
-        // Provisional plan for delegation decision (authority seed)
         var provisionalAuthority = new DelegationAuthority(
             ProviderId: new ProviderId("local"),
             Kind: ProviderKind.Local,
@@ -221,11 +210,13 @@ public sealed class DeterministicBuildPlanner : IBuildPlanner
             Artifacts: artifacts
         );
 
-        // Delegation decision (pure)
         var decision = _policy.Decide(normalizedRequest, provisionalPlan);
 
-        // Deterministic hash (single authority)
-        var planId = BuildPlanHasher.ComputePlanId(normalizedRequest, decision.Authority, steps, artifacts);
+        var planId = BuildPlanHasher.ComputePlanId(
+            normalizedRequest,
+            decision.Authority,
+            steps,
+            artifacts);
 
         return new BuildPlan(
             PlanId: planId,

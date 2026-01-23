@@ -1,10 +1,15 @@
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
+using RuntimeSnapshot = Shoots.Runtime.Abstractions.ToolCatalogSnapshot;
 
 namespace Shoots.Runtime.Loader;
 
@@ -22,6 +27,7 @@ public sealed class AiHelpFacade : IAiHelpFacade
     public async Task<string> GetContextSummaryAsync(AiHelpRequest request, CancellationToken ct = default)
     {
         var status = await _runtimeFacade.QueryStatus(ct).ConfigureAwait(false);
+
         var builder = new StringBuilder();
         builder.AppendLine("Explanatory assistance only.");
         builder.AppendLine(_narratorSummary.DescribeRuntime(status.Version));
@@ -29,29 +35,37 @@ public sealed class AiHelpFacade : IAiHelpFacade
         builder.AppendLine(DescribePlan(request.Plan));
         builder.AppendLine(DescribeCatalog(request.ToolCatalog, request.Role));
         builder.AppendLine(DescribeRole(request.Role));
+
         return builder.ToString().Trim();
     }
 
     public async Task<string> ExplainStateAsync(AiHelpRequest request, CancellationToken ct = default)
     {
         var status = await _runtimeFacade.QueryStatus(ct).ConfigureAwait(false);
+
         var builder = new StringBuilder();
         builder.AppendLine("State summary:");
         builder.AppendLine(_narratorSummary.DescribeRuntime(status.Version));
+
         if (!string.IsNullOrWhiteSpace(request.ExecutionState))
             builder.AppendLine($"Execution state: {request.ExecutionState}.");
+
         if (!string.IsNullOrWhiteSpace(request.EnvironmentProfile))
             builder.AppendLine($"Environment profile: {request.EnvironmentProfile}.");
+
         if (!string.IsNullOrWhiteSpace(request.LastAppliedProfile))
             builder.AppendLine($"Last applied: {request.LastAppliedProfile}.");
+
         builder.AppendLine($"Tool tier: {request.Workspace.Tier}.");
         builder.AppendLine($"Allowed capabilities: {DescribeCapabilities(request.Workspace.AllowedCapabilities)}.");
+
         return builder.ToString().Trim();
     }
 
     public Task<string> SuggestNextStepsAsync(AiHelpRequest request, CancellationToken ct = default)
     {
         _ = ct;
+
         var steps = new List<string>
         {
             "Review the current workspace and environment summary.",
@@ -84,7 +98,7 @@ public sealed class AiHelpFacade : IAiHelpFacade
         return $"Plan: {plan.PlanId} with {plan.Steps.Count} steps and {plan.Artifacts.Count} artifacts.";
     }
 
-    private static string DescribeCatalog(ToolCatalogSnapshot? catalog, RoleDescriptor? role)
+    private static string DescribeCatalog(RuntimeSnapshot? catalog, RoleDescriptor? role)
     {
         if (catalog is null)
             return "Tool catalog: unavailable.";
@@ -122,7 +136,7 @@ public sealed class AiHelpFacade : IAiHelpFacade
         return string.Join(", ", capabilities);
     }
 
-    private static IEnumerable<string> GetPreferredTools(ToolCatalogSnapshot catalog, RoleDescriptor role)
+    private static IEnumerable<string> GetPreferredTools(RuntimeSnapshot catalog, RoleDescriptor role)
     {
         var preferredTags = role.PreferredCapabilities
             .Select(capability => capability.ToString())
@@ -139,6 +153,7 @@ public sealed class AiHelpFacade : IAiHelpFacade
     private static int ScoreTool(IReadOnlyList<string> tags, IReadOnlyList<string> preferredTags)
     {
         var score = 0;
+
         foreach (var tag in tags)
         {
             var normalized = tag.ToLowerInvariant();

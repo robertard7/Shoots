@@ -1,3 +1,7 @@
+#nullable enable
+
+using System.Threading;
+using System.Threading.Tasks;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
@@ -10,7 +14,12 @@ public sealed class NullExecutionCommandService : IExecutionCommandService
     {
         _ = plan;
         _ = ct;
-        return Task.FromResult(RuntimeResult.Fail(RuntimeError.Internal("Execution command service is not configured.")));
+
+        return Task.FromResult(
+            RuntimeResult.Fail(
+                RuntimeError.Internal("Execution command service is not configured.")
+            )
+        );
     }
 
     public Task CancelAsync(CancellationToken ct = default)
@@ -22,8 +31,12 @@ public sealed class NullExecutionCommandService : IExecutionCommandService
     public Task<IRuntimeStatusSnapshot> RefreshStatusAsync(CancellationToken ct = default)
     {
         _ = ct;
-        return Task.FromResult<IRuntimeStatusSnapshot>(new NullRuntimeStatusSnapshot(new RuntimeVersion(0, 0, 0)));
+
+        return Task.FromResult<IRuntimeStatusSnapshot>(
+            new NullRuntimeStatusSnapshot(new RuntimeVersion(0, 0, 0))
+        );
     }
 
-    private sealed record NullRuntimeStatusSnapshot(RuntimeVersion Version) : IRuntimeStatusSnapshot;
+    private sealed record NullRuntimeStatusSnapshot(RuntimeVersion Version)
+        : IRuntimeStatusSnapshot;
 }
