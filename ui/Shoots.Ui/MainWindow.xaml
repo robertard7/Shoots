@@ -113,7 +113,29 @@
             <Button Width="110" Margin="8,0,0,0" Content="Cancel" Command="{Binding CancelCommand}" />
             <Button Width="140" Margin="8,0,0,0" Content="Refresh Status" Command="{Binding RefreshStatusCommand}" />
           </StackPanel>
-          <TextBlock Grid.Row="2" Margin="0,24,0,0" Text="Shoots UI Shell" FontSize="20" FontWeight="SemiBold" />
+          <StackPanel Grid.Row="2" Margin="0,24,0,0">
+            <TextBlock Text="{Binding ExecutionModeSummary}" FontWeight="SemiBold" />
+            <TextBlock Margin="0,4,0,0" Text="{Binding ExecutionProviderSummary}" />
+            <TextBlock Margin="0,4,0,0" Text="{Binding ExecutionGraphSummary}" TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="#FF6B7280"
+                       Text="{Binding ExecutionDisabledReason}"
+                       TextWrapping="Wrap" />
+            <GroupBox Margin="0,12,0,0" Header="Resolved Steps">
+              <ListBox Margin="8" ItemsSource="{Binding ExecutionPlanSteps}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Margin="0,4,0,4">
+                      <TextBlock Text="{Binding Description}" FontWeight="SemiBold" />
+                      <TextBlock Foreground="#FF6B7280"
+                                 Text="{Binding Id}"
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </GroupBox>
+          </StackPanel>
         </Grid>
       </TabItem>
       <TabItem Header="AI Help">
@@ -188,15 +210,38 @@
                 <ListBox.ItemTemplate>
                   <DataTemplate>
                     <StackPanel Margin="0,4,0,4">
-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                      <TextBlock Text="{Binding Description}" TextWrapping="Wrap" />
-                      <TextBlock Foreground="#FF6B7280"
-                                 Text="{Binding CreatedUtc}"
-                                 TextWrapping="Wrap" />
+                      <TextBlock Text="Name" FontWeight="SemiBold" />
+                      <TextBox Margin="0,4,0,0" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                      <TextBlock Margin="0,8,0,0" Text="Description" />
+                      <TextBox Margin="0,4,0,0" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" Height="60" />
+                      <TextBlock Margin="0,8,0,0" Text="Intents (one per line)" />
+                      <TextBox Margin="0,4,0,0" Text="{Binding IntentsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" />
+                      <TextBlock Margin="0,8,0,0" Text="Expected artifacts (one per line)" />
+                      <TextBox Margin="0,4,0,0" Text="{Binding ArtifactsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" />
+                      <Border Margin="0,8,0,0" Background="#FFFEE2E2" CornerRadius="4" Padding="6"
+                              Visibility="{Binding HasValidationErrors, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock Foreground="#FFB91C1C" Text="{Binding ValidationSummary}" TextWrapping="Wrap" />
+                      </Border>
+                      <TextBlock Margin="0,6,0,0" Foreground="#FF6B7280" Text="{Binding CreatedUtc}" TextWrapping="Wrap" />
                     </StackPanel>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
+              <TextBlock Margin="8,0,8,8"
+                         Foreground="#FF6B7280"
+                         Text="No blueprints yet. Add one on the left."
+                         TextWrapping="Wrap">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding HasBlueprints}" Value="False">
+                        <Setter Property="Visibility" Value="Visible" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
             </GroupBox>
           </Grid>
         </Grid>
@@ -236,6 +281,69 @@
                 <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsNotes}" TextWrapping="Wrap" />
               </StackPanel>
             </GroupBox>
+          </Grid>
+        </Grid>
+      </TabItem>
+      <TabItem Header="Tool Execution Records">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <StackPanel>
+            <TextBlock Text="Tool execution records capture inputs, outputs, and outcomes." TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="#FF6B7280"
+                       Text="Load a plan to populate records."
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="280" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+              <TextBlock Text="Records" FontWeight="SemiBold" />
+              <TextBlock Margin="0,4,0,0"
+                         Foreground="#FF6B7280"
+                         Text="No records available yet."
+                         TextWrapping="Wrap">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding HasToolExecutionRecords}" Value="False">
+                        <Setter Property="Visibility" Value="Visible" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
+              <ListBox Margin="0,8,0,0"
+                       ItemsSource="{Binding ToolExecutionRecords}"
+                       SelectedItem="{Binding SelectedToolExecutionRecord}"
+                       DisplayMemberPath="DisplayName" />
+              <TextBlock Margin="0,12,0,0" Text="Compare with" />
+              <ComboBox Margin="0,4,0,0"
+                        ItemsSource="{Binding ToolExecutionRecords}"
+                        SelectedItem="{Binding ComparisonToolExecutionRecord}"
+                        DisplayMemberPath="DisplayName" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+              <TextBlock Text="{Binding ToolExecutionDetailsTitle}" FontWeight="SemiBold" />
+              <GroupBox Margin="0,8,0,0" Header="Inputs">
+                <TextBlock Margin="8" Text="{Binding SelectedToolExecutionInputs}" TextWrapping="Wrap" />
+              </GroupBox>
+              <GroupBox Margin="0,8,0,0" Header="Outputs">
+                <TextBlock Margin="8" Text="{Binding SelectedToolExecutionOutputs}" TextWrapping="Wrap" />
+              </GroupBox>
+              <GroupBox Margin="0,8,0,0" Header="Errors">
+                <TextBlock Margin="8" Text="{Binding SelectedToolExecutionError}" TextWrapping="Wrap" />
+              </GroupBox>
+              <GroupBox Margin="0,8,0,0" Header="Diff">
+                <TextBlock Margin="8" Text="{Binding ToolExecutionDiffSummary}" TextWrapping="Wrap" />
+              </GroupBox>
+            </StackPanel>
           </Grid>
         </Grid>
       </TabItem>

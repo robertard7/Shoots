@@ -1,3 +1,5 @@
+using Shoots.Runtime.Ui.Abstractions;
+
 namespace Shoots.UI.Blueprints;
 
 // UI-only. Declarative. Non-executable. Not runtime-affecting.
@@ -7,4 +9,29 @@ public sealed record SystemBlueprint(
     IReadOnlyList<string> Intents,
     IReadOnlyList<string> Artifacts,
     DateTimeOffset CreatedUtc
-);
+) : IAiHelpSurface
+{
+    public string SurfaceKind => $"Blueprint {Name}";
+
+    public string DescribeContext()
+    {
+        var summary = string.IsNullOrWhiteSpace(Description) ? "No description available." : Description.Trim();
+        return $"Blueprint '{Name}' created {CreatedUtc:u}. {summary}";
+    }
+
+    public string DescribeCapabilities()
+    {
+        if (Intents.Count == 0)
+            return "No intents are listed.";
+
+        return $"Intents: {string.Join("; ", Intents)}.";
+    }
+
+    public string DescribeConstraints()
+    {
+        if (Artifacts.Count == 0)
+            return "No artifacts are listed.";
+
+        return $"Artifacts: {string.Join("; ", Artifacts)}.";
+    }
+}

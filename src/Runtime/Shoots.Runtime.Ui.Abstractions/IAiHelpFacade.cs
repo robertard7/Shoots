@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core;
@@ -17,13 +18,15 @@ public interface IAiHelpFacade
 }
 
 public sealed record AiHelpRequest(
+    AiIntentDescriptor Intent,
     AiWorkspaceSnapshot Workspace,
     BuildPlan? Plan,
     RuntimeCatalogSnapshot? ToolCatalog,
     string? ExecutionState,
     string? EnvironmentProfile,
     string? LastAppliedProfile,
-    RoleDescriptor? Role);
+    RoleDescriptor? Role,
+    IReadOnlyList<IAiHelpSurface> Surfaces);
 
 public sealed record AiWorkspaceSnapshot(
     string? Name,
