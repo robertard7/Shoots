@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core;
@@ -16,14 +17,23 @@ public interface IAiHelpFacade
     Task<string> SuggestNextStepsAsync(AiHelpRequest request, CancellationToken ct = default);
 }
 
+public sealed record AiHelpScope(
+    string SurfaceId,
+    string? Summary,
+    IReadOnlyDictionary<string, string> Data = new Dictionary<string, string>()
+);
+
 public sealed record AiHelpRequest(
+    AiHelpScope Scope,
+    AiIntentDescriptor Intent,
     AiWorkspaceSnapshot Workspace,
     BuildPlan? Plan,
     RuntimeCatalogSnapshot? ToolCatalog,
     string? ExecutionState,
     string? EnvironmentProfile,
     string? LastAppliedProfile,
-    RoleDescriptor? Role);
+    RoleDescriptor? Role,
+    IReadOnlyList<IAiHelpSurface> Surfaces);
 
 public sealed record AiWorkspaceSnapshot(
     string? Name,

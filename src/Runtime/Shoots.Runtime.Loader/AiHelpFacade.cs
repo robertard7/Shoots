@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,36 +16,68 @@ namespace Shoots.Runtime.Loader;
 
 public sealed class AiHelpFacade : IAiHelpFacade
 {
+    private static readonly ConcurrentQueue<AiHelpIntentUsage> IntentLog = new();
     private readonly IRuntimeFacade _runtimeFacade;
     private readonly IRuntimeNarratorSummary _narratorSummary;
+    private readonly IReadOnlyList<IAiHelpSurface> _registeredSurfaces;
+    private readonly IAiHelpIntentLogger? _intentLogger;
 
-    public AiHelpFacade(IRuntimeFacade runtimeFacade, IRuntimeNarratorSummary narratorSummary)
+    public AiHelpFacade(
+        IRuntimeFacade runtimeFacade,
+        IRuntimeNarratorSummary narratorSummary,
+        IEnumerable<IAiHelpSurface>? helpSurfaces = null,
+        IAiHelpIntentLogger? intentLogger = null)
     {
         _runtimeFacade = runtimeFacade ?? throw new ArgumentNullException(nameof(runtimeFacade));
         _narratorSummary = narratorSummary ?? throw new ArgumentNullException(nameof(narratorSummary));
+        _registeredSurfaces = helpSurfaces?.ToList() ?? Array.Empty<IAiHelpSurface>();
+        _intentLogger = intentLogger;
     }
 
     public async Task<string> GetContextSummaryAsync(AiHelpRequest request, CancellationToken ct = default)
     {
+        var surfaces = ResolveSurfaces(request);
+        if (surfaces.Count == 0)
+            return DescribeMissingSurface(request);
+
+        if (!SupportsIntent(surfaces, request.Intent))
+            return "AI Help is offline because the intent is not registered for this surface.";
+
+        LogIntentUsage(request, surfaces[0]);
+
         var status = await _runtimeFacade.QueryStatus(ct).ConfigureAwait(false);
 
         var builder = new StringBuilder();
         builder.AppendLine("Explanatory assistance only.");
+        builder.AppendLine($"Intent: {DescribeIntent(request.Intent)}.");
+        builder.AppendLine($"Scope: {DescribeScope(request.Scope)}.");
         builder.AppendLine(_narratorSummary.DescribeRuntime(status.Version));
         builder.AppendLine(DescribeWorkspace(request.Workspace));
         builder.AppendLine(DescribePlan(request.Plan));
         builder.AppendLine(DescribeCatalog(request.ToolCatalog, request.Role));
         builder.AppendLine(DescribeRole(request.Role));
+        builder.AppendLine(DescribeSurfaceContexts(surfaces));
 
         return builder.ToString().Trim();
     }
 
     public async Task<string> ExplainStateAsync(AiHelpRequest request, CancellationToken ct = default)
     {
+        var surfaces = ResolveSurfaces(request);
+        if (surfaces.Count == 0)
+            return DescribeMissingSurface(request);
+
+        if (!SupportsIntent(surfaces, request.Intent))
+            return "AI Help is offline because the intent is not registered for this surface.";
+
+        LogIntentUsage(request, surfaces[0]);
+
         var status = await _runtimeFacade.QueryStatus(ct).ConfigureAwait(false);
 
         var builder = new StringBuilder();
         builder.AppendLine("State summary:");
+        builder.AppendLine($"Intent: {DescribeIntent(request.Intent)}.");
+        builder.AppendLine($"Scope: {DescribeScope(request.Scope)}.");
         builder.AppendLine(_narratorSummary.DescribeRuntime(status.Version));
 
         if (!string.IsNullOrWhiteSpace(request.ExecutionState))
@@ -58,6 +91,7 @@ public sealed class AiHelpFacade : IAiHelpFacade
 
         builder.AppendLine($"Tool tier: {request.Workspace.Tier}.");
         builder.AppendLine($"Allowed capabilities: {DescribeCapabilities(request.Workspace.AllowedCapabilities)}.");
+        builder.AppendLine(DescribeSurfaceConstraints(surfaces));
 
         return builder.ToString().Trim();
     }
@@ -65,6 +99,15 @@ public sealed class AiHelpFacade : IAiHelpFacade
     public Task<string> SuggestNextStepsAsync(AiHelpRequest request, CancellationToken ct = default)
     {
         _ = ct;
+
+        var surfaces = ResolveSurfaces(request);
+        if (surfaces.Count == 0)
+            return Task.FromResult(DescribeMissingSurface(request));
+
+        if (!SupportsIntent(surfaces, request.Intent))
+            return Task.FromResult("AI Help is offline because the intent is not registered for this surface.");
+
+        LogIntentUsage(request, surfaces[0]);
 
         var steps = new List<string>
         {
@@ -76,7 +119,107 @@ public sealed class AiHelpFacade : IAiHelpFacade
         if (string.IsNullOrWhiteSpace(request.Workspace.Name))
             steps.Insert(0, "Select a workspace to scope context.");
 
-        return Task.FromResult(string.Join(" ", steps));
+        steps.AddRange(DescribeSurfaceCapabilities(surfaces));
+
+        return Task.FromResult($"{string.Join(" ", steps)} Intent: {DescribeIntent(request.Intent)}. Scope: {DescribeScope(request.Scope)}.");
+    }
+
+    private IReadOnlyList<IAiHelpSurface> ResolveSurfaces(AiHelpRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Scope.SurfaceId))
+            return Array.Empty<IAiHelpSurface>();
+
+        var surfaces = new List<IAiHelpSurface>();
+        surfaces.AddRange(_registeredSurfaces);
+
+        if (request.Surfaces is not null)
+            surfaces.AddRange(request.Surfaces);
+
+        var normalized = NormalizeSurfaceId(request.Scope.SurfaceId);
+
+        return surfaces
+            .Where(surface => NormalizeSurfaceId(surface.SurfaceId) == normalized)
+            .Distinct()
+            .ToList();
+    }
+
+    private static string DescribeIntent(AiIntentDescriptor intent)
+    {
+        if (string.IsNullOrWhiteSpace(intent.TargetId))
+            return $"{intent.Type} for {intent.Scope}";
+
+        return $"{intent.Type} for {intent.Scope} ({intent.TargetId})";
+    }
+
+    private static string DescribeScope(AiHelpScope scope)
+    {
+        if (!string.IsNullOrWhiteSpace(scope.Summary))
+            return scope.Summary;
+
+        if (scope.Data is null || scope.Data.Count == 0)
+            return scope.SurfaceId;
+
+        var detail = string.Join(", ", scope.Data.Select(pair => $"{pair.Key}={pair.Value}"));
+        return $"{scope.SurfaceId} ({detail})";
+    }
+
+    private static string NormalizeSurfaceId(string value)
+        => value.Trim().ToLowerInvariant();
+
+    private static bool SupportsIntent(IReadOnlyList<IAiHelpSurface> surfaces, AiIntentDescriptor intent)
+        => surfaces.Any(surface =>
+            surface.SupportedIntents.Any(registered =>
+                registered.Type == intent.Type &&
+                registered.Scope == intent.Scope));
+
+    private string DescribeMissingSurface(AiHelpRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Scope.SurfaceId))
+            return "AI Help requires a surface scope to operate.";
+
+        return $"AI Help is offline because no surfaces match '{request.Scope.SurfaceId}'.";
+    }
+
+    private void LogIntentUsage(AiHelpRequest request, IAiHelpSurface surface)
+    {
+        var usage = new AiHelpIntentUsage(
+            DateTimeOffset.UtcNow,
+            surface.SurfaceId,
+            request.Intent,
+            request.Scope.Summary,
+            request.Scope.Data ?? new Dictionary<string, string>());
+
+        if (_intentLogger is null)
+        {
+            IntentLog.Enqueue(usage);
+            return;
+        }
+
+        _intentLogger.Record(usage);
+    }
+
+    private static string DescribeSurfaceContexts(IEnumerable<IAiHelpSurface> surfaces)
+    {
+        var summaries = surfaces
+            .Select(surface => $"Surface {surface.SurfaceKind}: {surface.DescribeContext()}")
+            .ToList();
+
+        return summaries.Count == 0 ? "No surface context available." : string.Join(Environment.NewLine, summaries);
+    }
+
+    private static string DescribeSurfaceConstraints(IEnumerable<IAiHelpSurface> surfaces)
+    {
+        var summaries = surfaces
+            .Select(surface => $"Surface {surface.SurfaceKind} constraints: {surface.DescribeConstraints()}")
+            .ToList();
+
+        return summaries.Count == 0 ? "No surface constraints available." : string.Join(Environment.NewLine, summaries);
+    }
+
+    private static IEnumerable<string> DescribeSurfaceCapabilities(IEnumerable<IAiHelpSurface> surfaces)
+    {
+        foreach (var surface in surfaces)
+            yield return $"Review {surface.SurfaceKind} capabilities: {surface.DescribeCapabilities()}.";
     }
 
     private static string DescribeWorkspace(AiWorkspaceSnapshot workspace)

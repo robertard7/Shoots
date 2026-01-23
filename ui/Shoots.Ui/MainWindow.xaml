@@ -112,8 +112,42 @@
                     ToolTipService.ShowOnDisabled="True" />
             <Button Width="110" Margin="8,0,0,0" Content="Cancel" Command="{Binding CancelCommand}" />
             <Button Width="140" Margin="8,0,0,0" Content="Refresh Status" Command="{Binding RefreshStatusCommand}" />
+            <Button Width="140"
+                    Margin="8,0,0,0"
+                    Content="Explain Execution"
+                    Command="{Binding ExplainExecutionCommand}"
+                    ToolTip="Describe execution context using AI Help." />
           </StackPanel>
-          <TextBlock Grid.Row="2" Margin="0,24,0,0" Text="Shoots UI Shell" FontSize="20" FontWeight="SemiBold" />
+          <StackPanel Grid.Row="2" Margin="0,24,0,0">
+            <TextBlock Text="{Binding ExecutionModeSummary}" FontWeight="SemiBold" />
+            <TextBlock Margin="0,4,0,0" Text="{Binding ExecutionProviderSummary}" />
+            <TextBlock Margin="0,4,0,0" Text="{Binding ExecutionGraphSummary}" TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="#FF6B7280"
+                       Text="{Binding ExecutionDisabledReason}"
+                       TextWrapping="Wrap" />
+            <GroupBox Margin="0,12,0,0" Header="Resolved Steps">
+              <ListBox Margin="8" ItemsSource="{Binding ExecutionPlanSteps}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Margin="0,4,0,4">
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Description}" FontWeight="SemiBold" />
+                        <Border Margin="8,0,0,0" Background="{Binding OwnerColor}" CornerRadius="4" Padding="4,1">
+                          <TextBlock Foreground="White"
+                                     Text="{Binding OwnerLabel}"
+                                     ToolTip="{Binding OwnerHint}" />
+                        </Border>
+                      </StackPanel>
+                      <TextBlock Foreground="#FF6B7280"
+                                 Text="{Binding Id}"
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </GroupBox>
+          </StackPanel>
         </Grid>
       </TabItem>
       <TabItem Header="AI Help">
@@ -159,6 +193,10 @@
                        Foreground="#FF6B7280"
                        Text="{Binding BlueprintStatusNote}"
                        TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="#FF1F2937"
+                       Text="{Binding BlueprintSaveStatus}"
+                       TextWrapping="Wrap" />
           </StackPanel>
           <Grid Grid.Row="1" Margin="0,12,0,0">
             <Grid.ColumnDefinitions>
@@ -168,13 +206,47 @@
             <StackPanel Margin="0,0,12,0">
               <GroupBox Header="Register Blueprint" IsEnabled="{Binding CanManageBlueprints}">
                 <StackPanel Margin="12">
-                  <TextBlock Text="Name" />
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Name" />
+                    <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
+                      <TextBlock Foreground="#FF374151" Text="Metadata Only" />
+                    </Border>
+                  </StackPanel>
                   <TextBox Margin="0,4,0,0" Text="{Binding NewBlueprintName, UpdateSourceTrigger=PropertyChanged}" />
-                  <TextBlock Margin="0,8,0,0" Text="Description" />
+                  <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                    <TextBlock Text="Description" />
+                    <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
+                      <TextBlock Foreground="#FF374151" Text="Metadata Only" />
+                    </Border>
+                  </StackPanel>
                   <TextBox Margin="0,4,0,0" Text="{Binding NewBlueprintDescription}" TextWrapping="Wrap" Height="60" />
-                  <TextBlock Margin="0,8,0,0" Text="Intents (one per line)" />
+                  <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                    <TextBlock Text="Version" />
+                    <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
+                      <TextBlock Foreground="#FF374151" Text="Metadata Only" />
+                    </Border>
+                  </StackPanel>
+                  <TextBox Margin="0,4,0,0" Text="{Binding NewBlueprintVersion, UpdateSourceTrigger=PropertyChanged}" />
+                  <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                    <TextBlock Text="Definition (JSON or YAML)" />
+                    <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
+                      <TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
+                    </Border>
+                  </StackPanel>
+                  <TextBox Margin="0,4,0,0" Text="{Binding NewBlueprintDefinition, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="120" />
+                  <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                    <TextBlock Text="Intents (one per line)" />
+                    <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
+                      <TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
+                    </Border>
+                  </StackPanel>
                   <TextBox Margin="0,4,0,0" Text="{Binding NewBlueprintIntents}" AcceptsReturn="True" Height="80" />
-                  <TextBlock Margin="0,8,0,0" Text="Expected artifacts (one per line)" />
+                  <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                    <TextBlock Text="Expected artifacts (one per line)" />
+                    <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
+                      <TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
+                    </Border>
+                  </StackPanel>
                   <TextBox Margin="0,4,0,0" Text="{Binding NewBlueprintArtifacts}" AcceptsReturn="True" Height="80" />
                   <Button Margin="0,12,0,0"
                           Content="Add Blueprint"
@@ -188,15 +260,128 @@
                 <ListBox.ItemTemplate>
                   <DataTemplate>
                     <StackPanel Margin="0,4,0,4">
-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                      <TextBlock Text="{Binding Description}" TextWrapping="Wrap" />
-                      <TextBlock Foreground="#FF6B7280"
-                                 Text="{Binding CreatedUtc}"
-                                 TextWrapping="Wrap" />
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Blueprint" FontWeight="SemiBold" />
+                        <Border Margin="8,0,0,0" CornerRadius="4" Padding="4,1">
+                          <Border.Style>
+                            <Style TargetType="Border">
+                              <Setter Property="Background" Value="#FFE5E7EB" />
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDirty}" Value="True">
+                                  <Setter Property="Background" Value="#FFFDE68A" />
+                                </DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </Border.Style>
+                          <TextBlock Text="{Binding DirtyStateLabel}">
+                            <TextBlock.Style>
+                              <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#FF374151" />
+                                <Style.Triggers>
+                                  <DataTrigger Binding="{Binding IsDirty}" Value="True">
+                                    <Setter Property="Foreground" Value="#FF92400E" />
+                                  </DataTrigger>
+                                </Style.Triggers>
+                              </Style>
+                            </TextBlock.Style>
+                          </TextBlock>
+                        </Border>
+                      </StackPanel>
+                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <TextBlock Text="Name" FontWeight="SemiBold" />
+                        <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
+                          <TextBlock Foreground="#FF374151" Text="Metadata Only" />
+                        </Border>
+                      </StackPanel>
+                      <TextBox Margin="0,4,0,0" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <TextBlock Text="Description" />
+                        <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
+                          <TextBlock Foreground="#FF374151" Text="Metadata Only" />
+                        </Border>
+                      </StackPanel>
+                      <TextBox Margin="0,4,0,0" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" Height="60" />
+                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <TextBlock Text="Version" />
+                        <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
+                          <TextBlock Foreground="#FF374151" Text="Metadata Only" />
+                        </Border>
+                      </StackPanel>
+                      <TextBox Margin="0,4,0,0" Text="{Binding Version, UpdateSourceTrigger=PropertyChanged}" />
+                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <TextBlock Text="Definition (JSON or YAML)" />
+                        <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
+                          <TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
+                        </Border>
+                      </StackPanel>
+                      <TextBox Margin="0,4,0,0" Text="{Binding DefinitionText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="120" />
+                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <TextBlock Text="Intents (one per line)" />
+                        <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
+                          <TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
+                        </Border>
+                      </StackPanel>
+                      <TextBox Margin="0,4,0,0" Text="{Binding IntentsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" />
+                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <TextBlock Text="Expected artifacts (one per line)" />
+                        <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
+                          <TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
+                        </Border>
+                      </StackPanel>
+                      <TextBox Margin="0,4,0,0" Text="{Binding ArtifactsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" />
+                      <Border Margin="0,8,0,0" Background="#FFFEE2E2" CornerRadius="4" Padding="6"
+                              Visibility="{Binding HasValidationErrors, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock Foreground="#FFB91C1C" Text="{Binding ValidationSummary}" TextWrapping="Wrap" />
+                      </Border>
+                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <Button Width="100"
+                                Content="Save"
+                                Command="{Binding DataContext.SaveBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}"
+                                IsEnabled="{Binding CanSave}" />
+                        <Button Width="100"
+                                Margin="8,0,0,0"
+                                Content="Revert"
+                                Command="{Binding DataContext.RevertBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}"
+                                IsEnabled="{Binding CanRevert}" />
+                      </StackPanel>
+                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                        <Button Width="120"
+                                Content="Explain"
+                                Command="{Binding DataContext.ExplainBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}" />
+                        <Button Width="120"
+                                Margin="8,0,0,0"
+                                Content="Validate"
+                                Command="{Binding DataContext.ValidateBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}" />
+                        <Button Width="120"
+                                Margin="8,0,0,0"
+                                Content="Suggest"
+                                Command="{Binding DataContext.SuggestBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}" />
+                      </StackPanel>
+                      <TextBlock Margin="0,6,0,0" Foreground="#FF6B7280" Text="{Binding CreatedUtc}" TextWrapping="Wrap" />
                     </StackPanel>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
+              <TextBlock Margin="8,0,8,8"
+                         Foreground="#FF6B7280"
+                         Text="No blueprints yet. Add one on the left."
+                         TextWrapping="Wrap">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding HasBlueprints}" Value="False">
+                        <Setter Property="Visibility" Value="Visible" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
             </GroupBox>
           </Grid>
         </Grid>
@@ -225,17 +410,156 @@
                        SelectedItem="{Binding SelectedRootFs}"
                        DisplayMemberPath="DisplayName" />
             </GroupBox>
-            <GroupBox Grid.Column="1" Margin="12,0,0,0" Header="Selected Rootfs">
-              <StackPanel Margin="12">
-                <TextBlock Text="{Binding ActiveRootFsLabel}" FontWeight="SemiBold" />
-                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsSource}" TextWrapping="Wrap" />
-                <TextBlock Margin="0,10,0,0" Text="Execution distro source override (URL or local path)" />
-                <TextBox Margin="0,4,0,0" Text="{Binding RootFsSourceOverride, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBlock Margin="0,6,0,0" Foreground="#FF6B7280" Text="{Binding RootFsFallbackNotice}" TextWrapping="Wrap" />
-                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsLicense}" TextWrapping="Wrap" />
-                <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsNotes}" TextWrapping="Wrap" />
+            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+              <GroupBox Header="Selected Rootfs">
+                <StackPanel Margin="12">
+                  <TextBlock Text="{Binding ActiveRootFsLabel}" FontWeight="SemiBold" />
+                  <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsSource}" TextWrapping="Wrap" />
+                  <TextBlock Margin="0,10,0,0" Text="Execution distro source override (URL or local path)" />
+                  <TextBox Margin="0,4,0,0" Text="{Binding RootFsSourceOverride, UpdateSourceTrigger=PropertyChanged}" />
+                  <TextBlock Margin="0,6,0,0" Foreground="#FF6B7280" Text="{Binding RootFsFallbackNotice}" TextWrapping="Wrap" />
+                  <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsLicense}" TextWrapping="Wrap" />
+                  <TextBlock Margin="0,6,0,0" Text="{Binding ActiveRootFsNotes}" TextWrapping="Wrap" />
+                </StackPanel>
+              </GroupBox>
+              <GroupBox Margin="0,12,0,0" Header="Resolved Environment">
+                <TextBlock Margin="12" Text="{Binding ResolvedExecutionEnvironmentSummary}" TextWrapping="Wrap" />
+              </GroupBox>
+              <GroupBox Margin="0,12,0,0" Header="Execution Blockers">
+                <TextBlock Margin="12" Text="{Binding ExecutionBlockerSummary}" TextWrapping="Wrap" />
+              </GroupBox>
+              <GroupBox Margin="0,12,0,0" Header="Provider Capabilities">
+                <StackPanel Margin="12">
+                  <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <TextBlock Width="90" Text="Provider" FontWeight="SemiBold" />
+                    <TextBlock Width="70" Text="Plan" FontWeight="SemiBold" />
+                    <TextBlock Width="80" Text="Execute" FontWeight="SemiBold" />
+                    <TextBlock Width="80" Text="Artifacts" FontWeight="SemiBold" />
+                  </StackPanel>
+                  <ItemsControl ItemsSource="{Binding ProviderCapabilityMatrix}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
+                          <TextBlock Width="90" Text="{Binding Kind}" />
+                          <TextBlock Width="70" Text="{Binding PlanCapability}" />
+                          <TextBlock Width="80" Text="{Binding ExecuteCapability}" />
+                          <TextBlock Width="80" Text="{Binding ArtifactCapability}" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <TextBlock Margin="0,6,0,0" Foreground="#FF6B7280" Text="Matrix reflects default provider capabilities." />
+                </StackPanel>
+              </GroupBox>
+              <GroupBox Margin="0,12,0,0" Header="Execution Preview">
+                <StackPanel Margin="12">
+                  <TextBlock Text="{Binding ExecutionPreviewSummary}" TextWrapping="Wrap" />
+                  <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding ExecutionPreviewSteps}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <StackPanel Margin="0,2,0,2">
+                          <TextBlock Text="{Binding Description}" FontWeight="SemiBold" />
+                          <TextBlock Foreground="#FF6B7280" Text="{Binding OwnerLabel}" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </GroupBox>
+            </StackPanel>
+          </Grid>
+        </Grid>
+      </TabItem>
+      <TabItem Header="Tool Execution Records">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <StackPanel>
+            <TextBlock Text="Tool execution records capture inputs, outputs, and outcomes." TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="#FF6B7280"
+                       Text="Load a plan to populate records."
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="280" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+              <StackPanel Orientation="Horizontal">
+                <Button Width="120"
+                        Content="Replay Plan"
+                        Command="{Binding ReplayPlanCommand}"
+                        ToolTip="Replay uses recorded steps only."
+                        Margin="0,0,8,0" />
+                <Button Width="160"
+                        Content="Explain This Step"
+                        Command="{Binding ExplainSelectedToolExecutionCommand}"
+                        ToolTip="Send the selected record to AI Help." />
               </StackPanel>
-            </GroupBox>
+              <TextBlock Margin="0,12,0,0" Text="Sessions" FontWeight="SemiBold" />
+              <ListBox Margin="0,8,0,0"
+                       ItemsSource="{Binding ToolExecutionSessions}"
+                       SelectedItem="{Binding SelectedToolExecutionSession}"
+                       DisplayMemberPath="DisplayName" />
+              <TextBlock Margin="0,12,0,0" Text="Records" FontWeight="SemiBold" />
+              <TextBlock Margin="0,4,0,0"
+                         Foreground="#FF6B7280"
+                         Text="No records available yet."
+                         TextWrapping="Wrap">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding HasToolExecutionRecords}" Value="False">
+                        <Setter Property="Visibility" Value="Visible" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
+              <ListBox Margin="0,8,0,0"
+                       ItemsSource="{Binding ToolExecutionRecords}"
+                       SelectedItem="{Binding SelectedToolExecutionRecord}"
+                       DisplayMemberPath="DisplayName" />
+              <TextBlock Margin="0,12,0,0" Text="Compare session" />
+              <ComboBox Margin="0,4,0,0"
+                        ItemsSource="{Binding ToolExecutionSessions}"
+                        SelectedItem="{Binding ComparisonToolExecutionSession}"
+                        DisplayMemberPath="DisplayName" />
+              <TextBlock Margin="0,12,0,0" Text="Compare record" />
+              <ComboBox Margin="0,4,0,0"
+                        ItemsSource="{Binding ComparisonToolExecutionRecords}"
+                        SelectedItem="{Binding ComparisonToolExecutionRecord}"
+                        DisplayMemberPath="DisplayName" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+              <TextBlock Text="{Binding ToolExecutionDetailsTitle}" FontWeight="SemiBold" />
+              <Border Margin="0,6,0,0"
+                      Background="{Binding SelectedToolExecutionRecord.OwnerHighlight}"
+                      CornerRadius="4"
+                      Padding="4,1"
+                      Visibility="{Binding SelectedToolExecutionRecord, Converter={StaticResource NullToVisibilityConverter}}">
+                <TextBlock Foreground="White"
+                           Text="{Binding SelectedToolExecutionRecord.OwnerBadge}"
+                           ToolTip="{Binding SelectedToolExecutionRecord.Owner}" />
+              </Border>
+              <GroupBox Margin="0,8,0,0" Header="Inputs">
+                <TextBlock Margin="8" Text="{Binding SelectedToolExecutionInputs}" TextWrapping="Wrap" />
+              </GroupBox>
+              <GroupBox Margin="0,8,0,0" Header="Outputs">
+                <TextBlock Margin="8" Text="{Binding SelectedToolExecutionOutputs}" TextWrapping="Wrap" />
+              </GroupBox>
+              <GroupBox Margin="0,8,0,0" Header="Errors">
+                <TextBlock Margin="8" Text="{Binding SelectedToolExecutionError}" TextWrapping="Wrap" />
+              </GroupBox>
+              <GroupBox Margin="0,8,0,0" Header="Diff">
+                <TextBlock Margin="8" Text="{Binding ToolExecutionDiffSummary}" TextWrapping="Wrap" />
+              </GroupBox>
+            </StackPanel>
           </Grid>
         </Grid>
       </TabItem>
