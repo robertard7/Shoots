@@ -15,6 +15,7 @@ public sealed class ToolExecutionRecordViewModel : IAiHelpSurface
         IReadOnlyDictionary<string, object?> outputs,
         bool? success,
         string? errorMessage,
+        DecisionOwner owner,
         DateTimeOffset capturedAt)
     {
         RecordId = recordId;
@@ -23,6 +24,7 @@ public sealed class ToolExecutionRecordViewModel : IAiHelpSurface
         Outputs = outputs;
         Success = success;
         ErrorMessage = errorMessage;
+        Owner = owner;
         CapturedAt = capturedAt;
     }
 
@@ -37,6 +39,8 @@ public sealed class ToolExecutionRecordViewModel : IAiHelpSurface
     public bool? Success { get; }
 
     public string? ErrorMessage { get; }
+
+    public DecisionOwner Owner { get; }
 
     public DateTimeOffset CapturedAt { get; }
 
@@ -53,10 +57,35 @@ public sealed class ToolExecutionRecordViewModel : IAiHelpSurface
         _ => "Result is not recorded."
     };
 
+    public string OwnerBadge => Owner switch
+    {
+        DecisionOwner.Ai => "AI",
+        DecisionOwner.Human => "Human",
+        DecisionOwner.Rule => "Rule",
+        _ => "Runtime"
+    };
+
+    public string OwnerHighlight => Owner switch
+    {
+        DecisionOwner.Ai => "#FF2563EB",
+        DecisionOwner.Human => "#FF16A34A",
+        DecisionOwner.Rule => "#FF7C3AED",
+        _ => "#FF6B7280"
+    };
+
+    public string SurfaceId => $"ter:{ToolId}:{RecordId}:{CapturedAt:yyyyMMddHHmmss}";
+
     public string SurfaceKind => $"Tool execution {ToolId}";
 
+    public IReadOnlyList<AiIntentDescriptor> SupportedIntents { get; } = new[]
+    {
+        new AiIntentDescriptor(AiIntentType.Explain, AiIntentScope.ToolExecution),
+        new AiIntentDescriptor(AiIntentType.Diagnose, AiIntentScope.ToolExecution),
+        new AiIntentDescriptor(AiIntentType.Compare, AiIntentScope.ToolExecution)
+    };
+
     public string DescribeContext()
-        => $"Tool '{ToolId}' recorded at {CapturedAt:u}.";
+        => $"Tool '{ToolId}' recorded at {CapturedAt:u}. Owner: {Owner}.";
 
     public string DescribeCapabilities()
         => $"Inputs: {FormatKeyValues(Inputs, "none")}. Outputs: {FormatKeyValues(Outputs, "none")}.";
@@ -64,7 +93,10 @@ public sealed class ToolExecutionRecordViewModel : IAiHelpSurface
     public string DescribeConstraints()
         => $"Result status: {FormatStatus()}.";
 
-    public static ToolExecutionRecordViewModel FromPlanStep(ToolBuildStep step, ToolResult? result)
+    public static ToolExecutionRecordViewModel FromPlanStep(
+        ToolBuildStep step,
+        ToolResult? result,
+        DecisionOwner owner)
     {
         var outputValues = result is not null && result.ToolId == step.ToolId
             ? result.Outputs
@@ -83,6 +115,7 @@ public sealed class ToolExecutionRecordViewModel : IAiHelpSurface
             outputValues,
             success,
             error,
+            owner,
             DateTimeOffset.UtcNow);
     }
 

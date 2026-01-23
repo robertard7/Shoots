@@ -3,7 +3,11 @@ namespace Shoots.Runtime.Ui.Abstractions;
 public enum AiIntentType
 {
     Explain,
+    Validate,
+    Compare,
     Diagnose,
+    Predict,
+    Risk,
     Suggest,
     Modify
 }
@@ -11,7 +15,9 @@ public enum AiIntentType
 public enum AiIntentScope
 {
     Blueprint,
+    Planner,
     Execution,
+    ToolExecution,
     Provider,
     UI
 }

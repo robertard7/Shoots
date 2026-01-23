@@ -7,6 +7,7 @@ The universal AI layer makes AI help a shared runtime service instead of a per-s
 - **IAiHelpSurface**: a small contract for describing context, capabilities, and constraints per screen or asset.
 - **AiIntentDescriptor**: intent metadata applied to every AI help call (Explain, Diagnose, Suggest, Modify) along with a target scope.
 - **AiHelpFacade**: combines runtime snapshots with all registered surfaces, and stays descriptive and read-only.
+- **AiHelpScope**: pins each request to a surface scope and shared data payload.
 
 ## Why it exists
 
@@ -23,6 +24,12 @@ Surfaces are registered by UI views and runtime components. The facade merges th
 1. A plan or screen creates its surface(s).
 2. The UI sends surfaces along with a concrete intent descriptor.
 3. The facade returns context, state, and next-step suggestions without executing anything.
+
+## Flow diagram
+
+```
+Surface → Intent → AI Help → No Authority
+```
 
 ## Extending the layer
 

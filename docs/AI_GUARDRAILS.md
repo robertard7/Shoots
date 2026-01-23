@@ -7,6 +7,7 @@ The AI help layer is descriptive and read-only. It surfaces reality and constrai
 - AI help never executes tools or triggers runtime actions.
 - Every request includes an explicit intent type and target scope.
 - Each help surface describes its own constraints so AI guidance stays bounded.
+- AI help only responds when a surface scope is registered.
 
 ## Intent types
 

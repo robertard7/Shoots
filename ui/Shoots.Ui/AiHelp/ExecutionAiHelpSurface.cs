@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Ui.Abstractions;
 
@@ -16,7 +17,16 @@ public sealed class ExecutionAiHelpSurface : IAiHelpSurface
         _startReason = startReason;
     }
 
+    public string SurfaceId => "execution";
+
     public string SurfaceKind => "Execution";
+
+    public IReadOnlyList<AiIntentDescriptor> SupportedIntents { get; } = new[]
+    {
+        new AiIntentDescriptor(AiIntentType.Explain, AiIntentScope.Execution),
+        new AiIntentDescriptor(AiIntentType.Predict, AiIntentScope.Execution),
+        new AiIntentDescriptor(AiIntentType.Risk, AiIntentScope.Execution)
+    };
 
     public string DescribeContext()
     {

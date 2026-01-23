@@ -17,7 +17,14 @@ public interface IAiHelpFacade
     Task<string> SuggestNextStepsAsync(AiHelpRequest request, CancellationToken ct = default);
 }
 
+public sealed record AiHelpScope(
+    string SurfaceId,
+    string? Summary,
+    IReadOnlyDictionary<string, string> Data = new Dictionary<string, string>()
+);
+
 public sealed record AiHelpRequest(
+    AiHelpScope Scope,
     AiIntentDescriptor Intent,
     AiWorkspaceSnapshot Workspace,
     BuildPlan? Plan,

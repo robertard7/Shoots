@@ -13,7 +13,15 @@ public sealed class BlueprintCatalogAiHelpSurface : IAiHelpSurface
         _blueprintNames = blueprintNames;
     }
 
+    public string SurfaceId => "blueprints";
+
     public string SurfaceKind => "Blueprint Catalog";
+
+    public IReadOnlyList<AiIntentDescriptor> SupportedIntents { get; } = new[]
+    {
+        new AiIntentDescriptor(AiIntentType.Explain, AiIntentScope.Blueprint),
+        new AiIntentDescriptor(AiIntentType.Suggest, AiIntentScope.Blueprint)
+    };
 
     public string DescribeContext()
         => _blueprintNames.Count == 0

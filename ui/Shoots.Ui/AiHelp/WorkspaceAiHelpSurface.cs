@@ -16,7 +16,15 @@ public sealed class WorkspaceAiHelpSurface : IAiHelpSurface
         _tier = tier;
     }
 
+    public string SurfaceId => "workspace";
+
     public string SurfaceKind => "Workspace";
+
+    public IReadOnlyList<AiIntentDescriptor> SupportedIntents { get; } = new[]
+    {
+        new AiIntentDescriptor(AiIntentType.Explain, AiIntentScope.UI),
+        new AiIntentDescriptor(AiIntentType.Suggest, AiIntentScope.UI)
+    };
 
     public string DescribeContext()
     {

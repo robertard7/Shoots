@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using Shoots.Contracts.Core;
+using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
 using Shoots.UI.AiHelp;
 using Shoots.UI.Blueprints;
@@ -33,8 +34,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly IAiHelpFacade _aiHelpFacade;
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private readonly ObservableCollection<BlueprintEntryViewModel> _blueprints;
+    private readonly ObservableCollection<ToolExecutionSessionViewModel> _toolExecutionSessions;
     private readonly ObservableCollection<ToolExecutionRecordViewModel> _toolExecutionRecords;
+    private readonly ObservableCollection<ToolExecutionRecordViewModel> _comparisonToolExecutionRecords;
     private readonly ObservableCollection<RootFsDescriptor> _rootFsCatalog;
+    private readonly ReadOnlyCollection<ProviderCapabilityMatrixRow> _providerCapabilityMatrix;
     private ExecutionState _state;
     private BuildPlan? _plan;
     private IEnvironmentProfile? _selectedProfile;
@@ -53,9 +57,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _newBlueprintDescription = string.Empty;
     private string _newBlueprintIntents = string.Empty;
     private string _newBlueprintArtifacts = string.Empty;
+    private string _newBlueprintVersion = "1.0";
+    private string _newBlueprintDefinition = string.Empty;
     private ExecutionEnvironmentSettings _executionSettings = new("none", Array.Empty<RootFsDescriptor>(), string.Empty);
     private ToolExecutionRecordViewModel? _selectedToolExecutionRecord;
     private ToolExecutionRecordViewModel? _comparisonToolExecutionRecord;
+    private ToolExecutionSessionViewModel? _selectedToolExecutionSession;
+    private ToolExecutionSessionViewModel? _comparisonToolExecutionSession;
+    private string _blueprintSaveStatus = "Blueprint changes are saved.";
 
     public MainWindowViewModel(
         IExecutionCommandService commandService,
@@ -95,6 +104,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ToggleSystemTierCommand = new AsyncRelayCommand(ToggleSystemTierAsync, CanToggleSystemTier);
         RefreshAiHelpCommand = new AsyncRelayCommand(RefreshAiHelpAsync, CanRefreshAiHelp);
         AddBlueprintCommand = new AsyncRelayCommand(AddBlueprintAsync, CanAddBlueprint);
+        SaveBlueprintCommand = new AsyncRelayCommand(SaveBlueprintAsync, CanSaveBlueprint);
+        RevertBlueprintCommand = new AsyncRelayCommand(RevertBlueprintAsync, CanRevertBlueprint);
+        ExplainBlueprintCommand = new AsyncRelayCommand(ExplainBlueprintAsync, CanExplainBlueprint);
+        ValidateBlueprintCommand = new AsyncRelayCommand(ValidateBlueprintAsync, CanExplainBlueprint);
+        SuggestBlueprintCommand = new AsyncRelayCommand(SuggestBlueprintAsync, CanExplainBlueprint);
+        ExplainExecutionCommand = new AsyncRelayCommand(ExplainExecutionAsync, CanRefreshAiHelp);
+        ReplayPlanCommand = new AsyncRelayCommand(ReplayPlanAsync, CanReplayPlan);
+        ExplainSelectedToolExecutionCommand = new AsyncRelayCommand(ExplainSelectedToolExecutionAsync, CanExplainToolExecution);
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
         EnvironmentCapabilities = Array.Empty<string>();
@@ -105,10 +122,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RecentWorkspaces = new ReadOnlyObservableCollection<ProjectWorkspace>(_recentWorkspaces);
         _blueprints = new ObservableCollection<BlueprintEntryViewModel>();
         Blueprints = new ReadOnlyObservableCollection<BlueprintEntryViewModel>(_blueprints);
+        _toolExecutionSessions = new ObservableCollection<ToolExecutionSessionViewModel>();
+        ToolExecutionSessions = new ReadOnlyObservableCollection<ToolExecutionSessionViewModel>(_toolExecutionSessions);
         _toolExecutionRecords = new ObservableCollection<ToolExecutionRecordViewModel>();
         ToolExecutionRecords = new ReadOnlyObservableCollection<ToolExecutionRecordViewModel>(_toolExecutionRecords);
+        _comparisonToolExecutionRecords = new ObservableCollection<ToolExecutionRecordViewModel>();
+        ComparisonToolExecutionRecords = new ReadOnlyObservableCollection<ToolExecutionRecordViewModel>(_comparisonToolExecutionRecords);
         _rootFsCatalog = new ObservableCollection<RootFsDescriptor>();
         RootFsCatalog = new ReadOnlyObservableCollection<RootFsDescriptor>(_rootFsCatalog);
+        _providerCapabilityMatrix = new ReadOnlyCollection<ProviderCapabilityMatrixRow>(new[]
+        {
+            ProviderCapabilityMatrixRow.FromKind(ProviderKind.Local),
+            ProviderCapabilityMatrixRow.FromKind(ProviderKind.Remote),
+            ProviderCapabilityMatrixRow.FromKind(ProviderKind.Delegated)
+        });
         RefreshRecentWorkspaces();
         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
         LoadExecutionEnvironments();
@@ -143,6 +170,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(IsReplayMode));
             OnPropertyChanged(nameof(ExecutionModeSummary));
             OnPropertyChanged(nameof(ExecutionDisabledReason));
+            OnPropertyChanged(nameof(ExecutionBlockerSummary));
             RaiseCommandCanExecute();
         }
     }
@@ -161,9 +189,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ? "Execution graph: no plan loaded."
         : $"Execution graph hash: {Plan.GraphStructureHash}. Nodes: {Plan.NodeSetHash}. Edges: {Plan.EdgeSetHash}.";
 
-    public IReadOnlyList<BuildStep> ExecutionPlanSteps => Plan?.Steps ?? Array.Empty<BuildStep>();
+    public IReadOnlyList<ExecutionStepSummaryViewModel> ExecutionPlanSteps =>
+        BuildExecutionStepSummaries(Plan);
+
+    public IReadOnlyList<ExecutionStepSummaryViewModel> ExecutionPreviewSteps => ExecutionPlanSteps;
 
     public string ExecutionDisabledReason => StartDisabledReason;
+
+    public string ExecutionBlockerSummary => BuildExecutionBlockerSummary();
+
+    public string ResolvedExecutionEnvironmentSummary => BuildExecutionEnvironmentSummary();
+
+    public string ExecutionPreviewSummary => Plan is null
+        ? "No execution preview is available."
+        : $"Preview ready for {Plan.Steps.Count} steps (graph {Plan.GraphStructureHash}).";
 
     public BuildPlan? Plan
     {
@@ -178,7 +217,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(ExecutionGraphSummary));
             OnPropertyChanged(nameof(ExecutionProviderSummary));
             OnPropertyChanged(nameof(ExecutionPlanSteps));
+            OnPropertyChanged(nameof(ExecutionPreviewSteps));
+            OnPropertyChanged(nameof(ExecutionPreviewSummary));
             OnPropertyChanged(nameof(ExecutionDisabledReason));
+            OnPropertyChanged(nameof(ExecutionBlockerSummary));
             RefreshToolExecutionRecords();
             RaiseCommandCanExecute();
         }
@@ -203,6 +245,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public AsyncRelayCommand RefreshAiHelpCommand { get; }
 
     public AsyncRelayCommand AddBlueprintCommand { get; }
+
+    public AsyncRelayCommand SaveBlueprintCommand { get; }
+
+    public AsyncRelayCommand RevertBlueprintCommand { get; }
+
+    public AsyncRelayCommand ExplainBlueprintCommand { get; }
+
+    public AsyncRelayCommand ValidateBlueprintCommand { get; }
+
+    public AsyncRelayCommand SuggestBlueprintCommand { get; }
+
+    public AsyncRelayCommand ExplainExecutionCommand { get; }
+
+    public AsyncRelayCommand ReplayPlanCommand { get; }
+
+    public AsyncRelayCommand ExplainSelectedToolExecutionCommand { get; }
 
     public IReadOnlyList<IEnvironmentProfile> Profiles { get; }
 
@@ -285,9 +343,44 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public bool HasBlueprints => _blueprints.Count > 0;
 
+    public ReadOnlyObservableCollection<ToolExecutionSessionViewModel> ToolExecutionSessions { get; }
+
     public ReadOnlyObservableCollection<ToolExecutionRecordViewModel> ToolExecutionRecords { get; }
 
     public bool HasToolExecutionRecords => _toolExecutionRecords.Count > 0;
+
+    public ReadOnlyObservableCollection<ToolExecutionRecordViewModel> ComparisonToolExecutionRecords { get; }
+
+    public ToolExecutionSessionViewModel? SelectedToolExecutionSession
+    {
+        get => _selectedToolExecutionSession;
+        set
+        {
+            if (ReferenceEquals(_selectedToolExecutionSession, value))
+                return;
+
+            _selectedToolExecutionSession = value;
+            RefreshToolExecutionRecordsForSession();
+            if (_comparisonToolExecutionSession is null && value is not null)
+                ComparisonToolExecutionSession = value;
+            OnPropertyChanged(nameof(SelectedToolExecutionSession));
+        }
+    }
+
+    public ToolExecutionSessionViewModel? ComparisonToolExecutionSession
+    {
+        get => _comparisonToolExecutionSession;
+        set
+        {
+            if (ReferenceEquals(_comparisonToolExecutionSession, value))
+                return;
+
+            _comparisonToolExecutionSession = value;
+            RefreshComparisonToolExecutionRecords();
+            OnPropertyChanged(nameof(ComparisonToolExecutionSession));
+            OnPropertyChanged(nameof(ToolExecutionDiffSummary));
+        }
+    }
 
     public ToolExecutionRecordViewModel? SelectedToolExecutionRecord
     {
@@ -304,6 +397,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(SelectedToolExecutionError));
             OnPropertyChanged(nameof(ToolExecutionDetailsTitle));
             OnPropertyChanged(nameof(ToolExecutionDiffSummary));
+            ExplainSelectedToolExecutionCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -324,7 +418,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string ToolExecutionDetailsTitle =>
         SelectedToolExecutionRecord is null
             ? "Tool execution details"
-            : $"Tool execution: {SelectedToolExecutionRecord.DisplayName}";
+            : $"Tool execution: {SelectedToolExecutionRecord.DisplayName} ({SelectedToolExecutionSession?.DisplayName ?? "no session"})";
 
     public string SelectedToolExecutionInputs => SelectedToolExecutionRecord?.InputsSummary ?? "Select a tool execution record.";
 
@@ -336,6 +430,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         BuildToolExecutionDiffSummary(SelectedToolExecutionRecord, ComparisonToolExecutionRecord);
 
     public ReadOnlyObservableCollection<RootFsDescriptor> RootFsCatalog { get; }
+
+    public ReadOnlyCollection<ProviderCapabilityMatrixRow> ProviderCapabilityMatrix => _providerCapabilityMatrix;
 
     public ReadOnlyCollection<RoleDescriptor> RoleOptions { get; }
 
@@ -354,6 +450,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(HasNoActiveWorkspace));
             OnPropertyChanged(nameof(SelectedWorkspace));
             OnPropertyChanged(nameof(WindowTitle));
+            OnPropertyChanged(nameof(ExecutionBlockerSummary));
             LoadEnvironmentScript();
             UpdateProfileCapabilities();
             UpdateDatabaseIntentSelection();
@@ -509,7 +606,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             _newBlueprintName = value;
             OnPropertyChanged(nameof(NewBlueprintName));
-            RaiseCommandCanExecute();
+            OnBlueprintDraftChanged();
         }
     }
 
@@ -523,6 +620,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             _newBlueprintDescription = value;
             OnPropertyChanged(nameof(NewBlueprintDescription));
+            OnBlueprintDraftChanged();
         }
     }
 
@@ -536,6 +634,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             _newBlueprintIntents = value;
             OnPropertyChanged(nameof(NewBlueprintIntents));
+            OnBlueprintDraftChanged();
         }
     }
 
@@ -549,6 +648,35 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             _newBlueprintArtifacts = value;
             OnPropertyChanged(nameof(NewBlueprintArtifacts));
+            OnBlueprintDraftChanged();
+        }
+    }
+
+    public string NewBlueprintVersion
+    {
+        get => _newBlueprintVersion;
+        set
+        {
+            if (_newBlueprintVersion == value)
+                return;
+
+            _newBlueprintVersion = value;
+            OnPropertyChanged(nameof(NewBlueprintVersion));
+            OnBlueprintDraftChanged();
+        }
+    }
+
+    public string NewBlueprintDefinition
+    {
+        get => _newBlueprintDefinition;
+        set
+        {
+            if (_newBlueprintDefinition == value)
+                return;
+
+            _newBlueprintDefinition = value;
+            OnPropertyChanged(nameof(NewBlueprintDefinition));
+            OnBlueprintDraftChanged();
         }
     }
 
@@ -591,6 +719,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ? "Blueprints are available for this workspace."
         : "Blueprints are available when System tier is enabled.";
 
+    public string BlueprintSaveStatus
+    {
+        get => _blueprintSaveStatus;
+        private set
+        {
+            if (_blueprintSaveStatus == value)
+                return;
+
+            _blueprintSaveStatus = value;
+            OnPropertyChanged(nameof(BlueprintSaveStatus));
+        }
+    }
+
     public void SetPlan(BuildPlan? plan)
     {
         Plan = plan;
@@ -631,12 +772,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return !string.Equals(_lastEnvironmentResult.ProfileName, _environmentScript.Name, StringComparison.Ordinal);
     }
 
-    private Task StartAsync()
+    private async Task StartAsync()
     {
         if (Plan is null)
-            return Task.CompletedTask;
+            return;
 
-        return _commandService.StartAsync(Plan);
+        var result = await _commandService.StartAsync(Plan).ConfigureAwait(true);
+        if (!result.Ok)
+            return;
+
+        RecordExecutionSession(result);
     }
 
     private Task CancelAsync() => _commandService.CancelAsync();
@@ -834,12 +979,26 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ToggleSystemTierCommand.RaiseCanExecuteChanged();
         RefreshAiHelpCommand.RaiseCanExecuteChanged();
         AddBlueprintCommand.RaiseCanExecuteChanged();
+        SaveBlueprintCommand.RaiseCanExecuteChanged();
+        RevertBlueprintCommand.RaiseCanExecuteChanged();
+        ExplainBlueprintCommand.RaiseCanExecuteChanged();
+        ValidateBlueprintCommand.RaiseCanExecuteChanged();
+        SuggestBlueprintCommand.RaiseCanExecuteChanged();
+        ExplainExecutionCommand.RaiseCanExecuteChanged();
+        ReplayPlanCommand.RaiseCanExecuteChanged();
+        ExplainSelectedToolExecutionCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(StartDisabledReason));
         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));
         OnPropertyChanged(nameof(ApplyScriptDisabledReason));
         OnPropertyChanged(nameof(AiHelpDisabledReason));
         OnPropertyChanged(nameof(SystemTierActionLabel));
         OnPropertyChanged(nameof(ExecutionDisabledReason));
+    }
+
+    private void OnBlueprintDraftChanged()
+    {
+        AddBlueprintCommand.RaiseCanExecuteChanged();
+        BlueprintSaveStatus = "Blueprint draft updated.";
     }
 
     private bool CanRemoveWorkspace()
@@ -874,7 +1033,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private bool CanRefreshAiHelp()
     {
-        return HasActiveWorkspace && Plan is not null;
+        return HasActiveWorkspace;
     }
 
     private bool CanToggleSystemTier()
@@ -902,7 +1061,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private bool CanAddBlueprint()
     {
-        return CanManageBlueprints && !string.IsNullOrWhiteSpace(NewBlueprintName);
+        return CanManageBlueprints
+            && !string.IsNullOrWhiteSpace(NewBlueprintName)
+            && !string.IsNullOrWhiteSpace(NewBlueprintVersion)
+            && !string.IsNullOrWhiteSpace(NewBlueprintDefinition)
+            && !string.IsNullOrWhiteSpace(NewBlueprintIntents)
+            && !string.IsNullOrWhiteSpace(NewBlueprintArtifacts);
     }
 
     private Task AddBlueprintAsync()
@@ -915,9 +1079,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             NewBlueprintDescription.Trim(),
             ParseBlueprintLines(NewBlueprintIntents),
             ParseBlueprintLines(NewBlueprintArtifacts),
+            NewBlueprintVersion.Trim(),
+            NewBlueprintDefinition.Trim(),
             DateTimeOffset.UtcNow);
 
-        var entry = new BlueprintEntryViewModel(blueprint, SaveBlueprints);
+        var entry = new BlueprintEntryViewModel(blueprint, RequestBlueprintSave);
         _blueprints.Add(entry);
         SaveBlueprints();
         OnPropertyChanged(nameof(HasBlueprints));
@@ -926,8 +1092,103 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         NewBlueprintDescription = string.Empty;
         NewBlueprintIntents = string.Empty;
         NewBlueprintArtifacts = string.Empty;
+        NewBlueprintVersion = "1.0";
+        NewBlueprintDefinition = string.Empty;
 
         return Task.CompletedTask;
+    }
+
+    private bool CanSaveBlueprint()
+    {
+        return CanManageBlueprints;
+    }
+
+    private Task SaveBlueprintAsync(object? parameter)
+    {
+        if (parameter is not BlueprintEntryViewModel entry)
+            return Task.CompletedTask;
+
+        if (!entry.TrySave())
+        {
+            BlueprintSaveStatus = "Blueprint changes are not saved because validation failed.";
+            return Task.CompletedTask;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private bool CanRevertBlueprint()
+    {
+        return CanManageBlueprints;
+    }
+
+    private Task RevertBlueprintAsync(object? parameter)
+    {
+        if (parameter is not BlueprintEntryViewModel entry)
+            return Task.CompletedTask;
+
+        entry.RevertToLastSaved();
+        BlueprintSaveStatus = "Blueprint changes were reverted.";
+        return Task.CompletedTask;
+    }
+
+    private bool CanExplainBlueprint()
+    {
+        return CanManageBlueprints;
+    }
+
+    private Task ExplainBlueprintAsync(object? parameter)
+        => ExplainBlueprintWithIntentAsync(parameter, AiIntentType.Explain);
+
+    private Task ValidateBlueprintAsync(object? parameter)
+        => ExplainBlueprintWithIntentAsync(parameter, AiIntentType.Validate);
+
+    private Task SuggestBlueprintAsync(object? parameter)
+        => ExplainBlueprintWithIntentAsync(parameter, AiIntentType.Suggest);
+
+    private Task ExplainExecutionAsync()
+        => ExplainSurfaceAsync(
+            new AiHelpScope("execution", "Execution overview", BuildExecutionScopeData()),
+            new AiIntentDescriptor(AiIntentType.Explain, AiIntentScope.Execution));
+
+    private bool CanReplayPlan()
+        => Plan is not null;
+
+    private Task ReplayPlanAsync()
+    {
+        if (Plan is null)
+            return Task.CompletedTask;
+
+        var records = BuildToolExecutionRecords(Plan, Plan.ToolResult);
+        var session = ToolExecutionSessionViewModel.CreateReplay(Plan, records);
+        _toolExecutionSessions.Insert(0, session);
+        SelectedToolExecutionSession = session;
+        ComparisonToolExecutionSession ??= session;
+        State = ExecutionState.Replaying;
+        return Task.CompletedTask;
+    }
+
+    private bool CanExplainToolExecution()
+        => SelectedToolExecutionRecord is not null;
+
+    private Task ExplainSelectedToolExecutionAsync()
+    {
+        if (SelectedToolExecutionRecord is null)
+            return Task.CompletedTask;
+
+        var scopeData = new Dictionary<string, string>
+        {
+            ["tool"] = SelectedToolExecutionRecord.ToolId,
+            ["record"] = SelectedToolExecutionRecord.RecordId,
+            ["owner"] = SelectedToolExecutionRecord.Owner.ToString()
+        };
+
+        return ExplainSurfaceAsync(
+            new AiHelpScope(
+                SelectedToolExecutionRecord.SurfaceId,
+                "Tool execution record",
+                scopeData),
+            new AiIntentDescriptor(AiIntentType.Explain, AiIntentScope.ToolExecution));
     }
 
     private async Task RefreshAiHelpAsync()
@@ -936,16 +1197,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             AiHelpContextSummary = "AI Help is descriptive only.";
             AiHelpStateExplanation = "No runtime context is available.";
-            AiHelpNextSteps = "Select a workspace and load a plan to view help.";
+            AiHelpNextSteps = "Select a workspace to view help.";
             OnPropertyChanged(nameof(AiHelpContextSummary));
             OnPropertyChanged(nameof(AiHelpStateExplanation));
             OnPropertyChanged(nameof(AiHelpNextSteps));
             return;
         }
 
-        var contextRequest = BuildAiHelpRequest(new AiIntentDescriptor(AiIntentType.Explain, AiIntentScope.UI));
-        var stateRequest = BuildAiHelpRequest(new AiIntentDescriptor(AiIntentType.Diagnose, AiIntentScope.Execution));
-        var nextStepsRequest = BuildAiHelpRequest(new AiIntentDescriptor(AiIntentType.Suggest, AiIntentScope.UI));
+        var contextRequest = BuildAiHelpRequest(
+            new AiHelpScope("workspace", "Workspace overview", BuildWorkspaceScopeData()),
+            new AiIntentDescriptor(AiIntentType.Explain, AiIntentScope.UI));
+        var stateRequest = BuildAiHelpRequest(
+            new AiHelpScope("execution", "Execution state", BuildExecutionScopeData()),
+            new AiIntentDescriptor(AiIntentType.Diagnose, AiIntentScope.Execution));
+        var nextStepsRequest = BuildAiHelpRequest(
+            new AiHelpScope("workspace", "Workspace next steps", BuildWorkspaceScopeData()),
+            new AiIntentDescriptor(AiIntentType.Suggest, AiIntentScope.UI));
         try
         {
             AiHelpContextSummary = await _aiHelpFacade.GetContextSummaryAsync(contextRequest).ConfigureAwait(true);
@@ -981,7 +1248,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasWorkspaces));
     }
 
-    private AiHelpRequest BuildAiHelpRequest(AiIntentDescriptor intent)
+    private AiHelpRequest BuildAiHelpRequest(AiHelpScope scope, AiIntentDescriptor intent)
     {
         var workspace = ActiveWorkspace;
         var allowedCapabilities = workspace?.AllowedCapabilities
@@ -994,6 +1261,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             allowedCapabilities);
 
         return new AiHelpRequest(
+            scope,
             intent,
             snapshot,
             Plan,
@@ -1012,13 +1280,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             new WorkspaceAiHelpSurface(ActiveWorkspace, ActiveToolpackTier),
             new ExecutionAiHelpSurface(Plan, State, StartDisabledReason),
             new ExecutionEnvironmentAiHelpSurface(ActiveRootFs, RootFsSourceOverride, RootFsFallbackNotice),
-            new BlueprintCatalogAiHelpSurface(_blueprints.Select(entry => entry.Name).ToList())
+            new BlueprintCatalogAiHelpSurface(_blueprints.Select(entry => entry.Name).ToList()),
+            new PlannerAiHelpSurface(Plan)
         };
 
         foreach (var blueprint in _blueprints)
             surfaces.Add(blueprint.ToBlueprint());
 
         foreach (var record in _toolExecutionRecords)
+            surfaces.Add(record);
+
+        foreach (var record in _comparisonToolExecutionRecords)
             surfaces.Add(record);
 
         return surfaces;
@@ -1032,9 +1304,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
 
         foreach (var blueprint in _blueprintStore.LoadForWorkspace(_activeWorkspace.RootPath))
-            _blueprints.Add(new BlueprintEntryViewModel(blueprint, SaveBlueprints));
+            _blueprints.Add(new BlueprintEntryViewModel(blueprint, RequestBlueprintSave));
 
         OnPropertyChanged(nameof(HasBlueprints));
+        BlueprintSaveStatus = "Blueprint changes are saved.";
     }
 
     private void SaveBlueprints()
@@ -1043,34 +1316,73 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
 
         if (_blueprints.Any(entry => !entry.IsValid))
+        {
+            BlueprintSaveStatus = "Blueprint changes are not saved because some entries are invalid.";
             return;
+        }
 
         _blueprintStore.SaveForWorkspace(_activeWorkspace.RootPath, _blueprints.Select(entry => entry.ToBlueprint()));
+        BlueprintSaveStatus = "Blueprint changes are saved.";
+    }
+
+    private void RequestBlueprintSave(BlueprintEntryViewModel entry)
+    {
+        _ = entry;
+        SaveBlueprints();
     }
 
     private void RefreshToolExecutionRecords()
     {
-        _toolExecutionRecords.Clear();
-
         if (Plan is null)
         {
-            SelectedToolExecutionRecord = null;
-            ComparisonToolExecutionRecord = null;
-            OnPropertyChanged(nameof(HasToolExecutionRecords));
+            _toolExecutionSessions.Clear();
+            SelectedToolExecutionSession = null;
+            ComparisonToolExecutionSession = null;
+            RefreshToolExecutionRecordsForSession();
             return;
         }
 
-        var toolSteps = Plan.Steps.OfType<ToolBuildStep>().ToList();
-        foreach (var step in toolSteps)
-            _toolExecutionRecords.Add(ToolExecutionRecordViewModel.FromPlanStep(step, Plan.ToolResult));
+        for (var i = _toolExecutionSessions.Count - 1; i >= 0; i--)
+        {
+            var session = _toolExecutionSessions[i];
+            if (session.IsPreview && string.Equals(session.PlanId, Plan.PlanId, StringComparison.Ordinal))
+                _toolExecutionSessions.RemoveAt(i);
+        }
+
+        var previewRecords = BuildToolExecutionRecords(Plan, Plan.ToolResult);
+        var previewSession = ToolExecutionSessionViewModel.CreatePreview(Plan, previewRecords);
+        _toolExecutionSessions.Insert(0, previewSession);
+        SelectedToolExecutionSession = previewSession;
+        ComparisonToolExecutionSession ??= previewSession;
+    }
+
+    private void RefreshToolExecutionRecordsForSession()
+    {
+        _toolExecutionRecords.Clear();
+
+        if (SelectedToolExecutionSession is not null)
+        {
+            foreach (var record in SelectedToolExecutionSession.Records)
+                _toolExecutionRecords.Add(record);
+        }
 
         SelectedToolExecutionRecord = _toolExecutionRecords.FirstOrDefault();
-        if (_toolExecutionRecords.Count > 1)
-            ComparisonToolExecutionRecord = _toolExecutionRecords.Skip(1).FirstOrDefault();
-        else
-            ComparisonToolExecutionRecord = null;
-
         OnPropertyChanged(nameof(HasToolExecutionRecords));
+        OnPropertyChanged(nameof(ToolExecutionDiffSummary));
+    }
+
+    private void RefreshComparisonToolExecutionRecords()
+    {
+        _comparisonToolExecutionRecords.Clear();
+
+        if (ComparisonToolExecutionSession is not null)
+        {
+            foreach (var record in ComparisonToolExecutionSession.Records)
+                _comparisonToolExecutionRecords.Add(record);
+        }
+
+        ComparisonToolExecutionRecord = _comparisonToolExecutionRecords.FirstOrDefault();
+        OnPropertyChanged(nameof(ToolExecutionDiffSummary));
     }
 
     private void LoadExecutionEnvironments()
@@ -1092,6 +1404,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(RootFsSourceOverride));
         OnPropertyChanged(nameof(ActiveRootFsLicense));
         OnPropertyChanged(nameof(ActiveRootFsNotes));
+        OnPropertyChanged(nameof(ResolvedExecutionEnvironmentSummary));
         OnPropertyChanged(nameof(HasRootFsCatalog));
         OnPropertyChanged(nameof(RootFsNotice));
         OnPropertyChanged(nameof(RootFsFallbackNotice));
@@ -1246,6 +1559,247 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return string.Join(" ", new[] { inputDiff, outputDiff, statusDiff }.Where(text => !string.IsNullOrWhiteSpace(text)));
     }
 
+    private static IReadOnlyList<ExecutionStepSummaryViewModel> BuildExecutionStepSummaries(BuildPlan? plan)
+    {
+        if (plan is null)
+            return Array.Empty<ExecutionStepSummaryViewModel>();
+
+        return plan.Steps
+            .Select(step => ExecutionStepSummaryViewModel.FromStep(step))
+            .ToList();
+    }
+
+    private string BuildExecutionBlockerSummary()
+    {
+        if (Plan is null)
+            return "No execution plan is loaded.";
+
+        var notes = new List<string>
+        {
+            $"Provider: {Plan.Authority.ProviderId.Value} ({Plan.Authority.Kind})."
+        };
+
+        if (State is ExecutionState.Running or ExecutionState.Waiting or ExecutionState.Replaying)
+            notes.Add("Execution is already in progress.");
+
+        if (!HasActiveWorkspace)
+            notes.Add("Workspace is not selected.");
+
+        if (!Plan.Authority.AllowsDelegation)
+            notes.Add("Policy: delegation is not allowed for this plan.");
+
+        if (notes.Count == 1)
+            notes.Add("No execution blockers are detected.");
+
+        return string.Join(" ", notes);
+    }
+
+    private string BuildExecutionEnvironmentSummary()
+    {
+        if (ActiveRootFs is null)
+            return "Resolved environment: none selected.";
+
+        var source = ResolvedRootFsSource ?? "no source";
+        return $"Resolved environment: {ActiveRootFs.DisplayName} ({ActiveRootFs.SourceType}, {source}).";
+    }
+
+    private Dictionary<string, string> BuildWorkspaceScopeData()
+    {
+        var data = new Dictionary<string, string>
+        {
+            ["tier"] = ActiveToolpackTier.ToString()
+        };
+
+        if (ActiveWorkspace is not null)
+        {
+            data["workspace"] = ActiveWorkspace.Name;
+            data["path"] = ActiveWorkspace.RootPath;
+        }
+
+        return data;
+    }
+
+    private Dictionary<string, string> BuildExecutionScopeData()
+    {
+        var data = new Dictionary<string, string>
+        {
+            ["state"] = StateLabel
+        };
+
+        if (Plan is not null)
+        {
+            data["plan"] = Plan.PlanId;
+            data["provider"] = Plan.Authority.ProviderId.Value;
+        }
+
+        return data;
+    }
+
+    private Task ExplainBlueprintWithIntentAsync(object? parameter, AiIntentType intentType)
+    {
+        if (parameter is not BlueprintEntryViewModel entry)
+            return Task.CompletedTask;
+
+        var scopeData = new Dictionary<string, string>
+        {
+            ["name"] = entry.Name,
+            ["version"] = entry.Version
+        };
+
+        return ExplainSurfaceAsync(
+            new AiHelpScope(entry.ToBlueprint().SurfaceId, "Blueprint entry", scopeData),
+            new AiIntentDescriptor(intentType, AiIntentScope.Blueprint, entry.Name));
+    }
+
+    private async Task ExplainSurfaceAsync(AiHelpScope scope, AiIntentDescriptor intent)
+    {
+        if (!CanRefreshAiHelp())
+        {
+            AiHelpContextSummary = "AI Help is descriptive only.";
+            AiHelpStateExplanation = "No runtime context is available.";
+            AiHelpNextSteps = "Select a workspace to view help.";
+            OnPropertyChanged(nameof(AiHelpContextSummary));
+            OnPropertyChanged(nameof(AiHelpStateExplanation));
+            OnPropertyChanged(nameof(AiHelpNextSteps));
+            return;
+        }
+
+        var request = BuildAiHelpRequest(scope, intent);
+        try
+        {
+            AiHelpContextSummary = await _aiHelpFacade.GetContextSummaryAsync(request).ConfigureAwait(true);
+            AiHelpStateExplanation = await _aiHelpFacade.ExplainStateAsync(request).ConfigureAwait(true);
+            AiHelpNextSteps = await _aiHelpFacade.SuggestNextStepsAsync(request).ConfigureAwait(true);
+        }
+        catch (Exception)
+        {
+            AiHelpContextSummary = "AI Help is offline.";
+            AiHelpStateExplanation = "No runtime context is available.";
+            AiHelpNextSteps = "AI Help is descriptive only.";
+        }
+
+        OnPropertyChanged(nameof(AiHelpContextSummary));
+        OnPropertyChanged(nameof(AiHelpStateExplanation));
+        OnPropertyChanged(nameof(AiHelpNextSteps));
+    }
+
+    private void RecordExecutionSession(RuntimeResult result)
+    {
+        if (Plan is null)
+            return;
+
+        if (result.Output is ExecutionEnvelopeDto envelope)
+        {
+            var records = BuildToolExecutionRecords(Plan, envelope.ToolResults);
+            var session = ToolExecutionSessionViewModel.CreateRun(Plan, DateTimeOffset.UtcNow, records);
+            _toolExecutionSessions.Insert(0, session);
+            SelectedToolExecutionSession = session;
+            ComparisonToolExecutionSession ??= session;
+            return;
+        }
+
+        if (result.Output is ExecutionEnvelope liveEnvelope)
+        {
+            var records = BuildToolExecutionRecords(liveEnvelope.Plan, liveEnvelope.ToolResults);
+            var session = ToolExecutionSessionViewModel.CreateRun(liveEnvelope.Plan, DateTimeOffset.UtcNow, records);
+            _toolExecutionSessions.Insert(0, session);
+            SelectedToolExecutionSession = session;
+            ComparisonToolExecutionSession ??= session;
+            return;
+        }
+
+        var fallbackRecords = BuildToolExecutionRecords(Plan, Plan.ToolResult);
+        var fallbackSession = ToolExecutionSessionViewModel.CreateRun(Plan, DateTimeOffset.UtcNow, fallbackRecords);
+        _toolExecutionSessions.Insert(0, fallbackSession);
+        SelectedToolExecutionSession = fallbackSession;
+        ComparisonToolExecutionSession ??= fallbackSession;
+    }
+
+    private IReadOnlyList<ToolExecutionRecordViewModel> BuildToolExecutionRecords(
+        BuildPlan plan,
+        ToolResult? toolResult)
+    {
+        var toolSteps = plan.Steps.OfType<ToolBuildStep>().ToList();
+        return toolSteps
+            .Select(step =>
+            {
+                var owner = FindDecisionOwner(plan, step.ToolId);
+                return ToolExecutionRecordViewModel.FromPlanStep(step, toolResult, owner);
+            })
+            .ToList();
+    }
+
+    private IReadOnlyList<ToolExecutionRecordViewModel> BuildToolExecutionRecords(
+        BuildPlan plan,
+        IReadOnlyList<ToolResult> results)
+    {
+        var toolSteps = plan.Steps.OfType<ToolBuildStep>().ToList();
+        var resultMap = results
+            .GroupBy(result => result.ToolId.Value, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        return toolSteps
+            .Select(step =>
+            {
+                resultMap.TryGetValue(step.ToolId.Value, out var result);
+                var owner = FindDecisionOwner(plan, step.ToolId);
+                var outputs = result?.Outputs ?? new Dictionary<string, object?>();
+                var success = result?.Success;
+                var error = success == false ? "Recorded output indicates a failure." : null;
+
+                return new ToolExecutionRecordViewModel(
+                    step.Id,
+                    step.ToolId.Value,
+                    step.InputBindings,
+                    outputs,
+                    success,
+                    error,
+                    owner,
+                    DateTimeOffset.UtcNow);
+            })
+            .ToList();
+    }
+
+    private IReadOnlyList<ToolExecutionRecordViewModel> BuildToolExecutionRecords(
+        BuildPlan plan,
+        IReadOnlyList<ToolResultDto> results)
+    {
+        var toolSteps = plan.Steps.OfType<ToolBuildStep>().ToList();
+        var resultMap = results
+            .GroupBy(result => result.ToolId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        return toolSteps
+            .Select(step =>
+            {
+                resultMap.TryGetValue(step.ToolId.Value, out var result);
+                var owner = FindDecisionOwner(plan, step.ToolId);
+                var outputs = result?.Outputs ?? new Dictionary<string, object?>();
+                var success = result?.Success;
+                var error = success == false ? "Recorded output indicates a failure." : null;
+
+                return new ToolExecutionRecordViewModel(
+                    step.Id,
+                    step.ToolId.Value,
+                    step.InputBindings,
+                    outputs,
+                    success,
+                    error,
+                    owner,
+                    DateTimeOffset.UtcNow);
+            })
+            .ToList();
+    }
+
+    private static DecisionOwner FindDecisionOwner(BuildPlan plan, ToolId toolId)
+    {
+        var routeStep = plan.Steps
+            .OfType<RouteStep>()
+            .FirstOrDefault(step => step.ToolInvocation?.ToolId == toolId);
+
+        return routeStep?.Owner ?? DecisionOwner.Runtime;
+    }
+
     private string? DescribeUnsupportedCapabilities(EnvironmentCapability declared)
     {
         var supported = EnvironmentCapability.SourceControl | EnvironmentCapability.Database | EnvironmentCapability.ArtifactExport;
@@ -1301,9 +1855,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (ActiveWorkspace is null)
             return "Select a workspace to view AI Help.";
-
-        if (Plan is null)
-            return "Load a plan to view AI Help.";
 
         return "Refresh AI Help.";
     }

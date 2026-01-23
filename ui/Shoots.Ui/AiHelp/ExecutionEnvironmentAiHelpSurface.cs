@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Shoots.Runtime.Ui.Abstractions;
 using Shoots.UI.ExecutionEnvironments;
 
@@ -19,7 +20,16 @@ public sealed class ExecutionEnvironmentAiHelpSurface : IAiHelpSurface
         _fallbackNotice = fallbackNotice;
     }
 
+    public string SurfaceId => "execution-environment";
+
     public string SurfaceKind => "Execution Environment";
+
+    public IReadOnlyList<AiIntentDescriptor> SupportedIntents { get; } = new[]
+    {
+        new AiIntentDescriptor(AiIntentType.Explain, AiIntentScope.Execution),
+        new AiIntentDescriptor(AiIntentType.Diagnose, AiIntentScope.Execution),
+        new AiIntentDescriptor(AiIntentType.Suggest, AiIntentScope.Execution)
+    };
 
     public string DescribeContext()
     {
