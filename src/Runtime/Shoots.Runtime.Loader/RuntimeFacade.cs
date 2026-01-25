@@ -36,7 +36,8 @@ public sealed class RuntimeFacade : IRuntimeFacade
     public Task<IRuntimeStatusSnapshot> QueryStatus(CancellationToken ct = default)
     {
         _ = ct;
-        return Task.FromResult<IRuntimeStatusSnapshot>(new RuntimeStatusSnapshot(_host.Version));
+        return Task.FromResult<IRuntimeStatusSnapshot>(
+            new RuntimeStatusSnapshot(_host.Version, ComputePolicyHash(_policy)));
     }
 
     public async IAsyncEnumerable<RoutingTraceEntry> SubscribeTrace(CancellationToken ct = default)
@@ -51,12 +52,18 @@ public sealed class RuntimeFacade : IRuntimeFacade
         return Task.CompletedTask;
     }
 
-    private sealed record RuntimeStatusSnapshot(RuntimeVersion Version) : IRuntimeStatusSnapshot;
+    private sealed record RuntimeStatusSnapshot(RuntimeVersion Version, string PolicyHash) : IRuntimeStatusSnapshot;
 
     private static void EnforceEmbeddedProvider()
     {
         var registry = ProviderRegistryFactory.CreateDefault();
         Trace.WriteLine($"[Shoots.Runtime.Loader] Provider order: {string.Join(", ", registry.RegistrationOrder)}");
         registry.EnsureEmbeddedProviderPrimary();
+    }
+
+    private static string ComputePolicyHash(AiPresentationPolicy policy)
+    {
+        var value = $"{policy.Visibility}|{policy.AllowAiPanelToggle}|{policy.AllowCopyExport}|{policy.EnterpriseMode}";
+        return HashTools.ComputeSha256Hash(value);
     }
 }

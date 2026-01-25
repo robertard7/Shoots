@@ -1,0 +1,88 @@
+diff --git a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+index 9a109c8..8c8bc97 100644
+--- a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
++++ b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+@@ -36,7 +36,8 @@ public sealed class RuntimeFacade : IRuntimeFacade
+     public Task<IRuntimeStatusSnapshot> QueryStatus(CancellationToken ct = default)
+     {
+         _ = ct;
+-        return Task.FromResult<IRuntimeStatusSnapshot>(new RuntimeStatusSnapshot(_host.Version));
++        return Task.FromResult<IRuntimeStatusSnapshot>(
++            new RuntimeStatusSnapshot(_host.Version, ComputePolicyHash(_policy)));
+     }
+ 
+     public async IAsyncEnumerable<RoutingTraceEntry> SubscribeTrace(CancellationToken ct = default)
+@@ -51,7 +52,7 @@ public sealed class RuntimeFacade : IRuntimeFacade
+         return Task.CompletedTask;
+     }
+ 
+-    private sealed record RuntimeStatusSnapshot(RuntimeVersion Version) : IRuntimeStatusSnapshot;
++    private sealed record RuntimeStatusSnapshot(RuntimeVersion Version, string PolicyHash) : IRuntimeStatusSnapshot;
+ 
+     private static void EnforceEmbeddedProvider()
+     {
+@@ -59,4 +60,10 @@ public sealed class RuntimeFacade : IRuntimeFacade
+         Trace.WriteLine($"[Shoots.Runtime.Loader] Provider order: {string.Join(", ", registry.RegistrationOrder)}");
+         registry.EnsureEmbeddedProviderPrimary();
+     }
++
++    private static string ComputePolicyHash(AiPresentationPolicy policy)
++    {
++        var value = $"{policy.Visibility}|{policy.AllowAiPanelToggle}|{policy.AllowCopyExport}|{policy.EnterpriseMode}";
++        return HashTools.ComputeSha256Hash(value);
++    }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RuntimeFacadeBoundaryTests.cs b/src/Runtime/Shoots.Runtime.Tests/RuntimeFacadeBoundaryTests.cs
+index f2ac25c..36bee47 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RuntimeFacadeBoundaryTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RuntimeFacadeBoundaryTests.cs
+@@ -1,6 +1,7 @@
+ using System.Threading;
+ using System.Threading.Tasks;
+ using Shoots.Contracts.Core.AI;
++using Shoots.Contracts.Core;
+ using Shoots.Runtime.Abstractions;
+ using Shoots.Runtime.Loader;
+ using Xunit;
+@@ -17,6 +18,7 @@ public sealed class RuntimeFacadeBoundaryTests
+         var status = await facade.QueryStatus();
+ 
+         Assert.Equal(new RuntimeVersion(0, 0, 0), status.Version);
++        Assert.Equal(ComputePolicyHash(AiVisibilityMode.Visible, true, true, false), status.PolicyHash);
+     }
+ 
+     [Fact]
+@@ -29,6 +31,7 @@ public sealed class RuntimeFacadeBoundaryTests
+         var status = await facade.QueryStatus();
+ 
+         Assert.Equal(new RuntimeVersion(0, 0, 0), status.Version);
++        Assert.Equal(ComputePolicyHash(AiVisibilityMode.HiddenForEndUsers, false, false, true), status.PolicyHash);
+     }
+ 
+     private sealed class StubRuntimeHost : IRuntimeHost
+@@ -55,4 +58,14 @@ public sealed class RuntimeFacadeBoundaryTests
+                 EnterpriseMode: true);
+         }
+     }
++
++    private static string ComputePolicyHash(
++        AiVisibilityMode visibility,
++        bool allowPanelToggle,
++        bool allowCopyExport,
++        bool enterpriseMode)
++    {
++        var value = $"{visibility}|{allowPanelToggle}|{allowCopyExport}|{enterpriseMode}";
++        return HashTools.ComputeSha256Hash(value);
++    }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Ui.Abstractions/IRuntimeFacade.cs b/src/Runtime/Shoots.Runtime.Ui.Abstractions/IRuntimeFacade.cs
+index 3a23f05..4b72fd4 100644
+--- a/src/Runtime/Shoots.Runtime.Ui.Abstractions/IRuntimeFacade.cs
++++ b/src/Runtime/Shoots.Runtime.Ui.Abstractions/IRuntimeFacade.cs
+@@ -17,4 +17,6 @@ public interface IRuntimeFacade
+ public interface IRuntimeStatusSnapshot
+ {
+     RuntimeVersion Version { get; }
++
++    string PolicyHash { get; }
+ }

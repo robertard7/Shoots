@@ -17,4 +17,6 @@ public interface IRuntimeFacade
 public interface IRuntimeStatusSnapshot
 {
     RuntimeVersion Version { get; }
+
+    string PolicyHash { get; }
 }
