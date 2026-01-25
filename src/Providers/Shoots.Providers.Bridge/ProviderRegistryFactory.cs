@@ -11,7 +11,7 @@ public static class ProviderRegistryFactory
     public static ProviderRegistry CreateDefault(OllamaProviderSettings? ollamaSettings = null)
     {
         var registry = new ProviderRegistry();
-        registry.Register("embedded.local", new EmbeddedAiProviderAdapter());
+        registry.Register(ProviderRegistry.EmbeddedProviderId, new EmbeddedAiProviderAdapter());
         registry.Register("fake.local", new FakeAiProviderAdapter());
         registry.Register("null.local", NullAiProviderAdapter.Instance);
         if (ollamaSettings is not null)

@@ -10,6 +10,6 @@ public sealed class ProviderPresenceTripwireTests
     {
         var registry = ProviderRegistryFactory.CreateDefault();
 
-        Assert.Contains("embedded.local", registry.Providers.Keys);
+        Assert.Contains(ProviderRegistry.EmbeddedProviderId, registry.Providers.Keys);
     }
 }

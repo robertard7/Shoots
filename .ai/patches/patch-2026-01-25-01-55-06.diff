@@ -1,0 +1,91 @@
+diff --git a/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs b/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
+index a035749..c263245 100644
+--- a/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
++++ b/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
+@@ -5,6 +5,8 @@ namespace Shoots.Providers.Abstractions;
+ 
+ public sealed class ProviderRegistry
+ {
++    public const string EmbeddedProviderId = "embedded.local";
++
+     private readonly Dictionary<string, IAiProviderAdapter> _providers = new(StringComparer.OrdinalIgnoreCase);
+ 
+     public IReadOnlyDictionary<string, IAiProviderAdapter> Providers => _providers;
+@@ -16,6 +18,12 @@ public sealed class ProviderRegistry
+         if (adapter is null)
+             throw new ArgumentNullException(nameof(adapter));
+ 
++        if (string.Equals(providerId, EmbeddedProviderId, StringComparison.OrdinalIgnoreCase)
++            && _providers.ContainsKey(EmbeddedProviderId))
++        {
++            throw new InvalidOperationException("Embedded provider cannot be overridden.");
++        }
++
+         _providers[providerId] = adapter;
+     }
+ 
+diff --git a/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs b/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
+index 52b4cdf..7d69766 100644
+--- a/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
++++ b/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
+@@ -11,7 +11,7 @@ public static class ProviderRegistryFactory
+     public static ProviderRegistry CreateDefault(OllamaProviderSettings? ollamaSettings = null)
+     {
+         var registry = new ProviderRegistry();
+-        registry.Register("embedded.local", new EmbeddedAiProviderAdapter());
++        registry.Register(ProviderRegistry.EmbeddedProviderId, new EmbeddedAiProviderAdapter());
+         registry.Register("fake.local", new FakeAiProviderAdapter());
+         registry.Register("null.local", NullAiProviderAdapter.Instance);
+         if (ollamaSettings is not null)
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
+index b2c3ab4..bf423c4 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
+@@ -10,6 +10,6 @@ public sealed class ProviderPresenceTripwireTests
+     {
+         var registry = ProviderRegistryFactory.CreateDefault();
+ 
+-        Assert.Contains("embedded.local", registry.Providers.Keys);
++        Assert.Contains(ProviderRegistry.EmbeddedProviderId, registry.Providers.Keys);
+     }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
+new file mode 100644
+index 0000000..debff29
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
+@@ -0,0 +1,34 @@
++using System;
++using Shoots.Contracts.Core;
++using Shoots.Providers.Abstractions;
++using Xunit;
++
++namespace Shoots.Runtime.Tests;
++
++public sealed class ProviderRegistryGuardTests
++{
++    [Fact]
++    public void Embedded_provider_cannot_be_overridden()
++    {
++        var registry = new ProviderRegistry();
++        registry.Register(ProviderRegistry.EmbeddedProviderId, new StubAdapter());
++
++        var exception = Assert.Throws<InvalidOperationException>(() =>
++            registry.Register(ProviderRegistry.EmbeddedProviderId, new StubAdapter()));
++
++        Assert.Contains("Embedded provider cannot be overridden", exception.Message);
++    }
++
++    private sealed class StubAdapter : IAiProviderAdapter
++    {
++        public ToolSelectionDecision? RequestDecision(
++            WorkOrder workOrder,
++            RouteStep routeStep,
++            string graphHash,
++            string catalogHash,
++            ToolCatalogSnapshot catalog)
++        {
++            return null;
++        }
++    }
++}
