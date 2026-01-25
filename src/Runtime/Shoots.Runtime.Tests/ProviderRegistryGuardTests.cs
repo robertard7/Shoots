@@ -55,6 +55,18 @@ public sealed class ProviderRegistryGuardTests
         Assert.Contains("Embedded provider is required", exception.Message);
     }
 
+    [Fact]
+    public void Registry_rejects_duplicate_provider_ids()
+    {
+        var registry = new ProviderRegistry();
+        registry.Register("fake.local", new StubAdapter());
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            registry.Register("fake.local", new StubAdapter()));
+
+        Assert.Contains("Provider already registered", exception.Message);
+    }
+
     private sealed class StubAdapter : IAiProviderAdapter
     {
         public ToolSelectionDecision? RequestDecision(

@@ -26,6 +26,9 @@ public sealed class ProviderRegistry
             throw new InvalidOperationException("Embedded provider cannot be overridden.");
         }
 
+        if (_providers.ContainsKey(providerId))
+            throw new InvalidOperationException($"Provider already registered: {providerId}");
+
         if (!_providers.ContainsKey(providerId))
             _registrationOrder.Add(providerId);
 
