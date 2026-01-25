@@ -50,6 +50,7 @@ public partial class App : Application
 
         MainWindow = new MainWindow();
         MainWindow.Show();
+        AiSurfaceRegistry.Current.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
 
         var surfaceRegistry = AiSurfaceRegistry.Current;
         Log($"AI surface registry: {surfaceRegistry.DescribeRegistrations()}");
