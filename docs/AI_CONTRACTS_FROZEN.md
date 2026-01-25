@@ -8,3 +8,5 @@ The following AI policy contracts are frozen:
 - AiPresentationPolicy
 
 Changes to these types require explicit versioning and updated tripwire tests.
+
+Tripwire tests enforce the contract shape; CI fails when frozen contracts change without versioning.
