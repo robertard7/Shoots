@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -54,6 +55,11 @@ public partial class App : Application
         Log($"AI surface registry: {surfaceRegistry.DescribeRegistrations()}");
 
 #if DEBUG
+        var missingRequired = surfaceRegistry.GetMissingSurfaceIds(UiSurfaceCatalog.RequiredSurfaceIds);
+        var missingOptional = surfaceRegistry.GetMissingSurfaceIds(UiSurfaceCatalog.OptionalSurfaceIds);
+        var missingOptionalPrefixes = surfaceRegistry.GetMissingSurfacePrefixes(UiSurfaceCatalog.OptionalSurfaceIdPrefixes);
+        Log($"AI surfaces missing (required): {FormatSurfaceList(missingRequired)}; missing (optional): {FormatSurfaceList(missingOptional)}; missing (optional prefixes): {FormatSurfaceList(missingOptionalPrefixes)}");
+
         surfaceRegistry.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
 #endif
 
@@ -150,6 +156,9 @@ public partial class App : Application
 
     private static void Log(string message) =>
         Trace.WriteLine($"[Shoots.UI] {message}");
+
+    private static string FormatSurfaceList(IReadOnlyList<string> surfaces)
+        => surfaces.Count == 0 ? "none" : string.Join(", ", surfaces);
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);

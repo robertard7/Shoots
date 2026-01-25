@@ -1419,7 +1419,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             new ExecutionAiHelpSurface(Plan, State, StartDisabledReason),
             new ExecutionEnvironmentAiHelpSurface(ActiveRootFs, RootFsSourceOverride, RootFsFallbackNotice),
             new BlueprintCatalogAiHelpSurface(_blueprints.Select(entry => entry.Name).ToList()),
-            new PlannerAiHelpSurface(Plan)
+            new PlannerAiHelpSurface(Plan),
+            new ToolExecutionCatalogAiHelpSurface(_toolExecutionSessions, _toolExecutionRecords, _comparisonToolExecutionRecords)
         };
 
         foreach (var blueprint in _blueprints)

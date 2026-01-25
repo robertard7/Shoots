@@ -37,4 +37,5 @@
 | .ai/patches/patch-2026-01-25-03-21-25.diff | 46368d4273c0928f7f258cd9aa486487ad5efdc4 | Phase 2 (Policy Hash) |
 | .ai/patches/patch-2026-01-25-04-21-27.diff | eaf59740055db6fc99fd3ad3116789128bef2b59 | Phase 1 (Startup Integrity) |
 | .ai/patches/patch-2026-01-25-16-02-47.diff | f1f6666acfc55bb84ace60a4cf0c9a20fd9146bc | Phase B1 (Surface Enforcement) |
+| .ai/patches/patch-2026-01-25-16-11-17.diff | fd4ae43b7345718fcb43298b531265c691233f3a | Phase B2 (Surface Completion) |
 | .ai/patches/patch-2026-01-20-02-18-03.diff | 57054e96f9e7e76cceea52af103d3f77b0b3b152 | Phase SC1 (Visibility) |
