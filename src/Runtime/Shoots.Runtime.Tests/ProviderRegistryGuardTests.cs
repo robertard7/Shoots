@@ -47,7 +47,7 @@ public sealed class ProviderRegistryGuardTests
     public void Registry_rejects_embedded_provider_wrong_id()
     {
         var registry = new ProviderRegistry();
-        registry.Register("embedded.local-alt", new StubAdapter());
+        registry.Register($"{ProviderRegistry.EmbeddedProviderId}-alt", new StubAdapter());
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             registry.EnsureEmbeddedProviderPrimary());

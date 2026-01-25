@@ -116,7 +116,8 @@
                     Margin="8,0,0,0"
                     Content="Explain Execution"
                     Command="{Binding ExplainExecutionCommand}"
-                    ToolTip="Describe execution context using AI Help." />
+                    ToolTip="Describe execution context using AI Help."
+                    Visibility="{Binding CanRenderAiExplainButtons, Converter={StaticResource BooleanToVisibilityConverter}}" />
           </StackPanel>
           <StackPanel Grid.Row="2" Margin="0,24,0,0">
             <TextBlock Text="{Binding ExecutionModeSummary}" FontWeight="SemiBold" />
@@ -156,29 +157,81 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
           </Grid.RowDefinitions>
-          <Border Background="#FFFDF4D7" CornerRadius="4" Padding="10">
-            <TextBlock Text="Informational assistance only." FontWeight="SemiBold" />
-          </Border>
-          <StackPanel Grid.Row="1" Margin="0,12,0,0">
-            <Button Width="160"
-                    Content="Refresh AI Help"
-                    Command="{Binding RefreshAiHelpCommand}"
-                    ToolTip="{Binding AiHelpDisabledReason}"
-                    ToolTipService.ShowOnDisabled="True" />
-            <GroupBox Header="Context Summary" Margin="0,12,0,0">
-              <TextBlock Margin="12" Text="{Binding AiHelpContextSummary}" TextWrapping="Wrap" />
+          <StackPanel>
+            <GroupBox Header="AI Visibility Policy"
+                      Visibility="{Binding CanConfigureAiPolicy, Converter={StaticResource BooleanToVisibilityConverter}}">
+              <StackPanel Margin="12">
+                <TextBlock Foreground="#FF6B7280"
+                           Text="Policy controls AI visibility without disabling the AI substrate."
+                           TextWrapping="Wrap" />
+                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                  <TextBlock Width="160" Text="Access Role" VerticalAlignment="Center" />
+                  <ComboBox Width="220"
+                            ItemsSource="{Binding AiAccessRoles}"
+                            SelectedItem="{Binding SelectedAiAccessRole}" />
+                </StackPanel>
+                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                  <TextBlock Width="160" Text="Visibility Mode" VerticalAlignment="Center" />
+                  <ComboBox Width="220"
+                            ItemsSource="{Binding AiVisibilityModes}"
+                            SelectedItem="{Binding SelectedAiVisibilityMode}"
+                            IsEnabled="{Binding CanToggleAiVisibility}" />
+                </StackPanel>
+                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                  <CheckBox Content="Allow AI panel toggle"
+                            IsChecked="{Binding AllowAiPanelToggle}" />
+                </StackPanel>
+                <StackPanel Margin="0,6,0,0" Orientation="Horizontal">
+                  <CheckBox Content="Allow copy/export"
+                            IsChecked="{Binding AllowCopyExport}" />
+                </StackPanel>
+              </StackPanel>
             </GroupBox>
-            <GroupBox Header="State Explanation" Margin="0,12,0,0">
-              <TextBlock Margin="12" Text="{Binding AiHelpStateExplanation}" TextWrapping="Wrap" />
-            </GroupBox>
-            <GroupBox Header="Suggested Next Steps" Margin="0,12,0,0">
-              <TextBlock Margin="12" Text="{Binding AiHelpNextSteps}" TextWrapping="Wrap" />
-            </GroupBox>
-            <TextBlock Margin="0,12,0,0"
+            <TextBlock Margin="0,8,0,0"
                        Foreground="#FF6B7280"
-                       Text="AI Help is descriptive and does not execute actions."
+                       Text="{Binding AiPanelVisibilityNote}"
                        TextWrapping="Wrap" />
+            <Border Margin="0,8,0,0"
+                    Background="#FFEFF6FF"
+                    CornerRadius="4"
+                    Padding="10"
+                    Visibility="{Binding CanRenderAiProviderStatus, Converter={StaticResource BooleanToVisibilityConverter}}">
+              <TextBlock Text="{Binding AiProviderStatus}" />
+            </Border>
           </StackPanel>
+          <Grid Grid.Row="1" Margin="0,12,0,0">
+            <StackPanel Visibility="{Binding CanRenderAiPanel, Converter={StaticResource BooleanToVisibilityConverter}}">
+              <Border Background="#FFFDF4D7" CornerRadius="4" Padding="10">
+                <TextBlock Text="Informational assistance only." FontWeight="SemiBold" />
+              </Border>
+              <StackPanel Margin="0,12,0,0">
+                <Button Width="160"
+                        Content="Refresh AI Help"
+                        Command="{Binding RefreshAiHelpCommand}"
+                        ToolTip="{Binding AiHelpDisabledReason}"
+                        ToolTipService.ShowOnDisabled="True" />
+                <GroupBox Header="Context Summary" Margin="0,12,0,0">
+                  <TextBlock Margin="12" Text="{Binding AiHelpContextSummary}" TextWrapping="Wrap" />
+                </GroupBox>
+                <GroupBox Header="State Explanation" Margin="0,12,0,0">
+                  <TextBlock Margin="12" Text="{Binding AiHelpStateExplanation}" TextWrapping="Wrap" />
+                </GroupBox>
+                <GroupBox Header="Suggested Next Steps" Margin="0,12,0,0">
+                  <TextBlock Margin="12" Text="{Binding AiHelpNextSteps}" TextWrapping="Wrap" />
+                </GroupBox>
+                <TextBlock Margin="0,12,0,0"
+                           Foreground="#FF6B7280"
+                           Text="AI Help is descriptive and does not execute actions."
+                           TextWrapping="Wrap" />
+              </StackPanel>
+            </StackPanel>
+            <Border Background="#FFF3F4F6"
+                    CornerRadius="4"
+                    Padding="12"
+                    Visibility="{Binding IsAiPanelHidden, Converter={StaticResource BooleanToVisibilityConverter}}">
+              <TextBlock Text="AI surfaces are active, but the panel is hidden by policy." TextWrapping="Wrap" />
+            </Border>
+          </Grid>
         </Grid>
       </TabItem>
       <TabItem Header="Blueprints">
@@ -350,17 +403,20 @@
                         <Button Width="120"
                                 Content="Explain"
                                 Command="{Binding DataContext.ExplainBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                CommandParameter="{Binding}" />
+                                CommandParameter="{Binding}"
+                                Visibility="{Binding DataContext.CanRenderAiExplainButtons, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <Button Width="120"
                                 Margin="8,0,0,0"
                                 Content="Validate"
                                 Command="{Binding DataContext.ValidateBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                CommandParameter="{Binding}" />
+                                CommandParameter="{Binding}"
+                                Visibility="{Binding DataContext.CanRenderAiExplainButtons, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <Button Width="120"
                                 Margin="8,0,0,0"
                                 Content="Suggest"
                                 Command="{Binding DataContext.SuggestBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                CommandParameter="{Binding}" />
+                                CommandParameter="{Binding}"
+                                Visibility="{Binding DataContext.CanRenderAiExplainButtons, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BooleanToVisibilityConverter}}" />
                       </StackPanel>
                       <TextBlock Margin="0,6,0,0" Foreground="#FF6B7280" Text="{Binding CreatedUtc}" TextWrapping="Wrap" />
                     </StackPanel>
@@ -498,7 +554,8 @@
                 <Button Width="160"
                         Content="Explain This Step"
                         Command="{Binding ExplainSelectedToolExecutionCommand}"
-                        ToolTip="Send the selected record to AI Help." />
+                        ToolTip="Send the selected record to AI Help."
+                        Visibility="{Binding CanRenderAiExplainButtons, Converter={StaticResource BooleanToVisibilityConverter}}" />
               </StackPanel>
               <TextBlock Margin="0,12,0,0" Text="Sessions" FontWeight="SemiBold" />
               <ListBox Margin="0,8,0,0"
