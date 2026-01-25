@@ -40,5 +40,33 @@ public sealed class AiPolicyContractTripwireTests
                 "Visibility"
             },
             properties);
+
+        var constructor = typeof(AiPresentationPolicy)
+            .GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+            .Single();
+
+        var parameters = constructor
+            .GetParameters()
+            .Select(parameter => parameter.Name)
+            .ToArray();
+
+        Assert.Equal(
+            new[]
+            {
+                "Visibility",
+                "AllowAiPanelToggle",
+                "AllowCopyExport",
+                "EnterpriseMode"
+            },
+            parameters);
+    }
+
+    [Fact]
+    public void AiPresentationPolicy_version_is_frozen()
+    {
+        Assert.Equal(1, AiPresentationPolicy.ContractVersion);
+        Assert.Equal(
+            "Visibility|AllowAiPanelToggle|AllowCopyExport|EnterpriseMode",
+            AiPresentationPolicy.ContractShape);
     }
 }

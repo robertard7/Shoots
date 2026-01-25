@@ -63,6 +63,8 @@ public sealed class RuntimeFacade : IRuntimeFacade
 
     private static string ComputePolicyHash(AiPresentationPolicy policy)
     {
+        // ⚠️ CONTRACT FROZEN: Keep ordering aligned with AiPresentationPolicy.ContractShape.
+        // Any change requires a contract version bump plus tripwire updates.
         var value = $"{policy.Visibility}|{policy.AllowAiPanelToggle}|{policy.AllowCopyExport}|{policy.EnterpriseMode}";
         return HashTools.ComputeSha256Hash(value);
     }

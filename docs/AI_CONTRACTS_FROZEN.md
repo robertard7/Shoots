@@ -6,6 +6,7 @@ The following AI policy contracts are frozen:
 - AiAccessRole
 - AiVisibilityMode
 - AiPresentationPolicy
+- IRuntimeStatusSnapshot
 
 Changes to these types require explicit versioning and updated tripwire tests.
 

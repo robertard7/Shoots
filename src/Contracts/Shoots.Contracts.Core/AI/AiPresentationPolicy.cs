@@ -8,4 +8,9 @@ public sealed record AiPresentationPolicy(
     bool AllowAiPanelToggle,
     bool AllowCopyExport,
     bool EnterpriseMode
-);
+)
+{
+    public const int ContractVersion = 1;
+
+    public const string ContractShape = "Visibility|AllowAiPanelToggle|AllowCopyExport|EnterpriseMode";
+}
