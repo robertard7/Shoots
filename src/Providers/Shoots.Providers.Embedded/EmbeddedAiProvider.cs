@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Shoots.Contracts.Core;
+using Shoots.Providers.Abstractions;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Providers.Embedded;
 
 public sealed class EmbeddedAiProvider : IAiProvider, IAiProviderHealth, IAiProviderCapabilities
 {
-    public static readonly ProviderId EmbeddedProviderId = new("embedded.local");
+    public static readonly ProviderId EmbeddedProviderId = new(ProviderRegistry.EmbeddedProviderId);
 
     public ProviderId ProviderId => EmbeddedProviderId;
 
@@ -33,7 +34,7 @@ public sealed class EmbeddedAiProvider : IAiProvider, IAiProviderHealth, IAiProv
 
         var summary = BuildDeterministicSummary(request.Prompt);
         var schema = string.IsNullOrWhiteSpace(request.OutputSchema) ? "none" : request.OutputSchema.Trim();
-        var payload = $"embedded.local\nsummary={summary}\nschema={schema}";
+        var payload = $"{ProviderRegistry.EmbeddedProviderId}\nsummary={summary}\nschema={schema}";
         return new AiResponse(payload);
     }
 

@@ -1,0 +1,148 @@
+diff --git a/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs b/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
+index c263245..3213934 100644
+--- a/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
++++ b/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
+@@ -7,9 +7,11 @@ public sealed class ProviderRegistry
+ {
+     public const string EmbeddedProviderId = "embedded.local";
+ 
++    private readonly List<string> _registrationOrder = new();
+     private readonly Dictionary<string, IAiProviderAdapter> _providers = new(StringComparer.OrdinalIgnoreCase);
+ 
+     public IReadOnlyDictionary<string, IAiProviderAdapter> Providers => _providers;
++    public IReadOnlyList<string> RegistrationOrder => _registrationOrder;
+ 
+     public void Register(string providerId, IAiProviderAdapter adapter)
+     {
+@@ -24,6 +26,9 @@ public sealed class ProviderRegistry
+             throw new InvalidOperationException("Embedded provider cannot be overridden.");
+         }
+ 
++        if (!_providers.ContainsKey(providerId))
++            _registrationOrder.Add(providerId);
++
+         _providers[providerId] = adapter;
+     }
+ 
+@@ -34,4 +39,16 @@ public sealed class ProviderRegistry
+ 
+         return _providers.TryGetValue(providerId, out var adapter) ? adapter : null;
+     }
++
++    public void EnsureEmbeddedProviderPrimary()
++    {
++        if (!_providers.ContainsKey(EmbeddedProviderId))
++            throw new InvalidOperationException("Embedded provider is required.");
++
++        if (_registrationOrder.Count == 0 ||
++            !string.Equals(_registrationOrder[0], EmbeddedProviderId, StringComparison.OrdinalIgnoreCase))
++        {
++            throw new InvalidOperationException("Embedded provider must be registered first.");
++        }
++    }
+ }
+diff --git a/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs b/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
+index 7d69766..67b8ebc 100644
+--- a/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
++++ b/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
+@@ -16,6 +16,7 @@ public static class ProviderRegistryFactory
+         registry.Register("null.local", NullAiProviderAdapter.Instance);
+         if (ollamaSettings is not null)
+             registry.Register("ollama.local", new OllamaAiProviderAdapter(ollamaSettings));
++        registry.EnsureEmbeddedProviderPrimary();
+         return registry;
+     }
+ }
+diff --git a/src/Providers/Shoots.Providers.Embedded/EmbeddedAiProvider.cs b/src/Providers/Shoots.Providers.Embedded/EmbeddedAiProvider.cs
+index a6a711e..fb785c0 100644
+--- a/src/Providers/Shoots.Providers.Embedded/EmbeddedAiProvider.cs
++++ b/src/Providers/Shoots.Providers.Embedded/EmbeddedAiProvider.cs
+@@ -3,13 +3,14 @@ using System.Collections.Generic;
+ using System.Linq;
+ using System.Text;
+ using Shoots.Contracts.Core;
++using Shoots.Providers.Abstractions;
+ using Shoots.Runtime.Abstractions;
+ 
+ namespace Shoots.Providers.Embedded;
+ 
+ public sealed class EmbeddedAiProvider : IAiProvider, IAiProviderHealth, IAiProviderCapabilities
+ {
+-    public static readonly ProviderId EmbeddedProviderId = new("embedded.local");
++    public static readonly ProviderId EmbeddedProviderId = new(ProviderRegistry.EmbeddedProviderId);
+ 
+     public ProviderId ProviderId => EmbeddedProviderId;
+ 
+@@ -33,7 +34,7 @@ public sealed class EmbeddedAiProvider : IAiProvider, IAiProviderHealth, IAiProv
+ 
+         var summary = BuildDeterministicSummary(request.Prompt);
+         var schema = string.IsNullOrWhiteSpace(request.OutputSchema) ? "none" : request.OutputSchema.Trim();
+-        var payload = $"embedded.local\nsummary={summary}\nschema={schema}";
++        var payload = $"{ProviderRegistry.EmbeddedProviderId}\nsummary={summary}\nschema={schema}";
+         return new AiResponse(payload);
+     }
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
+index bf423c4..e8ca7db 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
+@@ -1,4 +1,5 @@
+ using Shoots.Providers.Bridge;
++using Shoots.Providers.Abstractions;
+ using Xunit;
+ 
+ namespace Shoots.Runtime.Tests;
+@@ -11,5 +12,6 @@ public sealed class ProviderPresenceTripwireTests
+         var registry = ProviderRegistryFactory.CreateDefault();
+ 
+         Assert.Contains(ProviderRegistry.EmbeddedProviderId, registry.Providers.Keys);
++        Assert.Equal(ProviderRegistry.EmbeddedProviderId, registry.RegistrationOrder[0]);
+     }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
+index debff29..267c799 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
+@@ -19,6 +19,42 @@ public sealed class ProviderRegistryGuardTests
+         Assert.Contains("Embedded provider cannot be overridden", exception.Message);
+     }
+ 
++    [Fact]
++    public void Registry_requires_embedded_provider()
++    {
++        var registry = new ProviderRegistry();
++
++        var exception = Assert.Throws<InvalidOperationException>(() =>
++            registry.EnsureEmbeddedProviderPrimary());
++
++        Assert.Contains("Embedded provider is required", exception.Message);
++    }
++
++    [Fact]
++    public void Registry_requires_embedded_provider_first()
++    {
++        var registry = new ProviderRegistry();
++        registry.Register("fake.local", new StubAdapter());
++        registry.Register(ProviderRegistry.EmbeddedProviderId, new StubAdapter());
++
++        var exception = Assert.Throws<InvalidOperationException>(() =>
++            registry.EnsureEmbeddedProviderPrimary());
++
++        Assert.Contains("Embedded provider must be registered first", exception.Message);
++    }
++
++    [Fact]
++    public void Registry_rejects_embedded_provider_wrong_id()
++    {
++        var registry = new ProviderRegistry();
++        registry.Register("embedded.local-alt", new StubAdapter());
++
++        var exception = Assert.Throws<InvalidOperationException>(() =>
++            registry.EnsureEmbeddedProviderPrimary());
++
++        Assert.Contains("Embedded provider is required", exception.Message);
++    }
++
+     private sealed class StubAdapter : IAiProviderAdapter
+     {
+         public ToolSelectionDecision? RequestDecision(

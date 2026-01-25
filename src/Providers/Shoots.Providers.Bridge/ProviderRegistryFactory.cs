@@ -16,6 +16,7 @@ public static class ProviderRegistryFactory
         registry.Register("null.local", NullAiProviderAdapter.Instance);
         if (ollamaSettings is not null)
             registry.Register("ollama.local", new OllamaAiProviderAdapter(ollamaSettings));
+        registry.EnsureEmbeddedProviderPrimary();
         return registry;
     }
 }
