@@ -1,0 +1,42 @@
+diff --git a/ui/Shoots.Ui/App.xaml.cs b/ui/Shoots.Ui/App.xaml.cs
+index d1e04a9..330e862 100644
+--- a/ui/Shoots.Ui/App.xaml.cs
++++ b/ui/Shoots.Ui/App.xaml.cs
+@@ -49,7 +49,13 @@ public partial class App : Application
+ 
+         MainWindow = new MainWindow();
+         MainWindow.Show();
+-        AiSurfaceRegistry.Current.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
++
++        var surfaceRegistry = AiSurfaceRegistry.Current;
++        Log($"AI surface registry: {surfaceRegistry.DescribeRegistrations()}");
++
++#if DEBUG
++        surfaceRegistry.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
++#endif
+ 
+         base.OnStartup(e);
+     }
+diff --git a/ui/Shoots.Ui/Services/AiSurfaceRegistry.cs b/ui/Shoots.Ui/Services/AiSurfaceRegistry.cs
+index 9eeb7e2..2645eb0 100644
+--- a/ui/Shoots.Ui/Services/AiSurfaceRegistry.cs
++++ b/ui/Shoots.Ui/Services/AiSurfaceRegistry.cs
+@@ -15,6 +15,18 @@ public sealed class AiSurfaceRegistry : IAiSurfaceRegistry
+     public IReadOnlyList<AiSurfaceRegistration> RegisteredSurfaces
+         => _registrations.Values.ToList();
+ 
++    public string DescribeRegistrations()
++    {
++        if (_registrations.Count == 0)
++            return "none";
++
++        return string.Join(
++            ", ",
++            _registrations.Values
++                .OrderBy(registration => registration.SurfaceId, StringComparer.OrdinalIgnoreCase)
++                .Select(registration => $"{registration.SurfaceId} ({registration.SurfaceKind})"));
++    }
++
+     public void Register(AiSurfaceRegistration registration)
+     {
+         ValidateRegistration(registration);

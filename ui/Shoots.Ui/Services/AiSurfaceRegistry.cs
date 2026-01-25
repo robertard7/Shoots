@@ -15,6 +15,18 @@ public sealed class AiSurfaceRegistry : IAiSurfaceRegistry
     public IReadOnlyList<AiSurfaceRegistration> RegisteredSurfaces
         => _registrations.Values.ToList();
 
+    public string DescribeRegistrations()
+    {
+        if (_registrations.Count == 0)
+            return "none";
+
+        return string.Join(
+            ", ",
+            _registrations.Values
+                .OrderBy(registration => registration.SurfaceId, StringComparer.OrdinalIgnoreCase)
+                .Select(registration => $"{registration.SurfaceId} ({registration.SurfaceKind})"));
+    }
+
     public void Register(AiSurfaceRegistration registration)
     {
         ValidateRegistration(registration);
