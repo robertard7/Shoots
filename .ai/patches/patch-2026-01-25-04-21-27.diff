@@ -1,0 +1,31 @@
+diff --git a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+index b468f44..b440660 100644
+--- a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
++++ b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+@@ -12,6 +12,7 @@ public sealed class RuntimeFacade : IRuntimeFacade
+     private readonly IRuntimeHost _host;
+     private readonly IAiPolicyResolver _policyResolver;
+     private readonly AiPresentationPolicy _policy;
++    private readonly string _policyHash;
+ 
+     public RuntimeFacade(IRuntimeHost host)
+         : this(host, null)
+@@ -22,7 +23,9 @@ public sealed class RuntimeFacade : IRuntimeFacade
+         _host = host ?? throw new ArgumentNullException(nameof(host));
+         _policyResolver = policyResolver ?? new DefaultAiPolicyResolver();
+         _policy = _policyResolver.Resolve(AiAccessRole.Developer);
++        _policyHash = ComputePolicyHash(_policy);
+         Trace.WriteLine($"[Shoots.Runtime.Loader] AI policy: {_policy.Visibility} (enterprise={_policy.EnterpriseMode})");
++        Trace.WriteLine($"[Shoots.Runtime.Loader] AI policy hash: {_policyHash}");
+         EnforceEmbeddedProvider();
+     }
+ 
+@@ -37,7 +40,7 @@ public sealed class RuntimeFacade : IRuntimeFacade
+     {
+         _ = ct;
+         return Task.FromResult<IRuntimeStatusSnapshot>(
+-            new RuntimeStatusSnapshot(_host.Version, ComputePolicyHash(_policy)));
++            new RuntimeStatusSnapshot(_host.Version, _policyHash));
+     }
+ 
+     public async IAsyncEnumerable<RoutingTraceEntry> SubscribeTrace(CancellationToken ct = default)

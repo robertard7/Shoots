@@ -35,4 +35,5 @@
 | .ai/patches/patch-2026-01-20-01-53-57.diff | 72ef55a0a8c89f80a7f6f780e5f638fca655b15a | Phase SC0-SC3 (Scope) |
 | .ai/patches/patch-2026-01-20-01-58-59.diff | 00e22b4792276f1b109b96774eec7396b1271d3d | Phase SC1 (Visibility) |
 | .ai/patches/patch-2026-01-25-03-21-25.diff | 46368d4273c0928f7f258cd9aa486487ad5efdc4 | Phase 2 (Policy Hash) |
+| .ai/patches/patch-2026-01-25-04-21-27.diff | eaf59740055db6fc99fd3ad3116789128bef2b59 | Phase 1 (Startup Integrity) |
 | .ai/patches/patch-2026-01-20-02-18-03.diff | 57054e96f9e7e76cceea52af103d3f77b0b3b152 | Phase SC1 (Visibility) |
