@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\\Shoots.Providers.Abstractions\\Shoots.Providers.Abstractions.csproj" />
+    <ProjectReference Include="..\\..\\Runtime\\Shoots.Runtime.Abstractions\\Shoots.Runtime.Abstractions.csproj" />
+    <ProjectReference Include="..\\..\\Contracts\\Shoots.Contracts.Core\\Shoots.Contracts.Core.csproj" />
+  </ItemGroup>
+
+</Project>

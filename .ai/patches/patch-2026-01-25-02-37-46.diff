@@ -1,0 +1,656 @@
+diff --git a/src/Contracts/Shoots.Contracts.Core/AI/AiAccessRole.cs b/src/Contracts/Shoots.Contracts.Core/AI/AiAccessRole.cs
+new file mode 100644
+index 0000000..3125803
+--- /dev/null
++++ b/src/Contracts/Shoots.Contracts.Core/AI/AiAccessRole.cs
+@@ -0,0 +1,11 @@
++namespace Shoots.Contracts.Core.AI;
++
++/// <summary>
++/// Local access roles for AI presentation.
++/// </summary>
++public enum AiAccessRole
++{
++    EndUser,
++    Developer,
++    Admin
++}
+diff --git a/src/Contracts/Shoots.Contracts.Core/AI/AiPresentationPolicy.cs b/src/Contracts/Shoots.Contracts.Core/AI/AiPresentationPolicy.cs
+new file mode 100644
+index 0000000..95577ee
+--- /dev/null
++++ b/src/Contracts/Shoots.Contracts.Core/AI/AiPresentationPolicy.cs
+@@ -0,0 +1,10 @@
++namespace Shoots.Contracts.Core.AI;
++
++/// <summary>
++/// Presentation policy for AI visibility and export controls.
++/// </summary>
++public sealed record AiPresentationPolicy(
++    AiVisibilityMode Visibility,
++    bool AllowAiPanelToggle,
++    bool AllowCopyExport
++);
+diff --git a/src/Contracts/Shoots.Contracts.Core/AI/AiVisibilityMode.cs b/src/Contracts/Shoots.Contracts.Core/AI/AiVisibilityMode.cs
+new file mode 100644
+index 0000000..458f3f3
+--- /dev/null
++++ b/src/Contracts/Shoots.Contracts.Core/AI/AiVisibilityMode.cs
+@@ -0,0 +1,11 @@
++namespace Shoots.Contracts.Core.AI;
++
++/// <summary>
++/// AI presentation visibility modes.
++/// </summary>
++public enum AiVisibilityMode
++{
++    Visible,
++    HiddenForEndUsers,
++    AdminOnly
++}
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
+index 618928b..c8fa583 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
+@@ -47,7 +47,7 @@ public sealed class ProviderRegistryGuardTests
+     public void Registry_rejects_embedded_provider_wrong_id()
+     {
+         var registry = new ProviderRegistry();
+-        registry.Register("embedded.local-alt", new StubAdapter());
++        registry.Register($"{ProviderRegistry.EmbeddedProviderId}-alt", new StubAdapter());
+ 
+         var exception = Assert.Throws<InvalidOperationException>(() =>
+             registry.EnsureEmbeddedProviderPrimary());
+diff --git a/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs b/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs
+new file mode 100644
+index 0000000..f2ea35d
+--- /dev/null
++++ b/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs
+@@ -0,0 +1,47 @@
++using Shoots.Contracts.Core.AI;
++using Shoots.UI.Services;
++using Xunit;
++
++namespace Shoots.UI.Tests;
++
++public sealed class AiPanelVisibilityServiceTests
++{
++    [Fact]
++    public void Visible_policy_shows_ai_for_end_users()
++    {
++        var policy = new AiPresentationPolicy(AiVisibilityMode.Visible, true, true);
++        var service = new AiPanelVisibilityService();
++
++        var state = service.Evaluate(policy, AiAccessRole.EndUser);
++
++        Assert.True(state.CanRenderAiPanel);
++        Assert.True(state.CanRenderAiExplainButtons);
++        Assert.True(state.CanRenderAiProviderStatus);
++    }
++
++    [Fact]
++    public void Hidden_for_end_users_blocks_ai_for_end_users()
++    {
++        var policy = new AiPresentationPolicy(AiVisibilityMode.HiddenForEndUsers, true, true);
++        var service = new AiPanelVisibilityService();
++
++        var state = service.Evaluate(policy, AiAccessRole.EndUser);
++
++        Assert.False(state.CanRenderAiPanel);
++        Assert.False(state.CanRenderAiExplainButtons);
++        Assert.False(state.CanRenderAiProviderStatus);
++    }
++
++    [Fact]
++    public void Admin_only_shows_ai_for_admins()
++    {
++        var policy = new AiPresentationPolicy(AiVisibilityMode.AdminOnly, true, true);
++        var service = new AiPanelVisibilityService();
++
++        var state = service.Evaluate(policy, AiAccessRole.Admin);
++
++        Assert.True(state.CanRenderAiPanel);
++        Assert.True(state.CanRenderAiExplainButtons);
++        Assert.True(state.CanRenderAiProviderStatus);
++    }
++}
+diff --git a/ui/Shoots.Ui/MainWindow.xaml b/ui/Shoots.Ui/MainWindow.xaml
+index 6781c3d..3e5527b 100644
+--- a/ui/Shoots.Ui/MainWindow.xaml
++++ b/ui/Shoots.Ui/MainWindow.xaml
+@@ -116,7 +116,8 @@
+                     Margin="8,0,0,0"
+                     Content="Explain Execution"
+                     Command="{Binding ExplainExecutionCommand}"
+-                    ToolTip="Describe execution context using AI Help." />
++                    ToolTip="Describe execution context using AI Help."
++                    Visibility="{Binding CanRenderAiExplainButtons, Converter={StaticResource BooleanToVisibilityConverter}}" />
+           </StackPanel>
+           <StackPanel Grid.Row="2" Margin="0,24,0,0">
+             <TextBlock Text="{Binding ExecutionModeSummary}" FontWeight="SemiBold" />
+@@ -156,29 +157,81 @@
+             <RowDefinition Height="Auto" />
+             <RowDefinition Height="*" />
+           </Grid.RowDefinitions>
+-          <Border Background="#FFFDF4D7" CornerRadius="4" Padding="10">
+-            <TextBlock Text="Informational assistance only." FontWeight="SemiBold" />
+-          </Border>
+-          <StackPanel Grid.Row="1" Margin="0,12,0,0">
+-            <Button Width="160"
+-                    Content="Refresh AI Help"
+-                    Command="{Binding RefreshAiHelpCommand}"
+-                    ToolTip="{Binding AiHelpDisabledReason}"
+-                    ToolTipService.ShowOnDisabled="True" />
+-            <GroupBox Header="Context Summary" Margin="0,12,0,0">
+-              <TextBlock Margin="12" Text="{Binding AiHelpContextSummary}" TextWrapping="Wrap" />
+-            </GroupBox>
+-            <GroupBox Header="State Explanation" Margin="0,12,0,0">
+-              <TextBlock Margin="12" Text="{Binding AiHelpStateExplanation}" TextWrapping="Wrap" />
+-            </GroupBox>
+-            <GroupBox Header="Suggested Next Steps" Margin="0,12,0,0">
+-              <TextBlock Margin="12" Text="{Binding AiHelpNextSteps}" TextWrapping="Wrap" />
++          <StackPanel>
++            <GroupBox Header="AI Visibility Policy"
++                      Visibility="{Binding CanConfigureAiPolicy, Converter={StaticResource BooleanToVisibilityConverter}}">
++              <StackPanel Margin="12">
++                <TextBlock Foreground="#FF6B7280"
++                           Text="Policy controls AI visibility without disabling the AI substrate."
++                           TextWrapping="Wrap" />
++                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
++                  <TextBlock Width="160" Text="Access Role" VerticalAlignment="Center" />
++                  <ComboBox Width="220"
++                            ItemsSource="{Binding AiAccessRoles}"
++                            SelectedItem="{Binding SelectedAiAccessRole}" />
++                </StackPanel>
++                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
++                  <TextBlock Width="160" Text="Visibility Mode" VerticalAlignment="Center" />
++                  <ComboBox Width="220"
++                            ItemsSource="{Binding AiVisibilityModes}"
++                            SelectedItem="{Binding SelectedAiVisibilityMode}"
++                            IsEnabled="{Binding CanToggleAiVisibility}" />
++                </StackPanel>
++                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
++                  <CheckBox Content="Allow AI panel toggle"
++                            IsChecked="{Binding AllowAiPanelToggle}" />
++                </StackPanel>
++                <StackPanel Margin="0,6,0,0" Orientation="Horizontal">
++                  <CheckBox Content="Allow copy/export"
++                            IsChecked="{Binding AllowCopyExport}" />
++                </StackPanel>
++              </StackPanel>
+             </GroupBox>
+-            <TextBlock Margin="0,12,0,0"
++            <TextBlock Margin="0,8,0,0"
+                        Foreground="#FF6B7280"
+-                       Text="AI Help is descriptive and does not execute actions."
++                       Text="{Binding AiPanelVisibilityNote}"
+                        TextWrapping="Wrap" />
++            <Border Margin="0,8,0,0"
++                    Background="#FFEFF6FF"
++                    CornerRadius="4"
++                    Padding="10"
++                    Visibility="{Binding CanRenderAiProviderStatus, Converter={StaticResource BooleanToVisibilityConverter}}">
++              <TextBlock Text="{Binding AiProviderStatus}" />
++            </Border>
+           </StackPanel>
++          <Grid Grid.Row="1" Margin="0,12,0,0">
++            <StackPanel Visibility="{Binding CanRenderAiPanel, Converter={StaticResource BooleanToVisibilityConverter}}">
++              <Border Background="#FFFDF4D7" CornerRadius="4" Padding="10">
++                <TextBlock Text="Informational assistance only." FontWeight="SemiBold" />
++              </Border>
++              <StackPanel Margin="0,12,0,0">
++                <Button Width="160"
++                        Content="Refresh AI Help"
++                        Command="{Binding RefreshAiHelpCommand}"
++                        ToolTip="{Binding AiHelpDisabledReason}"
++                        ToolTipService.ShowOnDisabled="True" />
++                <GroupBox Header="Context Summary" Margin="0,12,0,0">
++                  <TextBlock Margin="12" Text="{Binding AiHelpContextSummary}" TextWrapping="Wrap" />
++                </GroupBox>
++                <GroupBox Header="State Explanation" Margin="0,12,0,0">
++                  <TextBlock Margin="12" Text="{Binding AiHelpStateExplanation}" TextWrapping="Wrap" />
++                </GroupBox>
++                <GroupBox Header="Suggested Next Steps" Margin="0,12,0,0">
++                  <TextBlock Margin="12" Text="{Binding AiHelpNextSteps}" TextWrapping="Wrap" />
++                </GroupBox>
++                <TextBlock Margin="0,12,0,0"
++                           Foreground="#FF6B7280"
++                           Text="AI Help is descriptive and does not execute actions."
++                           TextWrapping="Wrap" />
++              </StackPanel>
++            </StackPanel>
++            <Border Background="#FFF3F4F6"
++                    CornerRadius="4"
++                    Padding="12"
++                    Visibility="{Binding IsAiPanelHidden, Converter={StaticResource BooleanToVisibilityConverter}}">
++              <TextBlock Text="AI surfaces are active, but the panel is hidden by policy." TextWrapping="Wrap" />
++            </Border>
++          </Grid>
+         </Grid>
+       </TabItem>
+       <TabItem Header="Blueprints">
+@@ -350,17 +403,20 @@
+                         <Button Width="120"
+                                 Content="Explain"
+                                 Command="{Binding DataContext.ExplainBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+-                                CommandParameter="{Binding}" />
++                                CommandParameter="{Binding}"
++                                Visibility="{Binding DataContext.CanRenderAiExplainButtons, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                         <Button Width="120"
+                                 Margin="8,0,0,0"
+                                 Content="Validate"
+                                 Command="{Binding DataContext.ValidateBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+-                                CommandParameter="{Binding}" />
++                                CommandParameter="{Binding}"
++                                Visibility="{Binding DataContext.CanRenderAiExplainButtons, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                         <Button Width="120"
+                                 Margin="8,0,0,0"
+                                 Content="Suggest"
+                                 Command="{Binding DataContext.SuggestBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+-                                CommandParameter="{Binding}" />
++                                CommandParameter="{Binding}"
++                                Visibility="{Binding DataContext.CanRenderAiExplainButtons, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                       </StackPanel>
+                       <TextBlock Margin="0,6,0,0" Foreground="#FF6B7280" Text="{Binding CreatedUtc}" TextWrapping="Wrap" />
+                     </StackPanel>
+@@ -498,7 +554,8 @@
+                 <Button Width="160"
+                         Content="Explain This Step"
+                         Command="{Binding ExplainSelectedToolExecutionCommand}"
+-                        ToolTip="Send the selected record to AI Help." />
++                        ToolTip="Send the selected record to AI Help."
++                        Visibility="{Binding CanRenderAiExplainButtons, Converter={StaticResource BooleanToVisibilityConverter}}" />
+               </StackPanel>
+               <TextBlock Margin="0,12,0,0" Text="Sessions" FontWeight="SemiBold" />
+               <ListBox Margin="0,8,0,0"
+diff --git a/ui/Shoots.Ui/MainWindow.xaml.cs b/ui/Shoots.Ui/MainWindow.xaml.cs
+index 747e708..7b0e3dc 100644
+--- a/ui/Shoots.Ui/MainWindow.xaml.cs
++++ b/ui/Shoots.Ui/MainWindow.xaml.cs
+@@ -5,6 +5,7 @@ using Shoots.UI.Blueprints;
+ using Shoots.UI.ExecutionEnvironments;
+ using Shoots.UI.Projects;
+ using Shoots.UI.Services;
++using Shoots.UI.Settings;
+ using Shoots.UI.ViewModels;
+ 
+ namespace Shoots.UI;
+@@ -21,6 +22,7 @@ public partial class MainWindow : Window
+         var databaseIntentStore = new DatabaseIntentStore();
+         var blueprintStore = new SystemBlueprintStore();
+         var executionEnvironmentStore = new ExecutionEnvironmentSettingsStore();
++        var aiPolicyStore = new AiPolicyStore();
+         DataContext = new MainWindowViewModel(
+             new NullExecutionCommandService(),
+             new EnvironmentProfileService(),
+@@ -33,6 +35,8 @@ public partial class MainWindow : Window
+             new ToolTierPrompt(),
+             blueprintStore,
+             executionEnvironmentStore,
++            aiPolicyStore,
++            new AiPanelVisibilityService(),
+             new NullAiHelpFacade());
+     }
+ }
+diff --git a/ui/Shoots.Ui/Services/AiPanelVisibilityService.cs b/ui/Shoots.Ui/Services/AiPanelVisibilityService.cs
+new file mode 100644
+index 0000000..ce73dcf
+--- /dev/null
++++ b/ui/Shoots.Ui/Services/AiPanelVisibilityService.cs
+@@ -0,0 +1,31 @@
++using System;
++using Shoots.Contracts.Core.AI;
++
++namespace Shoots.UI.Services;
++
++public sealed record AiPanelVisibilityState(
++    bool CanRenderAiPanel,
++    bool CanRenderAiExplainButtons,
++    bool CanRenderAiProviderStatus
++);
++
++public sealed class AiPanelVisibilityService
++{
++    public AiPanelVisibilityState Evaluate(AiPresentationPolicy policy, AiAccessRole role)
++    {
++        if (policy is null)
++            throw new ArgumentNullException(nameof(policy));
++
++        return policy.Visibility switch
++        {
++            AiVisibilityMode.Visible => new AiPanelVisibilityState(true, true, true),
++            AiVisibilityMode.HiddenForEndUsers => role == AiAccessRole.EndUser
++                ? new AiPanelVisibilityState(false, false, false)
++                : new AiPanelVisibilityState(true, true, true),
++            AiVisibilityMode.AdminOnly => role is AiAccessRole.Admin or AiAccessRole.Developer
++                ? new AiPanelVisibilityState(true, true, true)
++                : new AiPanelVisibilityState(false, false, false),
++            _ => new AiPanelVisibilityState(true, true, true)
++        };
++    }
++}
+diff --git a/ui/Shoots.Ui/Settings/AiPolicyStore.cs b/ui/Shoots.Ui/Settings/AiPolicyStore.cs
+new file mode 100644
+index 0000000..6d88e56
+--- /dev/null
++++ b/ui/Shoots.Ui/Settings/AiPolicyStore.cs
+@@ -0,0 +1,99 @@
++using System;
++using System.IO;
++using System.Text.Json;
++using Shoots.Contracts.Core.AI;
++
++namespace Shoots.UI.Settings;
++
++public interface IAiPolicyStore
++{
++    AiPolicySettings Load(string? workspaceRoot);
++
++    void Save(string? workspaceRoot, AiPolicySettings settings);
++}
++
++public sealed record AiPolicySettings(
++    AiAccessRole AccessRole,
++    AiPresentationPolicy Policy
++);
++
++public sealed class AiPolicyStore : IAiPolicyStore
++{
++    public const string FileName = "ai-policy.json";
++    private const string SettingsFolderName = ".shoots";
++    private readonly string _defaultPath;
++
++    public AiPolicyStore(string? baseDirectory = null)
++    {
++        var root = baseDirectory ?? Path.Combine(
++            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
++            "Shoots");
++
++        _defaultPath = Path.Combine(root, FileName);
++    }
++
++    public AiPolicySettings Load(string? workspaceRoot)
++    {
++        var workspacePath = ResolveWorkspacePath(workspaceRoot);
++        if (!string.IsNullOrWhiteSpace(workspacePath) && File.Exists(workspacePath))
++            return LoadFromPath(workspacePath);
++
++        if (File.Exists(_defaultPath))
++            return LoadFromPath(_defaultPath);
++
++        return CreateDefault();
++    }
++
++    public void Save(string? workspaceRoot, AiPolicySettings settings)
++    {
++        if (settings is null)
++            throw new ArgumentNullException(nameof(settings));
++
++        var path = ResolveWorkspacePath(workspaceRoot) ?? _defaultPath;
++        var directory = Path.GetDirectoryName(path);
++        if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
++            Directory.CreateDirectory(directory);
++
++        var json = JsonSerializer.Serialize(settings, JsonOptions());
++        File.WriteAllText(path, json);
++    }
++
++    private static AiPolicySettings LoadFromPath(string path)
++    {
++        try
++        {
++            var json = File.ReadAllText(path);
++            var settings = JsonSerializer.Deserialize<AiPolicySettings>(json, JsonOptions());
++            return settings ?? CreateDefault();
++        }
++        catch
++        {
++            return CreateDefault();
++        }
++    }
++
++    private static AiPolicySettings CreateDefault()
++    {
++        var policy = new AiPresentationPolicy(
++            AiVisibilityMode.Visible,
++            AllowAiPanelToggle: true,
++            AllowCopyExport: true);
++
++        return new AiPolicySettings(AiAccessRole.Developer, policy);
++    }
++
++    private static string? ResolveWorkspacePath(string? workspaceRoot)
++    {
++        if (string.IsNullOrWhiteSpace(workspaceRoot))
++            return null;
++
++        return Path.Combine(workspaceRoot, SettingsFolderName, FileName);
++    }
++
++    private static JsonSerializerOptions JsonOptions() =>
++        new()
++        {
++            PropertyNameCaseInsensitive = true,
++            WriteIndented = true
++        };
++}
+diff --git a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+index bfa9be2..cd5e183 100644
+--- a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
++++ b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
+ using System.IO;
+ using System.Linq;
+ using Shoots.Contracts.Core;
++using Shoots.Contracts.Core.AI;
+ using Shoots.Runtime.Abstractions;
+ using Shoots.Runtime.Ui.Abstractions;
+ using Shoots.UI.AiHelp;
+@@ -15,6 +16,7 @@ using Shoots.UI.Intents;
+ using Shoots.UI.Projects;
+ using Shoots.UI.Roles;
+ using Shoots.UI.Services;
++using Shoots.UI.Settings;
+ 
+ namespace Shoots.UI.ViewModels;
+ 
+@@ -31,6 +33,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+     private readonly IToolTierPrompt _toolTierPrompt;
+     private readonly ISystemBlueprintStore _blueprintStore;
+     private readonly IExecutionEnvironmentSettingsStore _executionEnvironmentStore;
++    private readonly IAiPolicyStore _aiPolicyStore;
++    private readonly AiPanelVisibilityService _aiPanelVisibilityService;
+     private readonly IAiHelpFacade _aiHelpFacade;
+     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
+     private readonly ObservableCollection<BlueprintEntryViewModel> _blueprints;
+@@ -65,6 +69,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+     private ToolExecutionSessionViewModel? _selectedToolExecutionSession;
+     private ToolExecutionSessionViewModel? _comparisonToolExecutionSession;
+     private string _blueprintSaveStatus = "Blueprint changes are saved.";
++    private AiPresentationPolicy _aiPresentationPolicy =
++        new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true);
++    private AiAccessRole _aiAccessRole = AiAccessRole.Developer;
++    private AiPanelVisibilityState _aiPanelVisibilityState = new(true, true, true);
+ 
+     public MainWindowViewModel(
+         IExecutionCommandService commandService,
+@@ -78,6 +86,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         IToolTierPrompt toolTierPrompt,
+         ISystemBlueprintStore blueprintStore,
+         IExecutionEnvironmentSettingsStore executionEnvironmentStore,
++        IAiPolicyStore aiPolicyStore,
++        AiPanelVisibilityService aiPanelVisibilityService,
+         IAiHelpFacade aiHelpFacade)
+     {
+         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
+@@ -91,6 +101,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         _toolTierPrompt = toolTierPrompt ?? throw new ArgumentNullException(nameof(toolTierPrompt));
+         _blueprintStore = blueprintStore ?? throw new ArgumentNullException(nameof(blueprintStore));
+         _executionEnvironmentStore = executionEnvironmentStore ?? throw new ArgumentNullException(nameof(executionEnvironmentStore));
++        _aiPolicyStore = aiPolicyStore ?? throw new ArgumentNullException(nameof(aiPolicyStore));
++        _aiPanelVisibilityService = aiPanelVisibilityService ?? throw new ArgumentNullException(nameof(aiPanelVisibilityService));
+         _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
+         _state = ExecutionState.Idle;
+ 
+@@ -141,6 +153,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         LoadExecutionEnvironments();
+         RoleOptions = new ReadOnlyCollection<RoleDescriptor>(RoleCatalog.GetDefaultRoles().ToList());
+         SelectedRole = RoleOptions.FirstOrDefault();
++        AiVisibilityModes = new ReadOnlyCollection<AiVisibilityMode>(new[]
++        {
++            AiVisibilityMode.Visible,
++            AiVisibilityMode.HiddenForEndUsers,
++            AiVisibilityMode.AdminOnly
++        });
++        AiAccessRoles = new ReadOnlyCollection<AiAccessRole>(new[]
++        {
++            AiAccessRole.EndUser,
++            AiAccessRole.Developer,
++            AiAccessRole.Admin
++        });
+         DatabaseIntents = new ReadOnlyCollection<DatabaseIntentOption>(new[]
+         {
+             new DatabaseIntentOption(DatabaseIntent.None, "None", "No database intent declared."),
+@@ -151,6 +175,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
+             ?? DatabaseIntents.FirstOrDefault();
+         LoadEnvironmentScript();
++        LoadAiPolicy();
+         RegisterAiSurfaces();
+         _ = RefreshAiHelpAsync();
+     }
+@@ -458,6 +483,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+             UpdateExecutionEnvironmentSelection();
+             LoadBlueprints();
+             OnToolpackTierChanged();
++            LoadAiPolicy();
+             _ = RefreshAiHelpAsync();
+             RaiseCommandCanExecute();
+         }
+@@ -486,6 +512,89 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+ 
+     public string SelectedRoleDescription => SelectedRole?.Description ?? "No role selected.";
+ 
++    public ReadOnlyCollection<AiVisibilityMode> AiVisibilityModes { get; }
++
++    public ReadOnlyCollection<AiAccessRole> AiAccessRoles { get; }
++
++    public AiVisibilityMode SelectedAiVisibilityMode
++    {
++        get => _aiPresentationPolicy.Visibility;
++        set
++        {
++            if (_aiPresentationPolicy.Visibility == value)
++                return;
++
++            _aiPresentationPolicy = _aiPresentationPolicy with { Visibility = value };
++            SaveAiPolicy();
++            UpdateAiVisibilityState();
++            OnPropertyChanged(nameof(SelectedAiVisibilityMode));
++        }
++    }
++
++    public AiAccessRole SelectedAiAccessRole
++    {
++        get => _aiAccessRole;
++        set
++        {
++            if (_aiAccessRole == value)
++                return;
++
++            _aiAccessRole = value;
++            SaveAiPolicy();
++            UpdateAiVisibilityState();
++            OnPropertyChanged(nameof(SelectedAiAccessRole));
++            OnPropertyChanged(nameof(CanConfigureAiPolicy));
++            OnPropertyChanged(nameof(CanToggleAiVisibility));
++        }
++    }
++
++    public bool AllowAiPanelToggle
++    {
++        get => _aiPresentationPolicy.AllowAiPanelToggle;
++        set
++        {
++            if (_aiPresentationPolicy.AllowAiPanelToggle == value)
++                return;
++
++            _aiPresentationPolicy = _aiPresentationPolicy with { AllowAiPanelToggle = value };
++            SaveAiPolicy();
++            OnPropertyChanged(nameof(AllowAiPanelToggle));
++            OnPropertyChanged(nameof(CanToggleAiVisibility));
++        }
++    }
++
++    public bool AllowCopyExport
++    {
++        get => _aiPresentationPolicy.AllowCopyExport;
++        set
++        {
++            if (_aiPresentationPolicy.AllowCopyExport == value)
++                return;
++
++            _aiPresentationPolicy = _aiPresentationPolicy with { AllowCopyExport = value };
++            SaveAiPolicy();
++            OnPropertyChanged(nameof(AllowCopyExport));
++        }
++    }
++
++    public bool CanConfigureAiPolicy => _aiAccessRole is AiAccessRole.Admin or AiAccessRole.Developer;
++
++    public bool CanToggleAiVisibility => CanConfigureAiPolicy && AllowAiPanelToggle;
++
++    public bool CanRenderAiPanel => _aiPanelVisibilityState.CanRenderAiPanel;
++
++    public bool CanRenderAiExplainButtons => _aiPanelVisibilityState.CanRenderAiExplainButtons;
++
++    public bool CanRenderAiProviderStatus => _aiPanelVisibilityState.CanRenderAiProviderStatus;
++
++    public bool IsAiPanelHidden => !CanRenderAiPanel;
++
++    public string AiPanelVisibilityNote => CanRenderAiPanel
++        ? "AI help is available for this role."
++        : "AI is running in the background but hidden by policy.";
++
++    public string AiProviderStatus => "Embedded provider (primary).";
++
+     public RootFsDescriptor? SelectedRootFs
+     {
+         get => ActiveRootFs;
+@@ -1303,6 +1412,36 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         _ = BuildAiHelpSurfaces();
+     }
+ 
++    private void LoadAiPolicy()
++    {
++        var settings = _aiPolicyStore.Load(ActiveWorkspace?.RootPath);
++        _aiAccessRole = settings.AccessRole;
++        _aiPresentationPolicy = settings.Policy;
++        UpdateAiVisibilityState();
++        OnPropertyChanged(nameof(SelectedAiAccessRole));
++        OnPropertyChanged(nameof(SelectedAiVisibilityMode));
++        OnPropertyChanged(nameof(AllowAiPanelToggle));
++        OnPropertyChanged(nameof(AllowCopyExport));
++        OnPropertyChanged(nameof(CanConfigureAiPolicy));
++        OnPropertyChanged(nameof(CanToggleAiVisibility));
++    }
++
++    private void SaveAiPolicy()
++    {
++        var settings = new AiPolicySettings(_aiAccessRole, _aiPresentationPolicy);
++        _aiPolicyStore.Save(ActiveWorkspace?.RootPath, settings);
++    }
++
++    private void UpdateAiVisibilityState()
++    {
++        _aiPanelVisibilityState = _aiPanelVisibilityService.Evaluate(_aiPresentationPolicy, _aiAccessRole);
++        OnPropertyChanged(nameof(CanRenderAiPanel));
++        OnPropertyChanged(nameof(CanRenderAiExplainButtons));
++        OnPropertyChanged(nameof(CanRenderAiProviderStatus));
++        OnPropertyChanged(nameof(IsAiPanelHidden));
++        OnPropertyChanged(nameof(AiPanelVisibilityNote));
++    }
++
+     private void LoadBlueprints()
+     {
+         _blueprints.Clear();

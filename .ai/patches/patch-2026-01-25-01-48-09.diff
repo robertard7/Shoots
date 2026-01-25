@@ -1,0 +1,293 @@
+diff --git a/Shoots.sln b/Shoots.sln
+index 1bbc790..874639b 100644
+--- a/Shoots.sln
++++ b/Shoots.sln
+@@ -43,6 +43,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Tests", "src
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Bridge", "src\\Providers\\Shoots.Providers.Bridge\\Shoots.Providers.Bridge.csproj", "{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}"
+ EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Embedded", "src\\Providers\\Shoots.Providers.Embedded\\Shoots.Providers.Embedded.csproj", "{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}"
++EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Fake", "src\\Providers\\Shoots.Providers.Fake\\Shoots.Providers.Fake.csproj", "{A7363365-209B-4597-8CC3-36F386D4E2BA}"
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Ollama", "src\\Providers\\Shoots.Providers.Ollama\\Shoots.Providers.Ollama.csproj", "{7906E143-EAB9-40EE-B6F1-95E82AF2F212}"
+@@ -118,6 +120,10 @@ Global
+ 		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+ 		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+ 		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}.Release|Any CPU.Build.0 = Release|Any CPU
++		{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}.Release|Any CPU.Build.0 = Release|Any CPU
+ 		{A7363365-209B-4597-8CC3-36F386D4E2BA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+ 		{A7363365-209B-4597-8CC3-36F386D4E2BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+ 		{A7363365-209B-4597-8CC3-36F386D4E2BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+@@ -158,6 +164,7 @@ Global
+ 		{7554EE2E-F14C-46FC-800D-1EBE937C813D} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
+ 		{6E86F625-BE6A-4072-AADD-AD65542091C2} = {195911A4-CEAD-4F50-842F-1A5BFDD1B7BA}
+ 		{6DE646CD-375D-4674-A3EC-D7DEE5AC718E} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
++		{C57F49DA-540B-4AE3-AFAF-6B159C1F394E} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
+ 		{A7363365-209B-4597-8CC3-36F386D4E2BA} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
+ 		{7906E143-EAB9-40EE-B6F1-95E82AF2F212} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
+ 		{7C18480D-4786-4EE3-ACC8-02B0301BA3E4} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
+diff --git a/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs b/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
+index 2d07b47..52b4cdf 100644
+--- a/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
++++ b/src/Providers/Shoots.Providers.Bridge/ProviderRegistryFactory.cs
+@@ -1,4 +1,5 @@
+ using Shoots.Providers.Abstractions;
++using Shoots.Providers.Embedded;
+ using Shoots.Providers.Fake;
+ using Shoots.Providers.Ollama;
+ using Shoots.Providers.Null;
+@@ -10,6 +11,7 @@ public static class ProviderRegistryFactory
+     public static ProviderRegistry CreateDefault(OllamaProviderSettings? ollamaSettings = null)
+     {
+         var registry = new ProviderRegistry();
++        registry.Register("embedded.local", new EmbeddedAiProviderAdapter());
+         registry.Register("fake.local", new FakeAiProviderAdapter());
+         registry.Register("null.local", NullAiProviderAdapter.Instance);
+         if (ollamaSettings is not null)
+diff --git a/src/Providers/Shoots.Providers.Bridge/Shoots.Providers.Bridge.csproj b/src/Providers/Shoots.Providers.Bridge/Shoots.Providers.Bridge.csproj
+index 895a365..615cc66 100644
+--- a/src/Providers/Shoots.Providers.Bridge/Shoots.Providers.Bridge.csproj
++++ b/src/Providers/Shoots.Providers.Bridge/Shoots.Providers.Bridge.csproj
+@@ -8,6 +8,7 @@
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
++    <ProjectReference Include="..\Shoots.Providers.Embedded\Shoots.Providers.Embedded.csproj" />
+     <ProjectReference Include="..\Shoots.Providers.Fake\Shoots.Providers.Fake.csproj" />
+     <ProjectReference Include="..\Shoots.Providers.Ollama\Shoots.Providers.Ollama.csproj" />
+     <ProjectReference Include="..\Shoots.Providers.Null\Shoots.Providers.Null.csproj" />
+diff --git a/src/Providers/Shoots.Providers.Embedded/EmbeddedAiProvider.cs b/src/Providers/Shoots.Providers.Embedded/EmbeddedAiProvider.cs
+new file mode 100644
+index 0000000..a6a711e
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Embedded/EmbeddedAiProvider.cs
+@@ -0,0 +1,65 @@
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Text;
++using Shoots.Contracts.Core;
++using Shoots.Runtime.Abstractions;
++
++namespace Shoots.Providers.Embedded;
++
++public sealed class EmbeddedAiProvider : IAiProvider, IAiProviderHealth, IAiProviderCapabilities
++{
++    public static readonly ProviderId EmbeddedProviderId = new("embedded.local");
++
++    public ProviderId ProviderId => EmbeddedProviderId;
++
++    public IReadOnlyList<string> Capabilities { get; } = new[]
++    {
++        "chat",
++        "narration",
++        "intent-analysis",
++        "surface-explanation",
++        "plan-review"
++    };
++
++    public AiProviderHealthStatus Status => AiProviderHealthStatus.Online;
++
++    public string Detail => "Embedded deterministic provider (rule-driven).";
++
++    public AiResponse Invoke(AiRequest request)
++    {
++        if (request is null)
++            throw new ArgumentNullException(nameof(request));
++
++        var summary = BuildDeterministicSummary(request.Prompt);
++        var schema = string.IsNullOrWhiteSpace(request.OutputSchema) ? "none" : request.OutputSchema.Trim();
++        var payload = $"embedded.local\nsummary={summary}\nschema={schema}";
++        return new AiResponse(payload);
++    }
++
++    private static string BuildDeterministicSummary(string? prompt)
++    {
++        if (string.IsNullOrWhiteSpace(prompt))
++            return "no prompt provided";
++
++        var trimmed = prompt.Trim();
++        var lines = trimmed
++            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
++            .Select(line => line.Trim())
++            .Where(line => line.Length > 0)
++            .Take(6)
++            .ToList();
++
++        var builder = new StringBuilder();
++        builder.Append("prompt-lines=");
++        builder.Append(lines.Count);
++
++        if (lines.Count > 0)
++        {
++            builder.Append("; first=");
++            builder.Append(lines[0]);
++        }
++
++        return builder.ToString();
++    }
++}
+diff --git a/src/Providers/Shoots.Providers.Embedded/EmbeddedAiProviderAdapter.cs b/src/Providers/Shoots.Providers.Embedded/EmbeddedAiProviderAdapter.cs
+new file mode 100644
+index 0000000..eb47a14
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Embedded/EmbeddedAiProviderAdapter.cs
+@@ -0,0 +1,41 @@
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using Shoots.Contracts.Core;
++using Shoots.Providers.Abstractions;
++
++namespace Shoots.Providers.Embedded;
++
++public sealed class EmbeddedAiProviderAdapter : IAiProviderAdapter
++{
++    public ToolSelectionDecision? RequestDecision(
++        WorkOrder workOrder,
++        RouteStep routeStep,
++        string graphHash,
++        string catalogHash,
++        ToolCatalogSnapshot catalog)
++    {
++        ProviderGuards.AgainstNull(workOrder, nameof(workOrder));
++        ProviderGuards.AgainstNull(routeStep, nameof(routeStep));
++        ProviderGuards.AgainstNullOrWhiteSpace(graphHash, nameof(graphHash));
++        ProviderGuards.AgainstNullOrWhiteSpace(catalogHash, nameof(catalogHash));
++        ProviderGuards.RequireCatalog(catalog);
++
++        var selectedTool = SelectToolId(catalog);
++        var bindings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
++        return selectedTool is null ? null : new ToolSelectionDecision(selectedTool, bindings);
++    }
++
++    private static ToolId? SelectToolId(ToolCatalogSnapshot catalog)
++    {
++        if (catalog.Tools.Count == 0)
++            return null;
++
++        var deterministic = catalog.Tools
++            .Select(tool => tool.ToolId)
++            .OrderBy(toolId => toolId.Value, StringComparer.Ordinal)
++            .FirstOrDefault();
++
++        return deterministic;
++    }
++}
+diff --git a/src/Providers/Shoots.Providers.Embedded/Shoots.Providers.Embedded.csproj b/src/Providers/Shoots.Providers.Embedded/Shoots.Providers.Embedded.csproj
+new file mode 100644
+index 0000000..68bc2b9
+--- /dev/null
++++ b/src/Providers/Shoots.Providers.Embedded/Shoots.Providers.Embedded.csproj
+@@ -0,0 +1,15 @@
++<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\\Shoots.Providers.Abstractions\\Shoots.Providers.Abstractions.csproj" />
++    <ProjectReference Include="..\\..\\Runtime\\Shoots.Runtime.Abstractions\\Shoots.Runtime.Abstractions.csproj" />
++    <ProjectReference Include="..\\..\\Contracts\\Shoots.Contracts.Core\\Shoots.Contracts.Core.csproj" />
++  </ItemGroup>
++
++</Project>
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/IAiProviderCapabilities.cs b/src/Runtime/Shoots.Runtime.Abstractions/IAiProviderCapabilities.cs
+new file mode 100644
+index 0000000..036a4bb
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Abstractions/IAiProviderCapabilities.cs
+@@ -0,0 +1,18 @@
++using System.Collections.Generic;
++using Shoots.Contracts.Core;
++
++namespace Shoots.Runtime.Abstractions;
++
++// ⚠️ CONTRACT FREEZE
++// Any change here requires:
++// 1. New versioned type OR
++// 2. Explicit RFC + test update
++/// <summary>
++/// AI provider capability contract (immutable).
++/// </summary>
++public interface IAiProviderCapabilities
++{
++    ProviderId ProviderId { get; }
++
++    IReadOnlyList<string> Capabilities { get; }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/IAiProviderHealth.cs b/src/Runtime/Shoots.Runtime.Abstractions/IAiProviderHealth.cs
+new file mode 100644
+index 0000000..a3e012a
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Abstractions/IAiProviderHealth.cs
+@@ -0,0 +1,29 @@
++using Shoots.Contracts.Core;
++
++namespace Shoots.Runtime.Abstractions;
++
++// ⚠️ CONTRACT FREEZE
++// Any change here requires:
++// 1. New versioned type OR
++// 2. Explicit RFC + test update
++/// <summary>
++/// Deterministic health state for AI providers.
++/// </summary>
++public enum AiProviderHealthStatus
++{
++    Online,
++    Degraded,
++    Offline
++}
++
++/// <summary>
++/// AI provider health contract (immutable).
++/// </summary>
++public interface IAiProviderHealth
++{
++    ProviderId ProviderId { get; }
++
++    AiProviderHealthStatus Status { get; }
++
++    string Detail { get; }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
+new file mode 100644
+index 0000000..b2c3ab4
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
+@@ -0,0 +1,15 @@
++using Shoots.Providers.Bridge;
++using Xunit;
++
++namespace Shoots.Runtime.Tests;
++
++public sealed class ProviderPresenceTripwireTests
++{
++    [Fact]
++    public void Default_provider_registry_includes_embedded_provider()
++    {
++        var registry = ProviderRegistryFactory.CreateDefault();
++
++        Assert.Contains("embedded.local", registry.Providers.Keys);
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj b/src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj
+index 932990a..03754c7 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj
++++ b/src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj
+@@ -10,6 +10,7 @@
+   <ItemGroup>
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+     <ProjectReference Include="..\..\Providers\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
++    <ProjectReference Include="..\..\Providers\Shoots.Providers.Bridge\Shoots.Providers.Bridge.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Core\Shoots.Runtime.Core.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Loader\Shoots.Runtime.Loader.csproj" />
