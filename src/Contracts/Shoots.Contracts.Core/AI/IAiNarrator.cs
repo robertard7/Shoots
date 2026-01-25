@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Shoots.Contracts.Core;
+namespace Shoots.Contracts.Core.AI;
 
 /// <summary>
 /// Deterministic narration contract (what the system explains back).

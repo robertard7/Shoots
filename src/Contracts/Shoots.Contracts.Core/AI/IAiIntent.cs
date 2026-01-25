@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Shoots.Contracts.Core;
+namespace Shoots.Contracts.Core.AI;
 
 /// <summary>
 /// Deterministic intent contract (what the user is trying to do).

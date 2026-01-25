@@ -1,5 +1,5 @@
 using System.Linq;
-using Shoots.Contracts.Core;
+using Shoots.Contracts.Core.AI;
 using Xunit;
 
 namespace Shoots.Contracts.Core.Tests;

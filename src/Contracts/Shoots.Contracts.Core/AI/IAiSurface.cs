@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Shoots.Contracts.Core;
+namespace Shoots.Contracts.Core.AI;
 
 /// <summary>
 /// Deterministic UI surface contract (screen, panel, editor, graph).
