@@ -13,6 +13,7 @@ public sealed class AiContractTripwireTests
         Assert.True(typeof(IAiIntent).IsInterface);
         Assert.True(typeof(IAiNarration).IsInterface);
         Assert.True(typeof(IAiNarrator).IsInterface);
+        Assert.True(typeof(IAiSurfaceRegistry).IsInterface);
     }
 
     [Fact]

@@ -151,6 +151,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
             ?? DatabaseIntents.FirstOrDefault();
         LoadEnvironmentScript();
+        RegisterAiSurfaces();
         _ = RefreshAiHelpAsync();
     }
 
@@ -1293,7 +1294,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         foreach (var record in _comparisonToolExecutionRecords)
             surfaces.Add(record);
 
+        AiSurfaceRegistry.Current.Register(surfaces);
         return surfaces;
+    }
+
+    private void RegisterAiSurfaces()
+    {
+        _ = BuildAiHelpSurfaces();
     }
 
     private void LoadBlueprints()
