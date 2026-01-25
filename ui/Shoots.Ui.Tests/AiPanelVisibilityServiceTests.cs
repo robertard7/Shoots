@@ -57,4 +57,17 @@ public sealed class AiPanelVisibilityServiceTests
         Assert.False(state.CanRenderAiExplainButtons);
         Assert.False(state.CanRenderAiProviderStatus);
     }
+
+    [Fact]
+    public void Enterprise_mode_allows_ai_for_admins()
+    {
+        var policy = new AiPresentationPolicy(AiVisibilityMode.Visible, true, true, true);
+        var service = new AiPanelVisibilityService();
+
+        var state = service.Evaluate(policy, AiAccessRole.Admin);
+
+        Assert.True(state.CanRenderAiPanel);
+        Assert.True(state.CanRenderAiExplainButtons);
+        Assert.True(state.CanRenderAiProviderStatus);
+    }
 }

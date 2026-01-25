@@ -1,0 +1,60 @@
+diff --git a/docs/UNIVERSAL_AI_LAYER.md b/docs/UNIVERSAL_AI_LAYER.md
+index 9fb7c01..53d259d 100644
+--- a/docs/UNIVERSAL_AI_LAYER.md
++++ b/docs/UNIVERSAL_AI_LAYER.md
+@@ -38,3 +38,7 @@ When adding a new screen or asset type:
+ - Create a new `IAiHelpSurface` implementation.
+ - Add the surface to the list collected in the UI or runtime layer.
+ - Provide an intent descriptor for each AI help request.
++
++## Contract freeze references
++
++- `AI_CONTRACTS_FROZEN.md` documents the frozen AI policy contracts.
+diff --git a/src/Runtime/Shoots.Runtime.Tests/AiPolicyResolverContractTests.cs b/src/Runtime/Shoots.Runtime.Tests/AiPolicyResolverContractTests.cs
+new file mode 100644
+index 0000000..1c7d169
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Tests/AiPolicyResolverContractTests.cs
+@@ -0,0 +1,20 @@
++using System.Reflection;
++using Shoots.Contracts.Core.AI;
++using Shoots.Runtime.Abstractions;
++using Xunit;
++
++namespace Shoots.Runtime.Tests;
++
++public sealed class AiPolicyResolverContractTests
++{
++    [Fact]
++    public void PolicyResolver_contract_is_frozen()
++    {
++        var method = typeof(IAiPolicyResolver).GetMethod("Resolve");
++        Assert.NotNull(method);
++        Assert.Equal(typeof(AiPresentationPolicy), method!.ReturnType);
++        var parameters = method.GetParameters();
++        Assert.Single(parameters);
++        Assert.Equal(typeof(AiAccessRole), parameters[0].ParameterType);
++    }
++}
+diff --git a/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs b/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs
+index 1a11968..0692383 100644
+--- a/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs
++++ b/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs
+@@ -57,4 +57,17 @@ public sealed class AiPanelVisibilityServiceTests
+         Assert.False(state.CanRenderAiExplainButtons);
+         Assert.False(state.CanRenderAiProviderStatus);
+     }
++
++    [Fact]
++    public void Enterprise_mode_allows_ai_for_admins()
++    {
++        var policy = new AiPresentationPolicy(AiVisibilityMode.Visible, true, true, true);
++        var service = new AiPanelVisibilityService();
++
++        var state = service.Evaluate(policy, AiAccessRole.Admin);
++
++        Assert.True(state.CanRenderAiPanel);
++        Assert.True(state.CanRenderAiExplainButtons);
++        Assert.True(state.CanRenderAiProviderStatus);
++    }
+ }
