@@ -1,0 +1,408 @@
+diff --git a/docs/AI_CONTRACTS_FROZEN.md b/docs/AI_CONTRACTS_FROZEN.md
+new file mode 100644
+index 0000000..54129c9
+--- /dev/null
++++ b/docs/AI_CONTRACTS_FROZEN.md
+@@ -0,0 +1,10 @@
++AI Contracts Frozen
++===================
++
++The following AI policy contracts are frozen:
++
++- AiAccessRole
++- AiVisibilityMode
++- AiPresentationPolicy
++
++Changes to these types require explicit versioning and updated tripwire tests.
+diff --git a/src/Contracts/Shoots.Contracts.Core.Tests/AiPolicyContractTripwireTests.cs b/src/Contracts/Shoots.Contracts.Core.Tests/AiPolicyContractTripwireTests.cs
+new file mode 100644
+index 0000000..47b9efe
+--- /dev/null
++++ b/src/Contracts/Shoots.Contracts.Core.Tests/AiPolicyContractTripwireTests.cs
+@@ -0,0 +1,44 @@
++using System;
++using System.Linq;
++using System.Reflection;
++using Shoots.Contracts.Core.AI;
++using Xunit;
++
++namespace Shoots.Contracts.Core.Tests;
++
++public sealed class AiPolicyContractTripwireTests
++{
++    [Fact]
++    public void AiVisibilityMode_is_frozen()
++    {
++        var names = Enum.GetNames(typeof(AiVisibilityMode));
++        Assert.Equal(new[] { "Visible", "HiddenForEndUsers", "AdminOnly" }, names);
++    }
++
++    [Fact]
++    public void AiAccessRole_is_frozen()
++    {
++        var names = Enum.GetNames(typeof(AiAccessRole));
++        Assert.Equal(new[] { "EndUser", "Developer", "Admin" }, names);
++    }
++
++    [Fact]
++    public void AiPresentationPolicy_fields_are_frozen()
++    {
++        var properties = typeof(AiPresentationPolicy)
++            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
++            .Select(property => property.Name)
++            .OrderBy(name => name, StringComparer.Ordinal)
++            .ToArray();
++
++        Assert.Equal(
++            new[]
++            {
++                "AllowAiPanelToggle",
++                "AllowCopyExport",
++                "EnterpriseMode",
++                "Visibility"
++            },
++            properties);
++    }
++}
+diff --git a/src/Contracts/Shoots.Contracts.Core/AI/AiPresentationPolicy.cs b/src/Contracts/Shoots.Contracts.Core/AI/AiPresentationPolicy.cs
+index 95577ee..f6e764c 100644
+--- a/src/Contracts/Shoots.Contracts.Core/AI/AiPresentationPolicy.cs
++++ b/src/Contracts/Shoots.Contracts.Core/AI/AiPresentationPolicy.cs
+@@ -6,5 +6,6 @@ namespace Shoots.Contracts.Core.AI;
+ public sealed record AiPresentationPolicy(
+     AiVisibilityMode Visibility,
+     bool AllowAiPanelToggle,
+-    bool AllowCopyExport
++    bool AllowCopyExport,
++    bool EnterpriseMode
+ );
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/IAiPolicyResolver.cs b/src/Runtime/Shoots.Runtime.Abstractions/IAiPolicyResolver.cs
+new file mode 100644
+index 0000000..00ac9ca
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Abstractions/IAiPolicyResolver.cs
+@@ -0,0 +1,15 @@
++using Shoots.Contracts.Core.AI;
++
++namespace Shoots.Runtime.Abstractions;
++
++// ⚠️ CONTRACT FREEZE
++// Any change here requires:
++// 1. New versioned type OR
++// 2. Explicit RFC + test update
++/// <summary>
++/// Resolves AI presentation policy before UI is constructed.
++/// </summary>
++public interface IAiPolicyResolver
++{
++    AiPresentationPolicy Resolve(AiAccessRole accessRole);
++}
+diff --git a/src/Runtime/Shoots.Runtime.Loader/DefaultAiPolicyResolver.cs b/src/Runtime/Shoots.Runtime.Loader/DefaultAiPolicyResolver.cs
+new file mode 100644
+index 0000000..ce27b94
+--- /dev/null
++++ b/src/Runtime/Shoots.Runtime.Loader/DefaultAiPolicyResolver.cs
+@@ -0,0 +1,17 @@
++using Shoots.Contracts.Core.AI;
++using Shoots.Runtime.Abstractions;
++
++namespace Shoots.Runtime.Loader;
++
++public sealed class DefaultAiPolicyResolver : IAiPolicyResolver
++{
++    public AiPresentationPolicy Resolve(AiAccessRole accessRole)
++    {
++        _ = accessRole;
++        return new AiPresentationPolicy(
++            AiVisibilityMode.Visible,
++            AllowAiPanelToggle: true,
++            AllowCopyExport: true,
++            EnterpriseMode: false);
++    }
++}
+diff --git a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+index 1451b88..9a109c8 100644
+--- a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
++++ b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+@@ -1,5 +1,6 @@
+ using System.Diagnostics;
+ using Shoots.Contracts.Core;
++using Shoots.Contracts.Core.AI;
+ using Shoots.Providers.Bridge;
+ using Shoots.Runtime.Abstractions;
+ using Shoots.Runtime.Ui.Abstractions;
+@@ -9,10 +10,19 @@ namespace Shoots.Runtime.Loader;
+ public sealed class RuntimeFacade : IRuntimeFacade
+ {
+     private readonly IRuntimeHost _host;
++    private readonly IAiPolicyResolver _policyResolver;
++    private readonly AiPresentationPolicy _policy;
+ 
+     public RuntimeFacade(IRuntimeHost host)
++        : this(host, null)
++    { }
++
++    public RuntimeFacade(IRuntimeHost host, IAiPolicyResolver? policyResolver)
+     {
+         _host = host ?? throw new ArgumentNullException(nameof(host));
++        _policyResolver = policyResolver ?? new DefaultAiPolicyResolver();
++        _policy = _policyResolver.Resolve(AiAccessRole.Developer);
++        Trace.WriteLine($"[Shoots.Runtime.Loader] AI policy: {_policy.Visibility} (enterprise={_policy.EnterpriseMode})");
+         EnforceEmbeddedProvider();
+     }
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RuntimeFacadeBoundaryTests.cs b/src/Runtime/Shoots.Runtime.Tests/RuntimeFacadeBoundaryTests.cs
+index 89f77ba..f2ac25c 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RuntimeFacadeBoundaryTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RuntimeFacadeBoundaryTests.cs
+@@ -1,5 +1,6 @@
+ using System.Threading;
+ using System.Threading.Tasks;
++using Shoots.Contracts.Core.AI;
+ using Shoots.Runtime.Abstractions;
+ using Shoots.Runtime.Loader;
+ using Xunit;
+@@ -18,6 +19,18 @@ public sealed class RuntimeFacadeBoundaryTests
+         Assert.Equal(new RuntimeVersion(0, 0, 0), status.Version);
+     }
+ 
++    [Fact]
++    public async Task RuntimeFacadeAllowsHiddenAiPolicy()
++    {
++        var facade = new RuntimeFacade(
++            new StubRuntimeHost(),
++            new StubPolicyResolver());
++
++        var status = await facade.QueryStatus();
++
++        Assert.Equal(new RuntimeVersion(0, 0, 0), status.Version);
++    }
++
+     private sealed class StubRuntimeHost : IRuntimeHost
+     {
+         public RuntimeVersion Version => new(0, 0, 0);
+@@ -29,4 +42,17 @@ public sealed class RuntimeFacadeBoundaryTests
+             return RuntimeResult.Fail(RuntimeError.Internal("Stub runtime host."));
+         }
+     }
++
++    private sealed class StubPolicyResolver : IAiPolicyResolver
++    {
++        public AiPresentationPolicy Resolve(AiAccessRole accessRole)
++        {
++            _ = accessRole;
++            return new AiPresentationPolicy(
++                AiVisibilityMode.HiddenForEndUsers,
++                AllowAiPanelToggle: false,
++                AllowCopyExport: false,
++                EnterpriseMode: true);
++        }
++    }
+ }
+diff --git a/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs b/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs
+index f2ea35d..1a11968 100644
+--- a/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs
++++ b/ui/Shoots.Ui.Tests/AiPanelVisibilityServiceTests.cs
+@@ -9,7 +9,7 @@ public sealed class AiPanelVisibilityServiceTests
+     [Fact]
+     public void Visible_policy_shows_ai_for_end_users()
+     {
+-        var policy = new AiPresentationPolicy(AiVisibilityMode.Visible, true, true);
++        var policy = new AiPresentationPolicy(AiVisibilityMode.Visible, true, true, false);
+         var service = new AiPanelVisibilityService();
+ 
+         var state = service.Evaluate(policy, AiAccessRole.EndUser);
+@@ -22,7 +22,7 @@ public sealed class AiPanelVisibilityServiceTests
+     [Fact]
+     public void Hidden_for_end_users_blocks_ai_for_end_users()
+     {
+-        var policy = new AiPresentationPolicy(AiVisibilityMode.HiddenForEndUsers, true, true);
++        var policy = new AiPresentationPolicy(AiVisibilityMode.HiddenForEndUsers, true, true, false);
+         var service = new AiPanelVisibilityService();
+ 
+         var state = service.Evaluate(policy, AiAccessRole.EndUser);
+@@ -35,7 +35,7 @@ public sealed class AiPanelVisibilityServiceTests
+     [Fact]
+     public void Admin_only_shows_ai_for_admins()
+     {
+-        var policy = new AiPresentationPolicy(AiVisibilityMode.AdminOnly, true, true);
++        var policy = new AiPresentationPolicy(AiVisibilityMode.AdminOnly, true, true, false);
+         var service = new AiPanelVisibilityService();
+ 
+         var state = service.Evaluate(policy, AiAccessRole.Admin);
+@@ -44,4 +44,17 @@ public sealed class AiPanelVisibilityServiceTests
+         Assert.True(state.CanRenderAiExplainButtons);
+         Assert.True(state.CanRenderAiProviderStatus);
+     }
++
++    [Fact]
++    public void Enterprise_mode_hides_ai_for_end_users()
++    {
++        var policy = new AiPresentationPolicy(AiVisibilityMode.Visible, true, true, true);
++        var service = new AiPanelVisibilityService();
++
++        var state = service.Evaluate(policy, AiAccessRole.EndUser);
++
++        Assert.False(state.CanRenderAiPanel);
++        Assert.False(state.CanRenderAiExplainButtons);
++        Assert.False(state.CanRenderAiProviderStatus);
++    }
+ }
+diff --git a/ui/Shoots.Ui/MainWindow.xaml b/ui/Shoots.Ui/MainWindow.xaml
+index 3e5527b..f73e84b 100644
+--- a/ui/Shoots.Ui/MainWindow.xaml
++++ b/ui/Shoots.Ui/MainWindow.xaml
+@@ -185,12 +185,28 @@
+                   <CheckBox Content="Allow copy/export"
+                             IsChecked="{Binding AllowCopyExport}" />
+                 </StackPanel>
++                <StackPanel Margin="0,6,0,0" Orientation="Horizontal">
++                  <CheckBox Content="Enterprise mode (hide AI for end users)"
++                            IsChecked="{Binding EnterpriseMode}" />
++                </StackPanel>
+               </StackPanel>
+             </GroupBox>
+             <TextBlock Margin="0,8,0,0"
+                        Foreground="#FF6B7280"
+                        Text="{Binding AiPanelVisibilityNote}"
+                        TextWrapping="Wrap" />
++            <TextBlock Margin="0,6,0,0"
++                       Foreground="#FFB91C1C"
++                       Text="{Binding AiExportNotice}"
++                       TextWrapping="Wrap"
++                       Visibility="{Binding IsCopyExportDisabled, Converter={StaticResource BooleanToVisibilityConverter}}" />
++            <Border Margin="0,6,0,0"
++                    Background="#FFFDE68A"
++                    CornerRadius="4"
++                    Padding="6"
++                    Visibility="{Binding ShowAdminOnlyWatermark, Converter={StaticResource BooleanToVisibilityConverter}}">
++              <TextBlock Text="{Binding AiVisibilityWatermark}" Foreground="#FF92400E" />
++            </Border>
+             <Border Margin="0,8,0,0"
+                     Background="#FFEFF6FF"
+                     CornerRadius="4"
+diff --git a/ui/Shoots.Ui/Services/AiPanelVisibilityService.cs b/ui/Shoots.Ui/Services/AiPanelVisibilityService.cs
+index ce73dcf..72428d5 100644
+--- a/ui/Shoots.Ui/Services/AiPanelVisibilityService.cs
++++ b/ui/Shoots.Ui/Services/AiPanelVisibilityService.cs
+@@ -16,6 +16,9 @@ public sealed class AiPanelVisibilityService
+         if (policy is null)
+             throw new ArgumentNullException(nameof(policy));
+ 
++        if (policy.EnterpriseMode && role == AiAccessRole.EndUser)
++            return new AiPanelVisibilityState(false, false, false);
++
+         return policy.Visibility switch
+         {
+             AiVisibilityMode.Visible => new AiPanelVisibilityState(true, true, true),
+diff --git a/ui/Shoots.Ui/Settings/AiPolicyStore.cs b/ui/Shoots.Ui/Settings/AiPolicyStore.cs
+index 6d88e56..fbc8dcf 100644
+--- a/ui/Shoots.Ui/Settings/AiPolicyStore.cs
++++ b/ui/Shoots.Ui/Settings/AiPolicyStore.cs
+@@ -77,7 +77,8 @@ public sealed class AiPolicyStore : IAiPolicyStore
+         var policy = new AiPresentationPolicy(
+             AiVisibilityMode.Visible,
+             AllowAiPanelToggle: true,
+-            AllowCopyExport: true);
++            AllowCopyExport: true,
++            EnterpriseMode: false);
+ 
+         return new AiPolicySettings(AiAccessRole.Developer, policy);
+     }
+diff --git a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+index cd5e183..b651eae 100644
+--- a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
++++ b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+@@ -70,7 +70,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+     private ToolExecutionSessionViewModel? _comparisonToolExecutionSession;
+     private string _blueprintSaveStatus = "Blueprint changes are saved.";
+     private AiPresentationPolicy _aiPresentationPolicy =
+-        new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true);
++        new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true, EnterpriseMode: false);
+     private AiAccessRole _aiAccessRole = AiAccessRole.Developer;
+     private AiPanelVisibilityState _aiPanelVisibilityState = new(true, true, true);
+ 
+@@ -528,6 +528,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+             SaveAiPolicy();
+             UpdateAiVisibilityState();
+             OnPropertyChanged(nameof(SelectedAiVisibilityMode));
++            OnPropertyChanged(nameof(ShowAdminOnlyWatermark));
+         }
+     }
+ 
+@@ -545,6 +546,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+             OnPropertyChanged(nameof(SelectedAiAccessRole));
+             OnPropertyChanged(nameof(CanConfigureAiPolicy));
+             OnPropertyChanged(nameof(CanToggleAiVisibility));
++            OnPropertyChanged(nameof(ShowAdminOnlyWatermark));
+         }
+     }
+ 
+@@ -574,6 +576,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+             _aiPresentationPolicy = _aiPresentationPolicy with { AllowCopyExport = value };
+             SaveAiPolicy();
+             OnPropertyChanged(nameof(AllowCopyExport));
++            OnPropertyChanged(nameof(IsCopyExportDisabled));
++            OnPropertyChanged(nameof(AiExportNotice));
++        }
++    }
++
++    public bool EnterpriseMode
++    {
++        get => _aiPresentationPolicy.EnterpriseMode;
++        set
++        {
++            if (_aiPresentationPolicy.EnterpriseMode == value)
++                return;
++
++            _aiPresentationPolicy = _aiPresentationPolicy with { EnterpriseMode = value };
++            SaveAiPolicy();
++            UpdateAiVisibilityState();
++            OnPropertyChanged(nameof(EnterpriseMode));
+         }
+     }
+ 
+@@ -588,6 +607,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+     public bool CanRenderAiProviderStatus => _aiPanelVisibilityState.CanRenderAiProviderStatus;
+ 
+     public bool IsAiPanelHidden => !CanRenderAiPanel;
++    public bool IsCopyExportDisabled => !AllowCopyExport;
++
++    public bool ShowAdminOnlyWatermark => CanRenderAiPanel && SelectedAiVisibilityMode == AiVisibilityMode.AdminOnly;
+ 
+     public string AiPanelVisibilityNote => CanRenderAiPanel
+         ? "AI help is available for this role."
+@@ -595,6 +617,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+ 
+     public string AiProviderStatus => "Embedded provider (primary).";
+ 
++    public string AiExportNotice => IsCopyExportDisabled
++        ? "Copy and export are disabled by policy."
++        : string.Empty;
++
++    public string AiVisibilityWatermark => "Admin-only visibility";
++
+     public RootFsDescriptor? SelectedRootFs
+     {
+         get => ActiveRootFs;
+@@ -1422,8 +1450,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         OnPropertyChanged(nameof(SelectedAiVisibilityMode));
+         OnPropertyChanged(nameof(AllowAiPanelToggle));
+         OnPropertyChanged(nameof(AllowCopyExport));
++        OnPropertyChanged(nameof(EnterpriseMode));
+         OnPropertyChanged(nameof(CanConfigureAiPolicy));
+         OnPropertyChanged(nameof(CanToggleAiVisibility));
++        OnPropertyChanged(nameof(IsCopyExportDisabled));
++        OnPropertyChanged(nameof(AiExportNotice));
++        OnPropertyChanged(nameof(ShowAdminOnlyWatermark));
+     }
+ 
+     private void SaveAiPolicy()
+@@ -1440,6 +1472,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         OnPropertyChanged(nameof(CanRenderAiProviderStatus));
+         OnPropertyChanged(nameof(IsAiPanelHidden));
+         OnPropertyChanged(nameof(AiPanelVisibilityNote));
++        OnPropertyChanged(nameof(ShowAdminOnlyWatermark));
+     }
+ 
+     private void LoadBlueprints()

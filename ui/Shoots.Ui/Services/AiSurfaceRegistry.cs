@@ -15,6 +15,40 @@ public sealed class AiSurfaceRegistry : IAiSurfaceRegistry
     public IReadOnlyList<AiSurfaceRegistration> RegisteredSurfaces
         => _registrations.Values.ToList();
 
+    public IReadOnlyList<string> GetMissingSurfaceIds(IEnumerable<string> surfaceIds)
+    {
+        if (surfaceIds is null)
+            throw new ArgumentNullException(nameof(surfaceIds));
+
+        return surfaceIds
+            .Where(id => !_registrations.ContainsKey(id))
+            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public IReadOnlyList<string> GetMissingSurfacePrefixes(IEnumerable<string> prefixes)
+    {
+        if (prefixes is null)
+            throw new ArgumentNullException(nameof(prefixes));
+
+        return prefixes
+            .Where(prefix => _registrations.Keys.All(id => !id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(prefix => prefix, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public string DescribeRegistrations()
+    {
+        if (_registrations.Count == 0)
+            return "none";
+
+        return string.Join(
+            ", ",
+            _registrations.Values
+                .OrderBy(registration => registration.SurfaceId, StringComparer.OrdinalIgnoreCase)
+                .Select(registration => $"{registration.SurfaceId} ({registration.SurfaceKind})"));
+    }
+
     public void Register(AiSurfaceRegistration registration)
     {
         ValidateRegistration(registration);

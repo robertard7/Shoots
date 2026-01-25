@@ -77,7 +77,8 @@ public sealed class AiPolicyStore : IAiPolicyStore
         var policy = new AiPresentationPolicy(
             AiVisibilityMode.Visible,
             AllowAiPanelToggle: true,
-            AllowCopyExport: true);
+            AllowCopyExport: true,
+            EnterpriseMode: false);
 
         return new AiPolicySettings(AiAccessRole.Developer, policy);
     }

@@ -185,12 +185,28 @@
                   <CheckBox Content="Allow copy/export"
                             IsChecked="{Binding AllowCopyExport}" />
                 </StackPanel>
+                <StackPanel Margin="0,6,0,0" Orientation="Horizontal">
+                  <CheckBox Content="Enterprise mode (hide AI for end users)"
+                            IsChecked="{Binding EnterpriseMode}" />
+                </StackPanel>
               </StackPanel>
             </GroupBox>
             <TextBlock Margin="0,8,0,0"
                        Foreground="#FF6B7280"
                        Text="{Binding AiPanelVisibilityNote}"
                        TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="#FFB91C1C"
+                       Text="{Binding AiExportNotice}"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding IsCopyExportDisabled, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <Border Margin="0,6,0,0"
+                    Background="#FFFDE68A"
+                    CornerRadius="4"
+                    Padding="6"
+                    Visibility="{Binding ShowAdminOnlyWatermark, Converter={StaticResource BooleanToVisibilityConverter}}">
+              <TextBlock Text="{Binding AiVisibilityWatermark}" Foreground="#FF92400E" />
+            </Border>
             <Border Margin="0,8,0,0"
                     Background="#FFEFF6FF"
                     CornerRadius="4"

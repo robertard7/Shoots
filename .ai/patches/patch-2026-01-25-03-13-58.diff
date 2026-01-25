@@ -1,0 +1,41 @@
+diff --git a/docs/AI_CONTRACTS_FROZEN.md b/docs/AI_CONTRACTS_FROZEN.md
+index 54129c9..03f1efb 100644
+--- a/docs/AI_CONTRACTS_FROZEN.md
++++ b/docs/AI_CONTRACTS_FROZEN.md
+@@ -8,3 +8,5 @@ The following AI policy contracts are frozen:
+ - AiPresentationPolicy
+ 
+ Changes to these types require explicit versioning and updated tripwire tests.
++
++Tripwire tests enforce the contract shape; CI fails when frozen contracts change without versioning.
+diff --git a/docs/ENTERPRISE_AI_BEHAVIOR.md b/docs/ENTERPRISE_AI_BEHAVIOR.md
+new file mode 100644
+index 0000000..c24852a
+--- /dev/null
++++ b/docs/ENTERPRISE_AI_BEHAVIOR.md
+@@ -0,0 +1,8 @@
++# Enterprise AI Behavior
++
++EnterpriseMode controls presentation only.
++
++Rules:
++- EnterpriseMode hides AI UI for EndUser roles.
++- EnterpriseMode does not disable AI surfaces or providers.
++- Admin/Developer roles retain access to AI UI when EnterpriseMode is enabled.
+diff --git a/docs/INDEX.md b/docs/INDEX.md
+new file mode 100644
+index 0000000..2d0d790
+--- /dev/null
++++ b/docs/INDEX.md
+@@ -0,0 +1,11 @@
++# Documentation Index
++
++- AI_CONTRACTS_FROZEN.md
++- AI_GUARDRAILS.md
++- ENTERPRISE_AI_BEHAVIOR.md
++- EXECUTION_CORE_FROZEN.md
++- PATCH_INDEX.md
++- PROVIDER_CONTRACT_FROZEN.md
++- UI_WPF_LAYOUT_DEFERRED.md
++- UNIVERSAL_AI_LAYER.md
++- VERIFICATION_POLICY.md

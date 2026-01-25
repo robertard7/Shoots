@@ -70,7 +70,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private ToolExecutionSessionViewModel? _comparisonToolExecutionSession;
     private string _blueprintSaveStatus = "Blueprint changes are saved.";
     private AiPresentationPolicy _aiPresentationPolicy =
-        new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true);
+        new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true, EnterpriseMode: false);
     private AiAccessRole _aiAccessRole = AiAccessRole.Developer;
     private AiPanelVisibilityState _aiPanelVisibilityState = new(true, true, true);
 
@@ -528,6 +528,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             SaveAiPolicy();
             UpdateAiVisibilityState();
             OnPropertyChanged(nameof(SelectedAiVisibilityMode));
+            OnPropertyChanged(nameof(ShowAdminOnlyWatermark));
         }
     }
 
@@ -545,6 +546,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(SelectedAiAccessRole));
             OnPropertyChanged(nameof(CanConfigureAiPolicy));
             OnPropertyChanged(nameof(CanToggleAiVisibility));
+            OnPropertyChanged(nameof(ShowAdminOnlyWatermark));
         }
     }
 
@@ -574,6 +576,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _aiPresentationPolicy = _aiPresentationPolicy with { AllowCopyExport = value };
             SaveAiPolicy();
             OnPropertyChanged(nameof(AllowCopyExport));
+            OnPropertyChanged(nameof(IsCopyExportDisabled));
+            OnPropertyChanged(nameof(AiExportNotice));
+        }
+    }
+
+    public bool EnterpriseMode
+    {
+        get => _aiPresentationPolicy.EnterpriseMode;
+        set
+        {
+            if (_aiPresentationPolicy.EnterpriseMode == value)
+                return;
+
+            _aiPresentationPolicy = _aiPresentationPolicy with { EnterpriseMode = value };
+            SaveAiPolicy();
+            UpdateAiVisibilityState();
+            OnPropertyChanged(nameof(EnterpriseMode));
         }
     }
 
@@ -588,12 +607,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public bool CanRenderAiProviderStatus => _aiPanelVisibilityState.CanRenderAiProviderStatus;
 
     public bool IsAiPanelHidden => !CanRenderAiPanel;
+    public bool IsCopyExportDisabled => !AllowCopyExport;
+
+    public bool ShowAdminOnlyWatermark => CanRenderAiPanel && SelectedAiVisibilityMode == AiVisibilityMode.AdminOnly;
 
     public string AiPanelVisibilityNote => CanRenderAiPanel
         ? "AI help is available for this role."
         : "AI is running in the background but hidden by policy.";
 
     public string AiProviderStatus => "Embedded provider (primary).";
+
+    public string AiExportNotice => IsCopyExportDisabled
+        ? "Copy and export are disabled by policy."
+        : string.Empty;
+
+    public string AiVisibilityWatermark => "Admin-only visibility";
 
     public RootFsDescriptor? SelectedRootFs
     {
@@ -1391,7 +1419,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             new ExecutionAiHelpSurface(Plan, State, StartDisabledReason),
             new ExecutionEnvironmentAiHelpSurface(ActiveRootFs, RootFsSourceOverride, RootFsFallbackNotice),
             new BlueprintCatalogAiHelpSurface(_blueprints.Select(entry => entry.Name).ToList()),
-            new PlannerAiHelpSurface(Plan)
+            new PlannerAiHelpSurface(Plan),
+            new ToolExecutionCatalogAiHelpSurface(_toolExecutionSessions, _toolExecutionRecords, _comparisonToolExecutionRecords)
         };
 
         foreach (var blueprint in _blueprints)
@@ -1422,8 +1451,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(SelectedAiVisibilityMode));
         OnPropertyChanged(nameof(AllowAiPanelToggle));
         OnPropertyChanged(nameof(AllowCopyExport));
+        OnPropertyChanged(nameof(EnterpriseMode));
         OnPropertyChanged(nameof(CanConfigureAiPolicy));
         OnPropertyChanged(nameof(CanToggleAiVisibility));
+        OnPropertyChanged(nameof(IsCopyExportDisabled));
+        OnPropertyChanged(nameof(AiExportNotice));
+        OnPropertyChanged(nameof(ShowAdminOnlyWatermark));
     }
 
     private void SaveAiPolicy()
@@ -1440,6 +1473,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CanRenderAiProviderStatus));
         OnPropertyChanged(nameof(IsAiPanelHidden));
         OnPropertyChanged(nameof(AiPanelVisibilityNote));
+        OnPropertyChanged(nameof(ShowAdminOnlyWatermark));
     }
 
     private void LoadBlueprints()

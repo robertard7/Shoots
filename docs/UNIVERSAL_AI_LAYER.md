@@ -38,3 +38,7 @@ When adding a new screen or asset type:
 - Create a new `IAiHelpSurface` implementation.
 - Add the surface to the list collected in the UI or runtime layer.
 - Provide an intent descriptor for each AI help request.
+
+## Contract freeze references
+
+- `AI_CONTRACTS_FROZEN.md` documents the frozen AI policy contracts.

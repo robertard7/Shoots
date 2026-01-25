@@ -16,6 +16,9 @@ public sealed class AiPanelVisibilityService
         if (policy is null)
             throw new ArgumentNullException(nameof(policy));
 
+        if (policy.EnterpriseMode && role == AiAccessRole.EndUser)
+            return new AiPanelVisibilityState(false, false, false);
+
         return policy.Visibility switch
         {
             AiVisibilityMode.Visible => new AiPanelVisibilityState(true, true, true),
