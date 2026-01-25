@@ -5,6 +5,7 @@ using Shoots.UI.Blueprints;
 using Shoots.UI.ExecutionEnvironments;
 using Shoots.UI.Projects;
 using Shoots.UI.Services;
+using Shoots.UI.Settings;
 using Shoots.UI.ViewModels;
 
 namespace Shoots.UI;
@@ -21,6 +22,7 @@ public partial class MainWindow : Window
         var databaseIntentStore = new DatabaseIntentStore();
         var blueprintStore = new SystemBlueprintStore();
         var executionEnvironmentStore = new ExecutionEnvironmentSettingsStore();
+        var aiPolicyStore = new AiPolicyStore();
         DataContext = new MainWindowViewModel(
             new NullExecutionCommandService(),
             new EnvironmentProfileService(),
@@ -33,6 +35,8 @@ public partial class MainWindow : Window
             new ToolTierPrompt(),
             blueprintStore,
             executionEnvironmentStore,
+            aiPolicyStore,
+            new AiPanelVisibilityService(),
             new NullAiHelpFacade());
     }
 }

@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using Shoots.UI.AiHelp;
+using Shoots.UI.Services;
 
 namespace Shoots.UI;
 
@@ -47,6 +49,7 @@ public partial class App : Application
 
         MainWindow = new MainWindow();
         MainWindow.Show();
+        AiSurfaceRegistry.Current.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
 
         base.OnStartup(e);
     }

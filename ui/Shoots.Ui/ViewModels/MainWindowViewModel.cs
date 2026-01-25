@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using Shoots.Contracts.Core;
+using Shoots.Contracts.Core.AI;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
 using Shoots.UI.AiHelp;
@@ -15,6 +16,7 @@ using Shoots.UI.Intents;
 using Shoots.UI.Projects;
 using Shoots.UI.Roles;
 using Shoots.UI.Services;
+using Shoots.UI.Settings;
 
 namespace Shoots.UI.ViewModels;
 
@@ -31,6 +33,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly IToolTierPrompt _toolTierPrompt;
     private readonly ISystemBlueprintStore _blueprintStore;
     private readonly IExecutionEnvironmentSettingsStore _executionEnvironmentStore;
+    private readonly IAiPolicyStore _aiPolicyStore;
+    private readonly AiPanelVisibilityService _aiPanelVisibilityService;
     private readonly IAiHelpFacade _aiHelpFacade;
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private readonly ObservableCollection<BlueprintEntryViewModel> _blueprints;
@@ -65,6 +69,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private ToolExecutionSessionViewModel? _selectedToolExecutionSession;
     private ToolExecutionSessionViewModel? _comparisonToolExecutionSession;
     private string _blueprintSaveStatus = "Blueprint changes are saved.";
+    private AiPresentationPolicy _aiPresentationPolicy =
+        new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true);
+    private AiAccessRole _aiAccessRole = AiAccessRole.Developer;
+    private AiPanelVisibilityState _aiPanelVisibilityState = new(true, true, true);
 
     public MainWindowViewModel(
         IExecutionCommandService commandService,
@@ -78,6 +86,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         IToolTierPrompt toolTierPrompt,
         ISystemBlueprintStore blueprintStore,
         IExecutionEnvironmentSettingsStore executionEnvironmentStore,
+        IAiPolicyStore aiPolicyStore,
+        AiPanelVisibilityService aiPanelVisibilityService,
         IAiHelpFacade aiHelpFacade)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
@@ -91,6 +101,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _toolTierPrompt = toolTierPrompt ?? throw new ArgumentNullException(nameof(toolTierPrompt));
         _blueprintStore = blueprintStore ?? throw new ArgumentNullException(nameof(blueprintStore));
         _executionEnvironmentStore = executionEnvironmentStore ?? throw new ArgumentNullException(nameof(executionEnvironmentStore));
+        _aiPolicyStore = aiPolicyStore ?? throw new ArgumentNullException(nameof(aiPolicyStore));
+        _aiPanelVisibilityService = aiPanelVisibilityService ?? throw new ArgumentNullException(nameof(aiPanelVisibilityService));
         _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
         _state = ExecutionState.Idle;
 
@@ -141,6 +153,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         LoadExecutionEnvironments();
         RoleOptions = new ReadOnlyCollection<RoleDescriptor>(RoleCatalog.GetDefaultRoles().ToList());
         SelectedRole = RoleOptions.FirstOrDefault();
+        AiVisibilityModes = new ReadOnlyCollection<AiVisibilityMode>(new[]
+        {
+            AiVisibilityMode.Visible,
+            AiVisibilityMode.HiddenForEndUsers,
+            AiVisibilityMode.AdminOnly
+        });
+        AiAccessRoles = new ReadOnlyCollection<AiAccessRole>(new[]
+        {
+            AiAccessRole.EndUser,
+            AiAccessRole.Developer,
+            AiAccessRole.Admin
+        });
         DatabaseIntents = new ReadOnlyCollection<DatabaseIntentOption>(new[]
         {
             new DatabaseIntentOption(DatabaseIntent.None, "None", "No database intent declared."),
@@ -151,6 +175,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
             ?? DatabaseIntents.FirstOrDefault();
         LoadEnvironmentScript();
+        LoadAiPolicy();
+        RegisterAiSurfaces();
         _ = RefreshAiHelpAsync();
     }
 
@@ -457,6 +483,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             UpdateExecutionEnvironmentSelection();
             LoadBlueprints();
             OnToolpackTierChanged();
+            LoadAiPolicy();
             _ = RefreshAiHelpAsync();
             RaiseCommandCanExecute();
         }
@@ -484,6 +511,89 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     public string SelectedRoleDescription => SelectedRole?.Description ?? "No role selected.";
+
+    public ReadOnlyCollection<AiVisibilityMode> AiVisibilityModes { get; }
+
+    public ReadOnlyCollection<AiAccessRole> AiAccessRoles { get; }
+
+    public AiVisibilityMode SelectedAiVisibilityMode
+    {
+        get => _aiPresentationPolicy.Visibility;
+        set
+        {
+            if (_aiPresentationPolicy.Visibility == value)
+                return;
+
+            _aiPresentationPolicy = _aiPresentationPolicy with { Visibility = value };
+            SaveAiPolicy();
+            UpdateAiVisibilityState();
+            OnPropertyChanged(nameof(SelectedAiVisibilityMode));
+        }
+    }
+
+    public AiAccessRole SelectedAiAccessRole
+    {
+        get => _aiAccessRole;
+        set
+        {
+            if (_aiAccessRole == value)
+                return;
+
+            _aiAccessRole = value;
+            SaveAiPolicy();
+            UpdateAiVisibilityState();
+            OnPropertyChanged(nameof(SelectedAiAccessRole));
+            OnPropertyChanged(nameof(CanConfigureAiPolicy));
+            OnPropertyChanged(nameof(CanToggleAiVisibility));
+        }
+    }
+
+    public bool AllowAiPanelToggle
+    {
+        get => _aiPresentationPolicy.AllowAiPanelToggle;
+        set
+        {
+            if (_aiPresentationPolicy.AllowAiPanelToggle == value)
+                return;
+
+            _aiPresentationPolicy = _aiPresentationPolicy with { AllowAiPanelToggle = value };
+            SaveAiPolicy();
+            OnPropertyChanged(nameof(AllowAiPanelToggle));
+            OnPropertyChanged(nameof(CanToggleAiVisibility));
+        }
+    }
+
+    public bool AllowCopyExport
+    {
+        get => _aiPresentationPolicy.AllowCopyExport;
+        set
+        {
+            if (_aiPresentationPolicy.AllowCopyExport == value)
+                return;
+
+            _aiPresentationPolicy = _aiPresentationPolicy with { AllowCopyExport = value };
+            SaveAiPolicy();
+            OnPropertyChanged(nameof(AllowCopyExport));
+        }
+    }
+
+    public bool CanConfigureAiPolicy => _aiAccessRole is AiAccessRole.Admin or AiAccessRole.Developer;
+
+    public bool CanToggleAiVisibility => CanConfigureAiPolicy && AllowAiPanelToggle;
+
+    public bool CanRenderAiPanel => _aiPanelVisibilityState.CanRenderAiPanel;
+
+    public bool CanRenderAiExplainButtons => _aiPanelVisibilityState.CanRenderAiExplainButtons;
+
+    public bool CanRenderAiProviderStatus => _aiPanelVisibilityState.CanRenderAiProviderStatus;
+
+    public bool IsAiPanelHidden => !CanRenderAiPanel;
+
+    public string AiPanelVisibilityNote => CanRenderAiPanel
+        ? "AI help is available for this role."
+        : "AI is running in the background but hidden by policy.";
+
+    public string AiProviderStatus => "Embedded provider (primary).";
 
     public RootFsDescriptor? SelectedRootFs
     {
@@ -1293,7 +1403,43 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         foreach (var record in _comparisonToolExecutionRecords)
             surfaces.Add(record);
 
+        AiSurfaceRegistry.Current.Register(surfaces);
         return surfaces;
+    }
+
+    private void RegisterAiSurfaces()
+    {
+        _ = BuildAiHelpSurfaces();
+    }
+
+    private void LoadAiPolicy()
+    {
+        var settings = _aiPolicyStore.Load(ActiveWorkspace?.RootPath);
+        _aiAccessRole = settings.AccessRole;
+        _aiPresentationPolicy = settings.Policy;
+        UpdateAiVisibilityState();
+        OnPropertyChanged(nameof(SelectedAiAccessRole));
+        OnPropertyChanged(nameof(SelectedAiVisibilityMode));
+        OnPropertyChanged(nameof(AllowAiPanelToggle));
+        OnPropertyChanged(nameof(AllowCopyExport));
+        OnPropertyChanged(nameof(CanConfigureAiPolicy));
+        OnPropertyChanged(nameof(CanToggleAiVisibility));
+    }
+
+    private void SaveAiPolicy()
+    {
+        var settings = new AiPolicySettings(_aiAccessRole, _aiPresentationPolicy);
+        _aiPolicyStore.Save(ActiveWorkspace?.RootPath, settings);
+    }
+
+    private void UpdateAiVisibilityState()
+    {
+        _aiPanelVisibilityState = _aiPanelVisibilityService.Evaluate(_aiPresentationPolicy, _aiAccessRole);
+        OnPropertyChanged(nameof(CanRenderAiPanel));
+        OnPropertyChanged(nameof(CanRenderAiExplainButtons));
+        OnPropertyChanged(nameof(CanRenderAiProviderStatus));
+        OnPropertyChanged(nameof(IsAiPanelHidden));
+        OnPropertyChanged(nameof(AiPanelVisibilityNote));
     }
 
     private void LoadBlueprints()

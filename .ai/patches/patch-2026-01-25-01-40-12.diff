@@ -1,0 +1,228 @@
+diff --git a/src/Contracts/Shoots.Contracts.Core.Tests/AiContractTripwireTests.cs b/src/Contracts/Shoots.Contracts.Core.Tests/AiContractTripwireTests.cs
+index f3ab21b..7501c1c 100644
+--- a/src/Contracts/Shoots.Contracts.Core.Tests/AiContractTripwireTests.cs
++++ b/src/Contracts/Shoots.Contracts.Core.Tests/AiContractTripwireTests.cs
+@@ -13,6 +13,7 @@ public sealed class AiContractTripwireTests
+         Assert.True(typeof(IAiIntent).IsInterface);
+         Assert.True(typeof(IAiNarration).IsInterface);
+         Assert.True(typeof(IAiNarrator).IsInterface);
++        Assert.True(typeof(IAiSurfaceRegistry).IsInterface);
+     }
+ 
+     [Fact]
+diff --git a/src/Contracts/Shoots.Contracts.Core/AI/IAiSurfaceRegistry.cs b/src/Contracts/Shoots.Contracts.Core/AI/IAiSurfaceRegistry.cs
+new file mode 100644
+index 0000000..3b39075
+--- /dev/null
++++ b/src/Contracts/Shoots.Contracts.Core/AI/IAiSurfaceRegistry.cs
+@@ -0,0 +1,36 @@
++using System.Collections.Generic;
++
++namespace Shoots.Contracts.Core.AI;
++
++/// <summary>
++/// Deterministic narration hook options for a UI surface.
++/// </summary>
++public enum AiNarrationHook
++{
++    Plan,
++    State,
++    Error,
++    Result
++}
++
++/// <summary>
++/// Deterministic AI surface registration metadata.
++/// </summary>
++public sealed record AiSurfaceRegistration(
++    string SurfaceId,
++    string SurfaceKind,
++    string DisplayName,
++    IReadOnlyList<string> DeclaredIntents,
++    IReadOnlyList<AiNarrationHook> NarrationHooks,
++    string SnapshotProvider
++);
++
++/// <summary>
++/// Registry for UI surfaces that opt into AI narration.
++/// </summary>
++public interface IAiSurfaceRegistry
++{
++    void Register(AiSurfaceRegistration registration);
++
++    IReadOnlyList<AiSurfaceRegistration> RegisteredSurfaces { get; }
++}
+diff --git a/ui/Shoots.Ui/AiHelp/UiSurfaceCatalog.cs b/ui/Shoots.Ui/AiHelp/UiSurfaceCatalog.cs
+new file mode 100644
+index 0000000..bef1893
+--- /dev/null
++++ b/ui/Shoots.Ui/AiHelp/UiSurfaceCatalog.cs
+@@ -0,0 +1,15 @@
++using System.Collections.Generic;
++
++namespace Shoots.UI.AiHelp;
++
++public static class UiSurfaceCatalog
++{
++    public static IReadOnlyList<string> RequiredSurfaceIds { get; } = new[]
++    {
++        "workspace",
++        "execution",
++        "execution-environment",
++        "blueprints",
++        "planner"
++    };
++}
+diff --git a/ui/Shoots.Ui/App.xaml.cs b/ui/Shoots.Ui/App.xaml.cs
+index 3a6568e..d1e04a9 100644
+--- a/ui/Shoots.Ui/App.xaml.cs
++++ b/ui/Shoots.Ui/App.xaml.cs
+@@ -5,6 +5,8 @@ using System.Threading.Tasks;
+ using System.Windows;
+ using System.Windows.Interop;
+ using System.Windows.Threading;
++using Shoots.UI.AiHelp;
++using Shoots.UI.Services;
+ 
+ namespace Shoots.UI;
+ 
+@@ -47,6 +49,7 @@ public partial class App : Application
+ 
+         MainWindow = new MainWindow();
+         MainWindow.Show();
++        AiSurfaceRegistry.Current.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
+ 
+         base.OnStartup(e);
+     }
+diff --git a/ui/Shoots.Ui/Services/AiSurfaceRegistry.cs b/ui/Shoots.Ui/Services/AiSurfaceRegistry.cs
+new file mode 100644
+index 0000000..9eeb7e2
+--- /dev/null
++++ b/ui/Shoots.Ui/Services/AiSurfaceRegistry.cs
+@@ -0,0 +1,98 @@
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using Shoots.Contracts.Core.AI;
++using Shoots.Runtime.Ui.Abstractions;
++
++namespace Shoots.UI.Services;
++
++public sealed class AiSurfaceRegistry : IAiSurfaceRegistry
++{
++    private readonly Dictionary<string, AiSurfaceRegistration> _registrations = new(StringComparer.OrdinalIgnoreCase);
++
++    public static AiSurfaceRegistry Current { get; } = new();
++
++    public IReadOnlyList<AiSurfaceRegistration> RegisteredSurfaces
++        => _registrations.Values.ToList();
++
++    public void Register(AiSurfaceRegistration registration)
++    {
++        ValidateRegistration(registration);
++        _registrations[registration.SurfaceId] = registration;
++    }
++
++    public void Register(IAiHelpSurface surface)
++    {
++        if (surface is null)
++            throw new ArgumentNullException(nameof(surface));
++
++        var intents = surface.SupportedIntents
++            .Select(intent => $"{intent.Type}:{intent.Scope}")
++            .ToList();
++
++        var registration = new AiSurfaceRegistration(
++            surface.SurfaceId,
++            surface.SurfaceKind,
++            surface.SurfaceKind,
++            intents,
++            new[]
++            {
++                AiNarrationHook.Plan,
++                AiNarrationHook.State,
++                AiNarrationHook.Error,
++                AiNarrationHook.Result
++            },
++            $"IAiHelpSurface:{surface.GetType().Name}");
++
++        Register(registration);
++    }
++
++    public void Register(IEnumerable<IAiHelpSurface> surfaces)
++    {
++        if (surfaces is null)
++            throw new ArgumentNullException(nameof(surfaces));
++
++        foreach (var surface in surfaces)
++            Register(surface);
++    }
++
++    public void AssertRequiredSurfacesRegistered(IEnumerable<string> requiredSurfaceIds)
++    {
++        if (requiredSurfaceIds is null)
++            throw new ArgumentNullException(nameof(requiredSurfaceIds));
++
++        var missing = requiredSurfaceIds
++            .Where(id => !_registrations.ContainsKey(id))
++            .ToList();
++
++        if (missing.Count == 0)
++            return;
++
++        throw new InvalidOperationException(
++            $"AI surface registration missing for: {string.Join(", ", missing)}.");
++    }
++
++    private static void ValidateRegistration(AiSurfaceRegistration registration)
++    {
++        if (registration is null)
++            throw new ArgumentNullException(nameof(registration));
++
++        if (string.IsNullOrWhiteSpace(registration.SurfaceId))
++            throw new InvalidOperationException("AI surface registration requires a SurfaceId.");
++
++        if (string.IsNullOrWhiteSpace(registration.SurfaceKind))
++            throw new InvalidOperationException("AI surface registration requires a SurfaceKind.");
++
++        if (string.IsNullOrWhiteSpace(registration.DisplayName))
++            throw new InvalidOperationException("AI surface registration requires a DisplayName.");
++
++        if (registration.DeclaredIntents is null || registration.DeclaredIntents.Count == 0)
++            throw new InvalidOperationException("AI surface registration requires declared intents.");
++
++        if (registration.NarrationHooks is null || registration.NarrationHooks.Count == 0)
++            throw new InvalidOperationException("AI surface registration requires narration hooks.");
++
++        if (string.IsNullOrWhiteSpace(registration.SnapshotProvider))
++            throw new InvalidOperationException("AI surface registration requires a snapshot provider.");
++    }
++}
+diff --git a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+index d4ed3c9..bfa9be2 100644
+--- a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
++++ b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+@@ -151,6 +151,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         SelectedDatabaseIntent = DatabaseIntents.LastOrDefault(option => option.Intent == DatabaseIntent.Undecided)
+             ?? DatabaseIntents.FirstOrDefault();
+         LoadEnvironmentScript();
++        RegisterAiSurfaces();
+         _ = RefreshAiHelpAsync();
+     }
+ 
+@@ -1293,9 +1294,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         foreach (var record in _comparisonToolExecutionRecords)
+             surfaces.Add(record);
+ 
++        AiSurfaceRegistry.Current.Register(surfaces);
+         return surfaces;
+     }
+ 
++    private void RegisterAiSurfaces()
++    {
++        _ = BuildAiHelpSurfaces();
++    }
++
+     private void LoadBlueprints()
+     {
+         _blueprints.Clear();

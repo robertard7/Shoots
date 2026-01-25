@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Shoots.Contracts.Core;
+using Shoots.Providers.Bridge;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
 
@@ -11,6 +13,7 @@ public sealed class RuntimeFacade : IRuntimeFacade
     public RuntimeFacade(IRuntimeHost host)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
+        EnforceEmbeddedProvider();
     }
 
     public Task<RuntimeResult> StartExecution(BuildPlan plan, CancellationToken ct = default)
@@ -39,4 +42,11 @@ public sealed class RuntimeFacade : IRuntimeFacade
     }
 
     private sealed record RuntimeStatusSnapshot(RuntimeVersion Version) : IRuntimeStatusSnapshot;
+
+    private static void EnforceEmbeddedProvider()
+    {
+        var registry = ProviderRegistryFactory.CreateDefault();
+        Trace.WriteLine($"[Shoots.Runtime.Loader] Provider order: {string.Join(", ", registry.RegistrationOrder)}");
+        registry.EnsureEmbeddedProviderPrimary();
+    }
 }

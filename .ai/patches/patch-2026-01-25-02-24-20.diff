@@ -1,0 +1,80 @@
+diff --git a/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs b/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
+index 3213934..d459d37 100644
+--- a/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
++++ b/src/Providers/Shoots.Providers.Abstractions/ProviderRegistry.cs
+@@ -26,6 +26,9 @@ public sealed class ProviderRegistry
+             throw new InvalidOperationException("Embedded provider cannot be overridden.");
+         }
+ 
++        if (_providers.ContainsKey(providerId))
++            throw new InvalidOperationException($"Provider already registered: {providerId}");
++
+         if (!_providers.ContainsKey(providerId))
+             _registrationOrder.Add(providerId);
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+index 3b4fef9..1451b88 100644
+--- a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
++++ b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+@@ -1,4 +1,6 @@
++using System.Diagnostics;
+ using Shoots.Contracts.Core;
++using Shoots.Providers.Bridge;
+ using Shoots.Runtime.Abstractions;
+ using Shoots.Runtime.Ui.Abstractions;
+ 
+@@ -11,6 +13,7 @@ public sealed class RuntimeFacade : IRuntimeFacade
+     public RuntimeFacade(IRuntimeHost host)
+     {
+         _host = host ?? throw new ArgumentNullException(nameof(host));
++        EnforceEmbeddedProvider();
+     }
+ 
+     public Task<RuntimeResult> StartExecution(BuildPlan plan, CancellationToken ct = default)
+@@ -39,4 +42,11 @@ public sealed class RuntimeFacade : IRuntimeFacade
+     }
+ 
+     private sealed record RuntimeStatusSnapshot(RuntimeVersion Version) : IRuntimeStatusSnapshot;
++
++    private static void EnforceEmbeddedProvider()
++    {
++        var registry = ProviderRegistryFactory.CreateDefault();
++        Trace.WriteLine($"[Shoots.Runtime.Loader] Provider order: {string.Join(", ", registry.RegistrationOrder)}");
++        registry.EnsureEmbeddedProviderPrimary();
++    }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Loader/Shoots.Runtime.Loader.csproj b/src/Runtime/Shoots.Runtime.Loader/Shoots.Runtime.Loader.csproj
+index ab0ad2c..b00bdf5 100644
+--- a/src/Runtime/Shoots.Runtime.Loader/Shoots.Runtime.Loader.csproj
++++ b/src/Runtime/Shoots.Runtime.Loader/Shoots.Runtime.Loader.csproj
+@@ -2,6 +2,7 @@
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
++    <ProjectReference Include="..\..\Providers\Shoots.Providers.Bridge\Shoots.Providers.Bridge.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Core\Shoots.Runtime.Core.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Ui.Abstractions\Shoots.Runtime.Ui.Abstractions.csproj" />
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
+index 267c799..618928b 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
+@@ -55,6 +55,18 @@ public sealed class ProviderRegistryGuardTests
+         Assert.Contains("Embedded provider is required", exception.Message);
+     }
+ 
++    [Fact]
++    public void Registry_rejects_duplicate_provider_ids()
++    {
++        var registry = new ProviderRegistry();
++        registry.Register("fake.local", new StubAdapter());
++
++        var exception = Assert.Throws<InvalidOperationException>(() =>
++            registry.Register("fake.local", new StubAdapter()));
++
++        Assert.Contains("Provider already registered", exception.Message);
++    }
++
+     private sealed class StubAdapter : IAiProviderAdapter
+     {
+         public ToolSelectionDecision? RequestDecision(
