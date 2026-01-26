@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Shoots.Contracts.Core;
 using Shoots.Contracts.Core.AI;
 using Shoots.Runtime.Abstractions;
@@ -48,6 +50,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 	public ReadOnlyObservableCollection<UiRootFsDescriptor> RootFsCatalog { get; }
     private readonly StartupFlowStateMachine _startupFlow;
     private readonly ObservableCollection<string> _startupMessages;
+    private string _startupInput = string.Empty;
     private readonly ReadOnlyCollection<ProviderCapabilityMatrixRow> _providerCapabilityMatrix;
     private ExecutionState _state;
     private BuildPlan? _plan;
@@ -118,6 +121,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         NewProjectCommand = new AsyncRelayCommand(NewProjectAsync, CanStartNewProject);
         SelectEntryPathCommand = new AsyncRelayCommand(SelectEntryPathAsync, CanSelectEntryPath);
+        SubmitStartupInputCommand = new AsyncRelayCommand(SubmitStartupInputAsync, CanSubmitStartupInput);
         StartCommand = new AsyncRelayCommand(StartAsync, CanStart);
         CancelCommand = new AsyncRelayCommand(CancelAsync, CanCancel);
         RefreshStatusCommand = new AsyncRelayCommand(RefreshStatusAsync);
@@ -271,6 +275,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public AsyncRelayCommand SelectEntryPathCommand { get; }
 
+    public AsyncRelayCommand SubmitStartupInputCommand { get; }
+
     public AsyncRelayCommand StartCommand { get; }
 
     public AsyncRelayCommand CancelCommand { get; }
@@ -322,6 +328,47 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         : "Startup flow is already active.";
 
     public int StartupTabIndex => HasActiveWorkspace ? 1 : 0;
+
+    public IReadOnlyList<string> StartupLanguageOptions =>
+        StartupLanguageRegistry.All.Select(option => option.Name).ToList();
+
+    public bool IsStartNewLanguageActive => _startupFlow.State == StartupFlowState.StartNewLanguage;
+
+    public bool IsStartupInputActive => _startupFlow.State is
+        StartupFlowState.StartNewLanguage or
+        StartupFlowState.StartNewName or
+        StartupFlowState.StartNewDescription or
+        StartupFlowState.StartNewConfirm or
+        StartupFlowState.ContinueExistingPath or
+        StartupFlowState.ContinueExistingReview or
+        StartupFlowState.ExploreMode;
+
+    public string StartupPrompt => _startupFlow.State switch
+    {
+        StartupFlowState.EntryPathSelection => "Choose a startup path to continue.",
+        StartupFlowState.StartNewLanguage => "Question: What primary language should the project use?",
+        StartupFlowState.StartNewName => "Question: Project name (optional). Reply with a name or \"skip\".",
+        StartupFlowState.StartNewDescription => "Question: Provide a 1–2 sentence description.",
+        StartupFlowState.StartNewConfirm => "Type \"confirm\" to create the project.",
+        StartupFlowState.ContinueExistingPath => "Question: Provide the path to the existing project.",
+        StartupFlowState.ContinueExistingReview => "Type \"confirm\" to attach this project read-only.",
+        StartupFlowState.ExploreMode => "Explore mode active. Type \"promote\" to start a project.",
+        _ => "Click New Project to begin."
+    };
+
+    public string StartupInput
+    {
+        get => _startupInput;
+        set
+        {
+            if (_startupInput == value)
+                return;
+
+            _startupInput = value;
+            OnPropertyChanged(nameof(StartupInput));
+            SubmitStartupInputCommand.RaiseCanExecuteChanged();
+        }
+    }
 
     public string SessionStatusLabel
     {
@@ -946,8 +993,42 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         LogStartupTransition(previous, _startupFlow.State, $"Entry path selected: {entryPath}.");
         AddStartupMessage($"Intent: {FormatEntryPathLabel(entryPath)}.");
+        AddStartupMessage($"System: {StartupPrompt}");
         NotifyStartupFlowChanged();
         return Task.CompletedTask;
+    }
+
+    private bool CanSubmitStartupInput() => IsStartupInputActive && !string.IsNullOrWhiteSpace(StartupInput);
+
+    private Task SubmitStartupInputAsync()
+    {
+        var input = NormalizeStartupInput(StartupInput);
+        if (string.IsNullOrWhiteSpace(input))
+            return Task.CompletedTask;
+
+        AddStartupMessage($"You: {input}");
+        StartupInput = string.Empty;
+
+        switch (_startupFlow.State)
+        {
+            case StartupFlowState.StartNewLanguage:
+                return HandleStartupLanguageAsync(input);
+            case StartupFlowState.StartNewName:
+                return HandleStartupProjectNameAsync(input);
+            case StartupFlowState.StartNewDescription:
+                return HandleStartupDescriptionAsync(input);
+            case StartupFlowState.StartNewConfirm:
+                return HandleStartupConfirmAsync(input);
+            case StartupFlowState.ContinueExistingPath:
+                return HandleContinueExistingPathAsync(input);
+            case StartupFlowState.ContinueExistingReview:
+                return HandleContinueExistingConfirmAsync(input);
+            case StartupFlowState.ExploreMode:
+                return HandleExploreModeAsync(input);
+            default:
+                AddStartupMessage($"System: {StartupPrompt}");
+                return Task.CompletedTask;
+        }
     }
 
     private bool CanStart() => Plan is not null && State is ExecutionState.Idle or ExecutionState.Completed or ExecutionState.Halted;
@@ -2159,6 +2240,311 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return "Refresh AI Help.";
     }
 
+    private Task HandleStartupLanguageAsync(string input)
+    {
+        var match = StartupLanguageRegistry.All
+            .Select(option => option.Name)
+            .FirstOrDefault(option => string.Equals(option, input, StringComparison.OrdinalIgnoreCase));
+
+        if (string.IsNullOrWhiteSpace(match))
+        {
+            AddStartupMessage($"System: Unsupported language. Choose one of: {string.Join(", ", StartupLanguageOptions)}.");
+            return Task.CompletedTask;
+        }
+
+        var previous = _startupFlow.State;
+        if (!_startupFlow.TrySetLanguage(match, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, "StartNew -> LanguageSelected.");
+        AddStartupMessage($"Intent: Language set to {match}.");
+        AddStartupMessage($"System: {StartupPrompt}");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleStartupProjectNameAsync(string input)
+    {
+        var normalized = input.Trim();
+        var name = string.Equals(normalized, "skip", StringComparison.OrdinalIgnoreCase) || normalized.Length == 0
+            ? null
+            : normalized;
+
+        var previous = _startupFlow.State;
+        if (!_startupFlow.TrySetProjectName(name, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, "StartNew -> NameCaptured.");
+        AddStartupMessage(name is null ? "Intent: Project name skipped." : $"Intent: Project name set to {name}.");
+        AddStartupMessage($"System: {StartupPrompt}");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleStartupDescriptionAsync(string input)
+    {
+        var normalized = NormalizeDescription(input);
+        var sentenceCount = CountSentences(normalized);
+        if (sentenceCount == 0 || sentenceCount > 2)
+        {
+            AddStartupMessage("System: Description must be 1–2 sentences. Please try again.");
+            return Task.CompletedTask;
+        }
+
+        var previous = _startupFlow.State;
+        if (!_startupFlow.TrySetDescription(normalized, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, "StartNew -> DescriptionCaptured.");
+        AddStartupMessage($"Intent: Description set to \"{normalized}\".");
+        AddStartupMessage(BuildCreateSummary());
+        AddStartupMessage($"System: {StartupPrompt}");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleStartupConfirmAsync(string input)
+    {
+        if (!string.Equals(input, "confirm", StringComparison.OrdinalIgnoreCase))
+        {
+            AddStartupMessage("System: Type \"confirm\" to create the project.");
+            return Task.CompletedTask;
+        }
+
+        var previous = _startupFlow.State;
+        if (!TryCreateProjectFromStartup(out var creationResult))
+        {
+            AddStartupMessage(creationResult);
+            return Task.CompletedTask;
+        }
+
+        AddStartupMessage(creationResult);
+        if (_startupFlow.TryConfirmCreate(out _))
+            LogStartupTransition(previous, _startupFlow.State, "StartNew -> Created.");
+
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleContinueExistingPathAsync(string input)
+    {
+        if (!Directory.Exists(input))
+        {
+            AddStartupMessage("System: Path does not exist. Provide an existing folder path.");
+            return Task.CompletedTask;
+        }
+
+        var previous = _startupFlow.State;
+        if (!_startupFlow.TrySetExistingProjectPath(input, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, "ContinueExisting -> PathCaptured.");
+        AddStartupMessage($"Intent: Attach to {input}.");
+        AddStartupMessage($"System: {StartupPrompt}");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleContinueExistingConfirmAsync(string input)
+    {
+        if (!string.Equals(input, "confirm", StringComparison.OrdinalIgnoreCase))
+        {
+            AddStartupMessage("System: Type \"confirm\" to attach read-only.");
+            return Task.CompletedTask;
+        }
+
+        var path = _startupFlow.ExistingProjectPath;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            AddStartupMessage("System: No path is available to attach.");
+            return Task.CompletedTask;
+        }
+
+        AddStartupMessage($"System: Read-only attach requested for {path}. No files were modified.");
+        return Task.CompletedTask;
+    }
+
+    private Task HandleExploreModeAsync(string input)
+    {
+        if (!string.Equals(input, "promote", StringComparison.OrdinalIgnoreCase))
+        {
+            AddStartupMessage("System: Explore mode active. Type \"promote\" to start a project.");
+            return Task.CompletedTask;
+        }
+
+        _startupFlow.Reset();
+        _startupFlow.TryBeginNewProject(out _);
+        AddStartupMessage("System: Promotion requested. Restarting startup flow.");
+        AddStartupMessage($"System: {StartupPrompt}");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private static string NormalizeStartupInput(string input) =>
+        input.Trim();
+
+    private static string NormalizeDescription(string input) =>
+        string.Join(" ", input.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+
+    private static int CountSentences(string input)
+    {
+        var count = 0;
+        var buffer = new StringBuilder();
+        foreach (var ch in input)
+        {
+            buffer.Append(ch);
+            if (ch is '.' or '!' or '?')
+            {
+                if (buffer.ToString().Trim().Length > 1)
+                    count++;
+                buffer.Clear();
+            }
+        }
+
+        if (buffer.ToString().Trim().Length > 0)
+            count++;
+
+        return count;
+    }
+
+    private string BuildCreateSummary()
+    {
+        var language = _startupFlow.SelectedLanguage ?? "Unknown";
+        var projectName = _startupFlow.ProjectName ?? "Untitled";
+        var folderName = BuildProjectFolderName(language, _startupFlow.ProjectName, _startupFlow.Description ?? string.Empty);
+        var structure = BuildStructureSummary(language);
+        return $"Summary: Language={language}; Name={projectName}; Folder={folderName}; Structure={structure}.";
+    }
+
+    private string BuildStructureSummary(string language)
+    {
+        var definition = StartupLanguageRegistry.Find(language);
+        if (definition is null)
+            return "No structure defined.";
+
+        var items = definition.Structure.Select(item => item.RelativePath).ToList();
+        items.Add("README.intent.md");
+        return string.Join(", ", items);
+    }
+
+    private static string BuildProjectFolderName(string language, string? projectName, string description)
+    {
+        if (!string.IsNullOrWhiteSpace(projectName))
+            return Slugify(projectName);
+
+        var raw = $"{language}|{description}";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
+        var suffix = Convert.ToHexString(hash)[..8].ToLowerInvariant();
+        return $"idea-{suffix}";
+    }
+
+    private static string Slugify(string name)
+    {
+        var builder = new StringBuilder();
+        foreach (var ch in name.Trim().ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(ch))
+                builder.Append(ch);
+            else if (ch is ' ' or '-' or '_')
+                builder.Append('-');
+        }
+
+        var slug = builder.ToString().Trim('-');
+        return string.IsNullOrWhiteSpace(slug) ? "project" : slug;
+    }
+
+    private bool TryCreateProjectFromStartup(out string message)
+    {
+        var language = _startupFlow.SelectedLanguage;
+        var description = _startupFlow.Description;
+        if (string.IsNullOrWhiteSpace(language) || string.IsNullOrWhiteSpace(description))
+        {
+            message = "System: Startup details are incomplete. Project creation aborted.";
+            return false;
+        }
+
+        var definition = StartupLanguageRegistry.Find(language);
+        if (definition is null)
+        {
+            message = $"System: No base structure defined for {language}.";
+            return false;
+        }
+
+        var folderName = BuildProjectFolderName(language, _startupFlow.ProjectName, description);
+        var sandboxRoot = GetSandboxRoot();
+        if (!Directory.Exists(sandboxRoot))
+        {
+            message = $"System: Sandbox root missing: {sandboxRoot}";
+            return false;
+        }
+
+        var projectRoot = Path.Combine(sandboxRoot, folderName);
+        var fullSandbox = Path.GetFullPath(sandboxRoot);
+        var fullProject = Path.GetFullPath(projectRoot);
+        if (!fullProject.StartsWith(fullSandbox, StringComparison.OrdinalIgnoreCase))
+        {
+            message = "System: Project path escapes the sandbox.";
+            return false;
+        }
+
+        if (Directory.Exists(fullProject))
+        {
+            message = "System: Project folder already exists.";
+            return false;
+        }
+
+        Directory.CreateDirectory(fullProject);
+        foreach (var item in definition.Structure)
+        {
+            var target = Path.Combine(fullProject, item.RelativePath);
+            if (item.IsDirectory)
+            {
+                Directory.CreateDirectory(target);
+                continue;
+            }
+
+            var directory = Path.GetDirectoryName(target);
+            if (!string.IsNullOrWhiteSpace(directory))
+                Directory.CreateDirectory(directory);
+
+            File.WriteAllText(target, item.Content ?? string.Empty);
+        }
+
+        var intentPath = Path.Combine(fullProject, "README.intent.md");
+        File.WriteAllText(intentPath, BuildIntentContent(language, _startupFlow.ProjectName, description));
+
+        var workspace = new ProjectWorkspace(
+            _startupFlow.ProjectName ?? folderName,
+            fullProject,
+            DateTimeOffset.UtcNow);
+        _workspaceProvider.SetActiveWorkspace(workspace);
+        ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+        RefreshRecentWorkspaces();
+        message = $"System: Project created at {fullProject}. README.intent.md written.";
+        return true;
+    }
+
+    private static string BuildIntentContent(string language, string? projectName, string description)
+    {
+        var nameLine = string.IsNullOrWhiteSpace(projectName) ? "Name: (none)" : $"Name: {projectName}";
+        return $"# Project Intent{System.Environment.NewLine}{System.Environment.NewLine}" +
+               $"Language: {language}{System.Environment.NewLine}" +
+               $"{nameLine}{System.Environment.NewLine}" +
+               $"Description: {description}{System.Environment.NewLine}";
+    }
+
     private void AddStartupMessage(string message)
     {
         _startupMessages.Add(message);
@@ -2174,9 +2560,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(StartupEntryPathLabel));
         OnPropertyChanged(nameof(IsEntryPathSelectionActive));
         OnPropertyChanged(nameof(StartupButtonTooltip));
+        OnPropertyChanged(nameof(StartupPrompt));
+        OnPropertyChanged(nameof(IsStartNewLanguageActive));
+        OnPropertyChanged(nameof(IsStartupInputActive));
         OnPropertyChanged(nameof(SessionStatusLabel));
         NewProjectCommand.RaiseCanExecuteChanged();
         SelectEntryPathCommand.RaiseCanExecuteChanged();
+        SubmitStartupInputCommand.RaiseCanExecuteChanged();
     }
 
     private static string FormatEntryPathLabel(StartupEntryPath entryPath) =>

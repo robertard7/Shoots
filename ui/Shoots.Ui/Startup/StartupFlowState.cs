@@ -4,5 +4,12 @@ public enum StartupFlowState
 {
     Initial,
     EntryPathSelection,
-    EntryPathChosen
+    StartNewLanguage,
+    StartNewName,
+    StartNewDescription,
+    StartNewConfirm,
+    StartNewCompleted,
+    ContinueExistingPath,
+    ContinueExistingReview,
+    ExploreMode
 }
