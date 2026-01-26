@@ -181,6 +181,76 @@ The **only** source of truth for validation is GitHub Actions output from:
 [self-hosted, Windows, X64, Shoots]
 ```
 
+### CI Authority Clause
+
+If a GitHub Actions run exists for the referenced SHA **and** artifacts are available, those artifacts are the **sole source of truth**. Local reasoning, summaries, or assumptions are invalid.
+
+Before proposing any fix when such artifacts exist, the agent must:
+- State the **run ID**
+- Enumerate **artifact names**
+
+Failure to do so is a policy violation.
+
+### Runner Presence Assertion
+
+When a workflow ran on `self-hosted`, the agent must assume environment parity with the repository:
+- Windows runner context
+- Repository paths and tooling consistent with the runner
+
+The agent must not claim or imply the runner was missing or CI did not execute once artifacts exist.
+
+### Failure Intake Protocol (Artifact-First)
+
+On any failure with artifacts present, the agent must begin its response with:
+```
+CI Artifact Analysis
+```
+
+Then it must:
+1. List all uploaded artifacts
+2. Identify `.trx` files
+3. Extract failing test names and stack summaries
+4. Ignore console noise unless artifacts are missing
+
+### Determinism Guard Handling
+
+If determinism artifacts exist, the agent must compare pass-1 vs pass-2 results:
+- If mismatch → classify as **Determinism violation**
+- If identical failure → classify as **Runtime logic failure**
+
+If artifacts are missing or runner infrastructure failed, classify as **Infrastructure failure**.
+
+No fourth category is allowed.
+
+### Patch Proposal Contract
+
+After classification, the agent must:
+- Propose a **minimal patch**
+- Reference exact file paths
+- State why the patch changes the CI outcome
+
+No vague suggestions are allowed; only diffs or concrete edits.
+
+### Retry Discipline
+
+After proposing a patch, the agent must:
+1. Instruct to push the commit
+2. Wait for the next CI run
+3. Re-evaluate artifacts from that run
+
+### Ban Status Guessing
+
+When artifacts exist, the agent must not use phrases such as:
+- "It looks like"
+- "Probably"
+- "May be due to"
+
+Any guessing is a policy failure.
+
+### Runner Regression Check
+
+If jobs suddenly queue or stop running, the agent must re-check runner visibility **before** changing workflow YAML.
+
 ---
 
 ## 12. Validation Workflow
@@ -202,4 +272,3 @@ The agent must follow the user’s instruction context:
 - If **analysis or planning is requested** → no diffs
 
 Any output that violates these rules is invalid.
-
