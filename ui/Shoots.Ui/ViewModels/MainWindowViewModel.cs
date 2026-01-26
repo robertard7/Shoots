@@ -329,6 +329,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public int StartupTabIndex => HasActiveWorkspace ? 1 : 0;
 
+    public string StartupProviderLabel => "Provider: Ollama (default)";
+
     public IReadOnlyList<string> StartupLanguageOptions =>
         StartupLanguageRegistry.All.Select(option => option.Name).ToList();
 
@@ -711,7 +713,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ? "AI help is available for this role."
         : "AI is running in the background but hidden by policy.";
 
-    public string AiProviderStatus => "Embedded provider (primary).";
+    public string AiProviderStatus => "Provider: Ollama";
 
     public string AiExportNotice => IsCopyExportDisabled
         ? "Copy and export are disabled by policy."
@@ -971,6 +973,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         LogStartupTransition(previous, _startupFlow.State, "Startup flow activated.");
+        Trace.WriteLine("[Shoots.UI] Provider = Ollama (default).");
+        AddStartupMessage("System: Provider = Ollama (default).");
         AddStartupMessage("System: Startup flow activated. Choose an entry path.");
         NotifyStartupFlowChanged();
         return Task.CompletedTask;
@@ -2343,6 +2347,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         }
 
+        var sandboxRoot = GetSandboxRoot();
+        var fullSandbox = Path.GetFullPath(sandboxRoot);
+        var fullPath = Path.GetFullPath(input);
+        if (!fullPath.StartsWith(fullSandbox, StringComparison.OrdinalIgnoreCase))
+            AddStartupMessage("Warning: Selected path is outside the sandbox.");
+
         var previous = _startupFlow.State;
         if (!_startupFlow.TrySetExistingProjectPath(input, out var error))
         {
@@ -2424,8 +2434,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var language = _startupFlow.SelectedLanguage ?? "Unknown";
         var projectName = _startupFlow.ProjectName ?? "Untitled";
         var folderName = BuildProjectFolderName(language, _startupFlow.ProjectName, _startupFlow.Description ?? string.Empty);
+        var sandboxRoot = GetSandboxRoot();
+        var projectPath = Path.Combine(sandboxRoot, folderName);
         var structure = BuildStructureSummary(language);
-        return $"Summary: Language={language}; Name={projectName}; Folder={folderName}; Structure={structure}.";
+        return $"Summary: Language={language}; Name={projectName}; Folder={folderName}; Path={projectPath}; Files={structure}.";
     }
 
     private string BuildStructureSummary(string language)
@@ -2563,6 +2575,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(StartupPrompt));
         OnPropertyChanged(nameof(IsStartNewLanguageActive));
         OnPropertyChanged(nameof(IsStartupInputActive));
+        OnPropertyChanged(nameof(StartupProviderLabel));
         OnPropertyChanged(nameof(SessionStatusLabel));
         NewProjectCommand.RaiseCanExecuteChanged();
         SelectEntryPathCommand.RaiseCanExecuteChanged();

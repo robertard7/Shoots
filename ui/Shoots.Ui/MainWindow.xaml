@@ -115,6 +115,9 @@
                 <TextBlock Text="Entry path:" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding StartupEntryPathLabel}" Margin="6,0,0,0" />
               </StackPanel>
+              <TextBlock Margin="0,6,0,0"
+                         Foreground="#FF6B7280"
+                         Text="{Binding StartupProviderLabel}" />
             </StackPanel>
           </Border>
           <StackPanel Grid.Row="1"
