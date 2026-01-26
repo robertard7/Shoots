@@ -119,6 +119,12 @@ Workspaces:
 Workspace isolation is strictly visual: each selection scopes UI context and
 environment script previews without mutating runtime behavior or determinism.
 
+STARTUP FLOW STATUS
+-------------------
+
+Startup flow is complete and frozen. Provider extensibility begins next and is
+explicitly out of scope for startup changes.
+
 PROJECT WORKSPACE NOTES
 -----------------------
 
