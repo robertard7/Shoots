@@ -73,6 +73,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _newBlueprintVersion = "1.0";
     private string _newBlueprintDefinition = string.Empty;
     private StartupSessionMode _sessionMode = StartupSessionMode.Startup;
+    private bool _startupComplete;
 	private ExecutionEnvironmentSettings _executionSettings = new(
 		"none",
 		Array.Empty<Shoots.UI.ExecutionEnvironments.RootFsDescriptor>(),
@@ -170,6 +171,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             ProviderCapabilityMatrixRow.FromKind(ProviderKind.Delegated)
         });
         _sessionMode = GetSessionMode();
+        _startupComplete = HasActiveWorkspace;
         RefreshRecentWorkspaces();
         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
         LoadExecutionEnvironments();
@@ -343,6 +345,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public bool IsStartupTabEnabled => !IsStartupLocked;
 
+    public bool IsStartupComplete => _startupComplete;
+
     public bool IsStartNewLanguageActive => _startupFlow.State == StartupFlowState.StartNewLanguage;
 
     public bool IsStartupInputActive => _startupFlow.State is
@@ -385,7 +389,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         get
         {
-            return GetSessionMode() switch
+            return _sessionMode switch
             {
                 StartupSessionMode.Project => $"Project: {ActiveWorkspace?.Name}",
                 StartupSessionMode.Explore => "Explore (no writes)",
@@ -580,6 +584,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(HasNoActiveWorkspace));
             OnPropertyChanged(nameof(IsStartupLocked));
             OnPropertyChanged(nameof(IsStartupTabEnabled));
+            _startupComplete = _activeWorkspace is not null;
+            OnPropertyChanged(nameof(IsStartupComplete));
             OnPropertyChanged(nameof(SelectedWorkspace));
             OnPropertyChanged(nameof(WindowTitle));
             OnPropertyChanged(nameof(StartupTabIndex));
@@ -974,7 +980,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private bool CanStartAnotherProject() => HasActiveWorkspace;
 
-    private bool CanSelectEntryPath() => _startupFlow.State == StartupFlowState.EntryPathSelection;
+    private bool CanSelectEntryPath() => _startupFlow.State == StartupFlowState.EntryPathSelection && !_startupComplete;
 
     private Task NewProjectAsync()
     {
@@ -994,7 +1000,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         LogStartupTransition(previous, _startupFlow.State, "Startup flow activated.");
         Trace.WriteLine("[Shoots.UI] Provider = Ollama (default).");
         AddStartupMessage("System: Provider = Ollama (default).");
-        AddStartupMessage("System: Startup flow activated. Choose an entry path.");
+        AddStartupMessage("System: Startup flow activated. Choose an entry path. State remains: EntryPathSelection.");
         NotifyStartupFlowChanged();
         return Task.CompletedTask;
     }
@@ -1006,6 +1012,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         ActiveWorkspace = null;
         _startupFlow.Reset();
+        _startupComplete = false;
+        OnPropertyChanged(nameof(IsStartupComplete));
         _startupFlow.TryBeginNewProject(out _);
         Trace.WriteLine("[Shoots.UI] Startup reset requested. Session mode: Startup.");
         AddStartupMessage("System: Startup reset requested. Choose an entry path.");
@@ -1015,6 +1023,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private Task SelectEntryPathAsync(object? parameter)
     {
+        if (_startupComplete)
+        {
+            AddStartupMessage("System: Startup is complete. Use \"Start another project\" to re-enter startup.");
+            return Task.CompletedTask;
+        }
+
         if (parameter is not StartupEntryPath entryPath)
         {
             AddStartupMessage("System: Unable to select entry path.");
@@ -1035,10 +1049,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
-    private bool CanSubmitStartupInput() => IsStartupInputActive && !string.IsNullOrWhiteSpace(StartupInput);
+    private bool CanSubmitStartupInput() => IsStartupInputActive && !_startupComplete && !string.IsNullOrWhiteSpace(StartupInput);
 
     private Task SubmitStartupInputAsync()
     {
+        if (_startupComplete)
+        {
+            AddStartupMessage("System: Startup is complete. Use \"Start another project\" to re-enter startup.");
+            return Task.CompletedTask;
+        }
+
         var input = NormalizeStartupInput(StartupInput);
         if (string.IsNullOrWhiteSpace(input))
             return Task.CompletedTask;
@@ -2285,7 +2305,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         if (string.IsNullOrWhiteSpace(match))
         {
-            AddStartupMessage($"System: Unsupported language. Choose one of: {string.Join(", ", StartupLanguageOptions)}.");
+            AddStartupMessage($"System: Unsupported language. Choose one of: {string.Join(", ", StartupLanguageOptions)}. State remains: {_startupFlow.State}.");
             return Task.CompletedTask;
         }
 
@@ -2330,7 +2350,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var sentenceCount = CountSentences(normalized);
         if (sentenceCount == 0 || sentenceCount > 2)
         {
-            AddStartupMessage("System: Description must be 1–2 sentences. Please try again.");
+            AddStartupMessage($"System: Description must be 1–2 sentences. State remains: {_startupFlow.State}.");
             return Task.CompletedTask;
         }
 
@@ -2353,7 +2373,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!string.Equals(input, "confirm", StringComparison.OrdinalIgnoreCase))
         {
-            AddStartupMessage("System: Type \"confirm\" to create the project.");
+            AddStartupMessage($"System: Type \"confirm\" to create the project. State remains: {_startupFlow.State}.");
             return Task.CompletedTask;
         }
 
@@ -2376,7 +2396,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!Directory.Exists(input))
         {
-            AddStartupMessage("System: Path does not exist. Provide an existing folder path.");
+            AddStartupMessage($"System: Path does not exist. Provide an existing folder path. State remains: {_startupFlow.State}.");
             return Task.CompletedTask;
         }
 
@@ -2404,7 +2424,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!string.Equals(input, "confirm", StringComparison.OrdinalIgnoreCase))
         {
-            AddStartupMessage("System: Type \"confirm\" to attach read-only.");
+            AddStartupMessage($"System: Type \"confirm\" to attach read-only. State remains: {_startupFlow.State}.");
             return Task.CompletedTask;
         }
 
@@ -2423,7 +2443,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!string.Equals(input, "promote", StringComparison.OrdinalIgnoreCase))
         {
-            AddStartupMessage("System: Explore mode active. Type \"promote\" to start a project.");
+            AddStartupMessage($"System: Explore mode active. Type \"promote\" to start a project. State remains: {_startupFlow.State}.");
             return Task.CompletedTask;
         }
 
@@ -2465,8 +2485,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string BuildCreateSummary()
     {
         var language = _startupFlow.SelectedLanguage ?? "Unknown";
-        var projectName = _startupFlow.ProjectName ?? "Untitled";
         var folderName = BuildProjectFolderName(language, _startupFlow.ProjectName, _startupFlow.Description ?? string.Empty);
+        var projectName = _startupFlow.ProjectName ?? folderName;
         var sandboxRoot = GetSandboxRoot();
         var projectPath = Path.Combine(sandboxRoot, folderName);
         var structure = BuildStructureSummary(language);
@@ -2613,6 +2633,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void UpdateSessionMode()
     {
+        if (HasActiveWorkspace && _startupFlow.EntryPath == StartupEntryPath.ExploreIdea)
+        {
+            AddStartupMessage("System: Explore mode cannot be active while a project is attached. State remains: Project.");
+            _startupFlow.Reset();
+        }
+
         var next = GetSessionMode();
         if (next == _sessionMode)
             return;
@@ -2643,6 +2669,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(StartupProviderLabel));
         OnPropertyChanged(nameof(IsStartupLocked));
         OnPropertyChanged(nameof(IsStartupTabEnabled));
+        OnPropertyChanged(nameof(IsStartupComplete));
         OnPropertyChanged(nameof(SessionStatusLabel));
         UpdateSessionMode();
         NewProjectCommand.RaiseCanExecuteChanged();
