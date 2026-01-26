@@ -321,6 +321,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ? "Begin the startup flow."
         : "Startup flow is already active.";
 
+    public int StartupTabIndex => HasActiveWorkspace ? 1 : 0;
+
+    public string SessionStatusLabel
+    {
+        get
+        {
+            if (HasActiveWorkspace)
+                return $"Project: {ActiveWorkspace?.Name}";
+
+            if (_startupFlow.EntryPath == StartupEntryPath.ExploreIdea)
+                return "Explore (no writes)";
+
+            return "Startup: No project active";
+        }
+    }
+
     public IReadOnlyList<IEnvironmentProfile> Profiles { get; }
 
     public IEnvironmentProfile? SelectedProfile
@@ -507,6 +523,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(HasNoActiveWorkspace));
             OnPropertyChanged(nameof(SelectedWorkspace));
             OnPropertyChanged(nameof(WindowTitle));
+            OnPropertyChanged(nameof(StartupTabIndex));
+            OnPropertyChanged(nameof(SessionStatusLabel));
             OnPropertyChanged(nameof(ExecutionBlockerSummary));
             LoadEnvironmentScript();
             UpdateProfileCapabilities();
@@ -2156,6 +2174,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(StartupEntryPathLabel));
         OnPropertyChanged(nameof(IsEntryPathSelectionActive));
         OnPropertyChanged(nameof(StartupButtonTooltip));
+        OnPropertyChanged(nameof(SessionStatusLabel));
         NewProjectCommand.RaiseCanExecuteChanged();
         SelectEntryPathCommand.RaiseCanExecuteChanged();
     }

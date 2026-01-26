@@ -15,6 +15,10 @@
     </Grid.ColumnDefinitions>
     <StackPanel Grid.Column="0" Margin="0,0,16,0">
       <TextBlock Text="Project Workspace" FontWeight="SemiBold" ToolTip="{Binding WorkspaceIsolationTooltip}" />
+      <TextBlock Margin="0,4,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding SessionStatusLabel}"
+                 TextWrapping="Wrap" />
       <Button Margin="0,8,0,0"
               Content="New Project"
               Command="{Binding NewProjectCommand}"
@@ -92,7 +96,7 @@
         </StackPanel>
       </GroupBox>
     </StackPanel>
-    <TabControl Grid.Column="1">
+    <TabControl Grid.Column="1" SelectedIndex="{Binding StartupTabIndex, Mode=OneWay}">
       <TabItem Header="Startup">
         <Grid Margin="16">
           <Grid.RowDefinitions>
