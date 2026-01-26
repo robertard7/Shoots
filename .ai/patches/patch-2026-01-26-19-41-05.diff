@@ -1,0 +1,226 @@
+diff --git a/ui/Shoots.Ui/MainWindow.xaml b/ui/Shoots.Ui/MainWindow.xaml
+index a3543cb..ce28957 100644
+--- a/ui/Shoots.Ui/MainWindow.xaml
++++ b/ui/Shoots.Ui/MainWindow.xaml
+@@ -24,6 +24,10 @@
+               Command="{Binding NewProjectCommand}"
+               ToolTip="{Binding StartupButtonTooltip}"
+               ToolTipService.ShowOnDisabled="True" />
++      <Button Margin="0,6,0,0"
++              Content="Start another project"
++              Command="{Binding StartAnotherProjectCommand}"
++              IsEnabled="{Binding IsStartupLocked}" />
+       <TextBlock Margin="0,16,0,0" Text="Recent Projects" FontWeight="SemiBold" />
+       <ListBox ItemsSource="{Binding RecentWorkspaces}"
+                SelectedItem="{Binding SelectedWorkspace, Mode=TwoWay}"
+@@ -97,7 +101,7 @@
+       </GroupBox>
+     </StackPanel>
+     <TabControl Grid.Column="1" SelectedIndex="{Binding StartupTabIndex, Mode=OneWay}">
+-      <TabItem Header="Startup">
++      <TabItem Header="Startup" IsEnabled="{Binding IsStartupTabEnabled}">
+         <Grid Margin="16">
+           <Grid.RowDefinitions>
+             <RowDefinition Height="Auto" />
+diff --git a/ui/Shoots.Ui/Startup/StartupSessionMode.cs b/ui/Shoots.Ui/Startup/StartupSessionMode.cs
+new file mode 100644
+index 0000000..e48f9a2
+--- /dev/null
++++ b/ui/Shoots.Ui/Startup/StartupSessionMode.cs
+@@ -0,0 +1,8 @@
++namespace Shoots.UI.Startup;
++
++public enum StartupSessionMode
++{
++    Startup,
++    Explore,
++    Project
++}
+diff --git a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+index 52df295..e1de460 100644
+--- a/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
++++ b/ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs
+@@ -72,6 +72,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+     private string _newBlueprintArtifacts = string.Empty;
+     private string _newBlueprintVersion = "1.0";
+     private string _newBlueprintDefinition = string.Empty;
++    private StartupSessionMode _sessionMode = StartupSessionMode.Startup;
+ 	private ExecutionEnvironmentSettings _executionSettings = new(
+ 		"none",
+ 		Array.Empty<Shoots.UI.ExecutionEnvironments.RootFsDescriptor>(),
+@@ -120,6 +121,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         _state = ExecutionState.Idle;
+ 
+         NewProjectCommand = new AsyncRelayCommand(NewProjectAsync, CanStartNewProject);
++        StartAnotherProjectCommand = new AsyncRelayCommand(StartAnotherProjectAsync, CanStartAnotherProject);
+         SelectEntryPathCommand = new AsyncRelayCommand(SelectEntryPathAsync, CanSelectEntryPath);
+         SubmitStartupInputCommand = new AsyncRelayCommand(SubmitStartupInputAsync, CanSubmitStartupInput);
+         StartCommand = new AsyncRelayCommand(StartAsync, CanStart);
+@@ -167,6 +169,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+             ProviderCapabilityMatrixRow.FromKind(ProviderKind.Remote),
+             ProviderCapabilityMatrixRow.FromKind(ProviderKind.Delegated)
+         });
++        _sessionMode = GetSessionMode();
+         RefreshRecentWorkspaces();
+         ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+         LoadExecutionEnvironments();
+@@ -273,6 +276,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+ 
+     public AsyncRelayCommand NewProjectCommand { get; }
+ 
++    public AsyncRelayCommand StartAnotherProjectCommand { get; }
++
+     public AsyncRelayCommand SelectEntryPathCommand { get; }
+ 
+     public AsyncRelayCommand SubmitStartupInputCommand { get; }
+@@ -334,6 +339,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+     public IReadOnlyList<string> StartupLanguageOptions =>
+         StartupLanguageRegistry.All.Select(option => option.Name).ToList();
+ 
++    public bool IsStartupLocked => HasActiveWorkspace;
++
++    public bool IsStartupTabEnabled => !IsStartupLocked;
++
+     public bool IsStartNewLanguageActive => _startupFlow.State == StartupFlowState.StartNewLanguage;
+ 
+     public bool IsStartupInputActive => _startupFlow.State is
+@@ -376,13 +385,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+     {
+         get
+         {
+-            if (HasActiveWorkspace)
+-                return $"Project: {ActiveWorkspace?.Name}";
+-
+-            if (_startupFlow.EntryPath == StartupEntryPath.ExploreIdea)
+-                return "Explore (no writes)";
+-
+-            return "Startup: No project active";
++            return GetSessionMode() switch
++            {
++                StartupSessionMode.Project => $"Project: {ActiveWorkspace?.Name}",
++                StartupSessionMode.Explore => "Explore (no writes)",
++                _ => "Startup: No project active"
++            };
+         }
+     }
+ 
+@@ -570,11 +578,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+             OnPropertyChanged(nameof(ActiveWorkspaceName));
+             OnPropertyChanged(nameof(HasActiveWorkspace));
+             OnPropertyChanged(nameof(HasNoActiveWorkspace));
++            OnPropertyChanged(nameof(IsStartupLocked));
++            OnPropertyChanged(nameof(IsStartupTabEnabled));
+             OnPropertyChanged(nameof(SelectedWorkspace));
+             OnPropertyChanged(nameof(WindowTitle));
+             OnPropertyChanged(nameof(StartupTabIndex));
+             OnPropertyChanged(nameof(SessionStatusLabel));
+             OnPropertyChanged(nameof(ExecutionBlockerSummary));
++            UpdateSessionMode();
+             LoadEnvironmentScript();
+             UpdateProfileCapabilities();
+             UpdateDatabaseIntentSelection();
+@@ -959,13 +970,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+ 
+     public void SetState(ExecutionState state) => State = state;
+ 
+-    private bool CanStartNewProject() => _startupFlow.State == StartupFlowState.Initial;
++    private bool CanStartNewProject() => _startupFlow.State == StartupFlowState.Initial && !HasActiveWorkspace;
++
++    private bool CanStartAnotherProject() => HasActiveWorkspace;
+ 
+     private bool CanSelectEntryPath() => _startupFlow.State == StartupFlowState.EntryPathSelection;
+ 
+     private Task NewProjectAsync()
+     {
+         var previous = _startupFlow.State;
++        if (HasActiveWorkspace)
++        {
++            AddStartupMessage("System: Startup is locked while a project is active. Use \"Start another project\" to restart.");
++            return Task.CompletedTask;
++        }
++
+         if (!_startupFlow.TryBeginNewProject(out var error))
+         {
+             AddStartupMessage($"System: {error}");
+@@ -980,6 +999,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         return Task.CompletedTask;
+     }
+ 
++    private Task StartAnotherProjectAsync()
++    {
++        if (!HasActiveWorkspace)
++            return Task.CompletedTask;
++
++        ActiveWorkspace = null;
++        _startupFlow.Reset();
++        _startupFlow.TryBeginNewProject(out _);
++        Trace.WriteLine("[Shoots.UI] Startup reset requested. Session mode: Startup.");
++        AddStartupMessage("System: Startup reset requested. Choose an entry path.");
++        NotifyStartupFlowChanged();
++        return Task.CompletedTask;
++    }
++
+     private Task SelectEntryPathAsync(object? parameter)
+     {
+         if (parameter is not StartupEntryPath entryPath)
+@@ -2437,7 +2470,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         var sandboxRoot = GetSandboxRoot();
+         var projectPath = Path.Combine(sandboxRoot, folderName);
+         var structure = BuildStructureSummary(language);
+-        return $"Summary: Language={language}; Name={projectName}; Folder={folderName}; Path={projectPath}; Files={structure}.";
++        var builder = new StringBuilder();
++        builder.AppendLine("Summary:");
++        builder.AppendLine("Provider: Ollama (default)");
++        builder.AppendLine($"Mode: {GetSessionMode()}");
++        builder.AppendLine($"Language: {language}");
++        builder.AppendLine($"Project name: {projectName}");
++        builder.AppendLine($"Sandbox path: {projectPath}");
++        builder.AppendLine("Files:");
++        foreach (var entry in structure.Split(", ", StringSplitOptions.RemoveEmptyEntries))
++            builder.AppendLine($"- {entry}");
++        return builder.ToString().TrimEnd();
+     }
+ 
+     private string BuildStructureSummary(string language)
+@@ -2557,6 +2600,28 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+                $"Description: {description}{System.Environment.NewLine}";
+     }
+ 
++    private StartupSessionMode GetSessionMode()
++    {
++        if (HasActiveWorkspace)
++            return StartupSessionMode.Project;
++
++        if (_startupFlow.EntryPath == StartupEntryPath.ExploreIdea)
++            return StartupSessionMode.Explore;
++
++        return StartupSessionMode.Startup;
++    }
++
++    private void UpdateSessionMode()
++    {
++        var next = GetSessionMode();
++        if (next == _sessionMode)
++            return;
++
++        Trace.WriteLine($"[Shoots.UI] Session mode transition: {_sessionMode} -> {next}.");
++        _sessionMode = next;
++        OnPropertyChanged(nameof(SessionStatusLabel));
++    }
++
+     private void AddStartupMessage(string message)
+     {
+         _startupMessages.Add(message);
+@@ -2576,8 +2641,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
+         OnPropertyChanged(nameof(IsStartNewLanguageActive));
+         OnPropertyChanged(nameof(IsStartupInputActive));
+         OnPropertyChanged(nameof(StartupProviderLabel));
++        OnPropertyChanged(nameof(IsStartupLocked));
++        OnPropertyChanged(nameof(IsStartupTabEnabled));
+         OnPropertyChanged(nameof(SessionStatusLabel));
++        UpdateSessionMode();
+         NewProjectCommand.RaiseCanExecuteChanged();
++        StartAnotherProjectCommand.RaiseCanExecuteChanged();
+         SelectEntryPathCommand.RaiseCanExecuteChanged();
+         SubmitStartupInputCommand.RaiseCanExecuteChanged();
+     }
