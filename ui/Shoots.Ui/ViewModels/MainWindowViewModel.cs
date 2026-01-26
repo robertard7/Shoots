@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Shoots.Contracts.Core;
@@ -17,6 +18,7 @@ using Shoots.UI.Projects;
 using Shoots.UI.Roles;
 using Shoots.UI.Services;
 using Shoots.UI.Settings;
+using Shoots.UI.Startup;
 using UiRootFsDescriptor = Shoots.UI.ExecutionEnvironments.RootFsDescriptor;
 
 namespace Shoots.UI.ViewModels;
@@ -44,6 +46,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly ObservableCollection<ToolExecutionRecordViewModel> _comparisonToolExecutionRecords;
 	private readonly ObservableCollection<UiRootFsDescriptor> _rootFsCatalog;
 	public ReadOnlyObservableCollection<UiRootFsDescriptor> RootFsCatalog { get; }
+    private readonly StartupFlowStateMachine _startupFlow;
+    private readonly ObservableCollection<string> _startupMessages;
     private readonly ReadOnlyCollection<ProviderCapabilityMatrixRow> _providerCapabilityMatrix;
     private ExecutionState _state;
     private BuildPlan? _plan;
@@ -112,6 +116,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
         _state = ExecutionState.Idle;
 
+        NewProjectCommand = new AsyncRelayCommand(NewProjectAsync, CanStartNewProject);
+        SelectEntryPathCommand = new AsyncRelayCommand(SelectEntryPathAsync, CanSelectEntryPath);
         StartCommand = new AsyncRelayCommand(StartAsync, CanStart);
         CancelCommand = new AsyncRelayCommand(CancelAsync, CanCancel);
         RefreshStatusCommand = new AsyncRelayCommand(RefreshStatusAsync);
@@ -148,6 +154,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ComparisonToolExecutionRecords = new ReadOnlyObservableCollection<ToolExecutionRecordViewModel>(_comparisonToolExecutionRecords);
         _rootFsCatalog = new ObservableCollection<UiRootFsDescriptor>();
 		RootFsCatalog = new ReadOnlyObservableCollection<UiRootFsDescriptor>(_rootFsCatalog);
+        _startupFlow = new StartupFlowStateMachine();
+        _startupMessages = new ObservableCollection<string>();
+        StartupMessages = new ReadOnlyObservableCollection<string>(_startupMessages);
         _providerCapabilityMatrix = new ReadOnlyCollection<ProviderCapabilityMatrixRow>(new[]
         {
             ProviderCapabilityMatrixRow.FromKind(ProviderKind.Local),
@@ -258,6 +267,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    public AsyncRelayCommand NewProjectCommand { get; }
+
+    public AsyncRelayCommand SelectEntryPathCommand { get; }
+
     public AsyncRelayCommand StartCommand { get; }
 
     public AsyncRelayCommand CancelCommand { get; }
@@ -293,6 +306,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public AsyncRelayCommand ReplayPlanCommand { get; }
 
     public AsyncRelayCommand ExplainSelectedToolExecutionCommand { get; }
+
+    public string StartupStateLabel => _startupFlow.State.ToString();
+
+    public string StartupEntryPathLabel => _startupFlow.EntryPath is null
+        ? "None selected"
+        : FormatEntryPathLabel(_startupFlow.EntryPath.Value);
+
+    public bool IsEntryPathSelectionActive => _startupFlow.State == StartupFlowState.EntryPathSelection;
+
+    public IReadOnlyList<string> StartupMessages { get; }
+
+    public string StartupButtonTooltip => _startupFlow.State == StartupFlowState.Initial
+        ? "Begin the startup flow."
+        : "Startup flow is already active.";
 
     public IReadOnlyList<IEnvironmentProfile> Profiles { get; }
 
@@ -864,6 +891,46 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     public void SetState(ExecutionState state) => State = state;
+
+    private bool CanStartNewProject() => _startupFlow.State == StartupFlowState.Initial;
+
+    private bool CanSelectEntryPath() => _startupFlow.State == StartupFlowState.EntryPathSelection;
+
+    private Task NewProjectAsync()
+    {
+        var previous = _startupFlow.State;
+        if (!_startupFlow.TryBeginNewProject(out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, "Startup flow activated.");
+        AddStartupMessage("System: Startup flow activated. Choose an entry path.");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task SelectEntryPathAsync(object? parameter)
+    {
+        if (parameter is not StartupEntryPath entryPath)
+        {
+            AddStartupMessage("System: Unable to select entry path.");
+            return Task.CompletedTask;
+        }
+
+        var previous = _startupFlow.State;
+        if (!_startupFlow.TrySelectEntryPath(entryPath, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, $"Entry path selected: {entryPath}.");
+        AddStartupMessage($"Intent: {FormatEntryPathLabel(entryPath)}.");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
 
     private bool CanStart() => Plan is not null && State is ExecutionState.Idle or ExecutionState.Completed or ExecutionState.Halted;
 
@@ -2073,6 +2140,34 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         return "Refresh AI Help.";
     }
+
+    private void AddStartupMessage(string message)
+    {
+        _startupMessages.Add(message);
+        OnPropertyChanged(nameof(StartupMessages));
+    }
+
+    private void LogStartupTransition(StartupFlowState previous, StartupFlowState next, string reason)
+        => Trace.WriteLine($"[Shoots.UI] Startup flow transition: {previous} -> {next}. {reason}");
+
+    private void NotifyStartupFlowChanged()
+    {
+        OnPropertyChanged(nameof(StartupStateLabel));
+        OnPropertyChanged(nameof(StartupEntryPathLabel));
+        OnPropertyChanged(nameof(IsEntryPathSelectionActive));
+        OnPropertyChanged(nameof(StartupButtonTooltip));
+        NewProjectCommand.RaiseCanExecuteChanged();
+        SelectEntryPathCommand.RaiseCanExecuteChanged();
+    }
+
+    private static string FormatEntryPathLabel(StartupEntryPath entryPath) =>
+        entryPath switch
+        {
+            StartupEntryPath.StartSomethingNew => "Start something new",
+            StartupEntryPath.ContinueExistingProject => "Continue an existing project",
+            StartupEntryPath.ExploreIdea => "Just explore an idea",
+            _ => entryPath.ToString()
+        };
 
     public ISourceControlIntent? SourceControlIntent => null;
 
