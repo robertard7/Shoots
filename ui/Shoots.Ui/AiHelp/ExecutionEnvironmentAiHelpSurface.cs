@@ -34,7 +34,7 @@ public sealed class ExecutionEnvironmentAiHelpSurface : IAiHelpSurface
     public string DescribeContext()
     {
         if (_rootFs is null)
-            return "No rootfs entry is selected.";
+            return "No root filesystem is selected.";
 
         return $"Rootfs '{_rootFs.DisplayName}' ({_rootFs.SourceType}).";
     }
@@ -52,6 +52,8 @@ public sealed class ExecutionEnvironmentAiHelpSurface : IAiHelpSurface
         if (!string.IsNullOrWhiteSpace(_sourceOverride))
             return $"Source override is set: {_sourceOverride}.";
 
-        return _fallbackNotice;
+        return string.IsNullOrWhiteSpace(_fallbackNotice)
+            ? "No execution environment constraints."
+            : _fallbackNotice;
     }
 }

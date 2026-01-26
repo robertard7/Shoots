@@ -93,31 +93,40 @@ public sealed class ToolExecutionRecordViewModel : IAiHelpSurface
     public string DescribeConstraints()
         => $"Result status: {FormatStatus()}.";
 
-    public static ToolExecutionRecordViewModel FromPlanStep(
-        ToolBuildStep step,
-        ToolResult? result,
-        DecisionOwner owner)
-    {
-        var outputValues = result is not null && result.ToolId == step.ToolId
-            ? result.Outputs
-            : new Dictionary<string, object?>();
+	public static ToolExecutionRecordViewModel FromPlanStep(
+		ToolBuildStep step,
+		ToolResult? result,
+		DecisionOwner owner)
+	{
+		bool isMatchingResult =
+			result is not null &&
+			result.ToolId == step.ToolId;
 
-        var success = result is not null && result.ToolId == step.ToolId
-            ? result.Success
-            : null;
+		IReadOnlyDictionary<string, object?> outputs =
+			isMatchingResult
+				? result!.Outputs
+				: new Dictionary<string, object?>();
 
-        var error = success == false ? "Recorded output indicates a failure." : null;
+		bool? success =
+			isMatchingResult
+				? result!.Success
+				: (bool?)null;
 
-        return new ToolExecutionRecordViewModel(
-            step.Id,
-            step.ToolId.Value,
-            step.InputBindings,
-            outputValues,
-            success,
-            error,
-            owner,
-            DateTimeOffset.UtcNow);
-    }
+		string? error =
+			success == false
+				? "Recorded output indicates a failure."
+				: null;
+
+		return new ToolExecutionRecordViewModel(
+			recordId: step.Id,
+			toolId: step.ToolId.Value,
+			inputs: step.InputBindings,
+			outputs: outputs,
+			success: success,
+			errorMessage: error,
+			owner: owner,
+			capturedAt: DateTimeOffset.UtcNow);
+	}
 
     public string FormatDiff(IReadOnlyDictionary<string, object?> left, IReadOnlyDictionary<string, object?> right, string label)
     {

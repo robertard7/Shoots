@@ -247,66 +247,68 @@ public sealed class RoutingLoopTests
 
         var result = loop.Run();
 
-        var errorEntry = Assert.Single(result.Trace.Entries.Where(entry => entry.Event == RoutingTraceEventKind.Error));
+        var errorEntry = Assert.Single(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.Error);
         Assert.Equal("internal_error", errorEntry.Error?.Code);
         Assert.Equal(RoutingStatus.Halted, result.State.Status);
         Assert.Equal("select", result.State.CurrentNodeId);
         Assert.Empty(result.ToolResults);
-        Assert.Single(result.Trace.Entries.Where(entry => entry.Event == RoutingTraceEventKind.Halted));
+        Assert.Single(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.Halted);
     }
+	[Fact]
+	public void Routing_advances_without_provider_on_non_select_steps()
+	{
+		var workOrder = new WorkOrder(
+			new WorkOrderId("wo-no-provider"),
+			"Original request.",
+			"Route loop without provider.",
+			new List<string>(),
+			new List<string>());
 
-    public void Routing_advances_without_provider_on_non_select_steps()
-    {
-        var workOrder = new WorkOrder(
-            new WorkOrderId("wo-no-provider"),
-            "Original request.",
-            "Route loop without provider.",
-            new List<string>(),
-            new List<string>());
+		var request = new BuildRequest(
+			workOrder,
+			"core.route",
+			new Dictionary<string, object?>(),
+			new[]
+			{
+				new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
+				new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+			});
 
-        var request = new BuildRequest(
-            workOrder,
-            "core.route",
-            new Dictionary<string, object?>(),
-            new[]
-            {
-                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "terminate" }),
-                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
-            });
+		var steps = new BuildStep[]
+		{
+			new RouteStep(
+				"validate",
+				"Validate work.",
+				"validate",
+				RouteIntent.Validate,
+				DecisionOwner.Runtime,
+				workOrder.Id),
+			new RouteStep(
+				"terminate",
+				"Terminate route.",
+				"terminate",
+				RouteIntent.Terminate,
+				DecisionOwner.Rule,
+				workOrder.Id)
+		};
 
-        var steps = new BuildStep[]
-        {
-            new RouteStep(
-                "validate",
-                "Validate work.",
-                "validate",
-                RouteIntent.Validate,
-                DecisionOwner.Runtime,
-                workOrder.Id),
-            new RouteStep(
-                "terminate",
-                "Terminate route.",
-                "terminate",
-                RouteIntent.Terminate,
-                DecisionOwner.Rule,
-                workOrder.Id)
-        };
+		var plan = BuildPlanTestFactory.CreatePlan(request, steps);
 
-        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
+		var loop = new RoutingLoop(
+			plan,
+			new EmptyToolRegistry(),
+			new ThrowingAiDecisionProvider(),
+			NullRuntimeNarrator.Instance,
+			new NullToolExecutor());
 
-        var loop = new RoutingLoop(
-            plan,
-            new EmptyToolRegistry(),
-            new ThrowingAiDecisionProvider(),
-            NullRuntimeNarrator.Instance,
-            new NullToolExecutor());
+		var result = loop.Run();
 
-        var result = loop.Run();
-
-        Assert.Equal(RoutingStatus.Completed, result.State.Status);
-        Assert.Equal("terminate", result.State.CurrentNodeId);
-        Assert.DoesNotContain(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.DecisionRequired);
-    }
+		Assert.Equal(RoutingStatus.Completed, result.State.Status);
+		Assert.Equal("terminate", result.State.CurrentNodeId);
+		Assert.DoesNotContain(
+			result.Trace.Entries,
+			entry => entry.Event == RoutingTraceEventKind.DecisionRequired);
+	}
 
     private sealed class RefusingAiDecisionProvider : IAiDecisionProvider
     {

@@ -30,7 +30,7 @@ public sealed class AiHelpFacade : IAiHelpFacade
     {
         _runtimeFacade = runtimeFacade ?? throw new ArgumentNullException(nameof(runtimeFacade));
         _narratorSummary = narratorSummary ?? throw new ArgumentNullException(nameof(narratorSummary));
-        _registeredSurfaces = helpSurfaces?.ToList() ?? Array.Empty<IAiHelpSurface>();
+        _registeredSurfaces = helpSurfaces?.ToList() ?? new List<IAiHelpSurface>();
         _intentLogger = intentLogger;
     }
 

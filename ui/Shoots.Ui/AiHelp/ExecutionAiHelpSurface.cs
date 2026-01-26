@@ -7,18 +7,20 @@ namespace Shoots.UI.AiHelp;
 public sealed class ExecutionAiHelpSurface : IAiHelpSurface
 {
     private readonly BuildPlan? _plan;
-    private readonly ExecutionState _state;
+    private readonly string _stateLabel;
     private readonly string _startReason;
 
-    public ExecutionAiHelpSurface(BuildPlan? plan, ExecutionState state, string startReason)
+    public ExecutionAiHelpSurface(
+        BuildPlan? plan,
+        string stateLabel,
+        string startReason)
     {
         _plan = plan;
-        _state = state;
+        _stateLabel = stateLabel;
         _startReason = startReason;
     }
 
     public string SurfaceId => "execution";
-
     public string SurfaceKind => "Execution";
 
     public IReadOnlyList<AiIntentDescriptor> SupportedIntents { get; } = new[]
@@ -37,7 +39,7 @@ public sealed class ExecutionAiHelpSurface : IAiHelpSurface
     }
 
     public string DescribeCapabilities()
-        => $"Execution state: {_state}.";
+        => $"Execution state: {_stateLabel}.";
 
     public string DescribeConstraints()
         => $"Start readiness: {_startReason}.";

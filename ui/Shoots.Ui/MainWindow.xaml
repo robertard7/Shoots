@@ -324,137 +324,186 @@
                 </StackPanel>
               </GroupBox>
             </StackPanel>
-            <GroupBox Grid.Column="1" Header="Registered Blueprints">
-              <ListBox Margin="8" ItemsSource="{Binding Blueprints}">
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
-                    <StackPanel Margin="0,4,0,4">
-                      <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Blueprint" FontWeight="SemiBold" />
-                        <Border Margin="8,0,0,0" CornerRadius="4" Padding="4,1">
-                          <Border.Style>
-                            <Style TargetType="Border">
-                              <Setter Property="Background" Value="#FFE5E7EB" />
-                              <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsDirty}" Value="True">
-                                  <Setter Property="Background" Value="#FFFDE68A" />
-                                </DataTrigger>
-                              </Style.Triggers>
-                            </Style>
-                          </Border.Style>
-                          <TextBlock Text="{Binding DirtyStateLabel}">
-                            <TextBlock.Style>
-                              <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="#FF374151" />
-                                <Style.Triggers>
-                                  <DataTrigger Binding="{Binding IsDirty}" Value="True">
-                                    <Setter Property="Foreground" Value="#FF92400E" />
-                                  </DataTrigger>
-                                </Style.Triggers>
-                              </Style>
-                            </TextBlock.Style>
-                          </TextBlock>
-                        </Border>
-                      </StackPanel>
-                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <TextBlock Text="Name" FontWeight="SemiBold" />
-                        <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
-                          <TextBlock Foreground="#FF374151" Text="Metadata Only" />
-                        </Border>
-                      </StackPanel>
-                      <TextBox Margin="0,4,0,0" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
-                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <TextBlock Text="Description" />
-                        <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
-                          <TextBlock Foreground="#FF374151" Text="Metadata Only" />
-                        </Border>
-                      </StackPanel>
-                      <TextBox Margin="0,4,0,0" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" Height="60" />
-                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <TextBlock Text="Version" />
-                        <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
-                          <TextBlock Foreground="#FF374151" Text="Metadata Only" />
-                        </Border>
-                      </StackPanel>
-                      <TextBox Margin="0,4,0,0" Text="{Binding Version, UpdateSourceTrigger=PropertyChanged}" />
-                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <TextBlock Text="Definition (JSON or YAML)" />
-                        <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
-                          <TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
-                        </Border>
-                      </StackPanel>
-                      <TextBox Margin="0,4,0,0" Text="{Binding DefinitionText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="120" />
-                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <TextBlock Text="Intents (one per line)" />
-                        <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
-                          <TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
-                        </Border>
-                      </StackPanel>
-                      <TextBox Margin="0,4,0,0" Text="{Binding IntentsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" />
-                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <TextBlock Text="Expected artifacts (one per line)" />
-                        <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
-                          <TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
-                        </Border>
-                      </StackPanel>
-                      <TextBox Margin="0,4,0,0" Text="{Binding ArtifactsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" />
-                      <Border Margin="0,8,0,0" Background="#FFFEE2E2" CornerRadius="4" Padding="6"
-                              Visibility="{Binding HasValidationErrors, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <TextBlock Foreground="#FFB91C1C" Text="{Binding ValidationSummary}" TextWrapping="Wrap" />
-                      </Border>
-                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <Button Width="100"
-                                Content="Save"
-                                Command="{Binding DataContext.SaveBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                CommandParameter="{Binding}"
-                                IsEnabled="{Binding CanSave}" />
-                        <Button Width="100"
-                                Margin="8,0,0,0"
-                                Content="Revert"
-                                Command="{Binding DataContext.RevertBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                CommandParameter="{Binding}"
-                                IsEnabled="{Binding CanRevert}" />
-                      </StackPanel>
-                      <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                        <Button Width="120"
-                                Content="Explain"
-                                Command="{Binding DataContext.ExplainBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                CommandParameter="{Binding}"
-                                Visibility="{Binding DataContext.CanRenderAiExplainButtons, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                        <Button Width="120"
-                                Margin="8,0,0,0"
-                                Content="Validate"
-                                Command="{Binding DataContext.ValidateBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                CommandParameter="{Binding}"
-                                Visibility="{Binding DataContext.CanRenderAiExplainButtons, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                        <Button Width="120"
-                                Margin="8,0,0,0"
-                                Content="Suggest"
-                                Command="{Binding DataContext.SuggestBlueprintCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                CommandParameter="{Binding}"
-                                Visibility="{Binding DataContext.CanRenderAiExplainButtons, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                      </StackPanel>
-                      <TextBlock Margin="0,6,0,0" Foreground="#FF6B7280" Text="{Binding CreatedUtc}" TextWrapping="Wrap" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
-              <TextBlock Margin="8,0,8,8"
-                         Foreground="#FF6B7280"
-                         Text="No blueprints yet. Add one on the left."
-                         TextWrapping="Wrap">
-                <TextBlock.Style>
-                  <Style TargetType="TextBlock">
-                    <Setter Property="Visibility" Value="Collapsed" />
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding HasBlueprints}" Value="False">
-                        <Setter Property="Visibility" Value="Visible" />
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </TextBlock.Style>
-              </TextBlock>
-            </GroupBox>
+			<GroupBox Grid.Column="1" Header="Registered Blueprints">
+			  <StackPanel>
+				<ListBox Margin="8" ItemsSource="{Binding Blueprints}">
+				  <ListBox.ItemTemplate>
+					<DataTemplate>
+					  <StackPanel Margin="0,4,0,4">
+						<StackPanel Orientation="Horizontal">
+						  <TextBlock Text="Blueprint" FontWeight="SemiBold" />
+						  <Border Margin="8,0,0,0" CornerRadius="4" Padding="4,1">
+							<Border.Style>
+							  <Style TargetType="Border">
+								<Setter Property="Background" Value="#FFE5E7EB" />
+								<Style.Triggers>
+								  <DataTrigger Binding="{Binding IsDirty}" Value="True">
+									<Setter Property="Background" Value="#FFFDE68A" />
+								  </DataTrigger>
+								</Style.Triggers>
+							  </Style>
+							</Border.Style>
+							<TextBlock Text="{Binding DirtyStateLabel}">
+							  <TextBlock.Style>
+								<Style TargetType="TextBlock">
+								  <Setter Property="Foreground" Value="#FF374151" />
+								  <Style.Triggers>
+									<DataTrigger Binding="{Binding IsDirty}" Value="True">
+									  <Setter Property="Foreground" Value="#FF92400E" />
+									</DataTrigger>
+								  </Style.Triggers>
+								</Style>
+							  </TextBlock.Style>
+							</TextBlock>
+						  </Border>
+						</StackPanel>
+
+						<StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+						  <TextBlock Text="Name" FontWeight="SemiBold" />
+						  <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
+							<TextBlock Foreground="#FF374151" Text="Metadata Only" />
+						  </Border>
+						</StackPanel>
+						<TextBox Margin="0,4,0,0"
+								 Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+
+						<StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+						  <TextBlock Text="Description" />
+						  <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
+							<TextBlock Foreground="#FF374151" Text="Metadata Only" />
+						  </Border>
+						</StackPanel>
+						<TextBox Margin="0,4,0,0"
+								 Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+								 TextWrapping="Wrap"
+								 Height="60" />
+
+						<StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+						  <TextBlock Text="Version" />
+						  <Border Margin="8,0,0,0" Background="#FFE5E7EB" CornerRadius="4" Padding="4,1">
+							<TextBlock Foreground="#FF374151" Text="Metadata Only" />
+						  </Border>
+						</StackPanel>
+						<TextBox Margin="0,4,0,0"
+								 Text="{Binding Version, UpdateSourceTrigger=PropertyChanged}" />
+
+						<StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+						  <TextBlock Text="Definition (JSON or YAML)" />
+						  <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
+							<TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
+						  </Border>
+						</StackPanel>
+						<TextBox Margin="0,4,0,0"
+								 Text="{Binding DefinitionText, UpdateSourceTrigger=PropertyChanged}"
+								 AcceptsReturn="True"
+								 Height="120" />
+
+						<StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+						  <TextBlock Text="Intents (one per line)" />
+						  <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
+							<TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
+						  </Border>
+						</StackPanel>
+						<TextBox Margin="0,4,0,0"
+								 Text="{Binding IntentsText, UpdateSourceTrigger=PropertyChanged}"
+								 AcceptsReturn="True"
+								 Height="80" />
+
+						<StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+						  <TextBlock Text="Expected artifacts (one per line)" />
+						  <Border Margin="8,0,0,0" Background="#FFDBEAFE" CornerRadius="4" Padding="4,1">
+							<TextBlock Foreground="#FF1D4ED8" Text="Affects Plan" />
+						  </Border>
+						</StackPanel>
+						<TextBox Margin="0,4,0,0"
+								 Text="{Binding ArtifactsText, UpdateSourceTrigger=PropertyChanged}"
+								 AcceptsReturn="True"
+								 Height="80" />
+
+						<Border Margin="0,8,0,0"
+								Background="#FFFEE2E2"
+								CornerRadius="4"
+								Padding="6"
+								Visibility="{Binding HasValidationErrors,
+													 Converter={StaticResource BooleanToVisibilityConverter}}">
+						  <TextBlock Foreground="#FFB91C1C"
+									 Text="{Binding ValidationSummary}"
+									 TextWrapping="Wrap" />
+						</Border>
+
+						<StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+						  <Button Width="100"
+								  Content="Save"
+								  Command="{Binding DataContext.SaveBlueprintCommand,
+													RelativeSource={RelativeSource AncestorType=ListBox}}"
+								  CommandParameter="{Binding}"
+								  IsEnabled="{Binding CanSave}" />
+						  <Button Width="100"
+								  Margin="8,0,0,0"
+								  Content="Revert"
+								  Command="{Binding DataContext.RevertBlueprintCommand,
+													RelativeSource={RelativeSource AncestorType=ListBox}}"
+								  CommandParameter="{Binding}"
+								  IsEnabled="{Binding CanRevert}" />
+						</StackPanel>
+
+						<StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+						  <Button Width="120"
+								  Content="Explain"
+								  Command="{Binding DataContext.ExplainBlueprintCommand,
+													RelativeSource={RelativeSource AncestorType=ListBox}}"
+								  CommandParameter="{Binding}"
+								  Visibility="{Binding DataContext.CanRenderAiExplainButtons,
+													   RelativeSource={RelativeSource AncestorType=ListBox},
+													   Converter={StaticResource BooleanToVisibilityConverter}}" />
+						  <Button Width="120"
+								  Margin="8,0,0,0"
+								  Content="Validate"
+								  Command="{Binding DataContext.ValidateBlueprintCommand,
+													RelativeSource={RelativeSource AncestorType=ListBox}}"
+								  CommandParameter="{Binding}"
+								  Visibility="{Binding DataContext.CanRenderAiExplainButtons,
+													   RelativeSource={RelativeSource AncestorType=ListBox},
+													   Converter={StaticResource BooleanToVisibilityConverter}}" />
+						  <Button Width="120"
+								  Margin="8,0,0,0"
+								  Content="Suggest"
+								  Command="{Binding DataContext.SuggestBlueprintCommand,
+													RelativeSource={RelativeSource AncestorType=ListBox}}"
+								  CommandParameter="{Binding}"
+								  Visibility="{Binding DataContext.CanRenderAiExplainButtons,
+													   RelativeSource={RelativeSource AncestorType=ListBox},
+													   Converter={StaticResource BooleanToVisibilityConverter}}" />
+						</StackPanel>
+
+						<TextBlock Margin="0,6,0,0"
+								   Foreground="#FF6B7280"
+								   Text="{Binding CreatedUtc}"
+								   TextWrapping="Wrap" />
+					  </StackPanel>
+					</DataTemplate>
+				  </ListBox.ItemTemplate>
+				</ListBox>
+
+				<!-- EMPTY STATE -->
+				<TextBlock Margin="8,0,8,8"
+						   Foreground="#FF6B7280"
+						   Text="No blueprints yet. Add one on the left."
+						   TextWrapping="Wrap">
+				  <TextBlock.Style>
+					<Style TargetType="TextBlock">
+					  <Setter Property="Visibility" Value="Collapsed" />
+					  <Style.Triggers>
+						<DataTrigger Binding="{Binding HasBlueprints}" Value="False">
+						  <Setter Property="Visibility" Value="Visible" />
+						</DataTrigger>
+					  </Style.Triggers>
+					</Style>
+				  </TextBlock.Style>
+				</TextBlock>
+
+			  </StackPanel>
+			</GroupBox>
           </Grid>
         </Grid>
       </TabItem>

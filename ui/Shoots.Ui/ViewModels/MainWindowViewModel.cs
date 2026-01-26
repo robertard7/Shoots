@@ -17,6 +17,7 @@ using Shoots.UI.Projects;
 using Shoots.UI.Roles;
 using Shoots.UI.Services;
 using Shoots.UI.Settings;
+using UiRootFsDescriptor = Shoots.UI.ExecutionEnvironments.RootFsDescriptor;
 
 namespace Shoots.UI.ViewModels;
 
@@ -41,7 +42,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly ObservableCollection<ToolExecutionSessionViewModel> _toolExecutionSessions;
     private readonly ObservableCollection<ToolExecutionRecordViewModel> _toolExecutionRecords;
     private readonly ObservableCollection<ToolExecutionRecordViewModel> _comparisonToolExecutionRecords;
-    private readonly ObservableCollection<RootFsDescriptor> _rootFsCatalog;
+	private readonly ObservableCollection<UiRootFsDescriptor> _rootFsCatalog;
+	public ReadOnlyObservableCollection<UiRootFsDescriptor> RootFsCatalog { get; }
     private readonly ReadOnlyCollection<ProviderCapabilityMatrixRow> _providerCapabilityMatrix;
     private ExecutionState _state;
     private BuildPlan? _plan;
@@ -63,7 +65,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _newBlueprintArtifacts = string.Empty;
     private string _newBlueprintVersion = "1.0";
     private string _newBlueprintDefinition = string.Empty;
-    private ExecutionEnvironmentSettings _executionSettings = new("none", Array.Empty<RootFsDescriptor>(), string.Empty);
+	private ExecutionEnvironmentSettings _executionSettings = new(
+		"none",
+		Array.Empty<Shoots.UI.ExecutionEnvironments.RootFsDescriptor>(),
+		string.Empty
+	);
     private ToolExecutionRecordViewModel? _selectedToolExecutionRecord;
     private ToolExecutionRecordViewModel? _comparisonToolExecutionRecord;
     private ToolExecutionSessionViewModel? _selectedToolExecutionSession;
@@ -140,8 +146,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ToolExecutionRecords = new ReadOnlyObservableCollection<ToolExecutionRecordViewModel>(_toolExecutionRecords);
         _comparisonToolExecutionRecords = new ObservableCollection<ToolExecutionRecordViewModel>();
         ComparisonToolExecutionRecords = new ReadOnlyObservableCollection<ToolExecutionRecordViewModel>(_comparisonToolExecutionRecords);
-        _rootFsCatalog = new ObservableCollection<RootFsDescriptor>();
-        RootFsCatalog = new ReadOnlyObservableCollection<RootFsDescriptor>(_rootFsCatalog);
+        _rootFsCatalog = new ObservableCollection<UiRootFsDescriptor>();
+		RootFsCatalog = new ReadOnlyObservableCollection<UiRootFsDescriptor>(_rootFsCatalog);
         _providerCapabilityMatrix = new ReadOnlyCollection<ProviderCapabilityMatrixRow>(new[]
         {
             ProviderCapabilityMatrixRow.FromKind(ProviderKind.Local),
@@ -455,8 +461,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string ToolExecutionDiffSummary =>
         BuildToolExecutionDiffSummary(SelectedToolExecutionRecord, ComparisonToolExecutionRecord);
 
-    public ReadOnlyObservableCollection<RootFsDescriptor> RootFsCatalog { get; }
-
     public ReadOnlyCollection<ProviderCapabilityMatrixRow> ProviderCapabilityMatrix => _providerCapabilityMatrix;
 
     public ReadOnlyCollection<RoleDescriptor> RoleOptions { get; }
@@ -622,23 +626,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         : string.Empty;
 
     public string AiVisibilityWatermark => "Admin-only visibility";
-
-    public RootFsDescriptor? SelectedRootFs
-    {
-        get => ActiveRootFs;
-        set => UpdateRootFsSelection(value);
-    }
-
-    public RootFsDescriptor? ActiveRootFs
-    {
-        get
-        {
-            if (ActiveWorkspace is null)
-                return GetRootFsById(_executionSettings.ActiveRootFsId);
-
-            return GetRootFsById(ActiveWorkspace.RootFsId ?? _executionSettings.ActiveRootFsId);
-        }
-    }
 
     public string ActiveRootFsLabel => ActiveRootFs?.DisplayName ?? "No rootfs selected";
 
@@ -1056,46 +1043,58 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return labels;
     }
 
-    private void LoadEnvironmentScript()
-    {
-        var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        var scriptRoot = ActiveWorkspace is null
-            ? baseDirectory
-            : ActiveWorkspace.RootPath ?? string.Empty;
-        _scriptSearchPath = Path.Combine(scriptRoot, EnvironmentScriptLoader.FileName);
+	private void LoadEnvironmentScript()
+	{
+		var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
 
-        if (_scriptLoader.TryLoad(scriptRoot, out var script, out var error))
-        {
-            _environmentScript = script;
-            EnvironmentInfoMessage = $"Environment script loaded from {_scriptSearchPath}.";
-            EnvironmentErrorMessage = null;
-            _scriptUnsupportedCapabilitiesMessage = DescribeUnsupportedCapabilities(script.DeclaredCapabilities);
-        }
-        else if (!string.IsNullOrWhiteSpace(error))
-        {
-            _environmentScript = null;
-            EnvironmentErrorMessage = error;
-            EnvironmentInfoMessage = null;
-            _scriptUnsupportedCapabilitiesMessage = null;
-        }
-        else
-        {
-            _environmentScript = null;
-            EnvironmentInfoMessage = null;
-            EnvironmentErrorMessage = null;
-            _scriptUnsupportedCapabilitiesMessage = null;
-        }
+		var scriptRoot = ActiveWorkspace?.RootPath;
+		if (string.IsNullOrWhiteSpace(scriptRoot))
+			scriptRoot = baseDirectory;
 
-        OnPropertyChanged(nameof(ScriptPreview));
-        OnPropertyChanged(nameof(ScriptCapabilities));
-        OnPropertyChanged(nameof(ScriptSteps));
-        OnPropertyChanged(nameof(ScriptSearchPath));
-        OnPropertyChanged(nameof(ScriptUnsupportedCapabilitiesMessage));
-        OnPropertyChanged(nameof(ScriptFolderCount));
-        OnPropertyChanged(nameof(ScriptFolderCountLabel));
-        OnPropertyChanged(nameof(ApplyScriptDisabledReason));
-        RaiseCommandCanExecute();
-    }
+		_scriptSearchPath = Path.Combine(scriptRoot, EnvironmentScriptLoader.FileName);
+
+		EnvironmentScript? loadedScript = null;
+		string? loadError = null;
+
+		var loaded = _scriptLoader.TryLoad(
+			scriptRoot,
+			out loadedScript,
+			out loadError);
+
+		if (loaded && loadedScript is not null)
+		{
+			_environmentScript = loadedScript;
+			EnvironmentInfoMessage = $"Environment script loaded from {_scriptSearchPath}.";
+			EnvironmentErrorMessage = null;
+			_scriptUnsupportedCapabilitiesMessage =
+				DescribeUnsupportedCapabilities(loadedScript.DeclaredCapabilities);
+		}
+		else if (!string.IsNullOrWhiteSpace(loadError))
+		{
+			_environmentScript = null;
+			EnvironmentErrorMessage = loadError;
+			EnvironmentInfoMessage = null;
+			_scriptUnsupportedCapabilitiesMessage = null;
+		}
+		else
+		{
+			_environmentScript = null;
+			EnvironmentInfoMessage = null;
+			EnvironmentErrorMessage = null;
+			_scriptUnsupportedCapabilitiesMessage = null;
+		}
+
+		OnPropertyChanged(nameof(ScriptPreview));
+		OnPropertyChanged(nameof(ScriptCapabilities));
+		OnPropertyChanged(nameof(ScriptSteps));
+		OnPropertyChanged(nameof(ScriptSearchPath));
+		OnPropertyChanged(nameof(ScriptUnsupportedCapabilitiesMessage));
+		OnPropertyChanged(nameof(ScriptFolderCount));
+		OnPropertyChanged(nameof(ScriptFolderCountLabel));
+		OnPropertyChanged(nameof(ApplyScriptDisabledReason));
+
+		RaiseCommandCanExecute();
+	}
 
     private static string GetSandboxRoot()
     {
@@ -1212,14 +1211,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (!CanAddBlueprint() || _activeWorkspace is null)
             return Task.CompletedTask;
 
-        var blueprint = new SystemBlueprint(
-            NewBlueprintName.Trim(),
-            NewBlueprintDescription.Trim(),
-            ParseBlueprintLines(NewBlueprintIntents),
-            ParseBlueprintLines(NewBlueprintArtifacts),
-            NewBlueprintVersion.Trim(),
-            NewBlueprintDefinition.Trim(),
-            DateTimeOffset.UtcNow);
+		var blueprint = new SystemBlueprint(
+			Name: NewBlueprintName.Trim(),
+			Description: NewBlueprintDescription.Trim(),
+			Intents: ParseBlueprintLines(NewBlueprintIntents),
+			Artifacts: ParseBlueprintLines(NewBlueprintArtifacts),
+			Version: NewBlueprintVersion.Trim(),
+			Definition: NewBlueprintDefinition.Trim(),
+			CreatedUtc: DateTimeOffset.UtcNow);
 
         var entry = new BlueprintEntryViewModel(blueprint, RequestBlueprintSave);
         _blueprints.Add(entry);
@@ -1411,30 +1410,50 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             BuildAiHelpSurfaces());
     }
 
-    private IReadOnlyList<IAiHelpSurface> BuildAiHelpSurfaces()
-    {
-        var surfaces = new List<IAiHelpSurface>
-        {
-            new WorkspaceAiHelpSurface(ActiveWorkspace, ActiveToolpackTier),
-            new ExecutionAiHelpSurface(Plan, State, StartDisabledReason),
-            new ExecutionEnvironmentAiHelpSurface(ActiveRootFs, RootFsSourceOverride, RootFsFallbackNotice),
-            new BlueprintCatalogAiHelpSurface(_blueprints.Select(entry => entry.Name).ToList()),
-            new PlannerAiHelpSurface(Plan),
-            new ToolExecutionCatalogAiHelpSurface(_toolExecutionSessions, _toolExecutionRecords, _comparisonToolExecutionRecords)
-        };
+	private IReadOnlyList<IAiHelpSurface> BuildAiHelpSurfaces()
+	{
+		var surfaces = new List<IAiHelpSurface>();
 
-        foreach (var blueprint in _blueprints)
-            surfaces.Add(blueprint.ToBlueprint());
+		// Workspace + execution context
+		surfaces.Add(new WorkspaceAiHelpSurface(ActiveWorkspace, ActiveToolpackTier));
 
-        foreach (var record in _toolExecutionRecords)
-            surfaces.Add(record);
+		surfaces.Add(new ExecutionAiHelpSurface(
+			Plan,
+			State.ToString(),
+			StartDisabledReason));
 
-        foreach (var record in _comparisonToolExecutionRecords)
-            surfaces.Add(record);
+		// Execution environment (UI-safe RootFs)
+		surfaces.Add(new ExecutionEnvironmentAiHelpSurface(
+			ActiveRootFs,
+			RootFsSourceOverride,
+			RootFsFallbackNotice));
 
-        AiSurfaceRegistry.Current.Register(surfaces);
-        return surfaces;
-    }
+		// Blueprint + planning surfaces
+		surfaces.Add(new BlueprintCatalogAiHelpSurface(
+			_blueprints.Select(entry => entry.Name).ToList()));
+
+		surfaces.Add(new PlannerAiHelpSurface(Plan));
+
+		// Tool execution surfaces
+		surfaces.Add(new ToolExecutionCatalogAiHelpSurface(
+			_toolExecutionSessions,
+			_toolExecutionRecords,
+			_comparisonToolExecutionRecords));
+
+		// Individual blueprint surfaces
+		foreach (var entry in _blueprints)
+			surfaces.Add(entry.ToBlueprint());
+
+		// Tool execution record surfaces
+		foreach (var record in _toolExecutionRecords)
+			surfaces.Add(record);
+
+		foreach (var record in _comparisonToolExecutionRecords)
+			surfaces.Add(record);
+
+		AiSurfaceRegistry.Current.Register(surfaces);
+		return surfaces;
+	}
 
     private void RegisterAiSurfaces()
     {
@@ -1590,23 +1609,39 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(RootFsFallbackNotice));
     }
 
-    private void UpdateRootFsSelection(RootFsDescriptor? descriptor)
-    {
-        if (descriptor is null)
-            return;
+	public UiRootFsDescriptor? ActiveRootFs
+	{
+		get
+		{
+			var id = ActiveWorkspace?.RootFsId ?? _executionSettings.ActiveRootFsId;
+			return GetRootFsById(id);
+		}
+	}
 
-        if (ActiveWorkspace is null)
-        {
-            _executionSettings = _executionSettings with { ActiveRootFsId = descriptor.Id };
-            _executionEnvironmentStore.Save(_executionSettings);
-            UpdateExecutionEnvironmentSelection();
-            return;
-        }
+	public UiRootFsDescriptor? SelectedRootFs
+	{
+		get => ActiveRootFs;
+		set => UpdateRootFsSelection(value);
+	}
 
-        var updated = ActiveWorkspace with { RootFsId = descriptor.Id };
-        _workspaceProvider.UpdateWorkspace(updated);
-        ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
-    }
+
+	private void UpdateRootFsSelection(UiRootFsDescriptor? descriptor)
+	{
+		if (descriptor is null)
+			return;
+
+		if (ActiveWorkspace is null)
+		{
+			_executionSettings = _executionSettings with { ActiveRootFsId = descriptor.Id };
+			_executionEnvironmentStore.Save(_executionSettings);
+			UpdateExecutionEnvironmentSelection();
+			return;
+		}
+
+		var updated = ActiveWorkspace with { RootFsId = descriptor.Id };
+		_workspaceProvider.UpdateWorkspace(updated);
+		ActiveWorkspace = _workspaceProvider.GetActiveWorkspace();
+	}
 
     private void UpdateRootFsSourceOverride(string? value)
     {
@@ -1647,14 +1682,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private RootFsDescriptor? GetRootFsById(string? id)
-    {
-        if (string.IsNullOrWhiteSpace(id))
-            return null;
+	private UiRootFsDescriptor? GetRootFsById(string? id)
+	{
+		if (string.IsNullOrWhiteSpace(id))
+			return null;
 
-        return _rootFsCatalog.FirstOrDefault(entry =>
-            string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase));
-    }
+		return _rootFsCatalog.FirstOrDefault(entry =>
+			string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase));
+	}
 
     private static IReadOnlyList<string> ParseBlueprintLines(string value)
     {

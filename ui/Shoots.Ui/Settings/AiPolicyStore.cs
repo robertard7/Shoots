@@ -26,8 +26,8 @@ public sealed class AiPolicyStore : IAiPolicyStore
     public AiPolicyStore(string? baseDirectory = null)
     {
         var root = baseDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Shoots");
+			System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+			"Shoots");
 
         _defaultPath = Path.Combine(root, FileName);
     }

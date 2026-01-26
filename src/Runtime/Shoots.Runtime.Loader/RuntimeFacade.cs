@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Shoots.Contracts.Core;
 using Shoots.Contracts.Core.AI;
 using Shoots.Providers.Bridge;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
+using System.Linq;
 
 namespace Shoots.Runtime.Loader;
 
@@ -24,50 +26,46 @@ public sealed class RuntimeFacade : IRuntimeFacade
         _policyResolver = policyResolver ?? new DefaultAiPolicyResolver();
         _policy = _policyResolver.Resolve(AiAccessRole.Developer);
         _policyHash = ComputePolicyHash(_policy);
-        Trace.WriteLine($"[Shoots.Runtime.Loader] AI policy: {_policy.Visibility} (enterprise={_policy.EnterpriseMode})");
-        Trace.WriteLine($"[Shoots.Runtime.Loader] AI policy hash: {_policyHash}");
         EnforceEmbeddedProvider();
     }
 
     public Task<RuntimeResult> StartExecution(BuildPlan plan, CancellationToken ct = default)
-    {
-        _ = plan;
-        _ = ct;
-        return Task.FromResult(RuntimeResult.Fail(RuntimeError.Internal("Runtime facade execution is not configured.")));
-    }
+        => Task.FromResult(RuntimeResult.Fail(
+            RuntimeError.Internal("Runtime facade execution is not configured.")
+        ));
 
     public Task<IRuntimeStatusSnapshot> QueryStatus(CancellationToken ct = default)
-    {
-        _ = ct;
-        return Task.FromResult<IRuntimeStatusSnapshot>(
+        => Task.FromResult<IRuntimeStatusSnapshot>(
             new RuntimeStatusSnapshot(_host.Version, _policyHash));
-    }
 
-    public async IAsyncEnumerable<RoutingTraceEntry> SubscribeTrace(CancellationToken ct = default)
-    {
-        _ = ct;
-        yield break;
-    }
+	public IAsyncEnumerable<RoutingTraceEntry> SubscribeTrace(
+		CancellationToken ct = default)
+	{
+		return EmptyTrace(ct);
+	}
+
+	private static async IAsyncEnumerable<RoutingTraceEntry> EmptyTrace(
+		[EnumeratorCancellation] CancellationToken ct)
+	{
+		await Task.CompletedTask;
+		yield break;
+	}
 
     public Task CancelExecution(CancellationToken ct = default)
-    {
-        _ = ct;
-        return Task.CompletedTask;
-    }
+        => Task.CompletedTask;
 
-    private sealed record RuntimeStatusSnapshot(RuntimeVersion Version, string PolicyHash) : IRuntimeStatusSnapshot;
+    private sealed record RuntimeStatusSnapshot(
+        RuntimeVersion Version,
+        string PolicyHash) : IRuntimeStatusSnapshot;
 
     private static void EnforceEmbeddedProvider()
     {
         var registry = ProviderRegistryFactory.CreateDefault();
-        Trace.WriteLine($"[Shoots.Runtime.Loader] Provider order: {string.Join(", ", registry.RegistrationOrder)}");
         registry.EnsureEmbeddedProviderPrimary();
     }
 
     private static string ComputePolicyHash(AiPresentationPolicy policy)
     {
-        // ⚠️ CONTRACT FROZEN: Keep ordering aligned with AiPresentationPolicy.ContractShape.
-        // Any change requires a contract version bump plus tripwire updates.
         var value = $"{policy.Visibility}|{policy.AllowAiPanelToggle}|{policy.AllowCopyExport}|{policy.EnterpriseMode}";
         return HashTools.ComputeSha256Hash(value);
     }

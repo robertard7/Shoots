@@ -21,9 +21,12 @@ public sealed class EmbeddedAiProviderAdapter : IAiProviderAdapter
         ProviderGuards.AgainstNullOrWhiteSpace(catalogHash, nameof(catalogHash));
         ProviderGuards.RequireCatalog(catalog);
 
-        var selectedTool = SelectToolId(catalog);
-        var bindings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        return selectedTool is null ? null : new ToolSelectionDecision(selectedTool, bindings);
+		var selectedTool = SelectToolId(catalog);
+		if (selectedTool is null)
+			return null;
+
+		var bindings = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+		return new ToolSelectionDecision(selectedTool.Value, bindings);
     }
 
     private static ToolId? SelectToolId(ToolCatalogSnapshot catalog)

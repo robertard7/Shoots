@@ -28,8 +28,8 @@ public sealed class BlueprintEntryViewModel : INotifyPropertyChanged
         _createdUtc = blueprint.CreatedUtc;
         _name = blueprint.Name;
         _description = blueprint.Description;
-        _intentsText = string.Join(Environment.NewLine, blueprint.Intents);
-        _artifactsText = string.Join(Environment.NewLine, blueprint.Artifacts);
+        _intentsText = string.Join(System.Environment.NewLine, blueprint.Intents);
+		_artifactsText = string.Join(System.Environment.NewLine, blueprint.Artifacts);
         _version = blueprint.Version;
         _definitionText = blueprint.Definition;
         Validate();
@@ -175,15 +175,15 @@ public sealed class BlueprintEntryViewModel : INotifyPropertyChanged
         }
     }
 
-    public SystemBlueprint ToBlueprint()
-        => new(
-            Name.Trim(),
-            Description.Trim(),
-            ParseLines(IntentsText),
-            ParseLines(ArtifactsText),
-            Version.Trim(),
-            DefinitionText.Trim(),
-            _createdUtc);
+	public SystemBlueprint ToBlueprint()
+		=> new SystemBlueprint(
+			Name: Name.Trim(),
+			Description: Description.Trim(),
+			Intents: ParseLines(IntentsText),
+			Artifacts: ParseLines(ArtifactsText),
+			Version: Version.Trim(),
+			Definition: DefinitionText.Trim(),
+			CreatedUtc: _createdUtc);
 
     public bool TrySave()
     {
@@ -201,8 +201,8 @@ public sealed class BlueprintEntryViewModel : INotifyPropertyChanged
     {
         Name = _lastSaved.Name;
         Description = _lastSaved.Description;
-        IntentsText = string.Join(Environment.NewLine, _lastSaved.Intents);
-        ArtifactsText = string.Join(Environment.NewLine, _lastSaved.Artifacts);
+        IntentsText = string.Join(System.Environment.NewLine, _lastSaved.Intents);
+		ArtifactsText = string.Join(System.Environment.NewLine, _lastSaved.Artifacts);
         Version = _lastSaved.Version;
         DefinitionText = _lastSaved.Definition;
         Validate();
@@ -214,6 +214,12 @@ public sealed class BlueprintEntryViewModel : INotifyPropertyChanged
         Validate();
         UpdateDirtyState();
     }
+	
+	private void ValidateAndSave()
+	{
+		Validate();
+		UpdateDirtyState();
+	}
 
     private void Validate()
     {

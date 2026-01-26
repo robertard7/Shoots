@@ -33,10 +33,15 @@ public sealed class NullExecutionCommandService : IExecutionCommandService
         _ = ct;
 
         return Task.FromResult<IRuntimeStatusSnapshot>(
-            new NullRuntimeStatusSnapshot(new RuntimeVersion(0, 0, 0))
+            new NullRuntimeStatusSnapshot(
+                new RuntimeVersion(0, 0, 0),
+                PolicyHash: "null"
+            )
         );
     }
 
-    private sealed record NullRuntimeStatusSnapshot(RuntimeVersion Version)
-        : IRuntimeStatusSnapshot;
+    private sealed record NullRuntimeStatusSnapshot(
+        RuntimeVersion Version,
+        string PolicyHash
+    ) : IRuntimeStatusSnapshot;
 }

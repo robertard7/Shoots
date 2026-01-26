@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Shoots.Runtime.Ui.Abstractions;
 
 namespace Shoots.UI.Blueprints;
@@ -8,9 +10,9 @@ public sealed record SystemBlueprint(
     string Description,
     IReadOnlyList<string> Intents,
     IReadOnlyList<string> Artifacts,
+    DateTimeOffset CreatedUtc,
     string Version = "1.0",
-    string Definition = "",
-    DateTimeOffset CreatedUtc
+    string Definition = ""
 ) : IAiHelpSurface
 {
     public string SurfaceId => $"blueprint:{Name}";
