@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
+using Shoots.Providers.Abstractions;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Runtime.Core;
@@ -12,7 +13,7 @@ public sealed class RoutingLoop
     private readonly IToolRegistry _registry;
     private readonly IAiDecisionProvider _aiDecisionProvider;
     private readonly IRuntimeNarrator _narrator;
-    private readonly IToolExecutor _toolExecutor;
+    private readonly IProviderClient _providerClient;
     private readonly List<ToolResult> _toolResults = new();
     private readonly RoutingTraceBuilder _traceBuilder;
     private readonly TracingRuntimeNarrator _tracingNarrator;
@@ -28,7 +29,7 @@ public sealed class RoutingLoop
         IToolRegistry registry,
         IAiDecisionProvider aiDecisionProvider,
         IRuntimeNarrator narrator,
-        IToolExecutor toolExecutor,
+        IProviderClient providerClient,
         RoutingState? initialState = null,
         IReadOnlyList<ToolResult>? toolResults = null,
         RoutingTrace? trace = null)
@@ -37,7 +38,7 @@ public sealed class RoutingLoop
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _aiDecisionProvider = aiDecisionProvider ?? throw new ArgumentNullException(nameof(aiDecisionProvider));
         _narrator = narrator ?? throw new ArgumentNullException(nameof(narrator));
-        _toolExecutor = toolExecutor ?? throw new ArgumentNullException(nameof(toolExecutor));
+        _providerClient = providerClient ?? throw new ArgumentNullException(nameof(providerClient));
         _catalogHash = registry.CatalogHash;
         _traceBuilder = new RoutingTraceBuilder(_plan, _catalogHash, trace);
         _tracingNarrator = new TracingRuntimeNarrator(_narrator, _traceBuilder);
@@ -161,7 +162,6 @@ public sealed class RoutingLoop
 						// FRESH RUN: execute + trace tool events
 						if (!_isReplay)
 						{
-							var envelope = BuildEnvelope();
 							var toolDetail = BuildToolExecutionDetail(invocation.ToolId);
 
 							_traceBuilder.Add(
@@ -170,7 +170,29 @@ public sealed class RoutingLoop
 								state: State,
 								step: step);
 
-							var result = _toolExecutor.Execute(invocation, envelope);
+							var providerEnvelope = BuildProviderEnvelope(step, invocation);
+							var providerResult = _providerClient
+								.ExecuteAsync(providerEnvelope, CancellationToken.None)
+								.GetAwaiter()
+								.GetResult();
+
+							if (providerResult.Kind == Shoots.Runtime.Abstractions.Execution.ExecutionResultKind.DecisionRequired)
+							{
+								State = State.WithStatus(RoutingStatus.Waiting);
+								continue;
+							}
+
+							var result = providerResult.Kind == Shoots.Runtime.Abstractions.Execution.ExecutionResultKind.ToolExecuted && providerResult.ToolResult is not null
+								? providerResult.ToolResult
+								: new ToolResult(
+									invocation.ToolId,
+									new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+									{
+										["error.code"] = providerResult.ErrorCode ?? "tool.not_available",
+										["error.message"] = providerResult.ErrorMessage ?? "Tool execution failed."
+									},
+									false);
+
 							_toolResults.Add(result);
 
 							var resultDetail = SerializeToolResult(result);
@@ -281,6 +303,31 @@ public sealed class RoutingLoop
             ResolveFinalStatus(State));
     }
 
+
+    private Shoots.Runtime.Abstractions.Execution.ExecutionEnvelope BuildProviderEnvelope(RouteStep step, ToolInvocation invocation)
+    {
+        var requestId = BuildProviderRequestId(step, invocation);
+
+        return new Shoots.Runtime.Abstractions.Execution.ExecutionEnvelope(
+            requestId,
+            Shoots.Runtime.Abstractions.Execution.ExecutionEnvelopeKind.Tool,
+            invocation.ToolId,
+            invocation.Bindings,
+            _plan.Request.WorkOrder?.OriginalRequest,
+            step.NodeId,
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["plan.id"] = _plan.PlanId,
+                ["node.id"] = step.NodeId,
+                ["intent.token"] = RouteIntentTokenFactory.ComputeTokenHash(State.IntentToken)
+            });
+    }
+
+    private string BuildProviderRequestId(RouteStep step, ToolInvocation invocation)
+    {
+        var tokenHash = RouteIntentTokenFactory.ComputeTokenHash(State.IntentToken);
+        return $"{_plan.PlanId}:{step.NodeId}:{invocation.ToolId.Value}:{tokenHash}";
+    }
     private IReadOnlyList<BuildArtifact> BuildArtifacts()
     {
         var artifacts = new List<BuildArtifact>(_plan.Artifacts);

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Providers.Bridge;
+using Shoots.Providers.Abstractions;
+using Shoots.Providers.Null;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Runtime.Core;
@@ -12,20 +14,20 @@ public sealed class RuntimeOrchestrator
     private readonly IToolRegistry _registry;
     private readonly IAiDecisionProvider _aiDecisionProvider;
     private readonly IRuntimeNarrator _narrator;
-    private readonly IToolExecutor _toolExecutor;
+    private readonly IProviderClient _providerClient;
     private readonly IRuntimePersistence? _persistence;
 
     public RuntimeOrchestrator(
         IToolRegistry registry,
         IAiDecisionProvider aiDecisionProvider,
         IRuntimeNarrator narrator,
-        IToolExecutor toolExecutor,
+        IProviderClient providerClient,
         IRuntimePersistence? persistence = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _aiDecisionProvider = aiDecisionProvider ?? throw new ArgumentNullException(nameof(aiDecisionProvider));
         _narrator = narrator ?? throw new ArgumentNullException(nameof(narrator));
-        _toolExecutor = toolExecutor ?? throw new ArgumentNullException(nameof(toolExecutor));
+        _providerClient = providerClient ?? throw new ArgumentNullException(nameof(providerClient));
         _persistence = persistence;
     }
 
@@ -43,7 +45,7 @@ public sealed class RuntimeOrchestrator
             _registry,
             _aiDecisionProvider,
             _narrator,
-            _toolExecutor,
+            _providerClient,
             seed?.State,
             seed?.ToolResults,
             seed?.Trace);
@@ -88,7 +90,7 @@ public sealed class RuntimeOrchestrator
             registry,
             provider,
             narrator ?? NullRuntimeNarrator.Instance,
-            new DeterministicToolExecutor(registry),
+            new NullProviderClient(),
             persistence);
 
         return orchestrator.Run(plan);
@@ -126,7 +128,7 @@ public sealed class RuntimeOrchestrator
             registry,
             aiDecisionProvider,
             NullRuntimeNarrator.Instance,
-            new DeterministicToolExecutor(registry),
+            new NullProviderClient(),
             lastState,
             toolResults,
             trace);
