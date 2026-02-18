@@ -1,8 +1,10 @@
-using Shoots.Runtime.Abstractions.Execution;
+using System.Threading;
+using System.Threading.Tasks;
+using Shoots.Runtime.Abstractions.Provider;
 
 namespace Shoots.Providers.Abstractions;
 
 public interface IProviderClient
 {
-    ValueTask<ExecutionResult> ExecuteAsync(ExecutionEnvelope envelope, CancellationToken ct);
+    ValueTask<ProviderExecutionResult> ExecuteAsync(ProviderExecutionEnvelope envelope, CancellationToken ct);
 }

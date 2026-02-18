@@ -1,16 +1,16 @@
 using Shoots.Contracts.Core;
 
-namespace Shoots.Runtime.Abstractions.Execution;
+namespace Shoots.Runtime.Abstractions.Provider;
 
-public enum ExecutionEnvelopeKind
+public enum ProviderExecutionEnvelopeKind
 {
     Tool,
     Decision
 }
 
-public sealed record ExecutionEnvelope(
+public sealed record ProviderExecutionEnvelope(
     string RequestId,
-    ExecutionEnvelopeKind Kind,
+    ProviderExecutionEnvelopeKind Kind,
     ToolId? ToolId,
     IReadOnlyDictionary<string, object?> Args,
     string? InputText,

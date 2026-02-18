@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Shoots.Contracts.Core;
 using Shoots.Providers.Null;
-using Shoots.Runtime.Abstractions.Execution;
+using Shoots.Runtime.Abstractions.Provider;
 using Xunit;
 
 namespace Shoots.Runtime.Tests;
@@ -13,9 +13,9 @@ public sealed class NullProviderClientTests
     public void Tool_requests_fail_deterministically()
     {
         var client = new NullProviderClient();
-        var envelope = new ExecutionEnvelope(
+        var envelope = new ProviderExecutionEnvelope(
             "req-null-tool",
-            ExecutionEnvelopeKind.Tool,
+            ProviderExecutionEnvelopeKind.Tool,
             new ToolId("tools.sample"),
             new Dictionary<string, object?>(),
             null,
@@ -29,7 +29,7 @@ public sealed class NullProviderClientTests
         var secondJson = JsonSerializer.Serialize(second);
 
         Assert.Equal(firstJson, secondJson);
-        Assert.Equal(ExecutionResultKind.Failed, first.Kind);
+        Assert.Equal(ProviderExecutionResultKind.Failed, first.Kind);
         Assert.Equal("tool.not_available", first.ErrorCode);
     }
 
@@ -37,9 +37,9 @@ public sealed class NullProviderClientTests
     public void Decision_requests_return_decision_required_deterministically()
     {
         var client = new NullProviderClient();
-        var envelope = new ExecutionEnvelope(
+        var envelope = new ProviderExecutionEnvelope(
             "req-null-decision",
-            ExecutionEnvelopeKind.Decision,
+            ProviderExecutionEnvelopeKind.Decision,
             null,
             new Dictionary<string, object?>(),
             null,
@@ -53,7 +53,7 @@ public sealed class NullProviderClientTests
         var secondJson = JsonSerializer.Serialize(second);
 
         Assert.Equal(firstJson, secondJson);
-        Assert.Equal(ExecutionResultKind.DecisionRequired, first.Kind);
+        Assert.Equal(ProviderExecutionResultKind.DecisionRequired, first.Kind);
         Assert.NotNull(first.DecisionRequest);
         Assert.Equal("gate-2", first.DecisionRequest!.RouteGateId);
     }

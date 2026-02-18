@@ -5,9 +5,7 @@ using Shoots.Contracts.Core;
 using Shoots.Providers.Abstractions;
 using Shoots.Providers.Null;
 using Shoots.Runtime.Abstractions;
-using ProviderExecutionEnvelope = Shoots.Runtime.Abstractions.Execution.ExecutionEnvelope;
-using ProviderExecutionResult = Shoots.Runtime.Abstractions.Execution.ExecutionResult;
-using ProviderExecutionResultKind = Shoots.Runtime.Abstractions.Execution.ExecutionResultKind;
+using Shoots.Runtime.Abstractions.Provider;
 using Shoots.Runtime.Core;
 using Xunit;
 

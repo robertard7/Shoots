@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using Shoots.Contracts.Core;
-using Shoots.Runtime.Abstractions.Execution;
+using Shoots.Runtime.Abstractions.Provider;
 using Xunit;
 
 namespace Shoots.Runtime.Tests;
@@ -11,9 +11,9 @@ public sealed class ProviderExecutionContractsJsonTests
     [Fact]
     public void Tool_execution_envelope_round_trips()
     {
-        var envelope = new ExecutionEnvelope(
+        var envelope = new ProviderExecutionEnvelope(
             "req-1",
-            ExecutionEnvelopeKind.Tool,
+            ProviderExecutionEnvelopeKind.Tool,
             new ToolId("tools.echo"),
             new Dictionary<string, object?>
             {
@@ -27,7 +27,7 @@ public sealed class ProviderExecutionContractsJsonTests
             });
 
         var json = JsonSerializer.Serialize(envelope);
-        var roundTrip = JsonSerializer.Deserialize<ExecutionEnvelope>(json);
+        var roundTrip = JsonSerializer.Deserialize<ProviderExecutionEnvelope>(json);
 
         Assert.NotNull(roundTrip);
         Assert.Equal(envelope, roundTrip);
@@ -36,9 +36,9 @@ public sealed class ProviderExecutionContractsJsonTests
     [Fact]
     public void Decision_execution_envelope_round_trips()
     {
-        var envelope = new ExecutionEnvelope(
+        var envelope = new ProviderExecutionEnvelope(
             "req-2",
-            ExecutionEnvelopeKind.Decision,
+            ProviderExecutionEnvelopeKind.Decision,
             null,
             new Dictionary<string, object?>(),
             null,
@@ -49,7 +49,7 @@ public sealed class ProviderExecutionContractsJsonTests
             });
 
         var json = JsonSerializer.Serialize(envelope);
-        var roundTrip = JsonSerializer.Deserialize<ExecutionEnvelope>(json);
+        var roundTrip = JsonSerializer.Deserialize<ProviderExecutionEnvelope>(json);
 
         Assert.NotNull(roundTrip);
         Assert.Equal(envelope, roundTrip);
@@ -58,9 +58,9 @@ public sealed class ProviderExecutionContractsJsonTests
     [Fact]
     public void Tool_executed_result_round_trips()
     {
-        var result = new ExecutionResult(
+        var result = new ProviderExecutionResult(
             "req-3",
-            ExecutionResultKind.ToolExecuted,
+            ProviderExecutionResultKind.ToolExecuted,
             new ToolResult(
                 new ToolId("tools.echo"),
                 new Dictionary<string, object?> { ["value"] = "alpha" },
@@ -70,7 +70,7 @@ public sealed class ProviderExecutionContractsJsonTests
             null);
 
         var json = JsonSerializer.Serialize(result);
-        var roundTrip = JsonSerializer.Deserialize<ExecutionResult>(json);
+        var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
 
         Assert.NotNull(roundTrip);
         Assert.Equal(result, roundTrip);
@@ -79,11 +79,11 @@ public sealed class ProviderExecutionContractsJsonTests
     [Fact]
     public void Decision_required_result_round_trips()
     {
-        var result = new ExecutionResult(
+        var result = new ProviderExecutionResult(
             "req-4",
-            ExecutionResultKind.DecisionRequired,
+            ProviderExecutionResultKind.DecisionRequired,
             null,
-            new DecisionRequest(
+            new ProviderDecisionRequest(
                 "req-4",
                 "gate-4",
                 new Dictionary<string, object?> { ["intent.token"] = "tok" }),
@@ -91,7 +91,7 @@ public sealed class ProviderExecutionContractsJsonTests
             null);
 
         var json = JsonSerializer.Serialize(result);
-        var roundTrip = JsonSerializer.Deserialize<ExecutionResult>(json);
+        var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
 
         Assert.NotNull(roundTrip);
         Assert.Equal(result, roundTrip);
@@ -100,16 +100,16 @@ public sealed class ProviderExecutionContractsJsonTests
     [Fact]
     public void Failed_result_round_trips()
     {
-        var result = new ExecutionResult(
+        var result = new ProviderExecutionResult(
             "req-5",
-            ExecutionResultKind.Failed,
+            ProviderExecutionResultKind.Failed,
             null,
             null,
             "tool.not_available",
             "not available");
 
         var json = JsonSerializer.Serialize(result);
-        var roundTrip = JsonSerializer.Deserialize<ExecutionResult>(json);
+        var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
 
         Assert.NotNull(roundTrip);
         Assert.Equal(result, roundTrip);

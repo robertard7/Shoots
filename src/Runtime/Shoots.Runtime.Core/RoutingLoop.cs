@@ -4,6 +4,7 @@ using System.Linq;
 using Shoots.Contracts.Core;
 using Shoots.Providers.Abstractions;
 using Shoots.Runtime.Abstractions;
+using Shoots.Runtime.Abstractions.Provider;
 
 namespace Shoots.Runtime.Core;
 
@@ -176,13 +177,13 @@ public sealed class RoutingLoop
 								.GetAwaiter()
 								.GetResult();
 
-							if (providerResult.Kind == Shoots.Runtime.Abstractions.Execution.ExecutionResultKind.DecisionRequired)
+							if (providerResult.Kind == ProviderExecutionResultKind.DecisionRequired)
 							{
 								State = State.WithStatus(RoutingStatus.Waiting);
 								continue;
 							}
 
-							var result = providerResult.Kind == Shoots.Runtime.Abstractions.Execution.ExecutionResultKind.ToolExecuted && providerResult.ToolResult is not null
+							var result = providerResult.Kind == ProviderExecutionResultKind.ToolExecuted && providerResult.ToolResult is not null
 								? providerResult.ToolResult
 								: new ToolResult(
 									invocation.ToolId,
@@ -304,13 +305,13 @@ public sealed class RoutingLoop
     }
 
 
-    private Shoots.Runtime.Abstractions.Execution.ExecutionEnvelope BuildProviderEnvelope(RouteStep step, ToolInvocation invocation)
+    private ProviderExecutionEnvelope BuildProviderEnvelope(RouteStep step, ToolInvocation invocation)
     {
         var requestId = BuildProviderRequestId(step, invocation);
 
-        return new Shoots.Runtime.Abstractions.Execution.ExecutionEnvelope(
+        return new ProviderExecutionEnvelope(
             requestId,
-            Shoots.Runtime.Abstractions.Execution.ExecutionEnvelopeKind.Tool,
+            ProviderExecutionEnvelopeKind.Tool,
             invocation.ToolId,
             invocation.Bindings,
             _plan.Request.WorkOrder?.OriginalRequest,

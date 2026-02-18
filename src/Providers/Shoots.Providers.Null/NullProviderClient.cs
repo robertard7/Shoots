@@ -1,43 +1,42 @@
-using Shoots.Contracts.Core;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Shoots.Providers.Abstractions;
-using Shoots.Runtime.Abstractions.Execution;
+using Shoots.Runtime.Abstractions.Provider;
 
 namespace Shoots.Providers.Null;
 
 public sealed class NullProviderClient : IProviderClient
 {
-    public ValueTask<ExecutionResult> ExecuteAsync(ExecutionEnvelope envelope, CancellationToken ct)
+    public ValueTask<ProviderExecutionResult> ExecuteAsync(ProviderExecutionEnvelope envelope, CancellationToken ct)
     {
         if (envelope is null)
             throw new ArgumentNullException(nameof(envelope));
 
         ct.ThrowIfCancellationRequested();
 
-        if (envelope.Kind == ExecutionEnvelopeKind.Decision)
+        if (envelope.Kind == ProviderExecutionEnvelopeKind.Decision)
         {
-            var routeGateId = envelope.RouteGateId ?? string.Empty;
-            var decisionRequest = new DecisionRequest(
+            var decisionRequest = new ProviderDecisionRequest(
                 envelope.RequestId,
-                routeGateId,
+                envelope.RouteGateId ?? string.Empty,
                 envelope.Context);
 
-            return ValueTask.FromResult(new ExecutionResult(
+            return ValueTask.FromResult(new ProviderExecutionResult(
                 envelope.RequestId,
-                ExecutionResultKind.DecisionRequired,
+                ProviderExecutionResultKind.DecisionRequired,
                 null,
                 decisionRequest,
                 null,
                 null));
         }
 
-        var result = new ExecutionResult(
+        return ValueTask.FromResult(new ProviderExecutionResult(
             envelope.RequestId,
-            ExecutionResultKind.Failed,
+            ProviderExecutionResultKind.Failed,
             null,
             null,
             "tool.not_available",
-            $"Tool '{envelope.ToolId?.Value ?? "unknown"}' is not available.");
-
-        return ValueTask.FromResult(result);
+            $"Tool '{envelope.ToolId?.Value ?? "unknown"}' is not available."));
     }
 }
