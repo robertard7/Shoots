@@ -101,10 +101,11 @@ public sealed class RoutingLoop
 			{
 				if (transitionCount >= _stepBudget)
                 {
+                    var budgetDetail = $"budget={_stepBudget}|transition.count={transitionCount}|node={State.CurrentNodeId}";
                     var budgetError = new RuntimeError(
                         "route_step_budget_exceeded",
                         "Route step budget exceeded.",
-                        _stepBudget);
+                        budgetDetail);
                     State = State.WithStatus(RoutingStatus.Halted);
                     _traceBuilder.Add(RoutingTraceEventKind.Error, detail: budgetError.Code, state: State, error: budgetError);
                     _tracingNarrator.OnStepBudgetExceeded(State, _stepBudget, budgetError);

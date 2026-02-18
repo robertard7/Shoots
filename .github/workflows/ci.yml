@@ -5,8 +5,39 @@ on:
   pull_request:
 
 jobs:
-  test:
-    name: test
+  runtime-linux:
+    name: runtime-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore Runtime
+        run: dotnet restore src/Runtime/Shoots.Runtime.sln
+
+      - name: Build Runtime
+        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore
+
+      - name: Test Runtime (trx)
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --logger "trx;LogFileName=runtime-linux.trx"
+
+      - name: Runtime hang probe (blame-hang)
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
+
+      - name: Upload runtime artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-linux-artifacts
+          path: |
+            **/runtime-linux.trx
+
+  full-windows:
+    name: full-windows
     runs-on: [self-hosted, Windows, X64, Shoots]
     steps:
       - name: Checkout
@@ -26,13 +57,10 @@ jobs:
       - name: Test (trx)
         run: dotnet test Shoots.sln -c Release --no-build --logger "trx;LogFileName=solution.trx"
 
-      - name: Runtime hang probe (blame-hang)
-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
-
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: test-artifacts
+          name: full-windows-artifacts
           path: |
             **/solution.trx
 

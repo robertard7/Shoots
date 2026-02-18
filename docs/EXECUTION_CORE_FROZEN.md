@@ -29,6 +29,8 @@ Decision gates are policy-driven and deterministic via `RouteRule.DecisionPolicy
 - `Bypass`: uses `RouteRule.FallbackToolSelection` when configured; if fallback is missing, routing behaves as `Hard`.
 - `Error`: missing decision halts deterministically with `route_decision_required`.
 
+Bypass changes tool selection only; routing always follows Mermaid edges and never fallback next-node metadata.
+
 `Waiting` is terminal for the current run and must not spin the routing loop.
 
 Routing loop enforces a deterministic step budget (`256` default, configurable per `RoutingLoop`) and halts with `route_step_budget_exceeded` when exceeded.

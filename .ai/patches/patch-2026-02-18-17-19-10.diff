@@ -1,0 +1,177 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 76fd1c9..998d102 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -5,8 +5,39 @@ on:
+   pull_request:
+ 
+ jobs:
+-  test:
+-    name: test
++  runtime-linux:
++    name: runtime-linux
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup .NET
++        uses: actions/setup-dotnet@v4
++        with:
++          dotnet-version: '8.0.x'
++
++      - name: Restore Runtime
++        run: dotnet restore src/Runtime/Shoots.Runtime.sln
++
++      - name: Build Runtime
++        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore
++
++      - name: Test Runtime (trx)
++        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --logger "trx;LogFileName=runtime-linux.trx"
++
++      - name: Runtime hang probe (blame-hang)
++        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
++
++      - name: Upload runtime artifacts
++        uses: actions/upload-artifact@v4
++        with:
++          name: runtime-linux-artifacts
++          path: |
++            **/runtime-linux.trx
++
++  full-windows:
++    name: full-windows
+     runs-on: [self-hosted, Windows, X64, Shoots]
+     steps:
+       - name: Checkout
+@@ -26,13 +57,10 @@ jobs:
+       - name: Test (trx)
+         run: dotnet test Shoots.sln -c Release --no-build --logger "trx;LogFileName=solution.trx"
+ 
+-      - name: Runtime hang probe (blame-hang)
+-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
+-
+       - name: Upload test artifacts
+         uses: actions/upload-artifact@v4
+         with:
+-          name: test-artifacts
++          name: full-windows-artifacts
+           path: |
+             **/solution.trx
+ 
+diff --git a/docs/EXECUTION_CORE_FROZEN.md b/docs/EXECUTION_CORE_FROZEN.md
+index fca30fb..fa189d1 100644
+--- a/docs/EXECUTION_CORE_FROZEN.md
++++ b/docs/EXECUTION_CORE_FROZEN.md
+@@ -29,6 +29,8 @@ Decision gates are policy-driven and deterministic via `RouteRule.DecisionPolicy
+ - `Bypass`: uses `RouteRule.FallbackToolSelection` when configured; if fallback is missing, routing behaves as `Hard`.
+ - `Error`: missing decision halts deterministically with `route_decision_required`.
+ 
++Bypass changes tool selection only; routing always follows Mermaid edges and never fallback next-node metadata.
++
+ `Waiting` is terminal for the current run and must not spin the routing loop.
+ 
+ Routing loop enforces a deterministic step budget (`256` default, configurable per `RoutingLoop`) and halts with `route_step_budget_exceeded` when exceeded.
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs b/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs
+index b3932fe..f4b1b9d 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs
+@@ -269,11 +269,11 @@ public static class RouteGate
+                             rule.FallbackToolSelection.ToolId,
+                             rule.FallbackToolSelection.Bindings);
+ 
+-                        if (allowedNextNodes.Count != 1)
++                        if (allowedNextNodes.Count > 1)
+                         {
+                             error = new RuntimeError(
+                                 "route_step_invalid",
+-                                "Bypass policy requires exactly one Mermaid next node for SelectTool.",
++                                "Bypass policy requires at most one Mermaid next node for SelectTool.",
+                                 routeStep.NodeId);
+ 
+                             nextState = state.WithStatus(RoutingStatus.Halted);
+@@ -282,7 +282,7 @@ public static class RouteGate
+                             return false;
+                         }
+ 
+-                        var bypassNextNodeId = allowedNextNodes[0];
++                        var bypassNextNodeId = allowedNextNodes.Count == 0 ? routeStep.NodeId : allowedNextNodes[0];
+                         narrator?.OnDecisionGateBypassed(
+                             state,
+                             routeStep,
+diff --git a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+index eef002b..62b34f2 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+@@ -101,10 +101,11 @@ public sealed class RoutingLoop
+ 			{
+ 				if (transitionCount >= _stepBudget)
+                 {
++                    var budgetDetail = $"budget={_stepBudget}|transition.count={transitionCount}|node={State.CurrentNodeId}";
+                     var budgetError = new RuntimeError(
+                         "route_step_budget_exceeded",
+                         "Route step budget exceeded.",
+-                        _stepBudget);
++                        budgetDetail);
+                     State = State.WithStatus(RoutingStatus.Halted);
+                     _traceBuilder.Add(RoutingTraceEventKind.Error, detail: budgetError.Code, state: State, error: budgetError);
+                     _tracingNarrator.OnStepBudgetExceeded(State, _stepBudget, budgetError);
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+index 707f3f9..93380ea 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+@@ -214,6 +214,40 @@ public sealed class RouteGateTests
+         Assert.Equal(RoutingStatus.Halted, nextState.Status);
+     }
+ 
++    [Fact]
++    public void TryAdvance_bypass_with_zero_next_nodes_completes_deterministically()
++    {
++        var fallbackTool = new ToolSpec(
++            new ToolId("tools.fallback"),
++            "Fallback tool.",
++            new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
++            new List<ToolInputSpec>(),
++            new List<ToolOutputSpec>(),
++            Array.Empty<string>());
++
++        var plan = CreatePlan(
++            new WorkOrderId("wo-plan"),
++            new[]
++            {
++                new RouteRule(
++                    "select",
++                    RouteIntent.SelectTool,
++                    DecisionOwner.Ai,
++                    "tool.selection",
++                    MermaidNodeKind.Start,
++                    Array.Empty<string>(),
++                    DecisionPolicy.Bypass,
++                    new FallbackToolSelection(fallbackTool.ToolId, new Dictionary<string, object?>())),
++            });
++
++        var state = RoutingState.CreateInitial(plan);
++        var advanced = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(fallbackTool), out var nextState, out var error);
++
++        Assert.True(advanced);
++        Assert.Null(error);
++        Assert.Equal(RoutingStatus.Completed, nextState.Status);
++    }
++
+     [Fact]
+     public void TryAdvance_halts_when_policy_is_error_and_decision_missing()
+     {
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+index b82cfc9..76d31dd 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+@@ -110,6 +110,9 @@ public sealed class RoutingLoopTests
+         Assert.Equal(RoutingStatus.Halted, result.State.Status);
+         var error = Assert.Single(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.Error);
+         Assert.Equal("route_step_budget_exceeded", error.Error?.Code);
++        Assert.Contains("budget=4", Assert.IsType<string>(error.Error?.Details));
++        Assert.Contains("transition.count=4", Assert.IsType<string>(error.Error?.Details));
++        Assert.Contains("node=validate", Assert.IsType<string>(error.Error?.Details));
+         Assert.Contains(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.StepBudgetExceeded);
+     }
+ 

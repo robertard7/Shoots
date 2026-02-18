@@ -269,11 +269,11 @@ public static class RouteGate
                             rule.FallbackToolSelection.ToolId,
                             rule.FallbackToolSelection.Bindings);
 
-                        if (allowedNextNodes.Count != 1)
+                        if (allowedNextNodes.Count > 1)
                         {
                             error = new RuntimeError(
                                 "route_step_invalid",
-                                "Bypass policy requires exactly one Mermaid next node for SelectTool.",
+                                "Bypass policy requires at most one Mermaid next node for SelectTool.",
                                 routeStep.NodeId);
 
                             nextState = state.WithStatus(RoutingStatus.Halted);
@@ -282,7 +282,7 @@ public static class RouteGate
                             return false;
                         }
 
-                        var bypassNextNodeId = allowedNextNodes[0];
+                        var bypassNextNodeId = allowedNextNodes.Count == 0 ? routeStep.NodeId : allowedNextNodes[0];
                         narrator?.OnDecisionGateBypassed(
                             state,
                             routeStep,
