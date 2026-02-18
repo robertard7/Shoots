@@ -86,3 +86,13 @@ Error:
 1. Execute runtime once.
 2. If `ExecutionEnvelope.Waiting` is populated, present `DecisionPromptKey` and policy context in UI.
 3. Collect decision and re-execute from persisted envelope state.
+
+## Run Eligibility Law
+
+- Hash is identity, not a trigger.
+- Waiting is terminal for a single run.
+- Host rerun requires explicit progress via `RuntimeRunOptions`:
+  - `InjectDecision`
+  - `OverridePlanChange`
+  - `DiscardWaitingStartOver`
+- If a run is waiting and no progress is injected, host returns cached waiting receipt and blocks rerun.

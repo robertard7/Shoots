@@ -8,10 +8,13 @@ public sealed record DecisionGateWaitingInfo(
     string RouteGateId,
     string CurrentNodeId,
     string IntentTokenHash,
+    string PlanHash,
+    DecisionPolicy Policy,
+    bool FallbackPresent,
+    string ReasonCode,
     IReadOnlyList<string> AllowedNextNodes,
     string DecisionPromptKey,
     DecisionOwner DecisionOwner,
-    DecisionPolicy Policy,
     FallbackToolSelection? FallbackToolSelection,
     string? FallbackNextNodeId
 );

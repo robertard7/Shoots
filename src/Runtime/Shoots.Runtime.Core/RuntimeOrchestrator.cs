@@ -16,6 +16,7 @@ public sealed class RuntimeOrchestrator
     private readonly IRuntimeNarrator _narrator;
     private readonly IProviderClient _providerClient;
     private readonly IRuntimePersistence? _persistence;
+    private readonly IRunResumeStateStore? _runStateStore;
 
     public RuntimeOrchestrator(
         IToolRegistry registry,
@@ -29,14 +30,31 @@ public sealed class RuntimeOrchestrator
         _narrator = narrator ?? throw new ArgumentNullException(nameof(narrator));
         _providerClient = providerClient ?? throw new ArgumentNullException(nameof(providerClient));
         _persistence = persistence;
+        _runStateStore = persistence as IRunResumeStateStore;
     }
 
-    public ExecutionEnvelope Run(BuildPlan plan)
+    public ExecutionEnvelope Run(BuildPlan plan, RuntimeRunOptions? options = null)
     {
         if (plan is null)
             throw new ArgumentNullException(nameof(plan));
 
+        var resolvedOptions = options ?? new RuntimeRunOptions();
         var seed = _persistence?.Load(plan.PlanId);
+        var runState = _runStateStore?.Load(plan.PlanId);
+        var discardedWaiting = resolvedOptions.ResumeMode == ResumeMode.DiscardWaitingStartOver && seed?.State.Status == RoutingStatus.Waiting;
+
+        if (resolvedOptions.ResumeMode == ResumeMode.DiscardWaitingStartOver)
+        {
+            if (seed is not null)
+                seed = null;
+            if (runState is not null)
+                runState = null;
+        }
+
+        var blocked = TryBuildBlockedWaitingEnvelope(plan, seed, runState, resolvedOptions);
+        if (blocked is not null)
+            return blocked;
+
         if (seed is not null && seed.State.Status is RoutingStatus.Completed or RoutingStatus.Halted)
             return seed;
 
@@ -48,25 +66,30 @@ public sealed class RuntimeOrchestrator
             _providerClient,
             seed?.State,
             seed?.ToolResults,
-            seed?.Trace);
+            trace: null);
 
         var result = loop.Run();
 
         var artifacts = BuildArtifacts(plan, result.ToolResults);
         var finalStatus = ResolveFinalStatus(result.State);
 
+        var trace = discardedWaiting
+            ? AppendHostEvent(result.Trace, RoutingTraceEventKind.HostResumeDiscardWaiting, "host.resume.discard_waiting")
+            : result.Trace;
+
         var envelope = new ExecutionEnvelope(
             plan,
             result.State,
             result.ToolResults,
             artifacts,
-            result.Trace,
+            trace,
             result.Telemetry,
             _registry.CatalogHash,
             finalStatus,
             result.Waiting);
 
         _persistence?.Save(envelope);
+        SaveRunState(envelope, resolvedOptions, runState?.AttemptCounter ?? 0);
         return envelope;
     }
 
@@ -75,7 +98,8 @@ public sealed class RuntimeOrchestrator
         IToolRegistry registry,
         IAiDecisionProvider? aiDecisionProvider = null,
         IRuntimePersistence? persistence = null,
-        IRuntimeNarrator? narrator = null)
+        IRuntimeNarrator? narrator = null,
+        RuntimeRunOptions? options = null)
     {
         if (plan is null)
             throw new ArgumentNullException(nameof(plan));
@@ -94,7 +118,7 @@ public sealed class RuntimeOrchestrator
             new NullProviderClient(),
             persistence);
 
-        return orchestrator.Run(plan);
+        return orchestrator.Run(plan, options);
     }
 
     public static ExecutionEnvelope Resume(
@@ -148,6 +172,82 @@ public sealed class RuntimeOrchestrator
             registry.CatalogHash,
             finalStatus,
             result.Waiting);
+    }
+
+
+    private ExecutionEnvelope? TryBuildBlockedWaitingEnvelope(
+        BuildPlan plan,
+        ExecutionEnvelope? seed,
+        RunResumeState? runState,
+        RuntimeRunOptions options)
+    {
+        if (seed?.State.Status != RoutingStatus.Waiting || seed.Waiting is null || runState is null)
+            return null;
+
+        if (runState.LastOutcomeKind != RunOutcomeKind.Waiting)
+            return null;
+
+        if (options.ResumeMode == ResumeMode.InjectDecision &&
+            !string.IsNullOrWhiteSpace(options.InjectedDecisionDigest) &&
+            !string.Equals(options.InjectedDecisionDigest, runState.LastInjectedDecisionDigest, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var planChanged =
+            !string.Equals(seed.Waiting.PlanHash, plan.PlanId, StringComparison.Ordinal) ||
+            !string.Equals(runState.LastPlanHash, plan.PlanId, StringComparison.Ordinal);
+
+        if (planChanged)
+        {
+            if (options.ResumeMode == ResumeMode.OverridePlanChange)
+            {
+                var overrideTrace = AppendHostEvent(seed.Trace, RoutingTraceEventKind.HostResumeOverridePlanChange, "host.resume.override_plan_change");
+                return seed with { Trace = overrideTrace };
+            }
+
+            var waiting = seed.Waiting with { ReasonCode = "plan_changed_requires_explicit_resume" };
+            var blockedPlanTrace = AppendHostEvent(seed.Trace, RoutingTraceEventKind.HostBlockedRerunWaiting, waiting.ReasonCode);
+            return seed with { Waiting = waiting, Trace = blockedPlanTrace };
+        }
+
+        var blockedTrace = AppendHostEvent(seed.Trace, RoutingTraceEventKind.HostBlockedRerunWaiting, "decision_required");
+        return seed with { Trace = blockedTrace };
+    }
+
+    private void SaveRunState(ExecutionEnvelope envelope, RuntimeRunOptions options, int priorAttempts)
+    {
+        if (_runStateStore is null)
+            return;
+
+        var outcome = envelope.State.Status switch
+        {
+            RoutingStatus.Completed => RunOutcomeKind.Completed,
+            RoutingStatus.Halted => RunOutcomeKind.Halted,
+            _ => RunOutcomeKind.Waiting
+        };
+
+        var state = new RunResumeState(
+            envelope.State.WorkOrderId.Value,
+            outcome,
+            envelope.Waiting,
+            options.InjectedDecisionDigest,
+            envelope.Plan.PlanId,
+            RouteIntentTokenFactory.ComputeTokenHash(envelope.State.IntentToken),
+            priorAttempts + 1);
+
+        _runStateStore.Save(envelope.Plan.PlanId, state);
+    }
+
+    private static RoutingTrace AppendHostEvent(RoutingTrace trace, RoutingTraceEventKind eventKind, string detail)
+    {
+        var nextTick = trace.Entries.Count == 0 ? 0 : trace.Entries[^1].Tick + 1;
+        var entries = trace.Entries.Concat(new[]
+        {
+            new RoutingTraceEntry(nextTick, eventKind, detail)
+        }).ToArray();
+
+        return trace with { Entries = entries };
     }
 
     private static IReadOnlyList<ToolResult> RebuildToolResults(RoutingTrace trace)

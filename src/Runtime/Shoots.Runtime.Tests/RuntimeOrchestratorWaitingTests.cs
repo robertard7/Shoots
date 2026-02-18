@@ -50,6 +50,8 @@ public sealed class RuntimeOrchestratorWaitingTests
         Assert.Equal("tool.selection", envelope.Waiting.DecisionPromptKey);
         Assert.Equal(DecisionOwner.Ai, envelope.Waiting.DecisionOwner);
         Assert.Equal(DecisionPolicy.Hard, envelope.Waiting.Policy);
+        Assert.Equal(plan.PlanId, envelope.Waiting.PlanHash);
+        Assert.Equal("decision_required", envelope.Waiting.ReasonCode);
     }
 
     private sealed class RefusingAiDecisionProvider : IAiDecisionProvider
