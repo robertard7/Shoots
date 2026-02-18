@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Shoots.Contracts.Core;
 using Shoots.Contracts.Core.AI;
-using Shoots.Providers.Bridge;
+using Shoots.ProviderAdapters.Bridge;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
 using System.Linq;

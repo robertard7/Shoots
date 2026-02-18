@@ -2,9 +2,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
-    <ProjectReference Include="..\..\Providers\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
-    <ProjectReference Include="..\..\Providers\Shoots.Providers.Bridge\Shoots.Providers.Bridge.csproj" />
-    <ProjectReference Include="..\..\Providers\Shoots.Providers.Null\Shoots.Providers.Null.csproj" />
+    <ProjectReference Include="..\..\ProviderAdapters\Shoots.ProviderAdapters.Abstractions\Shoots.ProviderAdapters.Abstractions.csproj" />
+    <ProjectReference Include="..\..\ProviderAdapters\Shoots.ProviderAdapters.Bridge\Shoots.ProviderAdapters.Bridge.csproj" />
+    <ProjectReference Include="..\..\ProviderAdapters\Shoots.ProviderAdapters.Null\Shoots.ProviderAdapters.Null.csproj" />
     <ProjectReference Include="..\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
   </ItemGroup>
 

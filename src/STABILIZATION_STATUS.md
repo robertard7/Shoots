@@ -19,3 +19,9 @@
 ## X3 — Tool authority semantics frozen
 - ProviderKind ordering is authoritative when comparing plan authority to tool requirements.
 - ProviderCapabilities are treated as strict bitmasks (no implicit escalation).
+
+
+## X4 — Provider adapter naming boundary frozen
+- `Shoots.Provider` (separate repository) is the native provider runtime for Shoots.Engine.
+- `Shoots/src/ProviderAdapters` in this repository contains .NET provider adapters/clients/stubs only.
+- Runtime routing authority remains Mermaid-derived and provider adapter outputs cannot override node traversal.

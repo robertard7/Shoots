@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Shoots.Contracts.Core;
-using Shoots.Providers.Null;
+using Shoots.ProviderAdapters.Null;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Core;
 using Xunit;

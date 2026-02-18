@@ -41,15 +41,15 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Cli", "src\B
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Tests", "src\Builder\Shoots.Builder.Tests\Shoots.Builder.Tests.csproj", "{6E86F625-BE6A-4072-AADD-AD65542091C2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Bridge", "src\\Providers\\Shoots.Providers.Bridge\\Shoots.Providers.Bridge.csproj", "{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Bridge", "src\\ProviderAdapters\\Shoots.ProviderAdapters.Bridge\\Shoots.ProviderAdapters.Bridge.csproj", "{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Embedded", "src\\Providers\\Shoots.Providers.Embedded\\Shoots.Providers.Embedded.csproj", "{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Embedded", "src\\ProviderAdapters\\Shoots.ProviderAdapters.Embedded\\Shoots.ProviderAdapters.Embedded.csproj", "{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Fake", "src\\Providers\\Shoots.Providers.Fake\\Shoots.Providers.Fake.csproj", "{A7363365-209B-4597-8CC3-36F386D4E2BA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Fake", "src\\ProviderAdapters\\Shoots.ProviderAdapters.Fake\\Shoots.ProviderAdapters.Fake.csproj", "{A7363365-209B-4597-8CC3-36F386D4E2BA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Ollama", "src\\Providers\\Shoots.Providers.Ollama\\Shoots.Providers.Ollama.csproj", "{7906E143-EAB9-40EE-B6F1-95E82AF2F212}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Ollama", "src\\ProviderAdapters\\Shoots.ProviderAdapters.Ollama\\Shoots.ProviderAdapters.Ollama.csproj", "{7906E143-EAB9-40EE-B6F1-95E82AF2F212}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Ollama.Tests", "src\\Providers\\Shoots.Providers.Ollama.Tests\\Shoots.Providers.Ollama.Tests.csproj", "{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Ollama.Tests", "src\\ProviderAdapters\\Shoots.ProviderAdapters.Ollama.Tests\\Shoots.ProviderAdapters.Ollama.Tests.csproj", "{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Ui", "ui\\Shoots.Ui\\Shoots.Ui.csproj", "{688E1C29-155C-44CD-8807-D423BB580733}"
 EndProject

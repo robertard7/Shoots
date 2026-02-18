@@ -280,3 +280,12 @@ FINAL NOTE
 Shoots exists to finish systems, not endlessly redesign them.
 
 If something feels "too strict," that is intentional.
+
+
+PROVIDER NAMING BOUNDARY
+------------------------
+
+`Shoots.Provider` is a separate repository for the native provider runtime used by Shoots.Engine.
+
+This repository uses `src/ProviderAdapters` for .NET provider adapters/clients/stubs only.
+The adapter layer does not own routing decisions: Mermaid graph transitions remain authoritative.

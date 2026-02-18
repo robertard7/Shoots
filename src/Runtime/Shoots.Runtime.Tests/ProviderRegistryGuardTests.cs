@@ -1,6 +1,6 @@
 using System;
 using Shoots.Contracts.Core;
-using Shoots.Providers.Abstractions;
+using Shoots.ProviderAdapters.Abstractions;
 using Xunit;
 
 namespace Shoots.Runtime.Tests;

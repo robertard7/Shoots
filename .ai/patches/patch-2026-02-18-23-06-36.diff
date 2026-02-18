@@ -1,0 +1,636 @@
+diff --git a/README.md b/README.md
+index fbdc53b..d978315 100644
+--- a/README.md
++++ b/README.md
+@@ -280,3 +280,12 @@ FINAL NOTE
+ Shoots exists to finish systems, not endlessly redesign them.
+ 
+ If something feels "too strict," that is intentional.
++
++
++PROVIDER NAMING BOUNDARY
++------------------------
++
++`Shoots.Provider` is a separate repository for the native provider runtime used by Shoots.Engine.
++
++This repository uses `src/ProviderAdapters` for .NET provider adapters/clients/stubs only.
++The adapter layer does not own routing decisions: Mermaid graph transitions remain authoritative.
+diff --git a/Shoots.sln b/Shoots.sln
+index 874639b..b3a8a25 100644
+--- a/Shoots.sln
++++ b/Shoots.sln
+@@ -41,15 +41,15 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Cli", "src\B
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Tests", "src\Builder\Shoots.Builder.Tests\Shoots.Builder.Tests.csproj", "{6E86F625-BE6A-4072-AADD-AD65542091C2}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Bridge", "src\\Providers\\Shoots.Providers.Bridge\\Shoots.Providers.Bridge.csproj", "{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Bridge", "src\\Providers\\Shoots.ProviderAdapters.Bridge\\Shoots.ProviderAdapters.Bridge.csproj", "{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Embedded", "src\\Providers\\Shoots.Providers.Embedded\\Shoots.Providers.Embedded.csproj", "{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Embedded", "src\\Providers\\Shoots.ProviderAdapters.Embedded\\Shoots.ProviderAdapters.Embedded.csproj", "{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Fake", "src\\Providers\\Shoots.Providers.Fake\\Shoots.Providers.Fake.csproj", "{A7363365-209B-4597-8CC3-36F386D4E2BA}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Fake", "src\\Providers\\Shoots.ProviderAdapters.Fake\\Shoots.ProviderAdapters.Fake.csproj", "{A7363365-209B-4597-8CC3-36F386D4E2BA}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Ollama", "src\\Providers\\Shoots.Providers.Ollama\\Shoots.Providers.Ollama.csproj", "{7906E143-EAB9-40EE-B6F1-95E82AF2F212}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Ollama", "src\\Providers\\Shoots.ProviderAdapters.Ollama\\Shoots.ProviderAdapters.Ollama.csproj", "{7906E143-EAB9-40EE-B6F1-95E82AF2F212}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Providers.Ollama.Tests", "src\\Providers\\Shoots.Providers.Ollama.Tests\\Shoots.Providers.Ollama.Tests.csproj", "{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Ollama.Tests", "src\\Providers\\Shoots.ProviderAdapters.Ollama.Tests\\Shoots.ProviderAdapters.Ollama.Tests.csproj", "{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}"
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Ui", "ui\\Shoots.Ui\\Shoots.Ui.csproj", "{688E1C29-155C-44CD-8807-D423BB580733}"
+ EndProject
+diff --git a/src/DEPENDENCY_MAP.md b/src/DEPENDENCY_MAP.md
+index fbc74d4..3d9b806 100644
+--- a/src/DEPENDENCY_MAP.md
++++ b/src/DEPENDENCY_MAP.md
+@@ -8,14 +8,24 @@
+ ## Contracts projects
+ - `Shoots.Contracts.Core` → (none)
+ 
++
++## Provider adapter projects
++- `Shoots.ProviderAdapters.Abstractions` → (none)
++- `Shoots.ProviderAdapters.Bridge` → `Shoots.ProviderAdapters.Abstractions`, `Shoots.ProviderAdapters.Embedded`, `Shoots.ProviderAdapters.Fake`, `Shoots.ProviderAdapters.Ollama`, `Shoots.ProviderAdapters.Null`
++- `Shoots.ProviderAdapters.Embedded` → `Shoots.ProviderAdapters.Abstractions`, `Shoots.Runtime.Abstractions`
++- `Shoots.ProviderAdapters.Fake` → `Shoots.ProviderAdapters.Abstractions`, `Shoots.Runtime.Abstractions`
++- `Shoots.ProviderAdapters.Null` → `Shoots.ProviderAdapters.Abstractions`, `Shoots.Runtime.Abstractions`
++- `Shoots.ProviderAdapters.Ollama` → `Shoots.ProviderAdapters.Abstractions`, `Shoots.Runtime.Abstractions`
++- `Shoots.ProviderAdapters.Ollama.Tests` → `Shoots.ProviderAdapters.Ollama`
++
+ ## Runtime projects
+ - `Shoots.Runtime.Abstractions` → `Shoots.Contracts.Core`
+-- `Shoots.Runtime.Core` → `Shoots.Contracts.Core`, `Shoots.Runtime.Abstractions`
+-- `Shoots.Runtime.Loader` → `Shoots.Contracts.Core`, `Shoots.Runtime.Abstractions`, `Shoots.Runtime.Core`
++- `Shoots.Runtime.Core` → `Shoots.Contracts.Core`, `Shoots.Runtime.Abstractions`, `Shoots.ProviderAdapters.Abstractions`, `Shoots.ProviderAdapters.Bridge`, `Shoots.ProviderAdapters.Null`
++- `Shoots.Runtime.Loader` → `Shoots.Contracts.Core`, `Shoots.Runtime.Abstractions`, `Shoots.Runtime.Core`, `Shoots.ProviderAdapters.Bridge`
+ - `Shoots.Runtime.Language` → `Shoots.Contracts.Core`, `Shoots.Runtime.Abstractions`
+ - `Shoots.Runtime.Runner` → `Shoots.Contracts.Core`, `Shoots.Runtime.Abstractions`, `Shoots.Runtime.Loader`
+ - `Shoots.Runtime.Sandbox` → `Shoots.Contracts.Core`, `Shoots.Runtime.Abstractions`, `Shoots.Runtime.Core`, `Shoots.Runtime.Language`
+-- `Shoots.Runtime.Tests` → `Shoots.Contracts.Core`, `Shoots.Runtime.Abstractions`, `Shoots.Runtime.Core`, `Shoots.Runtime.Loader`
++- `Shoots.Runtime.Tests` → `Shoots.Contracts.Core`, `Shoots.Runtime.Abstractions`, `Shoots.Runtime.Core`, `Shoots.Runtime.Loader`, `Shoots.ProviderAdapters.Abstractions`, `Shoots.ProviderAdapters.Bridge`, `Shoots.ProviderAdapters.Null`
+ 
+ ## Builder → Runtime execution wiring check
+ - Builder projects reference `Shoots.Runtime.Core` / `Shoots.Runtime.Loader`: **none**.
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/IAiProviderAdapter.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/IAiProviderAdapter.cs
+index 6f5728d..263397a 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/IAiProviderAdapter.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/IAiProviderAdapter.cs
+@@ -1,6 +1,6 @@
+ using Shoots.Contracts.Core;
+ 
+-namespace Shoots.Providers.Abstractions;
++namespace Shoots.ProviderAdapters.Abstractions;
+ 
+ public interface IAiProviderAdapter
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/IProviderClient.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/IProviderClient.cs
+index 32973f3..4e32570 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/IProviderClient.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/IProviderClient.cs
+@@ -2,7 +2,7 @@ using System.Threading;
+ using System.Threading.Tasks;
+ using Shoots.Runtime.Abstractions.Provider;
+ 
+-namespace Shoots.Providers.Abstractions;
++namespace Shoots.ProviderAdapters.Abstractions;
+ 
+ public interface IProviderClient
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/ProviderGuards.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/ProviderGuards.cs
+index 5b7fd54..69d3427 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/ProviderGuards.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/ProviderGuards.cs
+@@ -1,7 +1,7 @@
+ using System;
+ using Shoots.Contracts.Core;
+ 
+-namespace Shoots.Providers.Abstractions;
++namespace Shoots.ProviderAdapters.Abstractions;
+ 
+ public static class ProviderGuards
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/ProviderRegistry.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/ProviderRegistry.cs
+index d459d37..aaa6524 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/ProviderRegistry.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Abstractions/ProviderRegistry.cs
+@@ -1,7 +1,7 @@
+ using System;
+ using System.Collections.Generic;
+ 
+-namespace Shoots.Providers.Abstractions;
++namespace Shoots.ProviderAdapters.Abstractions;
+ 
+ public sealed class ProviderRegistry
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/BridgeAiDecisionProvider.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/BridgeAiDecisionProvider.cs
+index 7953f68..a79df05 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/BridgeAiDecisionProvider.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/BridgeAiDecisionProvider.cs
+@@ -1,10 +1,10 @@
+ using System;
+ using System.Linq;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ using Shoots.Runtime.Abstractions;
+ 
+-namespace Shoots.Providers.Bridge;
++namespace Shoots.ProviderAdapters.Bridge;
+ 
+ public sealed class BridgeAiDecisionProvider : IAiDecisionProvider
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/ProviderRegistryFactory.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/ProviderRegistryFactory.cs
+index 67b8ebc..eba2763 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/ProviderRegistryFactory.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/ProviderRegistryFactory.cs
+@@ -1,10 +1,10 @@
+-using Shoots.Providers.Abstractions;
+-using Shoots.Providers.Embedded;
+-using Shoots.Providers.Fake;
+-using Shoots.Providers.Ollama;
+-using Shoots.Providers.Null;
++using Shoots.ProviderAdapters.Abstractions;
++using Shoots.ProviderAdapters.Embedded;
++using Shoots.ProviderAdapters.Fake;
++using Shoots.ProviderAdapters.Ollama;
++using Shoots.ProviderAdapters.Null;
+ 
+-namespace Shoots.Providers.Bridge;
++namespace Shoots.ProviderAdapters.Bridge;
+ 
+ public static class ProviderRegistryFactory
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/Shoots.ProviderAdapters.Bridge.csproj b/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/Shoots.ProviderAdapters.Bridge.csproj
+index 615cc66..0f4a0c5 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/Shoots.ProviderAdapters.Bridge.csproj
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Bridge/Shoots.ProviderAdapters.Bridge.csproj
+@@ -7,11 +7,11 @@
+   </PropertyGroup>
+ 
+   <ItemGroup>
+-    <ProjectReference Include="..\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
+-    <ProjectReference Include="..\Shoots.Providers.Embedded\Shoots.Providers.Embedded.csproj" />
+-    <ProjectReference Include="..\Shoots.Providers.Fake\Shoots.Providers.Fake.csproj" />
+-    <ProjectReference Include="..\Shoots.Providers.Ollama\Shoots.Providers.Ollama.csproj" />
+-    <ProjectReference Include="..\Shoots.Providers.Null\Shoots.Providers.Null.csproj" />
++    <ProjectReference Include="..\Shoots.ProviderAdapters.Abstractions\Shoots.ProviderAdapters.Abstractions.csproj" />
++    <ProjectReference Include="..\Shoots.ProviderAdapters.Embedded\Shoots.ProviderAdapters.Embedded.csproj" />
++    <ProjectReference Include="..\Shoots.ProviderAdapters.Fake\Shoots.ProviderAdapters.Fake.csproj" />
++    <ProjectReference Include="..\Shoots.ProviderAdapters.Ollama\Shoots.ProviderAdapters.Ollama.csproj" />
++    <ProjectReference Include="..\Shoots.ProviderAdapters.Null\Shoots.ProviderAdapters.Null.csproj" />
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+     <ProjectReference Include="..\..\Runtime\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
+   </ItemGroup>
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/EmbeddedAiProvider.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/EmbeddedAiProvider.cs
+index fb785c0..ff7fce8 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/EmbeddedAiProvider.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/EmbeddedAiProvider.cs
+@@ -3,10 +3,10 @@ using System.Collections.Generic;
+ using System.Linq;
+ using System.Text;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ using Shoots.Runtime.Abstractions;
+ 
+-namespace Shoots.Providers.Embedded;
++namespace Shoots.ProviderAdapters.Embedded;
+ 
+ public sealed class EmbeddedAiProvider : IAiProvider, IAiProviderHealth, IAiProviderCapabilities
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/EmbeddedAiProviderAdapter.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/EmbeddedAiProviderAdapter.cs
+index d7b510d..8495324 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/EmbeddedAiProviderAdapter.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/EmbeddedAiProviderAdapter.cs
+@@ -2,9 +2,9 @@ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ 
+-namespace Shoots.Providers.Embedded;
++namespace Shoots.ProviderAdapters.Embedded;
+ 
+ public sealed class EmbeddedAiProviderAdapter : IAiProviderAdapter
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/Shoots.ProviderAdapters.Embedded.csproj b/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/Shoots.ProviderAdapters.Embedded.csproj
+index 68bc2b9..1249c52 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/Shoots.ProviderAdapters.Embedded.csproj
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Embedded/Shoots.ProviderAdapters.Embedded.csproj
+@@ -7,7 +7,7 @@
+   </PropertyGroup>
+ 
+   <ItemGroup>
+-    <ProjectReference Include="..\\Shoots.Providers.Abstractions\\Shoots.Providers.Abstractions.csproj" />
++    <ProjectReference Include="..\\Shoots.ProviderAdapters.Abstractions\\Shoots.ProviderAdapters.Abstractions.csproj" />
+     <ProjectReference Include="..\\..\\Runtime\\Shoots.Runtime.Abstractions\\Shoots.Runtime.Abstractions.csproj" />
+     <ProjectReference Include="..\\..\\Contracts\\Shoots.Contracts.Core\\Shoots.Contracts.Core.csproj" />
+   </ItemGroup>
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Fake/FakeAiProviderAdapter.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Fake/FakeAiProviderAdapter.cs
+index efb1d2e..23fca53 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Fake/FakeAiProviderAdapter.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Fake/FakeAiProviderAdapter.cs
+@@ -1,8 +1,8 @@
+ using System;
+ using System.Collections.Generic;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
+-namespace Shoots.Providers.Fake;
++using Shoots.ProviderAdapters.Abstractions;
++namespace Shoots.ProviderAdapters.Fake;
+ 
+ public sealed class FakeAiProviderAdapter : IAiProviderAdapter
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Fake/Shoots.ProviderAdapters.Fake.csproj b/src/ProviderAdapters/Shoots.ProviderAdapters.Fake/Shoots.ProviderAdapters.Fake.csproj
+index 3c05706..f876e03 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Fake/Shoots.ProviderAdapters.Fake.csproj
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Fake/Shoots.ProviderAdapters.Fake.csproj
+@@ -7,7 +7,7 @@
+   </PropertyGroup>
+ 
+   <ItemGroup>
+-    <ProjectReference Include="..\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
++    <ProjectReference Include="..\Shoots.ProviderAdapters.Abstractions\Shoots.ProviderAdapters.Abstractions.csproj" />
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+   </ItemGroup>
+ 
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullAiProviderAdapter.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullAiProviderAdapter.cs
+index 3afefe2..b073e7c 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullAiProviderAdapter.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullAiProviderAdapter.cs
+@@ -1,8 +1,8 @@
+ using System;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ 
+-namespace Shoots.Providers.Null;
++namespace Shoots.ProviderAdapters.Null;
+ 
+ public sealed class NullAiProviderAdapter : IAiProviderAdapter
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullProviderClient.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullProviderClient.cs
+index fb79836..c70057d 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullProviderClient.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullProviderClient.cs
+@@ -1,10 +1,10 @@
+ using System;
+ using System.Threading;
+ using System.Threading.Tasks;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ using Shoots.Runtime.Abstractions.Provider;
+ 
+-namespace Shoots.Providers.Null;
++namespace Shoots.ProviderAdapters.Null;
+ 
+ public sealed class NullProviderClient : IProviderClient
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullProviderRegistry.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullProviderRegistry.cs
+index 9da4009..082092d 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullProviderRegistry.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullProviderRegistry.cs
+@@ -1,6 +1,6 @@
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ 
+-namespace Shoots.Providers.Null;
++namespace Shoots.ProviderAdapters.Null;
+ 
+ public static class NullProviderRegistry
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Null/Shoots.ProviderAdapters.Null.csproj b/src/ProviderAdapters/Shoots.ProviderAdapters.Null/Shoots.ProviderAdapters.Null.csproj
+index 3c05706..f876e03 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Null/Shoots.ProviderAdapters.Null.csproj
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Null/Shoots.ProviderAdapters.Null.csproj
+@@ -7,7 +7,7 @@
+   </PropertyGroup>
+ 
+   <ItemGroup>
+-    <ProjectReference Include="..\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
++    <ProjectReference Include="..\Shoots.ProviderAdapters.Abstractions\Shoots.ProviderAdapters.Abstractions.csproj" />
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+   </ItemGroup>
+ 
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama.Tests/OllamaAiProviderAdapterTests.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama.Tests/OllamaAiProviderAdapterTests.cs
+index a740dc4..fa82afc 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama.Tests/OllamaAiProviderAdapterTests.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama.Tests/OllamaAiProviderAdapterTests.cs
+@@ -3,7 +3,7 @@ using System.Collections.Generic;
+ using Shoots.Contracts.Core;
+ using Xunit;
+ 
+-namespace Shoots.Providers.Ollama.Tests;
++namespace Shoots.ProviderAdapters.Ollama.Tests;
+ 
+ public sealed class OllamaAiProviderAdapterTests
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama.Tests/Shoots.ProviderAdapters.Ollama.Tests.csproj b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama.Tests/Shoots.ProviderAdapters.Ollama.Tests.csproj
+index 55cc3e8..91bd124 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama.Tests/Shoots.ProviderAdapters.Ollama.Tests.csproj
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama.Tests/Shoots.ProviderAdapters.Ollama.Tests.csproj
+@@ -6,7 +6,7 @@
+   </PropertyGroup>
+ 
+   <ItemGroup>
+-    <ProjectReference Include="..\Shoots.Providers.Ollama\Shoots.Providers.Ollama.csproj" />
++    <ProjectReference Include="..\Shoots.ProviderAdapters.Ollama\Shoots.ProviderAdapters.Ollama.csproj" />
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+   </ItemGroup>
+ 
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaAiProviderAdapter.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaAiProviderAdapter.cs
+index cee04b2..5c09983 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaAiProviderAdapter.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaAiProviderAdapter.cs
+@@ -1,9 +1,9 @@
+ using System;
+ using System.Linq;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ 
+-namespace Shoots.Providers.Ollama;
++namespace Shoots.ProviderAdapters.Ollama;
+ 
+ public sealed class OllamaAiProviderAdapter : IAiProviderAdapter
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaOutputParser.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaOutputParser.cs
+index 34b4444..8b66212 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaOutputParser.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaOutputParser.cs
+@@ -1,9 +1,9 @@
+ using System;
+ using System.Text.Json;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ 
+-namespace Shoots.Providers.Ollama;
++namespace Shoots.ProviderAdapters.Ollama;
+ 
+ public sealed class OllamaOutputParser
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaPromptBuilder.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaPromptBuilder.cs
+index 224deb1..aecc703 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaPromptBuilder.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaPromptBuilder.cs
+@@ -3,7 +3,7 @@ using System.Linq;
+ using System.Text;
+ using Shoots.Contracts.Core;
+ 
+-namespace Shoots.Providers.Ollama;
++namespace Shoots.ProviderAdapters.Ollama;
+ 
+ public sealed class OllamaPromptBuilder
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaProviderConfig.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaProviderConfig.cs
+index c17234b..80590fc 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaProviderConfig.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaProviderConfig.cs
+@@ -1,4 +1,4 @@
+-namespace Shoots.Providers.Ollama;
++namespace Shoots.ProviderAdapters.Ollama;
+ 
+ /// <summary>
+ /// Serialized configuration input. Use OllamaProviderSettings for validated runtime usage.
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaProviderSettings.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaProviderSettings.cs
+index 7a71ebe..d4162de 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaProviderSettings.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaProviderSettings.cs
+@@ -1,4 +1,4 @@
+-namespace Shoots.Providers.Ollama;
++namespace Shoots.ProviderAdapters.Ollama;
+ 
+ /// <summary>
+ /// Validated runtime settings for the Ollama provider.
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaStubClient.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaStubClient.cs
+index 72605fe..064977d 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaStubClient.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaStubClient.cs
+@@ -1,6 +1,6 @@
+ using System;
+ 
+-namespace Shoots.Providers.Ollama;
++namespace Shoots.ProviderAdapters.Ollama;
+ 
+ public sealed class OllamaStubClient
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaToolDecision.cs b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaToolDecision.cs
+index 723b9f3..39889f9 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaToolDecision.cs
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/OllamaToolDecision.cs
+@@ -1,6 +1,6 @@
+ using System.Collections.Generic;
+ 
+-namespace Shoots.Providers.Ollama;
++namespace Shoots.ProviderAdapters.Ollama;
+ 
+ public sealed class OllamaToolDecision
+ {
+diff --git a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/Shoots.ProviderAdapters.Ollama.csproj b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/Shoots.ProviderAdapters.Ollama.csproj
+index 3c05706..f876e03 100644
+--- a/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/Shoots.ProviderAdapters.Ollama.csproj
++++ b/src/ProviderAdapters/Shoots.ProviderAdapters.Ollama/Shoots.ProviderAdapters.Ollama.csproj
+@@ -7,7 +7,7 @@
+   </PropertyGroup>
+ 
+   <ItemGroup>
+-    <ProjectReference Include="..\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
++    <ProjectReference Include="..\Shoots.ProviderAdapters.Abstractions\Shoots.ProviderAdapters.Abstractions.csproj" />
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+   </ItemGroup>
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+index 62b34f2..aab6080 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+@@ -2,7 +2,7 @@ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ using Shoots.Runtime.Abstractions;
+ using Shoots.Runtime.Abstractions.Provider;
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs b/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
+index 1a73225..12a1728 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
+@@ -2,9 +2,9 @@ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Bridge;
+-using Shoots.Providers.Abstractions;
+-using Shoots.Providers.Null;
++using Shoots.ProviderAdapters.Bridge;
++using Shoots.ProviderAdapters.Abstractions;
++using Shoots.ProviderAdapters.Null;
+ using Shoots.Runtime.Abstractions;
+ 
+ namespace Shoots.Runtime.Core;
+diff --git a/src/Runtime/Shoots.Runtime.Core/Shoots.Runtime.Core.csproj b/src/Runtime/Shoots.Runtime.Core/Shoots.Runtime.Core.csproj
+index 14bcb84..11959b1 100644
+--- a/src/Runtime/Shoots.Runtime.Core/Shoots.Runtime.Core.csproj
++++ b/src/Runtime/Shoots.Runtime.Core/Shoots.Runtime.Core.csproj
+@@ -2,9 +2,9 @@
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+-    <ProjectReference Include="..\..\Providers\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
+-    <ProjectReference Include="..\..\Providers\Shoots.Providers.Bridge\Shoots.Providers.Bridge.csproj" />
+-    <ProjectReference Include="..\..\Providers\Shoots.Providers.Null\Shoots.Providers.Null.csproj" />
++    <ProjectReference Include="..\..\ProviderAdapters\Shoots.ProviderAdapters.Abstractions\Shoots.ProviderAdapters.Abstractions.csproj" />
++    <ProjectReference Include="..\..\ProviderAdapters\Shoots.ProviderAdapters.Bridge\Shoots.ProviderAdapters.Bridge.csproj" />
++    <ProjectReference Include="..\..\ProviderAdapters\Shoots.ProviderAdapters.Null\Shoots.ProviderAdapters.Null.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
+   </ItemGroup>
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+index 7cfe428..b087030 100644
+--- a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
++++ b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+@@ -2,7 +2,7 @@ using System.Diagnostics;
+ using System.Runtime.CompilerServices;
+ using Shoots.Contracts.Core;
+ using Shoots.Contracts.Core.AI;
+-using Shoots.Providers.Bridge;
++using Shoots.ProviderAdapters.Bridge;
+ using Shoots.Runtime.Abstractions;
+ using Shoots.Runtime.Ui.Abstractions;
+ using System.Linq;
+diff --git a/src/Runtime/Shoots.Runtime.Loader/Shoots.Runtime.Loader.csproj b/src/Runtime/Shoots.Runtime.Loader/Shoots.Runtime.Loader.csproj
+index b00bdf5..13d1a0b 100644
+--- a/src/Runtime/Shoots.Runtime.Loader/Shoots.Runtime.Loader.csproj
++++ b/src/Runtime/Shoots.Runtime.Loader/Shoots.Runtime.Loader.csproj
+@@ -2,7 +2,7 @@
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+-    <ProjectReference Include="..\..\Providers\Shoots.Providers.Bridge\Shoots.Providers.Bridge.csproj" />
++    <ProjectReference Include="..\..\ProviderAdapters\Shoots.ProviderAdapters.Bridge\Shoots.ProviderAdapters.Bridge.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Core\Shoots.Runtime.Core.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Ui.Abstractions\Shoots.Runtime.Ui.Abstractions.csproj" />
+diff --git a/src/Runtime/Shoots.Runtime.Tests/NullProviderClientTests.cs b/src/Runtime/Shoots.Runtime.Tests/NullProviderClientTests.cs
+index 42d587e..dd4a12f 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/NullProviderClientTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/NullProviderClientTests.cs
+@@ -2,7 +2,7 @@ using System.Collections.Generic;
+ using System.Text.Json;
+ using System.Threading.Tasks;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Null;
++using Shoots.ProviderAdapters.Null;
+ using Shoots.Runtime.Abstractions.Provider;
+ using Xunit;
+ 
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderInterfaceGuardTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderInterfaceGuardTests.cs
+index e3e4a88..c0dc99d 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ProviderInterfaceGuardTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderInterfaceGuardTests.cs
+@@ -1,6 +1,6 @@
+ using System.Linq;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ using Xunit;
+ 
+ namespace Shoots.Runtime.Tests;
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
+index e8ca7db..0b5af58 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderPresenceTripwireTests.cs
+@@ -1,5 +1,5 @@
+-using Shoots.Providers.Bridge;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Bridge;
++using Shoots.ProviderAdapters.Abstractions;
+ using Xunit;
+ 
+ namespace Shoots.Runtime.Tests;
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
+index c8fa583..81bcc30 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderRegistryGuardTests.cs
+@@ -1,6 +1,6 @@
+ using System;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ using Xunit;
+ 
+ namespace Shoots.Runtime.Tests;
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+index 76d31dd..6c608cb 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+@@ -2,8 +2,8 @@ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
+-using Shoots.Providers.Null;
++using Shoots.ProviderAdapters.Abstractions;
++using Shoots.ProviderAdapters.Null;
+ using Shoots.Runtime.Abstractions;
+ using Shoots.Runtime.Abstractions.Provider;
+ using Shoots.Runtime.Core;
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorRunEligibilityTests.cs b/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorRunEligibilityTests.cs
+index 359cbd2..5ec6ea4 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorRunEligibilityTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorRunEligibilityTests.cs
+@@ -1,6 +1,6 @@
+ using System.Collections.Generic;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Abstractions;
++using Shoots.ProviderAdapters.Abstractions;
+ using Shoots.Runtime.Abstractions;
+ using Shoots.Runtime.Abstractions.Provider;
+ using Shoots.Runtime.Core;
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorWaitingTests.cs b/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorWaitingTests.cs
+index cb3e140..94f05b9 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorWaitingTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorWaitingTests.cs
+@@ -1,6 +1,6 @@
+ using System.Collections.Generic;
+ using Shoots.Contracts.Core;
+-using Shoots.Providers.Null;
++using Shoots.ProviderAdapters.Null;
+ using Shoots.Runtime.Abstractions;
+ using Shoots.Runtime.Core;
+ using Xunit;
+diff --git a/src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj b/src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj
+index b8cf374..9451726 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj
++++ b/src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj
+@@ -9,9 +9,9 @@
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+-    <ProjectReference Include="..\..\Providers\Shoots.Providers.Abstractions\Shoots.Providers.Abstractions.csproj" />
+-    <ProjectReference Include="..\..\Providers\Shoots.Providers.Bridge\Shoots.Providers.Bridge.csproj" />
+-    <ProjectReference Include="..\..\Providers\Shoots.Providers.Null\Shoots.Providers.Null.csproj" />
++    <ProjectReference Include="..\..\ProviderAdapters\Shoots.ProviderAdapters.Abstractions\Shoots.ProviderAdapters.Abstractions.csproj" />
++    <ProjectReference Include="..\..\ProviderAdapters\Shoots.ProviderAdapters.Bridge\Shoots.ProviderAdapters.Bridge.csproj" />
++    <ProjectReference Include="..\..\ProviderAdapters\Shoots.ProviderAdapters.Null\Shoots.ProviderAdapters.Null.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Core\Shoots.Runtime.Core.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Loader\Shoots.Runtime.Loader.csproj" />
+diff --git a/src/STABILIZATION_STATUS.md b/src/STABILIZATION_STATUS.md
+index 2509e1d..dab5ee1 100644
+--- a/src/STABILIZATION_STATUS.md
++++ b/src/STABILIZATION_STATUS.md
+@@ -19,3 +19,9 @@
+ ## X3 — Tool authority semantics frozen
+ - ProviderKind ordering is authoritative when comparing plan authority to tool requirements.
+ - ProviderCapabilities are treated as strict bitmasks (no implicit escalation).
++
++
++## X4 — Provider adapter naming boundary frozen
++- `Shoots.Provider` (separate repository) is the native provider runtime for Shoots.Engine.
++- `Shoots/src/ProviderAdapters` in this repository contains .NET provider adapters/clients/stubs only.
++- Runtime routing authority remains Mermaid-derived and provider adapter outputs cannot override node traversal.

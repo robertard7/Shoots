@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core;
-using Shoots.Providers.Null;
+using Shoots.ProviderAdapters.Null;
 using Shoots.Runtime.Abstractions.Provider;
 using Xunit;
 

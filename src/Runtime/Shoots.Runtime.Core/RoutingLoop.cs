@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
-using Shoots.Providers.Abstractions;
+using Shoots.ProviderAdapters.Abstractions;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Abstractions.Provider;
 

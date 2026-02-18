@@ -1,5 +1,5 @@
-using Shoots.Providers.Bridge;
-using Shoots.Providers.Abstractions;
+using Shoots.ProviderAdapters.Bridge;
+using Shoots.ProviderAdapters.Abstractions;
 using Xunit;
 
 namespace Shoots.Runtime.Tests;
