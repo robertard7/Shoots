@@ -40,10 +40,11 @@ public sealed class RuntimeOrchestrator
 
         var resolvedOptions = options ?? new RuntimeRunOptions();
         var seed = _persistence?.Load(plan.PlanId);
-        var runState = _runStateStore?.Load(plan.PlanId);
+        var workOrderId = plan.Request.WorkOrder?.Id.Value ?? string.Empty;
+        var runState = _runStateStore?.LoadByWorkOrderId(workOrderId);
         var discardedWaiting = resolvedOptions.ResumeMode == ResumeMode.DiscardWaitingStartOver && seed?.State.Status == RoutingStatus.Waiting;
 
-        if (resolvedOptions.ResumeMode == ResumeMode.DiscardWaitingStartOver)
+        if (resolvedOptions.ResumeMode == ResumeMode.DiscardWaitingStartOver || resolvedOptions.DiscardWaiting)
         {
             if (seed is not null)
                 seed = null;
@@ -89,7 +90,7 @@ public sealed class RuntimeOrchestrator
             result.Waiting);
 
         _persistence?.Save(envelope);
-        SaveRunState(envelope, resolvedOptions, runState?.AttemptCounter ?? 0);
+        SaveRunState(envelope, resolvedOptions, runState);
         return envelope;
     }
 
@@ -187,6 +188,9 @@ public sealed class RuntimeOrchestrator
         if (runState.LastOutcomeKind != RunOutcomeKind.Waiting)
             return null;
 
+        if (!string.Equals(runState.WorkOrderId, plan.Request.WorkOrder?.Id.Value, StringComparison.Ordinal))
+            return null;
+
         if (options.ResumeMode == ResumeMode.InjectDecision &&
             !string.IsNullOrWhiteSpace(options.InjectedDecisionDigest) &&
             !string.Equals(options.InjectedDecisionDigest, runState.LastInjectedDecisionDigest, StringComparison.Ordinal))
@@ -194,13 +198,16 @@ public sealed class RuntimeOrchestrator
             return null;
         }
 
+        if (runState.ProgressToken != ComputeProgressToken(seed) && options.ResumeMode == ResumeMode.None && !options.DiscardWaiting && !options.AllowPlanChangeOverride)
+            return null;
+
         var planChanged =
             !string.Equals(seed.Waiting.PlanHash, plan.PlanId, StringComparison.Ordinal) ||
             !string.Equals(runState.LastPlanHash, plan.PlanId, StringComparison.Ordinal);
 
         if (planChanged)
         {
-            if (options.ResumeMode == ResumeMode.OverridePlanChange)
+            if (options.ResumeMode == ResumeMode.OverridePlanChange || options.AllowPlanChangeOverride)
             {
                 var overrideTrace = AppendHostEvent(seed.Trace, RoutingTraceEventKind.HostResumeOverridePlanChange, "host.resume.override_plan_change");
                 return seed with { Trace = overrideTrace };
@@ -215,7 +222,7 @@ public sealed class RuntimeOrchestrator
         return seed with { Trace = blockedTrace };
     }
 
-    private void SaveRunState(ExecutionEnvelope envelope, RuntimeRunOptions options, int priorAttempts)
+    private void SaveRunState(ExecutionEnvelope envelope, RuntimeRunOptions options, RunResumeState? priorState)
     {
         if (_runStateStore is null)
             return;
@@ -227,6 +234,8 @@ public sealed class RuntimeOrchestrator
             _ => RunOutcomeKind.Waiting
         };
 
+        var progressToken = ComputeProgressToken(envelope);
+
         var state = new RunResumeState(
             envelope.State.WorkOrderId.Value,
             outcome,
@@ -234,9 +243,21 @@ public sealed class RuntimeOrchestrator
             options.InjectedDecisionDigest,
             envelope.Plan.PlanId,
             RouteIntentTokenFactory.ComputeTokenHash(envelope.State.IntentToken),
-            priorAttempts + 1);
+            (priorState?.AttemptCounter ?? 0) + 1,
+            progressToken);
 
-        _runStateStore.Save(envelope.Plan.PlanId, state);
+        _runStateStore.SaveByWorkOrderId(envelope.State.WorkOrderId.Value, state);
+    }
+
+    private static int ComputeProgressToken(ExecutionEnvelope envelope)
+    {
+        var advanced = envelope.Trace.Entries.Count(entry =>
+            entry.Event == RoutingTraceEventKind.NodeAdvanced ||
+            entry.Event == RoutingTraceEventKind.ToolResult ||
+            entry.Event == RoutingTraceEventKind.DecisionAccepted ||
+            entry.Event == RoutingTraceEventKind.Completed);
+
+        return advanced;
     }
 
     private static RoutingTrace AppendHostEvent(RoutingTrace trace, RoutingTraceEventKind eventKind, string detail)

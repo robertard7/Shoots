@@ -14,5 +14,6 @@ public sealed record RunResumeState(
     string? LastInjectedDecisionDigest,
     string? LastPlanHash,
     string? LastIntentTokenHash,
-    int AttemptCounter
+    int AttemptCounter,
+    int ProgressToken
 );

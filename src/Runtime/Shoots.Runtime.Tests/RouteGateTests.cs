@@ -95,12 +95,48 @@ public sealed class RouteGateTests
             Assert.True(result);
             Assert.Null(error);
             Assert.Equal("terminate", nextState.CurrentNodeId);
-            Assert.Contains("decision.gate.bypassed", narrator.Events);
+            Assert.Contains("decision.gate.bypassed:terminate", narrator.Events);
         }
         finally
         {
             RouteGate.Narrator = null;
         }
+    }
+
+    [Fact]
+    public void TryAdvance_bypass_ignores_fallback_next_node_metadata_for_routing()
+    {
+        var fallbackTool = new ToolSpec(
+            new ToolId("tools.fallback"),
+            "Fallback tool.",
+            new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+            new List<ToolInputSpec>(),
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
+
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule(
+                    "select",
+                    RouteIntent.SelectTool,
+                    DecisionOwner.Ai,
+                    "tool.selection",
+                    MermaidNodeKind.Start,
+                    new[] { "terminate" },
+                    DecisionPolicy.Bypass,
+                    new FallbackToolSelection(fallbackTool.ToolId, new Dictionary<string, object?>()),
+                    "rogue-node"),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+            });
+
+        var state = RoutingState.CreateInitial(plan);
+        var advanced = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(fallbackTool), out var nextState, out var error);
+
+        Assert.True(advanced);
+        Assert.Null(error);
+        Assert.Equal("terminate", nextState.CurrentNodeId);
     }
 
     [Fact]
@@ -591,7 +627,7 @@ public sealed class RouteGateTests
         public void OnDecisionRequired(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("decision.required");
         public void OnDecisionAccepted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("decision.accepted");
         public void OnDecisionGateWaiting(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, FallbackToolSelection? fallbackToolSelection, string? fallbackNextNodeId) => Events.Add("decision.gate.waiting");
-        public void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection) => Events.Add("decision.gate.bypassed");
+        public void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection, string nextNodeId) => Events.Add($"decision.gate.bypassed:{nextNodeId}");
         public void OnDecisionGateRequiredError(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, RuntimeError error) => Events.Add("decision.gate.error");
         public void OnStepBudgetExceeded(RoutingState state, int stepBudget, RuntimeError error) => Events.Add("budget.exceeded");
         public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource) => Events.Add("node.transition");

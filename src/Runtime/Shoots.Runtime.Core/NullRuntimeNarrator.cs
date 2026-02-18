@@ -83,13 +83,14 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
         if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
     }
 
-    public void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection)
+    public void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection, string nextNodeId)
     {
         if (state is null) throw new ArgumentNullException(nameof(state));
         if (step is null) throw new ArgumentNullException(nameof(step));
         if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
         if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
         if (fallbackSelection is null) throw new ArgumentNullException(nameof(fallbackSelection));
+        if (nextNodeId is null) throw new ArgumentNullException(nameof(nextNodeId));
     }
 
     public void OnDecisionGateRequiredError(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, RuntimeError error)

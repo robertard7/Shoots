@@ -29,23 +29,23 @@ public sealed class InMemoryRuntimePersistence : IRuntimePersistence, IRunResume
             : null;
     }
 
-    RunResumeState? IRunResumeStateStore.Load(string planId)
+    RunResumeState? IRunResumeStateStore.LoadByWorkOrderId(string workOrderId)
     {
-        if (string.IsNullOrWhiteSpace(planId))
+        if (string.IsNullOrWhiteSpace(workOrderId))
             return null;
 
-        return _resume.TryGetValue(planId, out var state)
+        return _resume.TryGetValue(workOrderId, out var state)
             ? state
             : null;
     }
 
-    void IRunResumeStateStore.Save(string planId, RunResumeState state)
+    void IRunResumeStateStore.SaveByWorkOrderId(string workOrderId, RunResumeState state)
     {
-        if (string.IsNullOrWhiteSpace(planId))
-            throw new ArgumentException("plan id is required", nameof(planId));
+        if (string.IsNullOrWhiteSpace(workOrderId))
+            throw new ArgumentException("work order id is required", nameof(workOrderId));
         if (state is null)
             throw new ArgumentNullException(nameof(state));
 
-        _resume[planId] = state;
+        _resume[workOrderId] = state;
     }
 }

@@ -76,8 +76,8 @@ public sealed class RuntimeOrchestratorRunEligibilityTests
         Assert.Equal(RoutingStatus.Waiting, first.State.Status);
 
         var runStateStore = (IRunResumeStateStore)persistence;
-        var state = runStateStore.Load(plan.PlanId)!;
-        runStateStore.Save(plan.PlanId, state with { LastPlanHash = "other-plan" });
+        var state = runStateStore.LoadByWorkOrderId("wo-run-planchange")!;
+        runStateStore.SaveByWorkOrderId("wo-run-planchange", state with { LastPlanHash = "other-plan" });
 
         decisions.Enabled = true;
 

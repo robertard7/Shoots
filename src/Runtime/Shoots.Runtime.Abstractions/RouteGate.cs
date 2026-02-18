@@ -268,13 +268,15 @@ public static class RouteGate
                         effectiveDecision = new ToolSelectionDecision(
                             rule.FallbackToolSelection.ToolId,
                             rule.FallbackToolSelection.Bindings);
+                        var bypassNextNodeId = allowedNextNodes.Count == 0 ? routeStep.NodeId : allowedNextNodes.Single();
                         narrator?.OnDecisionGateBypassed(
                             state,
                             routeStep,
                             state.IntentToken,
                             allowedNextNodes,
                             rule.DecisionPolicy,
-                            effectiveDecision);
+                            effectiveDecision,
+                            bypassNextNodeId);
                         break;
 
                     case DecisionPolicy.Error:

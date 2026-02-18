@@ -2,7 +2,7 @@ namespace Shoots.Runtime.Abstractions;
 
 public interface IRunResumeStateStore
 {
-    RunResumeState? Load(string planId);
+    RunResumeState? LoadByWorkOrderId(string workOrderId);
 
-    void Save(string planId, RunResumeState state);
+    void SaveByWorkOrderId(string workOrderId, RunResumeState state);
 }

@@ -90,11 +90,11 @@ internal sealed class TracingRuntimeNarrator : IRuntimeNarrator
         _inner.OnDecisionGateWaiting(state, step, intentToken, allowedNextNodes, policy, fallbackToolSelection, fallbackNextNodeId);
     }
 
-    public void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection)
+    public void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection, string nextNodeId)
     {
-        var detail = BuildDecisionGateDetail(step.NodeId, policy, fallbackSelection.ToolId.Value, null);
-        _trace.Add(RoutingTraceEventKind.DecisionGateBypassed, detail: detail, state: state, step: step);
-        _inner.OnDecisionGateBypassed(state, step, intentToken, allowedNextNodes, policy, fallbackSelection);
+        var detail = BuildDecisionGateDetail(step.NodeId, policy, fallbackSelection.ToolId.Value, nextNodeId);
+        _trace.Add(RoutingTraceEventKind.DecisionGateBypassed, detail: detail, fromNodeId: step.NodeId, toNodeId: nextNodeId, state: state, step: step);
+        _inner.OnDecisionGateBypassed(state, step, intentToken, allowedNextNodes, policy, fallbackSelection, nextNodeId);
     }
 
     public void OnDecisionGateRequiredError(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, RuntimeError error)
