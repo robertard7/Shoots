@@ -8,5 +8,6 @@ public sealed record RoutingLoopResult(
     RoutingState State,
     IReadOnlyList<ToolResult> ToolResults,
     RoutingTrace Trace,
-    IReadOnlyList<ExecutionTelemetryRecord> Telemetry
+    IReadOnlyList<ExecutionTelemetryRecord> Telemetry,
+    DecisionGateWaitingInfo? Waiting
 );

@@ -26,6 +26,9 @@ jobs:
       - name: Test (trx)
         run: dotnet test Shoots.sln -c Release --no-build --logger "trx;LogFileName=solution.trx"
 
+      - name: Runtime hang probe (blame-hang)
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
+
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:

@@ -260,10 +260,6 @@ public static class RouteGate
                         routeStep.ToolInvocation.Bindings);
 
             ToolSelectionDecision? effectiveDecision = explicitDecision ?? invocationDecision;
-            var decisionSource = explicitDecision is not null
-                ? RoutingDecisionSource.Provider
-                : RoutingDecisionSource.Rule;
-
             if (effectiveDecision is null)
             {
                 switch (rule.DecisionPolicy)
@@ -272,14 +268,13 @@ public static class RouteGate
                         effectiveDecision = new ToolSelectionDecision(
                             rule.FallbackToolSelection.ToolId,
                             rule.FallbackToolSelection.Bindings);
-                        decisionSource = RoutingDecisionSource.Rule;
-                        narrator?.OnNodeTransitionChosen(
+                        narrator?.OnDecisionGateBypassed(
                             state,
                             routeStep,
                             state.IntentToken,
                             allowedNextNodes,
-                            routeStep.NodeId,
-                            decisionSource);
+                            rule.DecisionPolicy,
+                            effectiveDecision);
                         break;
 
                     case DecisionPolicy.Error:
@@ -289,12 +284,14 @@ public static class RouteGate
                             routeStep.NodeId);
 
                         nextState = state.WithStatus(RoutingStatus.Halted);
+                        narrator?.OnDecisionGateRequiredError(state, routeStep, state.IntentToken, allowedNextNodes, rule.DecisionPolicy, error);
                         narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
                         narrator?.OnHalted(nextState, error);
                         return false;
 
                     default:
                         nextState = state.WithStatus(RoutingStatus.Waiting);
+                        narrator?.OnDecisionGateWaiting(nextState, routeStep, state.IntentToken, allowedNextNodes, rule.DecisionPolicy, rule.FallbackToolSelection, rule.FallbackNextNodeId);
                         narrator?.OnDecisionRequired(nextState, routeStep, state.IntentToken, allowedNextNodes);
                         error = null;
                         return false;

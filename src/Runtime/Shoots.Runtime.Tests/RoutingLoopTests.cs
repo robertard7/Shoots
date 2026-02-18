@@ -110,6 +110,7 @@ public sealed class RoutingLoopTests
         Assert.Equal(RoutingStatus.Halted, result.State.Status);
         var error = Assert.Single(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.Error);
         Assert.Equal("route_step_budget_exceeded", error.Error?.Code);
+        Assert.Contains(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.StepBudgetExceeded);
     }
 
     [Fact]

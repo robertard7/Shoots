@@ -15,6 +15,10 @@ public interface IRuntimeNarrator
     void OnNodeEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes);
     void OnDecisionRequired(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes);
     void OnDecisionAccepted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes);
+    void OnDecisionGateWaiting(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, FallbackToolSelection? fallbackToolSelection, string? fallbackNextNodeId);
+    void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection);
+    void OnDecisionGateRequiredError(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, RuntimeError error);
+    void OnStepBudgetExceeded(RoutingState state, int stepBudget, RuntimeError error);
     void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource);
     void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource);
     void OnNodeHalted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, RuntimeError error);

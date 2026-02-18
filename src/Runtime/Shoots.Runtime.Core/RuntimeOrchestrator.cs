@@ -63,7 +63,8 @@ public sealed class RuntimeOrchestrator
             result.Trace,
             result.Telemetry,
             _registry.CatalogHash,
-            finalStatus);
+            finalStatus,
+            result.Waiting);
 
         _persistence?.Save(envelope);
         return envelope;
@@ -145,7 +146,8 @@ public sealed class RuntimeOrchestrator
             result.Trace,
             result.Telemetry,
             registry.CatalogHash,
-            finalStatus);
+            finalStatus,
+            result.Waiting);
     }
 
     private static IReadOnlyList<ToolResult> RebuildToolResults(RoutingTrace trace)

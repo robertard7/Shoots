@@ -102,6 +102,38 @@ public static class BuildPlanHasher
               .Append('=')
               .Append(NormalizeToken(rule.AllowedOutputKind));
 
+            sb.Append("|route.policy=")
+              .Append(NormalizeToken(rule.NodeId))
+              .Append(':')
+              .Append(rule.DecisionPolicy.ToString());
+
+            if (rule.FallbackToolSelection is not null)
+            {
+                sb.Append("|route.fallback.tool=")
+                  .Append(NormalizeToken(rule.NodeId))
+                  .Append(':')
+                  .Append(NormalizeToken(rule.FallbackToolSelection.ToolId.Value));
+
+                foreach (var binding in rule.FallbackToolSelection.Bindings
+                             .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    sb.Append("|route.fallback.binding=")
+                      .Append(NormalizeToken(rule.NodeId))
+                      .Append(':')
+                      .Append(NormalizeToken(binding.Key))
+                      .Append('=')
+                      .Append(NormalizeTextToken(binding.Value?.ToString() ?? "null"));
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(rule.FallbackNextNodeId))
+            {
+                sb.Append("|route.fallback.next=")
+                  .Append(NormalizeToken(rule.NodeId))
+                  .Append(':')
+                  .Append(NormalizeToken(rule.FallbackNextNodeId));
+            }
+
             foreach (var nextNode in rule.AllowedNextNodes
                          .OrderBy(node => node, StringComparer.Ordinal))
             {

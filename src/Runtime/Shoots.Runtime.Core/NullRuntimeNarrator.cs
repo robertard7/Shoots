@@ -75,6 +75,38 @@ public sealed class NullRuntimeNarrator : IRuntimeNarrator
         if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
     }
 
+    public void OnDecisionGateWaiting(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, FallbackToolSelection? fallbackToolSelection, string? fallbackNextNodeId)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
+    }
+
+    public void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
+        if (fallbackSelection is null) throw new ArgumentNullException(nameof(fallbackSelection));
+    }
+
+    public void OnDecisionGateRequiredError(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, RuntimeError error)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (intentToken is null) throw new ArgumentNullException(nameof(intentToken));
+        if (allowedNextNodes is null) throw new ArgumentNullException(nameof(allowedNextNodes));
+        if (error is null) throw new ArgumentNullException(nameof(error));
+    }
+
+    public void OnStepBudgetExceeded(RoutingState state, int stepBudget, RuntimeError error)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (error is null) throw new ArgumentNullException(nameof(error));
+    }
+
     public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource)
     {
         if (state is null) throw new ArgumentNullException(nameof(state));

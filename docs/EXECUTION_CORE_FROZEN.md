@@ -32,3 +32,57 @@ Decision gates are policy-driven and deterministic via `RouteRule.DecisionPolicy
 `Waiting` is terminal for the current run and must not spin the routing loop.
 
 Routing loop enforces a deterministic step budget (`256` default, configurable per `RoutingLoop`) and halts with `route_step_budget_exceeded` when exceeded.
+
+### Policy Examples
+
+Hard (default):
+
+```json
+{
+  "NodeId": "select",
+  "Intent": "SelectTool",
+  "Owner": "Ai",
+  "AllowedOutputKind": "tool.selection",
+  "NodeKind": "Start",
+  "AllowedNextNodes": ["terminate"],
+  "DecisionPolicy": "Hard"
+}
+```
+
+Bypass with fallback:
+
+```json
+{
+  "NodeId": "select",
+  "Intent": "SelectTool",
+  "Owner": "Ai",
+  "AllowedOutputKind": "tool.selection",
+  "NodeKind": "Start",
+  "AllowedNextNodes": ["terminate"],
+  "DecisionPolicy": "Bypass",
+  "FallbackToolSelection": {
+    "ToolId": { "Value": "tools.echo" },
+    "Bindings": { "name": "alpha" }
+  }
+}
+```
+
+Error:
+
+```json
+{
+  "NodeId": "select",
+  "Intent": "SelectTool",
+  "Owner": "Ai",
+  "AllowedOutputKind": "tool.selection",
+  "NodeKind": "Start",
+  "AllowedNextNodes": ["terminate"],
+  "DecisionPolicy": "Error"
+}
+```
+
+### Host Flow
+
+1. Execute runtime once.
+2. If `ExecutionEnvelope.Waiting` is populated, present `DecisionPromptKey` and policy context in UI.
+3. Collect decision and re-execute from persisted envelope state.

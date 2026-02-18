@@ -85,12 +85,22 @@ public sealed class RouteGateTests
                 new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
-        var state = RoutingState.CreateInitial(plan);
-        var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(fallbackTool), out var nextState, out var error);
+        var narrator = new RecordingNarrator();
+        RouteGate.Narrator = narrator;
+        try
+        {
+            var state = RoutingState.CreateInitial(plan);
+            var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(fallbackTool), out var nextState, out var error);
 
-        Assert.True(result);
-        Assert.Null(error);
-        Assert.Equal("terminate", nextState.CurrentNodeId);
+            Assert.True(result);
+            Assert.Null(error);
+            Assert.Equal("terminate", nextState.CurrentNodeId);
+            Assert.Contains("decision.gate.bypassed", narrator.Events);
+        }
+        finally
+        {
+            RouteGate.Narrator = null;
+        }
     }
 
     [Fact]
@@ -111,13 +121,23 @@ public sealed class RouteGateTests
                 new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
-        var state = RoutingState.CreateInitial(plan);
-        var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(), out var nextState, out var error);
+        var narrator = new RecordingNarrator();
+        RouteGate.Narrator = narrator;
+        try
+        {
+            var state = RoutingState.CreateInitial(plan);
+            var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(), out var nextState, out var error);
 
-        Assert.False(result);
-        Assert.NotNull(error);
-        Assert.Equal("route_decision_required", error!.Code);
-        Assert.Equal(RoutingStatus.Halted, nextState.Status);
+            Assert.False(result);
+            Assert.NotNull(error);
+            Assert.Equal("route_decision_required", error!.Code);
+            Assert.Equal(RoutingStatus.Halted, nextState.Status);
+            Assert.Contains("decision.gate.error", narrator.Events);
+        }
+        finally
+        {
+            RouteGate.Narrator = null;
+        }
     }
 
     [Fact]
@@ -138,12 +158,22 @@ public sealed class RouteGateTests
                 new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
             });
 
-        var state = RoutingState.CreateInitial(plan);
-        var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(), out var nextState, out var error);
+        var narrator = new RecordingNarrator();
+        RouteGate.Narrator = narrator;
+        try
+        {
+            var state = RoutingState.CreateInitial(plan);
+            var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(), out var nextState, out var error);
 
-        Assert.False(result);
-        Assert.Null(error);
-        Assert.Equal(RoutingStatus.Waiting, nextState.Status);
+            Assert.False(result);
+            Assert.Null(error);
+            Assert.Equal(RoutingStatus.Waiting, nextState.Status);
+            Assert.Contains("decision.gate.waiting", narrator.Events);
+        }
+        finally
+        {
+            RouteGate.Narrator = null;
+        }
     }
 
     [Fact]
@@ -560,6 +590,10 @@ public sealed class RouteGateTests
         public void OnNodeEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("node.entered");
         public void OnDecisionRequired(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("decision.required");
         public void OnDecisionAccepted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("decision.accepted");
+        public void OnDecisionGateWaiting(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, FallbackToolSelection? fallbackToolSelection, string? fallbackNextNodeId) => Events.Add("decision.gate.waiting");
+        public void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection) => Events.Add("decision.gate.bypassed");
+        public void OnDecisionGateRequiredError(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, RuntimeError error) => Events.Add("decision.gate.error");
+        public void OnStepBudgetExceeded(RoutingState state, int stepBudget, RuntimeError error) => Events.Add("budget.exceeded");
         public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource) => Events.Add("node.transition");
         public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource) => Events.Add("node.advanced");
         public void OnNodeHalted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, RuntimeError error) => Events.Add("node.halted");

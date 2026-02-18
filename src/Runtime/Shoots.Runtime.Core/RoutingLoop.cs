@@ -84,7 +84,8 @@ public sealed class RoutingLoop
 				State,
 				_toolResults.ToArray(),
 				_traceBuilder.Build(),
-				_traceBuilder.BuildTelemetry());
+				_traceBuilder.BuildTelemetry(),
+                null);
 
 		var previousNarrator = RouteGate.Narrator;
 
@@ -106,6 +107,7 @@ public sealed class RoutingLoop
                         _stepBudget);
                     State = State.WithStatus(RoutingStatus.Halted);
                     _traceBuilder.Add(RoutingTraceEventKind.Error, detail: budgetError.Code, state: State, error: budgetError);
+                    _tracingNarrator.OnStepBudgetExceeded(State, _stepBudget, budgetError);
                     _tracingNarrator.OnHalted(State, budgetError);
                     break;
                 }
@@ -267,7 +269,8 @@ public sealed class RoutingLoop
 			State,
 			_toolResults.ToArray(),
 			_traceBuilder.Build(),
-			_traceBuilder.BuildTelemetry());
+			_traceBuilder.BuildTelemetry(),
+            BuildWaitingInfo(_plan, State));
 	}
 
 	private ToolSelectionDecision? ResolveDecision(RouteStep step)
@@ -323,7 +326,8 @@ public sealed class RoutingLoop
             _traceBuilder.Build(),
             telemetry,
             _catalogHash,
-            ResolveFinalStatus(State));
+            ResolveFinalStatus(State),
+            BuildWaitingInfo(_plan, State));
     }
 
 
@@ -436,6 +440,36 @@ public sealed class RoutingLoop
     {
         var provider = string.IsNullOrWhiteSpace(failure.ProviderId) ? "unknown" : failure.ProviderId;
         return $"provider.failure|kind={failure.Kind}|provider={provider}";
+    }
+
+
+    private static DecisionGateWaitingInfo? BuildWaitingInfo(BuildPlan plan, RoutingState state)
+    {
+        if (state.Status != RoutingStatus.Waiting)
+            return null;
+
+        var step = plan.Steps
+            .OfType<RouteStep>()
+            .FirstOrDefault(candidate => string.Equals(candidate.NodeId, state.CurrentNodeId, StringComparison.Ordinal));
+        if (step is null)
+            return null;
+
+        var rule = plan.Request.RouteRules?
+            .FirstOrDefault(candidate => string.Equals(candidate.NodeId, step.NodeId, StringComparison.Ordinal));
+        if (rule is null)
+            return null;
+
+        return new DecisionGateWaitingInfo(
+            state.WorkOrderId,
+            step.NodeId,
+            state.CurrentNodeId,
+            RouteIntentTokenFactory.ComputeTokenHash(state.IntentToken),
+            rule.AllowedNextNodes,
+            rule.AllowedOutputKind,
+            step.Owner,
+            rule.DecisionPolicy,
+            rule.FallbackToolSelection,
+            rule.FallbackNextNodeId);
     }
 
     private static ExecutionFinalStatus ResolveFinalStatus(RoutingState state)

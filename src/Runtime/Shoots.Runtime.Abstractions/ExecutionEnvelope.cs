@@ -14,5 +14,6 @@ public sealed record ExecutionEnvelope(
     RoutingTrace Trace,
     IReadOnlyList<ExecutionTelemetryRecord> Telemetry,
     string ToolCatalogHash,
-    ExecutionFinalStatus FinalStatus
+    ExecutionFinalStatus FinalStatus,
+    DecisionGateWaitingInfo? Waiting = null
 );
