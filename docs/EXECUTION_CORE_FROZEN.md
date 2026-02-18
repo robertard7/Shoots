@@ -96,3 +96,14 @@ Error:
   - `OverridePlanChange`
   - `DiscardWaitingStartOver`
 - If a run is waiting and no progress is injected, host returns cached waiting receipt and blocks rerun.
+
+
+### Plan Hash Resume Rule
+
+- Bad: "If spec hash differs at resume time: halt."
+- Good: "If plan hash differs, host must explicitly opt into override, and only for the same WorkOrderId waiting receipt lineage. Otherwise block rerun."
+
+Examples:
+1. Hard policy: first run returns Waiting, host injects decision digest and reruns.
+2. Bypass policy: fallback tool selection resolves gate, Mermaid next-node still decides route.
+3. Plan changed while waiting: blocked by default, allowed only with explicit override mode.

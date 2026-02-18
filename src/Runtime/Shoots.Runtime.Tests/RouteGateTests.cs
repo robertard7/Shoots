@@ -614,27 +614,47 @@ public sealed class RouteGateTests
 
     private sealed class RecordingNarrator : IRuntimeNarrator
     {
-        public List<string> Events { get; } = new();
+        private readonly object _sync = new();
+        private readonly List<string> _events = new();
 
-        public void OnPlan(string text) => Events.Add("plan");
-        public void OnCommand(RuntimeCommandSpec command, RuntimeRequest request) => Events.Add("command");
-        public void OnResult(RuntimeResult result) => Events.Add("result");
-        public void OnError(RuntimeError error) => Events.Add("error");
-        public void OnRoute(RouteNarration narration) => Events.Add("route");
-        public void OnWorkOrderReceived(WorkOrder workOrder) => Events.Add("workorder");
-        public void OnRouteEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("entered");
-        public void OnNodeEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("node.entered");
-        public void OnDecisionRequired(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("decision.required");
-        public void OnDecisionAccepted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("decision.accepted");
-        public void OnDecisionGateWaiting(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, FallbackToolSelection? fallbackToolSelection, string? fallbackNextNodeId) => Events.Add("decision.gate.waiting");
-        public void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection, string nextNodeId) => Events.Add($"decision.gate.bypassed:{nextNodeId}");
-        public void OnDecisionGateRequiredError(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, RuntimeError error) => Events.Add("decision.gate.error");
-        public void OnStepBudgetExceeded(RoutingState state, int stepBudget, RuntimeError error) => Events.Add("budget.exceeded");
-        public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource) => Events.Add("node.transition");
-        public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource) => Events.Add("node.advanced");
-        public void OnNodeHalted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, RuntimeError error) => Events.Add("node.halted");
-        public void OnHalted(RoutingState state, RuntimeError error) => Events.Add("halted");
-        public void OnCompleted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Events.Add("completed");
+        public IReadOnlyList<string> Events
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return _events.ToArray();
+                }
+            }
+        }
+
+        public void OnPlan(string text) => Add("plan");
+        public void OnCommand(RuntimeCommandSpec command, RuntimeRequest request) => Add("command");
+        public void OnResult(RuntimeResult result) => Add("result");
+        public void OnError(RuntimeError error) => Add("error");
+        public void OnRoute(RouteNarration narration) => Add("route");
+        public void OnWorkOrderReceived(WorkOrder workOrder) => Add("workorder");
+        public void OnRouteEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Add("entered");
+        public void OnNodeEntered(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Add("node.entered");
+        public void OnDecisionRequired(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Add("decision.required");
+        public void OnDecisionAccepted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Add("decision.accepted");
+        public void OnDecisionGateWaiting(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, FallbackToolSelection? fallbackToolSelection, string? fallbackNextNodeId) => Add("decision.gate.waiting");
+        public void OnDecisionGateBypassed(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, ToolSelectionDecision fallbackSelection, string nextNodeId) => Add($"decision.gate.bypassed:{nextNodeId}");
+        public void OnDecisionGateRequiredError(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, DecisionPolicy policy, RuntimeError error) => Add("decision.gate.error");
+        public void OnStepBudgetExceeded(RoutingState state, int stepBudget, RuntimeError error) => Add("budget.exceeded");
+        public void OnNodeTransitionChosen(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource) => Add("node.transition");
+        public void OnNodeAdvanced(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, string nextNodeId, RoutingDecisionSource decisionSource) => Add("node.advanced");
+        public void OnNodeHalted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes, RuntimeError error) => Add("node.halted");
+        public void OnHalted(RoutingState state, RuntimeError error) => Add("halted");
+        public void OnCompleted(RoutingState state, RouteStep step, RouteIntentToken intentToken, IReadOnlyList<string> allowedNextNodes) => Add("completed");
+
+        private void Add(string value)
+        {
+            lock (_sync)
+            {
+                _events.Add(value);
+            }
+        }
     }
 
     private static RouteIntentToken CreateIntentToken(BuildPlan plan)

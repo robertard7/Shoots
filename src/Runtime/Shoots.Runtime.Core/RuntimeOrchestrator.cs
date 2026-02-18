@@ -39,9 +39,13 @@ public sealed class RuntimeOrchestrator
             throw new ArgumentNullException(nameof(plan));
 
         var resolvedOptions = options ?? new RuntimeRunOptions();
-        var seed = _persistence?.Load(plan.PlanId);
+        var currentPlanHash = ResolvePlanHash(plan);
+        var seed = _persistence?.Load(currentPlanHash);
         var workOrderId = plan.Request.WorkOrder?.Id.Value ?? string.Empty;
         var runState = _runStateStore?.LoadByWorkOrderId(workOrderId);
+
+        if (seed is null && !string.IsNullOrWhiteSpace(runState?.LastPlanHash))
+            seed = _persistence?.Load(runState.LastPlanHash);
         var discardedWaiting = resolvedOptions.ResumeMode == ResumeMode.DiscardWaitingStartOver && seed?.State.Status == RoutingStatus.Waiting;
 
         if (resolvedOptions.ResumeMode == ResumeMode.DiscardWaitingStartOver || resolvedOptions.DiscardWaiting)
@@ -201,9 +205,10 @@ public sealed class RuntimeOrchestrator
         if (runState.ProgressToken != ComputeProgressToken(seed) && options.ResumeMode == ResumeMode.None && !options.DiscardWaiting && !options.AllowPlanChangeOverride)
             return null;
 
+        var currentPlanHash = ResolvePlanHash(plan);
         var planChanged =
-            !string.Equals(seed.Waiting.PlanHash, plan.PlanId, StringComparison.Ordinal) ||
-            !string.Equals(runState.LastPlanHash, plan.PlanId, StringComparison.Ordinal);
+            !string.Equals(seed.Waiting.PlanHash, currentPlanHash, StringComparison.Ordinal) ||
+            !string.Equals(runState.LastPlanHash, currentPlanHash, StringComparison.Ordinal);
 
         if (planChanged)
         {
@@ -241,7 +246,7 @@ public sealed class RuntimeOrchestrator
             outcome,
             envelope.Waiting,
             options.InjectedDecisionDigest,
-            envelope.Plan.PlanId,
+            ResolvePlanHash(envelope.Plan),
             RouteIntentTokenFactory.ComputeTokenHash(envelope.State.IntentToken),
             (priorState?.AttemptCounter ?? 0) + 1,
             progressToken);
@@ -258,6 +263,14 @@ public sealed class RuntimeOrchestrator
             entry.Event == RoutingTraceEventKind.Completed);
 
         return advanced;
+    }
+
+    private static string ResolvePlanHash(BuildPlan plan)
+    {
+        if (plan is null)
+            throw new ArgumentNullException(nameof(plan));
+
+        return plan.PlanId;
     }
 
     private static RoutingTrace AppendHostEvent(RoutingTrace trace, RoutingTraceEventKind eventKind, string detail)
