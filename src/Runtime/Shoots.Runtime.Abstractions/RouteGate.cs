@@ -43,7 +43,7 @@ public static class RouteGate
                 "route_workorder_missing",
                 "Work order is required to advance routing.");
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnHalted(nextState, error);
             return false;
         }
@@ -54,7 +54,7 @@ public static class RouteGate
                 "route_rules_missing",
                 "Route rules are required to advance routing.");
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnHalted(nextState, error);
             return false;
         }
@@ -65,7 +65,7 @@ public static class RouteGate
                 "route_graph_hash_missing",
                 "Graph structure hash is required to advance routing.");
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnHalted(nextState, error);
             return false;
         }
@@ -76,7 +76,7 @@ public static class RouteGate
                 "route_workorder_missing",
                 "Work order id is required to advance routing.");
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnHalted(nextState, error);
             return false;
         }
@@ -92,7 +92,7 @@ public static class RouteGate
                     StateWorkOrder = state.WorkOrderId.Value
                 });
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnHalted(nextState, error);
             return false;
         }
@@ -103,7 +103,7 @@ public static class RouteGate
                 "route_node_missing",
                 "Current node id is required to advance routing.");
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnHalted(nextState, error);
             return false;
         }
@@ -117,7 +117,7 @@ public static class RouteGate
                 "Route step is required for the current node.",
                 state.CurrentNodeId);
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnHalted(nextState, error);
             return false;
         }
@@ -132,7 +132,7 @@ public static class RouteGate
                 "route_intent_token_missing",
                 "Intent token is required to advance routing.");
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnNodeHalted(state, routeStep, state.IntentToken, Array.Empty<string>(), error);
             narrator?.OnHalted(nextState, error);
             return false;
@@ -150,7 +150,7 @@ public static class RouteGate
                     PlanWorkOrder = plan.Request.WorkOrder.Id.Value
                 });
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnNodeHalted(state, routeStep, state.IntentToken, Array.Empty<string>(), error);
             narrator?.OnHalted(nextState, error);
             return false;
@@ -167,13 +167,38 @@ public static class RouteGate
                 "Route rule is missing for the current node.",
                 routeStep.NodeId);
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnNodeHalted(state, routeStep, state.IntentToken, Array.Empty<string>(), error);
             narrator?.OnHalted(nextState, error);
             return false;
         }
 
         var allowedNextNodes = rule.AllowedNextNodes ?? Array.Empty<string>();
+
+        if (routeStep.Intent != RouteIntent.SelectTool && decision?.ToolSelection is not null)
+        {
+            error = new RuntimeError(
+                "route_decision_unexpected",
+                "Tool selection decision is only valid for SelectTool route steps.");
+
+            nextState = state.WithStatus(RoutingStatus.Halted);
+            narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
+
+        if (routeStep.Intent == RouteIntent.SelectTool && rule.Owner != DecisionOwner.Ai)
+        {
+            error = new RuntimeError(
+                "route_owner_invalid",
+                "SelectTool route steps must be owned by Ai.",
+                rule.Owner.ToString());
+
+            nextState = state.WithStatus(RoutingStatus.Halted);
+            narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
 
         // 7) Token hash match
         var expectedToken = RouteIntentTokenFactory.Create(plan, rule);
@@ -186,7 +211,7 @@ public static class RouteGate
                 "route_intent_token_mismatch",
                 "Intent token does not match the current routing state.");
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
             narrator?.OnHalted(nextState, error);
             return false;
@@ -203,7 +228,7 @@ public static class RouteGate
                 "Route intent does not match node kind.",
                 new { routeStep.Intent, rule.NodeKind });
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
             narrator?.OnHalted(nextState, error);
             return false;
@@ -217,7 +242,7 @@ public static class RouteGate
         {
             error ??= RuntimeError.Internal("Tool authority validation failed");
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
             narrator?.OnHalted(nextState, error);
             return false;
@@ -236,7 +261,7 @@ public static class RouteGate
 
             if (effectiveDecision is null)
             {
-                nextState = state with { Status = RoutingStatus.Waiting };
+                nextState = state.WithStatus(RoutingStatus.Waiting);
                 narrator?.OnDecisionRequired(nextState, routeStep, state.IntentToken, allowedNextNodes);
                 error = null;
                 return false;
@@ -244,7 +269,7 @@ public static class RouteGate
 
             if (!TryValidateToolSelection(plan, snapshot, effectiveDecision, out error))
             {
-                nextState = state with { Status = RoutingStatus.Halted };
+                nextState = state.WithStatus(RoutingStatus.Halted);
                 narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error!);
                 narrator?.OnHalted(nextState, error!);
                 return false;
@@ -256,7 +281,7 @@ public static class RouteGate
         // 11) Terminal handling
         if (allowedNextNodes.Count == 0)
         {
-            nextState = state with { Status = RoutingStatus.Completed };
+            nextState = state.WithStatus(RoutingStatus.Completed);
             narrator?.OnCompleted(nextState, routeStep, state.IntentToken, allowedNextNodes);
             error = null;
             return true;
@@ -273,7 +298,7 @@ public static class RouteGate
                 "Next route step is invalid.",
                 nextNodeId);
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
             narrator?.OnHalted(nextState, error);
             return false;
@@ -287,20 +312,17 @@ public static class RouteGate
                 "Route rule is missing for the next node.",
                 nextNodeId);
 
-            nextState = state with { Status = RoutingStatus.Halted };
+            nextState = state.WithStatus(RoutingStatus.Halted);
             narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
             narrator?.OnHalted(nextState, error);
             return false;
         }
 
         // 13) Advance state
-        nextState = state with
-        {
-            IntentToken = RouteIntentTokenFactory.Create(plan, nextRule),
-            CurrentNodeId = nextNodeId,
-            CurrentRouteIntent = nextStep.Intent,
-            Status = RoutingStatus.Pending
-        };
+        nextState = state.Advance(
+            RouteIntentTokenFactory.Create(plan, nextRule),
+            nextNodeId,
+            nextStep.Intent);
 
         narrator?.OnNodeAdvanced(
             nextState,

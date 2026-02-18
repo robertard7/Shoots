@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
+using Shoots.Providers.Abstractions;
+using Shoots.Providers.Null;
 using Shoots.Runtime.Abstractions;
+using Shoots.Runtime.Abstractions.Provider;
 using Shoots.Runtime.Core;
 using Xunit;
 
@@ -55,7 +58,7 @@ public sealed class RoutingLoopTests
             new EmptyToolRegistry(),
             new RefusingAiDecisionProvider(),
             NullRuntimeNarrator.Instance,
-            new NullToolExecutor());
+            new NullProviderClient());
 
         var result = loop.Run();
 
@@ -110,7 +113,7 @@ public sealed class RoutingLoopTests
             new SampleToolRegistry(),
             new AcceptingAiDecisionProvider(),
             NullRuntimeNarrator.Instance,
-            new DeterministicToolExecutor(new SampleToolRegistry()));
+            new SuccessfulProviderClient(new ToolId("tools.sample")));
         var first = loop.Run();
 
         var replay = new RoutingLoop(
@@ -118,7 +121,7 @@ public sealed class RoutingLoopTests
             new SampleToolRegistry(),
             new AcceptingAiDecisionProvider(),
             NullRuntimeNarrator.Instance,
-            new DeterministicToolExecutor(new SampleToolRegistry()),
+            new SuccessfulProviderClient(new ToolId("tools.sample")),
             trace: first.Trace);
         var second = replay.Run();
 
@@ -171,7 +174,7 @@ public sealed class RoutingLoopTests
             new SampleToolRegistry(),
             new ToolDecisionProvider(new ToolId("tools.sample")),
             NullRuntimeNarrator.Instance,
-            new DeterministicToolExecutor(new SampleToolRegistry()))
+            new SuccessfulProviderClient(new ToolId("tools.sample")))
             .Run();
 
         var second = new RoutingLoop(
@@ -179,7 +182,7 @@ public sealed class RoutingLoopTests
             new AlternateToolRegistry(),
             new ToolDecisionProvider(new ToolId("tools.other")),
             NullRuntimeNarrator.Instance,
-            new DeterministicToolExecutor(new AlternateToolRegistry()))
+            new SuccessfulProviderClient(new ToolId("tools.other")))
             .Run();
 
         var firstPath = first.Trace.Entries
@@ -243,7 +246,7 @@ public sealed class RoutingLoopTests
             new EmptyToolRegistry(),
             new ThrowingAiDecisionProvider(),
             NullRuntimeNarrator.Instance,
-            new NullToolExecutor());
+            new NullProviderClient());
 
         var result = loop.Run();
 
@@ -299,7 +302,7 @@ public sealed class RoutingLoopTests
 			new EmptyToolRegistry(),
 			new ThrowingAiDecisionProvider(),
 			NullRuntimeNarrator.Instance,
-			new NullToolExecutor());
+			new NullProviderClient());
 
 		var result = loop.Run();
 
@@ -309,6 +312,62 @@ public sealed class RoutingLoopTests
 			result.Trace.Entries,
 			entry => entry.Event == RoutingTraceEventKind.DecisionRequired);
 	}
+
+
+    [Fact]
+    public void Null_provider_halts_tool_step_deterministically()
+    {
+        var workOrder = new WorkOrder(
+            new WorkOrderId("wo-null-provider"),
+            "Original request.",
+            "Route loop null provider.",
+            new List<string>(),
+            new List<string>());
+
+        var request = new BuildRequest(
+            workOrder,
+            "core.route",
+            new Dictionary<string, object?>(),
+            new[]
+            {
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+            });
+
+        var steps = new BuildStep[]
+        {
+            new RouteStep(
+                "select",
+                "Select tool.",
+                "select",
+                RouteIntent.SelectTool,
+                DecisionOwner.Ai,
+                workOrder.Id),
+            new RouteStep(
+                "terminate",
+                "Terminate route.",
+                "terminate",
+                RouteIntent.Terminate,
+                DecisionOwner.Rule,
+                workOrder.Id)
+        };
+
+        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
+
+        var loop = new RoutingLoop(
+            plan,
+            new SampleToolRegistry(),
+            new AcceptingAiDecisionProvider(),
+            NullRuntimeNarrator.Instance,
+            new NullProviderClient());
+
+        var result = loop.Run();
+
+        Assert.Equal(RoutingStatus.Halted, result.State.Status);
+        Assert.Single(result.ToolResults);
+        Assert.False(result.ToolResults[0].Success);
+        Assert.Equal("tool.not_available", result.ToolResults[0].Outputs["error.code"]);
+    }
 
     private sealed class RefusingAiDecisionProvider : IAiDecisionProvider
     {
@@ -346,6 +405,37 @@ public sealed class RoutingLoopTests
         public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
         {
             throw new InvalidOperationException("Provider should not be called for non-select steps.");
+        }
+    }
+
+    private sealed class SuccessfulProviderClient : IProviderClient
+    {
+        private readonly ToolId _toolId;
+
+        public SuccessfulProviderClient(ToolId toolId)
+        {
+            _toolId = toolId;
+        }
+
+        public ValueTask<ProviderExecutionResult> ExecuteAsync(ProviderExecutionEnvelope envelope, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var result = new ToolResult(
+                _toolId,
+                new Dictionary<string, object?>
+                {
+                    ["output"] = "ok"
+                },
+                true);
+
+            return ValueTask.FromResult(new ProviderExecutionResult(
+                envelope.RequestId,
+                ProviderExecutionResultKind.ToolExecuted,
+                result,
+                null,
+                null,
+                null));
         }
     }
 
