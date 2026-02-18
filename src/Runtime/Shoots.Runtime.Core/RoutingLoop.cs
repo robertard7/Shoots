@@ -20,6 +20,8 @@ public sealed class RoutingLoop
     private readonly TracingRuntimeNarrator _tracingNarrator;
     private readonly string _catalogHash;
 	private readonly bool _isReplay;
+    private const int DefaultStepBudget = 256;
+    private readonly int _stepBudget;
 
     public RoutingState State { get; private set; }
     public IReadOnlyList<ToolResult> ToolResults => _toolResults;
@@ -33,7 +35,8 @@ public sealed class RoutingLoop
         IProviderClient providerClient,
         RoutingState? initialState = null,
         IReadOnlyList<ToolResult>? toolResults = null,
-        RoutingTrace? trace = null)
+        RoutingTrace? trace = null,
+        int? stepBudget = null)
     {
         _plan = plan ?? throw new ArgumentNullException(nameof(plan));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
@@ -44,6 +47,9 @@ public sealed class RoutingLoop
         _traceBuilder = new RoutingTraceBuilder(_plan, _catalogHash, trace);
         _tracingNarrator = new TracingRuntimeNarrator(_narrator, _traceBuilder);
 		_isReplay = trace is not null;
+        _stepBudget = stepBudget.GetValueOrDefault(DefaultStepBudget);
+        if (_stepBudget <= 0)
+            throw new ArgumentOutOfRangeException(nameof(stepBudget), "step budget must be positive");
 
         if (_plan.Request.WorkOrder is null)
             throw new ArgumentException("work order is required", nameof(plan));
@@ -89,8 +95,21 @@ public sealed class RoutingLoop
 
 		try
 		{
+            var transitionCount = 0;
 			while (true)
 			{
+				if (transitionCount >= _stepBudget)
+                {
+                    var budgetError = new RuntimeError(
+                        "route_step_budget_exceeded",
+                        "Route step budget exceeded.",
+                        _stepBudget);
+                    State = State.WithStatus(RoutingStatus.Halted);
+                    _traceBuilder.Add(RoutingTraceEventKind.Error, detail: budgetError.Code, state: State, error: budgetError);
+                    _tracingNarrator.OnHalted(State, budgetError);
+                    break;
+                }
+
 				var step = RequireRouteStep(_plan, State);
 
 				ToolSelectionDecision? selection = null;
@@ -102,19 +121,6 @@ public sealed class RoutingLoop
 				{
 					selection = ResolveDecision(step);
 
-					if (selection is null &&
-						State.Status == RoutingStatus.Waiting &&
-						step.Intent == RouteIntent.SelectTool &&
-						step.Owner == DecisionOwner.Ai)
-					{
-						State = State.WithStatus(RoutingStatus.Halted);
-						_tracingNarrator.OnHalted(
-							State,
-							new RuntimeError(
-								"internal_error",
-								"AI decision provider returned no decision."));
-						break;
-					}
 				}
 				catch (Exception ex)
 				{
@@ -156,10 +162,12 @@ public sealed class RoutingLoop
 					}
 
 					if (State.Status == RoutingStatus.Waiting)
-						continue;
+                        break;
 
 					break;
 				}
+
+                transitionCount++;
 
 				if (step.Intent == RouteIntent.SelectTool)
 				{
@@ -264,11 +272,11 @@ public sealed class RoutingLoop
 
 	private ToolSelectionDecision? ResolveDecision(RouteStep step)
 	{
-		if (State.Status != RoutingStatus.Waiting)
-			return null;
-
 		if (step.Intent != RouteIntent.SelectTool || step.Owner != DecisionOwner.Ai)
 			return null;
+
+        if (State.Status is not RoutingStatus.Pending and not RoutingStatus.Waiting)
+            return null;
 
 		// IMPORTANT:
 		// Runtime snapshot uses ToolRegistryEntry, NOT ToolSpec

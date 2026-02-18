@@ -14,7 +14,7 @@ namespace Shoots.Runtime.Tests;
 public sealed class RoutingLoopTests
 {
     [Fact]
-    public void Ai_refusal_halts_routing()
+    public void Ai_refusal_waits_and_returns_control()
     {
         var workOrder = new WorkOrder(
             new WorkOrderId("wo-loop"),
@@ -62,10 +62,54 @@ public sealed class RoutingLoopTests
 
         var result = loop.Run();
 
-        Assert.Equal(RoutingStatus.Halted, result.State.Status);
+        Assert.Equal(RoutingStatus.Waiting, result.State.Status);
         Assert.Equal("select", result.State.CurrentNodeId);
         Assert.Empty(result.ToolResults);
-        Assert.Contains(result.Telemetry, record => record.Event == RoutingTraceEventKind.Halted);
+        Assert.Contains(result.Telemetry, record => record.Event == RoutingTraceEventKind.DecisionRequired);
+    }
+
+
+
+    [Fact]
+    public void Step_budget_exceeded_halts_deterministically()
+    {
+        var workOrder = new WorkOrder(
+            new WorkOrderId("wo-budget"),
+            "Original request.",
+            "Route loop budget.",
+            new List<string>(),
+            new List<string>());
+
+        var request = new BuildRequest(
+            workOrder,
+            "core.route",
+            new Dictionary<string, object?>(),
+            new[]
+            {
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Start, new[] { "review" }),
+                new RouteRule("review", RouteIntent.Review, DecisionOwner.Runtime, "review", MermaidNodeKind.Route, new[] { "validate" })
+            });
+
+        var steps = new BuildStep[]
+        {
+            new RouteStep("validate", "Validate.", "validate", RouteIntent.Validate, DecisionOwner.Runtime, workOrder.Id),
+            new RouteStep("review", "Review.", "review", RouteIntent.Review, DecisionOwner.Runtime, workOrder.Id)
+        };
+
+        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
+
+        var result = new RoutingLoop(
+            plan,
+            new EmptyToolRegistry(),
+            new ThrowingAiDecisionProvider(),
+            NullRuntimeNarrator.Instance,
+            new NullProviderClient(),
+            stepBudget: 4)
+            .Run();
+
+        Assert.Equal(RoutingStatus.Halted, result.State.Status);
+        var error = Assert.Single(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.Error);
+        Assert.Equal("route_step_budget_exceeded", error.Error?.Code);
     }
 
     [Fact]

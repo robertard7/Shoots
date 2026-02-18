@@ -37,6 +37,21 @@ public enum MermaidNodeKind
 }
 
 /// <summary>
+/// Deterministic decision gate policy.
+/// </summary>
+public enum DecisionPolicy
+{
+    Hard,
+    Bypass,
+    Error
+}
+
+public sealed record FallbackToolSelection(
+    ToolId ToolId,
+    IReadOnlyDictionary<string, object?> Bindings
+);
+
+/// <summary>
 /// Deterministic routing rule.
 /// </summary>
 public sealed record RouteRule(
@@ -45,5 +60,8 @@ public sealed record RouteRule(
     DecisionOwner Owner,
     string AllowedOutputKind,
     MermaidNodeKind NodeKind,
-    IReadOnlyList<string> AllowedNextNodes
+    IReadOnlyList<string> AllowedNextNodes,
+    DecisionPolicy DecisionPolicy = DecisionPolicy.Hard,
+    FallbackToolSelection? FallbackToolSelection = null,
+    string? FallbackNextNodeId = null
 );

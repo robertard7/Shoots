@@ -20,3 +20,15 @@ Seal Version: 0.1.0
 Seal Commit: PENDING
 Seal Status: Verification pending. (See docs/VERIFICATION_POLICY.md)
 Post-seal changes require a new task board and explicit approval.
+
+## Decision Gates Law
+
+Decision gates are policy-driven and deterministic via `RouteRule.DecisionPolicy`:
+
+- `Hard` (default): missing decision transitions routing to `Waiting` and returns control to host/UI.
+- `Bypass`: uses `RouteRule.FallbackToolSelection` when configured; if fallback is missing, routing behaves as `Hard`.
+- `Error`: missing decision halts deterministically with `route_decision_required`.
+
+`Waiting` is terminal for the current run and must not spin the routing loop.
+
+Routing loop enforces a deterministic step budget (`256` default, configurable per `RoutingLoop`) and halts with `route_step_budget_exceeded` when exceeded.

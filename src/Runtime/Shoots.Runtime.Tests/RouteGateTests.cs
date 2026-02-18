@@ -56,6 +56,96 @@ public sealed class RouteGateTests
         Assert.Equal(state.CurrentNodeId, nextState.CurrentNodeId);
     }
 
+
+
+    [Fact]
+    public void TryAdvance_bypasses_when_policy_is_bypass_with_fallback_tool()
+    {
+        var fallbackTool = new ToolSpec(
+            new ToolId("tools.fallback"),
+            "Fallback tool.",
+            new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+            new List<ToolInputSpec>(),
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
+
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule(
+                    "select",
+                    RouteIntent.SelectTool,
+                    DecisionOwner.Ai,
+                    "tool.selection",
+                    MermaidNodeKind.Start,
+                    new[] { "terminate" },
+                    DecisionPolicy.Bypass,
+                    new FallbackToolSelection(fallbackTool.ToolId, new Dictionary<string, object?>())),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+            });
+
+        var state = RoutingState.CreateInitial(plan);
+        var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(fallbackTool), out var nextState, out var error);
+
+        Assert.True(result);
+        Assert.Null(error);
+        Assert.Equal("terminate", nextState.CurrentNodeId);
+    }
+
+    [Fact]
+    public void TryAdvance_halts_when_policy_is_error_and_decision_missing()
+    {
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule(
+                    "select",
+                    RouteIntent.SelectTool,
+                    DecisionOwner.Ai,
+                    "tool.selection",
+                    MermaidNodeKind.Start,
+                    new[] { "terminate" },
+                    DecisionPolicy.Error),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+            });
+
+        var state = RoutingState.CreateInitial(plan);
+        var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(), out var nextState, out var error);
+
+        Assert.False(result);
+        Assert.NotNull(error);
+        Assert.Equal("route_decision_required", error!.Code);
+        Assert.Equal(RoutingStatus.Halted, nextState.Status);
+    }
+
+    [Fact]
+    public void TryAdvance_waits_when_policy_is_bypass_without_fallback_tool()
+    {
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule(
+                    "select",
+                    RouteIntent.SelectTool,
+                    DecisionOwner.Ai,
+                    "tool.selection",
+                    MermaidNodeKind.Start,
+                    new[] { "terminate" },
+                    DecisionPolicy.Bypass),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+            });
+
+        var state = RoutingState.CreateInitial(plan);
+        var result = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(), out var nextState, out var error);
+
+        Assert.False(result);
+        Assert.Null(error);
+        Assert.Equal(RoutingStatus.Waiting, nextState.Status);
+    }
+
     [Fact]
     public void TryAdvance_halts_on_decision_for_non_select_tool()
     {

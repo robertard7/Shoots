@@ -248,23 +248,57 @@ public static class RouteGate
             return false;
         }
 
-        // 10) SelectTool handling (validation only)
+        // 10) SelectTool handling (policy-driven)
         if (routeStep.Intent == RouteIntent.SelectTool)
         {
-            var effectiveDecision =
-                decision?.ToolSelection ??
-                (routeStep.ToolInvocation is null
+            var explicitDecision = decision?.ToolSelection;
+            var invocationDecision =
+                routeStep.ToolInvocation is null
                     ? null
                     : new ToolSelectionDecision(
                         routeStep.ToolInvocation.ToolId,
-                        routeStep.ToolInvocation.Bindings));
+                        routeStep.ToolInvocation.Bindings);
+
+            ToolSelectionDecision? effectiveDecision = explicitDecision ?? invocationDecision;
+            var decisionSource = explicitDecision is not null
+                ? RoutingDecisionSource.Provider
+                : RoutingDecisionSource.Rule;
 
             if (effectiveDecision is null)
             {
-                nextState = state.WithStatus(RoutingStatus.Waiting);
-                narrator?.OnDecisionRequired(nextState, routeStep, state.IntentToken, allowedNextNodes);
-                error = null;
-                return false;
+                switch (rule.DecisionPolicy)
+                {
+                    case DecisionPolicy.Bypass when rule.FallbackToolSelection is not null:
+                        effectiveDecision = new ToolSelectionDecision(
+                            rule.FallbackToolSelection.ToolId,
+                            rule.FallbackToolSelection.Bindings);
+                        decisionSource = RoutingDecisionSource.Rule;
+                        narrator?.OnNodeTransitionChosen(
+                            state,
+                            routeStep,
+                            state.IntentToken,
+                            allowedNextNodes,
+                            routeStep.NodeId,
+                            decisionSource);
+                        break;
+
+                    case DecisionPolicy.Error:
+                        error = new RuntimeError(
+                            "route_decision_required",
+                            "A decision is required by policy for this route step.",
+                            routeStep.NodeId);
+
+                        nextState = state.WithStatus(RoutingStatus.Halted);
+                        narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
+                        narrator?.OnHalted(nextState, error);
+                        return false;
+
+                    default:
+                        nextState = state.WithStatus(RoutingStatus.Waiting);
+                        narrator?.OnDecisionRequired(nextState, routeStep, state.IntentToken, allowedNextNodes);
+                        error = null;
+                        return false;
+                }
             }
 
             if (!TryValidateToolSelection(plan, snapshot, effectiveDecision, out error))
