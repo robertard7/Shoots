@@ -112,3 +112,20 @@ Examples:
 1. Hard policy: first run returns Waiting, host injects decision digest and reruns.
 2. Bypass policy: fallback tool selection resolves gate, Mermaid next-node still decides route.
 3. Plan changed while waiting: blocked by default, allowed only with explicit override mode.
+
+
+### Host Responsibilities
+
+- Host must inject explicit progress while waiting: provide a decision digest, explicit plan-change override, or discard waiting to restart lineage.
+- `WorkOrderId` is the resume lineage identity.
+- `PlanHash` is the plan content identity used for continuity checks.
+- `PlanId` is a persistence key only and must not drive continuity decisions.
+
+### Lifecycle Example Trace
+
+1. Host calls `Run()` for work order `wo-123`.
+2. Runtime reaches a `SelectTool` gate without decision and returns `Waiting` (terminal for this run).
+3. Host receives waiting receipt (`WorkOrderId`, `RouteGateId`, `PlanHash`, `IntentTokenHash`) and prompts user/operator.
+4. Host calls `Run()` again with same `WorkOrderId` and new `InjectedDecisionDigest` using `ResumeMode.InjectDecision`.
+5. Runtime resumes deterministically, applies decision, and advances Mermaid-derived route.
+6. If plan content changed while waiting, host must use `ResumeMode.OverridePlanChange` (or `AllowPlanChangeOverride=true`) for same lineage; otherwise runtime returns blocked waiting.
