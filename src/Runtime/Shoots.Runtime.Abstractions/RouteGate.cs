@@ -175,6 +175,31 @@ public static class RouteGate
 
         var allowedNextNodes = rule.AllowedNextNodes ?? Array.Empty<string>();
 
+        if (routeStep.Intent != RouteIntent.SelectTool && decision?.ToolSelection is not null)
+        {
+            error = new RuntimeError(
+                "route_decision_unexpected",
+                "Tool selection decision is only valid for SelectTool route steps.");
+
+            nextState = state with { Status = RoutingStatus.Halted };
+            narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
+
+        if (routeStep.Intent == RouteIntent.SelectTool && rule.Owner != DecisionOwner.Ai)
+        {
+            error = new RuntimeError(
+                "route_owner_invalid",
+                "SelectTool route steps must be owned by Ai.",
+                rule.Owner.ToString());
+
+            nextState = state with { Status = RoutingStatus.Halted };
+            narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
+            narrator?.OnHalted(nextState, error);
+            return false;
+        }
+
         // 7) Token hash match
         var expectedToken = RouteIntentTokenFactory.Create(plan, rule);
         var expectedHash = RouteIntentTokenFactory.ComputeTokenHash(expectedToken);
