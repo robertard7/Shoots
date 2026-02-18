@@ -110,7 +110,7 @@ public sealed class RoutingLoop
 					// This is an actual error condition; even on replay, halting is allowed.
 					_traceBuilder.Add(RoutingTraceEventKind.Error, detail, state: State, step: step, error: providerError);
 
-					State = State with { Status = RoutingStatus.Halted };
+					State = State.WithStatus(RoutingStatus.Halted);
 					_tracingNarrator.OnHalted(State, providerError);
 					break;
 				}
@@ -184,7 +184,7 @@ public sealed class RoutingLoop
 							{
 								var code = ResolveToolFailureCode(result);
 								var failure = new RuntimeError(code, $"Tool '{result.ToolId.Value}' failed.");
-								State = State with { Status = RoutingStatus.Halted };
+								State = State.WithStatus(RoutingStatus.Halted);
 								_tracingNarrator.OnHalted(State, failure);
 								break;
 							}
@@ -201,7 +201,7 @@ public sealed class RoutingLoop
 							{
 								var code = ResolveToolFailureCode(recorded);
 								var failure = new RuntimeError(code, $"Tool '{recorded.ToolId.Value}' failed.");
-								State = State with { Status = RoutingStatus.Halted };
+								State = State.WithStatus(RoutingStatus.Halted);
 								_tracingNarrator.OnHalted(State, failure);
 								break;
 							}

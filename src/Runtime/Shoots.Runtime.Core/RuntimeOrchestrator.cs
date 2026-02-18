@@ -248,7 +248,7 @@ public sealed class RuntimeOrchestrator
         string message)
     {
         var state = seedState ?? RoutingState.CreateInitial(trace.Plan);
-        state = state with { Status = RoutingStatus.Halted };
+        state = state.WithStatus(RoutingStatus.Halted);
 
         var builder = new RoutingTraceBuilder(trace.Plan, registry.CatalogHash, trace);
         var error = new RuntimeError(code, message);
