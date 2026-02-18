@@ -177,6 +177,44 @@ public sealed class RouteGateTests
     }
 
     [Fact]
+    public void TryAdvance_bypass_halts_when_graph_has_multiple_next_nodes()
+    {
+        var fallbackTool = new ToolSpec(
+            new ToolId("tools.fallback"),
+            "Fallback tool.",
+            new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+            new List<ToolInputSpec>(),
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
+
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule(
+                    "select",
+                    RouteIntent.SelectTool,
+                    DecisionOwner.Ai,
+                    "tool.selection",
+                    MermaidNodeKind.Start,
+                    new[] { "terminate", "review" },
+                    DecisionPolicy.Bypass,
+                    new FallbackToolSelection(fallbackTool.ToolId, new Dictionary<string, object?>()),
+                    "terminate"),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>()),
+                new RouteRule("review", RouteIntent.Review, DecisionOwner.Runtime, "review", MermaidNodeKind.Route, new[] { "terminate" })
+            });
+
+        var state = RoutingState.CreateInitial(plan);
+        var advanced = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(fallbackTool), out var nextState, out var error);
+
+        Assert.False(advanced);
+        Assert.NotNull(error);
+        Assert.Equal("route_step_invalid", error!.Code);
+        Assert.Equal(RoutingStatus.Halted, nextState.Status);
+    }
+
+    [Fact]
     public void TryAdvance_halts_when_policy_is_error_and_decision_missing()
     {
         var plan = CreatePlan(

@@ -186,6 +186,118 @@ public sealed class RuntimeOrchestratorRunEligibilityTests
     }
 
     [Fact]
+    public void Same_content_different_plan_id_does_not_trigger_plan_changed_reason()
+    {
+        var persistence = new InMemoryRuntimePersistence();
+        var decisions = new ToggleDecisionProvider();
+        var orchestrator = new RuntimeOrchestrator(
+            new SampleToolRegistry(),
+            decisions,
+            NullRuntimeNarrator.Instance,
+            new SuccessfulProviderClient(),
+            persistence);
+
+        var firstPlan = CreatePlan("wo-run-planid-samecontent", commandId: "core.route.v1");
+        var waiting = orchestrator.Run(firstPlan);
+        Assert.Equal(RoutingStatus.Waiting, waiting.State.Status);
+
+        var sameContentDifferentPlanId = firstPlan with { PlanId = "other-plan-id" };
+        var blocked = orchestrator.Run(sameContentDifferentPlanId);
+
+        Assert.Equal(RoutingStatus.Waiting, blocked.State.Status);
+        Assert.NotNull(blocked.Waiting);
+        Assert.Equal("decision_required", blocked.Waiting!.ReasonCode);
+        Assert.Equal(RoutingTraceEventKind.HostBlockedRerunWaiting, blocked.Trace.Entries[^1].Event);
+    }
+
+    [Fact]
+    public void Different_content_same_plan_id_requires_explicit_override()
+    {
+        var persistence = new InMemoryRuntimePersistence();
+        var decisions = new ToggleDecisionProvider();
+        var orchestrator = new RuntimeOrchestrator(
+            new SampleToolRegistry(),
+            decisions,
+            NullRuntimeNarrator.Instance,
+            new SuccessfulProviderClient(),
+            persistence);
+
+        var firstPlan = CreatePlan("wo-run-sameplanid-diffcontent", commandId: "core.route.v1");
+        var waiting = orchestrator.Run(firstPlan);
+        Assert.Equal(RoutingStatus.Waiting, waiting.State.Status);
+
+        var changedContent = CreatePlan("wo-run-sameplanid-diffcontent", commandId: "core.route.v2") with { PlanId = firstPlan.PlanId };
+        var blocked = orchestrator.Run(changedContent);
+
+        Assert.Equal(RoutingStatus.Waiting, blocked.State.Status);
+        Assert.Equal("plan_changed_requires_explicit_resume", blocked.Waiting!.ReasonCode);
+    }
+
+    [Fact]
+    public void Injected_decision_digest_must_change_to_unblock_rerun()
+    {
+        var persistence = new InMemoryRuntimePersistence();
+        var decisions = new ToggleDecisionProvider();
+        var orchestrator = new RuntimeOrchestrator(
+            new SampleToolRegistry(),
+            decisions,
+            NullRuntimeNarrator.Instance,
+            new SuccessfulProviderClient(),
+            persistence);
+
+        var plan = CreatePlan("wo-run-digest");
+        var first = orchestrator.Run(plan, new RuntimeRunOptions(ResumeMode.InjectDecision, "digest-A"));
+        Assert.Equal(RoutingStatus.Waiting, first.State.Status);
+        Assert.Equal(1, decisions.Calls);
+
+        decisions.Enabled = true;
+
+        var sameDigest = orchestrator.Run(plan, new RuntimeRunOptions(ResumeMode.InjectDecision, "digest-A"));
+        Assert.Equal(RoutingStatus.Waiting, sameDigest.State.Status);
+        Assert.Equal(1, decisions.Calls);
+
+        var newDigest = orchestrator.Run(plan, new RuntimeRunOptions(ResumeMode.InjectDecision, "digest-B"));
+        Assert.Equal(RoutingStatus.Completed, newDigest.State.Status);
+        Assert.True(decisions.Calls >= 2);
+    }
+
+    [Fact]
+    public void InMemory_persistence_indexes_envelope_by_plan_id_and_plan_hash()
+    {
+        var persistence = new InMemoryRuntimePersistence();
+        var decisions = new ToggleDecisionProvider();
+        var orchestrator = new RuntimeOrchestrator(
+            new SampleToolRegistry(),
+            decisions,
+            NullRuntimeNarrator.Instance,
+            new SuccessfulProviderClient(),
+            persistence);
+
+        var firstPlan = CreatePlan("wo-run-index", commandId: "core.route.v1");
+        var firstEnvelope = orchestrator.Run(firstPlan);
+        var firstHash = BuildPlanIdentity.ComputePlanHash(firstPlan);
+
+        Assert.NotNull(persistence.Load(firstPlan.PlanId));
+        Assert.NotNull(persistence.Load(firstHash));
+
+        var secondPlan = CreatePlan("wo-run-index", commandId: "core.route.v2") with { PlanId = firstPlan.PlanId };
+        decisions.Enabled = true;
+        var secondEnvelope = orchestrator.Run(secondPlan, new RuntimeRunOptions(ResumeMode.InjectDecision, "digest-index-v2"));
+        var secondHash = BuildPlanIdentity.ComputePlanHash(secondPlan);
+
+        var byPlanId = persistence.Load(firstPlan.PlanId);
+        var byFirstHashAfterSecondSave = persistence.Load(firstHash);
+        var bySecondHash = persistence.Load(secondHash);
+
+        Assert.NotNull(byPlanId);
+        Assert.NotNull(byFirstHashAfterSecondSave);
+        Assert.NotNull(bySecondHash);
+        Assert.Equal(secondEnvelope.Plan.Request.CommandId, byPlanId!.Plan.Request.CommandId);
+        Assert.Equal(firstEnvelope.Plan.Request.CommandId, byFirstHashAfterSecondSave!.Plan.Request.CommandId);
+        Assert.Equal(secondEnvelope.Plan.Request.CommandId, bySecondHash!.Plan.Request.CommandId);
+    }
+
+    [Fact]
     public void Discard_waiting_start_over_emits_host_discard_marker()
     {
         var persistence = new InMemoryRuntimePersistence();

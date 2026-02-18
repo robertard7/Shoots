@@ -62,6 +62,38 @@ public sealed class TextRuntimeNarrator : IRuntimeNarrator
         IReadOnlyList<string> allowedNextNodes)
         => Emit("[decision.accepted]");
 
+    public void OnDecisionGateWaiting(
+        RoutingState state,
+        RouteStep step,
+        RouteIntentToken intentToken,
+        IReadOnlyList<string> allowedNextNodes,
+        DecisionPolicy policy,
+        FallbackToolSelection? fallbackToolSelection,
+        string? fallbackNextNodeId)
+        => Emit("[decision.gate.waiting]");
+
+    public void OnDecisionGateBypassed(
+        RoutingState state,
+        RouteStep step,
+        RouteIntentToken intentToken,
+        IReadOnlyList<string> allowedNextNodes,
+        DecisionPolicy policy,
+        ToolSelectionDecision fallbackSelection,
+        string nextNodeId)
+        => Emit("[decision.gate.bypassed]");
+
+    public void OnDecisionGateRequiredError(
+        RoutingState state,
+        RouteStep step,
+        RouteIntentToken intentToken,
+        IReadOnlyList<string> allowedNextNodes,
+        DecisionPolicy policy,
+        RuntimeError error)
+        => Emit("[decision.gate.error]");
+
+    public void OnStepBudgetExceeded(RoutingState state, int stepBudget, RuntimeError error)
+        => Emit("[step.budget.exceeded]");
+
     public void OnNodeTransitionChosen(
         RoutingState state,
         RouteStep step,

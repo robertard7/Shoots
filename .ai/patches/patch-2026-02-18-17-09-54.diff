@@ -1,0 +1,287 @@
+diff --git a/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs b/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
+index 8546a2b..fbc649d 100644
+--- a/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
++++ b/src/Builder/Shoots.Builder.Core/TextRuntimeNarrator.cs
+@@ -55,12 +55,44 @@ public sealed class TextRuntimeNarrator : IRuntimeNarrator
+         IReadOnlyList<string> allowedNextNodes)
+         => Emit("[decision.required]");
+ 
+-    public void OnDecisionAccepted(
+-        RoutingState state,
+-        RouteStep step,
+-        RouteIntentToken intentToken,
+-        IReadOnlyList<string> allowedNextNodes)
+-        => Emit("[decision.accepted]");
++    public void OnDecisionAccepted(
++        RoutingState state,
++        RouteStep step,
++        RouteIntentToken intentToken,
++        IReadOnlyList<string> allowedNextNodes)
++        => Emit("[decision.accepted]");
++
++    public void OnDecisionGateWaiting(
++        RoutingState state,
++        RouteStep step,
++        RouteIntentToken intentToken,
++        IReadOnlyList<string> allowedNextNodes,
++        DecisionPolicy policy,
++        FallbackToolSelection? fallbackToolSelection,
++        string? fallbackNextNodeId)
++        => Emit("[decision.gate.waiting]");
++
++    public void OnDecisionGateBypassed(
++        RoutingState state,
++        RouteStep step,
++        RouteIntentToken intentToken,
++        IReadOnlyList<string> allowedNextNodes,
++        DecisionPolicy policy,
++        ToolSelectionDecision fallbackSelection,
++        string nextNodeId)
++        => Emit("[decision.gate.bypassed]");
++
++    public void OnDecisionGateRequiredError(
++        RoutingState state,
++        RouteStep step,
++        RouteIntentToken intentToken,
++        IReadOnlyList<string> allowedNextNodes,
++        DecisionPolicy policy,
++        RuntimeError error)
++        => Emit("[decision.gate.error]");
++
++    public void OnStepBudgetExceeded(RoutingState state, int stepBudget, RuntimeError error)
++        => Emit("[step.budget.exceeded]");
+ 
+     public void OnNodeTransitionChosen(
+         RoutingState state,
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs b/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs
+index d55f0a4..b3932fe 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/RouteGate.cs
+@@ -268,7 +268,21 @@ public static class RouteGate
+                         effectiveDecision = new ToolSelectionDecision(
+                             rule.FallbackToolSelection.ToolId,
+                             rule.FallbackToolSelection.Bindings);
+-                        var bypassNextNodeId = allowedNextNodes.Count == 0 ? routeStep.NodeId : allowedNextNodes.Single();
++
++                        if (allowedNextNodes.Count != 1)
++                        {
++                            error = new RuntimeError(
++                                "route_step_invalid",
++                                "Bypass policy requires exactly one Mermaid next node for SelectTool.",
++                                routeStep.NodeId);
++
++                            nextState = state.WithStatus(RoutingStatus.Halted);
++                            narrator?.OnNodeHalted(state, routeStep, state.IntentToken, allowedNextNodes, error);
++                            narrator?.OnHalted(nextState, error);
++                            return false;
++                        }
++
++                        var bypassNextNodeId = allowedNextNodes[0];
+                         narrator?.OnDecisionGateBypassed(
+                             state,
+                             routeStep,
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+index 8393f14..707f3f9 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RouteGateTests.cs
+@@ -176,6 +176,44 @@ public sealed class RouteGateTests
+         Assert.Equal("terminate", nextState.CurrentNodeId);
+     }
+ 
++    [Fact]
++    public void TryAdvance_bypass_halts_when_graph_has_multiple_next_nodes()
++    {
++        var fallbackTool = new ToolSpec(
++            new ToolId("tools.fallback"),
++            "Fallback tool.",
++            new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
++            new List<ToolInputSpec>(),
++            new List<ToolOutputSpec>(),
++            Array.Empty<string>());
++
++        var plan = CreatePlan(
++            new WorkOrderId("wo-plan"),
++            new[]
++            {
++                new RouteRule(
++                    "select",
++                    RouteIntent.SelectTool,
++                    DecisionOwner.Ai,
++                    "tool.selection",
++                    MermaidNodeKind.Start,
++                    new[] { "terminate", "review" },
++                    DecisionPolicy.Bypass,
++                    new FallbackToolSelection(fallbackTool.ToolId, new Dictionary<string, object?>()),
++                    "terminate"),
++                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>()),
++                new RouteRule("review", RouteIntent.Review, DecisionOwner.Runtime, "review", MermaidNodeKind.Route, new[] { "terminate" })
++            });
++
++        var state = RoutingState.CreateInitial(plan);
++        var advanced = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(fallbackTool), out var nextState, out var error);
++
++        Assert.False(advanced);
++        Assert.NotNull(error);
++        Assert.Equal("route_step_invalid", error!.Code);
++        Assert.Equal(RoutingStatus.Halted, nextState.Status);
++    }
++
+     [Fact]
+     public void TryAdvance_halts_when_policy_is_error_and_decision_missing()
+     {
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RunEligibilityContractShapeTests.cs b/src/Runtime/Shoots.Runtime.Tests/RunEligibilityContractShapeTests.cs
+index 8957b94..1a14a1c 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RunEligibilityContractShapeTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RunEligibilityContractShapeTests.cs
+@@ -1,4 +1,5 @@
+ using System.Linq;
++using System.Reflection;
+ using Shoots.Runtime.Abstractions;
+ using Xunit;
+ 
+@@ -63,4 +64,22 @@ public sealed class RunEligibilityContractShapeTests
+         var actual = typeof(RuntimeRunOptions).GetProperties().Select(x => x.Name).ToArray();
+         Assert.Equal(expected, actual);
+     }
++
++    [Fact]
++    public void Run_resume_state_store_surface_is_frozen()
++    {
++        var expected = new[]
++        {
++            "LoadByWorkOrderId",
++            "SaveByWorkOrderId"
++        };
++
++        var actual = typeof(IRunResumeStateStore)
++            .GetMethods(BindingFlags.Instance | BindingFlags.Public)
++            .Select(x => x.Name)
++            .OrderBy(x => x)
++            .ToArray();
++
++        Assert.Equal(expected.OrderBy(x => x).ToArray(), actual);
++    }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorRunEligibilityTests.cs b/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorRunEligibilityTests.cs
+index 1ab9365..359cbd2 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorRunEligibilityTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RuntimeOrchestratorRunEligibilityTests.cs
+@@ -185,6 +185,118 @@ public sealed class RuntimeOrchestratorRunEligibilityTests
+         Assert.Equal(before.ProgressToken, afterFlag.ProgressToken);
+     }
+ 
++    [Fact]
++    public void Same_content_different_plan_id_does_not_trigger_plan_changed_reason()
++    {
++        var persistence = new InMemoryRuntimePersistence();
++        var decisions = new ToggleDecisionProvider();
++        var orchestrator = new RuntimeOrchestrator(
++            new SampleToolRegistry(),
++            decisions,
++            NullRuntimeNarrator.Instance,
++            new SuccessfulProviderClient(),
++            persistence);
++
++        var firstPlan = CreatePlan("wo-run-planid-samecontent", commandId: "core.route.v1");
++        var waiting = orchestrator.Run(firstPlan);
++        Assert.Equal(RoutingStatus.Waiting, waiting.State.Status);
++
++        var sameContentDifferentPlanId = firstPlan with { PlanId = "other-plan-id" };
++        var blocked = orchestrator.Run(sameContentDifferentPlanId);
++
++        Assert.Equal(RoutingStatus.Waiting, blocked.State.Status);
++        Assert.NotNull(blocked.Waiting);
++        Assert.Equal("decision_required", blocked.Waiting!.ReasonCode);
++        Assert.Equal(RoutingTraceEventKind.HostBlockedRerunWaiting, blocked.Trace.Entries[^1].Event);
++    }
++
++    [Fact]
++    public void Different_content_same_plan_id_requires_explicit_override()
++    {
++        var persistence = new InMemoryRuntimePersistence();
++        var decisions = new ToggleDecisionProvider();
++        var orchestrator = new RuntimeOrchestrator(
++            new SampleToolRegistry(),
++            decisions,
++            NullRuntimeNarrator.Instance,
++            new SuccessfulProviderClient(),
++            persistence);
++
++        var firstPlan = CreatePlan("wo-run-sameplanid-diffcontent", commandId: "core.route.v1");
++        var waiting = orchestrator.Run(firstPlan);
++        Assert.Equal(RoutingStatus.Waiting, waiting.State.Status);
++
++        var changedContent = CreatePlan("wo-run-sameplanid-diffcontent", commandId: "core.route.v2") with { PlanId = firstPlan.PlanId };
++        var blocked = orchestrator.Run(changedContent);
++
++        Assert.Equal(RoutingStatus.Waiting, blocked.State.Status);
++        Assert.Equal("plan_changed_requires_explicit_resume", blocked.Waiting!.ReasonCode);
++    }
++
++    [Fact]
++    public void Injected_decision_digest_must_change_to_unblock_rerun()
++    {
++        var persistence = new InMemoryRuntimePersistence();
++        var decisions = new ToggleDecisionProvider();
++        var orchestrator = new RuntimeOrchestrator(
++            new SampleToolRegistry(),
++            decisions,
++            NullRuntimeNarrator.Instance,
++            new SuccessfulProviderClient(),
++            persistence);
++
++        var plan = CreatePlan("wo-run-digest");
++        var first = orchestrator.Run(plan, new RuntimeRunOptions(ResumeMode.InjectDecision, "digest-A"));
++        Assert.Equal(RoutingStatus.Waiting, first.State.Status);
++        Assert.Equal(1, decisions.Calls);
++
++        decisions.Enabled = true;
++
++        var sameDigest = orchestrator.Run(plan, new RuntimeRunOptions(ResumeMode.InjectDecision, "digest-A"));
++        Assert.Equal(RoutingStatus.Waiting, sameDigest.State.Status);
++        Assert.Equal(1, decisions.Calls);
++
++        var newDigest = orchestrator.Run(plan, new RuntimeRunOptions(ResumeMode.InjectDecision, "digest-B"));
++        Assert.Equal(RoutingStatus.Completed, newDigest.State.Status);
++        Assert.True(decisions.Calls >= 2);
++    }
++
++    [Fact]
++    public void InMemory_persistence_indexes_envelope_by_plan_id_and_plan_hash()
++    {
++        var persistence = new InMemoryRuntimePersistence();
++        var decisions = new ToggleDecisionProvider();
++        var orchestrator = new RuntimeOrchestrator(
++            new SampleToolRegistry(),
++            decisions,
++            NullRuntimeNarrator.Instance,
++            new SuccessfulProviderClient(),
++            persistence);
++
++        var firstPlan = CreatePlan("wo-run-index", commandId: "core.route.v1");
++        var firstEnvelope = orchestrator.Run(firstPlan);
++        var firstHash = BuildPlanIdentity.ComputePlanHash(firstPlan);
++
++        Assert.NotNull(persistence.Load(firstPlan.PlanId));
++        Assert.NotNull(persistence.Load(firstHash));
++
++        var secondPlan = CreatePlan("wo-run-index", commandId: "core.route.v2") with { PlanId = firstPlan.PlanId };
++        decisions.Enabled = true;
++        var secondEnvelope = orchestrator.Run(secondPlan, new RuntimeRunOptions(ResumeMode.InjectDecision, "digest-index-v2"));
++        var secondHash = BuildPlanIdentity.ComputePlanHash(secondPlan);
++
++        var byPlanId = persistence.Load(firstPlan.PlanId);
++        var byFirstHashAfterSecondSave = persistence.Load(firstHash);
++        var bySecondHash = persistence.Load(secondHash);
++
++        Assert.NotNull(byPlanId);
++        Assert.NotNull(byFirstHashAfterSecondSave);
++        Assert.NotNull(bySecondHash);
++        Assert.Equal(secondEnvelope.Plan.Request.CommandId, byPlanId!.Plan.Request.CommandId);
++        Assert.Equal(firstEnvelope.Plan.Request.CommandId, byFirstHashAfterSecondSave!.Plan.Request.CommandId);
++        Assert.Equal(secondEnvelope.Plan.Request.CommandId, bySecondHash!.Plan.Request.CommandId);
++    }
++
+     [Fact]
+     public void Discard_waiting_start_over_emits_host_discard_marker()
+     {
