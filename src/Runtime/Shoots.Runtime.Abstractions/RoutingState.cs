@@ -15,14 +15,34 @@ public enum RoutingStatus
 /// <summary>
 /// Immutable routing progress snapshot.
 /// </summary>
-public sealed record RoutingState(
-    WorkOrderId WorkOrderId,
-    RouteIntentToken IntentToken,
-    string CurrentNodeId,
-    RouteIntent CurrentRouteIntent,
-    RoutingStatus Status
-)
+public sealed record RoutingState
 {
+    public RoutingState(
+        WorkOrderId workOrderId,
+        RouteIntentToken intentToken,
+        string currentNodeId,
+        RouteIntent currentRouteIntent,
+        RoutingStatus status)
+    {
+        WorkOrderId = workOrderId;
+        IntentToken = intentToken;
+        CurrentNodeId = currentNodeId;
+        CurrentRouteIntent = currentRouteIntent;
+        Status = status;
+    }
+
+    public WorkOrderId WorkOrderId { get; }
+    public RouteIntentToken IntentToken { get; }
+    public string CurrentNodeId { get; }
+    public RouteIntent CurrentRouteIntent { get; }
+    public RoutingStatus Status { get; }
+
+    public RoutingState WithStatus(RoutingStatus status) =>
+        new(WorkOrderId, IntentToken, CurrentNodeId, CurrentRouteIntent, status);
+
+    public RoutingState Advance(RouteIntentToken intentToken, string currentNodeId, RouteIntent currentRouteIntent) =>
+        new(WorkOrderId, intentToken, currentNodeId, currentRouteIntent, RoutingStatus.Pending);
+
     /// <summary>
     /// Creates the canonical initial routing state for a plan.
     /// </summary>

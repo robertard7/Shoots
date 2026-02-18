@@ -20,14 +20,41 @@ namespace Shoots.Contracts.Core;
 public sealed record BuildPlan(
     string PlanId,
     BuildRequest Request,
-    string GraphStructureHash,
-    string NodeSetHash,
-    string EdgeSetHash,
     DelegationAuthority Authority,
     IReadOnlyList<BuildStep> Steps,
-    IReadOnlyList<BuildArtifact> Artifacts,
-    ToolResult? ToolResult = null
-);
+    IReadOnlyList<BuildArtifact> Artifacts)
+{
+    [JsonInclude]
+    public readonly string GraphStructureHash = string.Empty;
+
+    [JsonInclude]
+    public readonly string NodeSetHash = string.Empty;
+
+    [JsonInclude]
+    public readonly string EdgeSetHash = string.Empty;
+
+    [JsonInclude]
+    public readonly ToolResult? ToolResult;
+
+    [JsonConstructor]
+    public BuildPlan(
+        string PlanId,
+        BuildRequest Request,
+        string GraphStructureHash,
+        string NodeSetHash,
+        string EdgeSetHash,
+        DelegationAuthority Authority,
+        IReadOnlyList<BuildStep> Steps,
+        IReadOnlyList<BuildArtifact> Artifacts,
+        ToolResult? ToolResult = null)
+        : this(PlanId, Request, Authority, Steps, Artifacts)
+    {
+        this.GraphStructureHash = GraphStructureHash;
+        this.NodeSetHash = NodeSetHash;
+        this.EdgeSetHash = EdgeSetHash;
+        this.ToolResult = ToolResult;
+    }
+}
 
 // ⚠️ CONTRACT FREEZE
 // Any change here requires:

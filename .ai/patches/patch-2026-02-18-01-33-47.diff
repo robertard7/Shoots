@@ -1,0 +1,380 @@
+diff --git a/src/Providers/Shoots.Providers.Abstractions/IProviderClient.cs b/src/Providers/Shoots.Providers.Abstractions/IProviderClient.cs
+index 247867b..32973f3 100644
+--- a/src/Providers/Shoots.Providers.Abstractions/IProviderClient.cs
++++ b/src/Providers/Shoots.Providers.Abstractions/IProviderClient.cs
+@@ -1,8 +1,10 @@
+-using Shoots.Runtime.Abstractions.Execution;
++using System.Threading;
++using System.Threading.Tasks;
++using Shoots.Runtime.Abstractions.Provider;
+ 
+ namespace Shoots.Providers.Abstractions;
+ 
+ public interface IProviderClient
+ {
+-    ValueTask<ExecutionResult> ExecuteAsync(ExecutionEnvelope envelope, CancellationToken ct);
++    ValueTask<ProviderExecutionResult> ExecuteAsync(ProviderExecutionEnvelope envelope, CancellationToken ct);
+ }
+diff --git a/src/Providers/Shoots.Providers.Null/NullProviderClient.cs b/src/Providers/Shoots.Providers.Null/NullProviderClient.cs
+index d1f43bd..fb79836 100644
+--- a/src/Providers/Shoots.Providers.Null/NullProviderClient.cs
++++ b/src/Providers/Shoots.Providers.Null/NullProviderClient.cs
+@@ -1,43 +1,42 @@
+-using Shoots.Contracts.Core;
++using System;
++using System.Threading;
++using System.Threading.Tasks;
+ using Shoots.Providers.Abstractions;
+-using Shoots.Runtime.Abstractions.Execution;
++using Shoots.Runtime.Abstractions.Provider;
+ 
+ namespace Shoots.Providers.Null;
+ 
+ public sealed class NullProviderClient : IProviderClient
+ {
+-    public ValueTask<ExecutionResult> ExecuteAsync(ExecutionEnvelope envelope, CancellationToken ct)
++    public ValueTask<ProviderExecutionResult> ExecuteAsync(ProviderExecutionEnvelope envelope, CancellationToken ct)
+     {
+         if (envelope is null)
+             throw new ArgumentNullException(nameof(envelope));
+ 
+         ct.ThrowIfCancellationRequested();
+ 
+-        if (envelope.Kind == ExecutionEnvelopeKind.Decision)
++        if (envelope.Kind == ProviderExecutionEnvelopeKind.Decision)
+         {
+-            var routeGateId = envelope.RouteGateId ?? string.Empty;
+-            var decisionRequest = new DecisionRequest(
++            var decisionRequest = new ProviderDecisionRequest(
+                 envelope.RequestId,
+-                routeGateId,
++                envelope.RouteGateId ?? string.Empty,
+                 envelope.Context);
+ 
+-            return ValueTask.FromResult(new ExecutionResult(
++            return ValueTask.FromResult(new ProviderExecutionResult(
+                 envelope.RequestId,
+-                ExecutionResultKind.DecisionRequired,
++                ProviderExecutionResultKind.DecisionRequired,
+                 null,
+                 decisionRequest,
+                 null,
+                 null));
+         }
+ 
+-        var result = new ExecutionResult(
++        return ValueTask.FromResult(new ProviderExecutionResult(
+             envelope.RequestId,
+-            ExecutionResultKind.Failed,
++            ProviderExecutionResultKind.Failed,
+             null,
+             null,
+             "tool.not_available",
+-            $"Tool '{envelope.ToolId?.Value ?? "unknown"}' is not available.");
+-
+-        return ValueTask.FromResult(result);
++            $"Tool '{envelope.ToolId?.Value ?? "unknown"}' is not available."));
+     }
+ }
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/Execution/ExecutionEnvelope.cs b/src/Runtime/Shoots.Runtime.Abstractions/Provider/ProviderExecutionEnvelope.cs
+similarity index 58%
+rename from src/Runtime/Shoots.Runtime.Abstractions/Execution/ExecutionEnvelope.cs
+rename to src/Runtime/Shoots.Runtime.Abstractions/Provider/ProviderExecutionEnvelope.cs
+index c3d41bd..fe23d45 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/Execution/ExecutionEnvelope.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/Provider/ProviderExecutionEnvelope.cs
+@@ -1,16 +1,16 @@
+ using Shoots.Contracts.Core;
+ 
+-namespace Shoots.Runtime.Abstractions.Execution;
++namespace Shoots.Runtime.Abstractions.Provider;
+ 
+-public enum ExecutionEnvelopeKind
++public enum ProviderExecutionEnvelopeKind
+ {
+     Tool,
+     Decision
+ }
+ 
+-public sealed record ExecutionEnvelope(
++public sealed record ProviderExecutionEnvelope(
+     string RequestId,
+-    ExecutionEnvelopeKind Kind,
++    ProviderExecutionEnvelopeKind Kind,
+     ToolId? ToolId,
+     IReadOnlyDictionary<string, object?> Args,
+     string? InputText,
+diff --git a/src/Runtime/Shoots.Runtime.Abstractions/Execution/ExecutionResult.cs b/src/Runtime/Shoots.Runtime.Abstractions/Provider/ProviderExecutionResult.cs
+similarity index 52%
+rename from src/Runtime/Shoots.Runtime.Abstractions/Execution/ExecutionResult.cs
+rename to src/Runtime/Shoots.Runtime.Abstractions/Provider/ProviderExecutionResult.cs
+index 1082737..ece7001 100644
+--- a/src/Runtime/Shoots.Runtime.Abstractions/Execution/ExecutionResult.cs
++++ b/src/Runtime/Shoots.Runtime.Abstractions/Provider/ProviderExecutionResult.cs
+@@ -1,25 +1,25 @@
+ using Shoots.Contracts.Core;
+ 
+-namespace Shoots.Runtime.Abstractions.Execution;
++namespace Shoots.Runtime.Abstractions.Provider;
+ 
+-public enum ExecutionResultKind
++public enum ProviderExecutionResultKind
+ {
+     ToolExecuted,
+     DecisionRequired,
+     Failed
+ }
+ 
+-public sealed record DecisionRequest(
++public sealed record ProviderDecisionRequest(
+     string RequestId,
+     string RouteGateId,
+     IReadOnlyDictionary<string, object?> Context
+ );
+ 
+-public sealed record ExecutionResult(
++public sealed record ProviderExecutionResult(
+     string RequestId,
+-    ExecutionResultKind Kind,
++    ProviderExecutionResultKind Kind,
+     ToolResult? ToolResult,
+-    DecisionRequest? DecisionRequest,
++    ProviderDecisionRequest? DecisionRequest,
+     string? ErrorCode,
+     string? ErrorMessage
+ );
+diff --git a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+index 3b41941..b1a9770 100644
+--- a/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
++++ b/src/Runtime/Shoots.Runtime.Core/RoutingLoop.cs
+@@ -4,6 +4,7 @@ using System.Linq;
+ using Shoots.Contracts.Core;
+ using Shoots.Providers.Abstractions;
+ using Shoots.Runtime.Abstractions;
++using Shoots.Runtime.Abstractions.Provider;
+ 
+ namespace Shoots.Runtime.Core;
+ 
+@@ -176,13 +177,13 @@ public sealed class RoutingLoop
+ 								.GetAwaiter()
+ 								.GetResult();
+ 
+-							if (providerResult.Kind == Shoots.Runtime.Abstractions.Execution.ExecutionResultKind.DecisionRequired)
++							if (providerResult.Kind == ProviderExecutionResultKind.DecisionRequired)
+ 							{
+ 								State = State.WithStatus(RoutingStatus.Waiting);
+ 								continue;
+ 							}
+ 
+-							var result = providerResult.Kind == Shoots.Runtime.Abstractions.Execution.ExecutionResultKind.ToolExecuted && providerResult.ToolResult is not null
++							var result = providerResult.Kind == ProviderExecutionResultKind.ToolExecuted && providerResult.ToolResult is not null
+ 								? providerResult.ToolResult
+ 								: new ToolResult(
+ 									invocation.ToolId,
+@@ -304,13 +305,13 @@ public sealed class RoutingLoop
+     }
+ 
+ 
+-    private Shoots.Runtime.Abstractions.Execution.ExecutionEnvelope BuildProviderEnvelope(RouteStep step, ToolInvocation invocation)
++    private ProviderExecutionEnvelope BuildProviderEnvelope(RouteStep step, ToolInvocation invocation)
+     {
+         var requestId = BuildProviderRequestId(step, invocation);
+ 
+-        return new Shoots.Runtime.Abstractions.Execution.ExecutionEnvelope(
++        return new ProviderExecutionEnvelope(
+             requestId,
+-            Shoots.Runtime.Abstractions.Execution.ExecutionEnvelopeKind.Tool,
++            ProviderExecutionEnvelopeKind.Tool,
+             invocation.ToolId,
+             invocation.Bindings,
+             _plan.Request.WorkOrder?.OriginalRequest,
+diff --git a/src/Runtime/Shoots.Runtime.Tests/NullProviderClientTests.cs b/src/Runtime/Shoots.Runtime.Tests/NullProviderClientTests.cs
+index f2e4551..b7a233b 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/NullProviderClientTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/NullProviderClientTests.cs
+@@ -2,7 +2,7 @@ using System.Collections.Generic;
+ using System.Text.Json;
+ using Shoots.Contracts.Core;
+ using Shoots.Providers.Null;
+-using Shoots.Runtime.Abstractions.Execution;
++using Shoots.Runtime.Abstractions.Provider;
+ using Xunit;
+ 
+ namespace Shoots.Runtime.Tests;
+@@ -13,9 +13,9 @@ public sealed class NullProviderClientTests
+     public void Tool_requests_fail_deterministically()
+     {
+         var client = new NullProviderClient();
+-        var envelope = new ExecutionEnvelope(
++        var envelope = new ProviderExecutionEnvelope(
+             "req-null-tool",
+-            ExecutionEnvelopeKind.Tool,
++            ProviderExecutionEnvelopeKind.Tool,
+             new ToolId("tools.sample"),
+             new Dictionary<string, object?>(),
+             null,
+@@ -29,7 +29,7 @@ public sealed class NullProviderClientTests
+         var secondJson = JsonSerializer.Serialize(second);
+ 
+         Assert.Equal(firstJson, secondJson);
+-        Assert.Equal(ExecutionResultKind.Failed, first.Kind);
++        Assert.Equal(ProviderExecutionResultKind.Failed, first.Kind);
+         Assert.Equal("tool.not_available", first.ErrorCode);
+     }
+ 
+@@ -37,9 +37,9 @@ public sealed class NullProviderClientTests
+     public void Decision_requests_return_decision_required_deterministically()
+     {
+         var client = new NullProviderClient();
+-        var envelope = new ExecutionEnvelope(
++        var envelope = new ProviderExecutionEnvelope(
+             "req-null-decision",
+-            ExecutionEnvelopeKind.Decision,
++            ProviderExecutionEnvelopeKind.Decision,
+             null,
+             new Dictionary<string, object?>(),
+             null,
+@@ -53,7 +53,7 @@ public sealed class NullProviderClientTests
+         var secondJson = JsonSerializer.Serialize(second);
+ 
+         Assert.Equal(firstJson, secondJson);
+-        Assert.Equal(ExecutionResultKind.DecisionRequired, first.Kind);
++        Assert.Equal(ProviderExecutionResultKind.DecisionRequired, first.Kind);
+         Assert.NotNull(first.DecisionRequest);
+         Assert.Equal("gate-2", first.DecisionRequest!.RouteGateId);
+     }
+diff --git a/src/Runtime/Shoots.Runtime.Tests/ProviderExecutionContractsJsonTests.cs b/src/Runtime/Shoots.Runtime.Tests/ProviderExecutionContractsJsonTests.cs
+index 724c247..434009b 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/ProviderExecutionContractsJsonTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/ProviderExecutionContractsJsonTests.cs
+@@ -1,7 +1,7 @@
+ using System.Collections.Generic;
+ using System.Text.Json;
+ using Shoots.Contracts.Core;
+-using Shoots.Runtime.Abstractions.Execution;
++using Shoots.Runtime.Abstractions.Provider;
+ using Xunit;
+ 
+ namespace Shoots.Runtime.Tests;
+@@ -11,9 +11,9 @@ public sealed class ProviderExecutionContractsJsonTests
+     [Fact]
+     public void Tool_execution_envelope_round_trips()
+     {
+-        var envelope = new ExecutionEnvelope(
++        var envelope = new ProviderExecutionEnvelope(
+             "req-1",
+-            ExecutionEnvelopeKind.Tool,
++            ProviderExecutionEnvelopeKind.Tool,
+             new ToolId("tools.echo"),
+             new Dictionary<string, object?>
+             {
+@@ -27,7 +27,7 @@ public sealed class ProviderExecutionContractsJsonTests
+             });
+ 
+         var json = JsonSerializer.Serialize(envelope);
+-        var roundTrip = JsonSerializer.Deserialize<ExecutionEnvelope>(json);
++        var roundTrip = JsonSerializer.Deserialize<ProviderExecutionEnvelope>(json);
+ 
+         Assert.NotNull(roundTrip);
+         Assert.Equal(envelope, roundTrip);
+@@ -36,9 +36,9 @@ public sealed class ProviderExecutionContractsJsonTests
+     [Fact]
+     public void Decision_execution_envelope_round_trips()
+     {
+-        var envelope = new ExecutionEnvelope(
++        var envelope = new ProviderExecutionEnvelope(
+             "req-2",
+-            ExecutionEnvelopeKind.Decision,
++            ProviderExecutionEnvelopeKind.Decision,
+             null,
+             new Dictionary<string, object?>(),
+             null,
+@@ -49,7 +49,7 @@ public sealed class ProviderExecutionContractsJsonTests
+             });
+ 
+         var json = JsonSerializer.Serialize(envelope);
+-        var roundTrip = JsonSerializer.Deserialize<ExecutionEnvelope>(json);
++        var roundTrip = JsonSerializer.Deserialize<ProviderExecutionEnvelope>(json);
+ 
+         Assert.NotNull(roundTrip);
+         Assert.Equal(envelope, roundTrip);
+@@ -58,9 +58,9 @@ public sealed class ProviderExecutionContractsJsonTests
+     [Fact]
+     public void Tool_executed_result_round_trips()
+     {
+-        var result = new ExecutionResult(
++        var result = new ProviderExecutionResult(
+             "req-3",
+-            ExecutionResultKind.ToolExecuted,
++            ProviderExecutionResultKind.ToolExecuted,
+             new ToolResult(
+                 new ToolId("tools.echo"),
+                 new Dictionary<string, object?> { ["value"] = "alpha" },
+@@ -70,7 +70,7 @@ public sealed class ProviderExecutionContractsJsonTests
+             null);
+ 
+         var json = JsonSerializer.Serialize(result);
+-        var roundTrip = JsonSerializer.Deserialize<ExecutionResult>(json);
++        var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
+ 
+         Assert.NotNull(roundTrip);
+         Assert.Equal(result, roundTrip);
+@@ -79,11 +79,11 @@ public sealed class ProviderExecutionContractsJsonTests
+     [Fact]
+     public void Decision_required_result_round_trips()
+     {
+-        var result = new ExecutionResult(
++        var result = new ProviderExecutionResult(
+             "req-4",
+-            ExecutionResultKind.DecisionRequired,
++            ProviderExecutionResultKind.DecisionRequired,
+             null,
+-            new DecisionRequest(
++            new ProviderDecisionRequest(
+                 "req-4",
+                 "gate-4",
+                 new Dictionary<string, object?> { ["intent.token"] = "tok" }),
+@@ -91,7 +91,7 @@ public sealed class ProviderExecutionContractsJsonTests
+             null);
+ 
+         var json = JsonSerializer.Serialize(result);
+-        var roundTrip = JsonSerializer.Deserialize<ExecutionResult>(json);
++        var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
+ 
+         Assert.NotNull(roundTrip);
+         Assert.Equal(result, roundTrip);
+@@ -100,16 +100,16 @@ public sealed class ProviderExecutionContractsJsonTests
+     [Fact]
+     public void Failed_result_round_trips()
+     {
+-        var result = new ExecutionResult(
++        var result = new ProviderExecutionResult(
+             "req-5",
+-            ExecutionResultKind.Failed,
++            ProviderExecutionResultKind.Failed,
+             null,
+             null,
+             "tool.not_available",
+             "not available");
+ 
+         var json = JsonSerializer.Serialize(result);
+-        var roundTrip = JsonSerializer.Deserialize<ExecutionResult>(json);
++        var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
+ 
+         Assert.NotNull(roundTrip);
+         Assert.Equal(result, roundTrip);
+diff --git a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+index d0ba25e..20afedf 100644
+--- a/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
++++ b/src/Runtime/Shoots.Runtime.Tests/RoutingLoopTests.cs
+@@ -5,9 +5,7 @@ using Shoots.Contracts.Core;
+ using Shoots.Providers.Abstractions;
+ using Shoots.Providers.Null;
+ using Shoots.Runtime.Abstractions;
+-using ProviderExecutionEnvelope = Shoots.Runtime.Abstractions.Execution.ExecutionEnvelope;
+-using ProviderExecutionResult = Shoots.Runtime.Abstractions.Execution.ExecutionResult;
+-using ProviderExecutionResultKind = Shoots.Runtime.Abstractions.Execution.ExecutionResultKind;
++using Shoots.Runtime.Abstractions.Provider;
+ using Shoots.Runtime.Core;
+ using Xunit;
+ 
