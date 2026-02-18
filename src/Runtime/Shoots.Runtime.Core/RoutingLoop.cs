@@ -101,6 +101,20 @@ public sealed class RoutingLoop
 				try
 				{
 					selection = ResolveDecision(step);
+
+					if (selection is null &&
+						State.Status == RoutingStatus.Waiting &&
+						step.Intent == RouteIntent.SelectTool &&
+						step.Owner == DecisionOwner.Ai)
+					{
+						State = State.WithStatus(RoutingStatus.Halted);
+						_tracingNarrator.OnHalted(
+							State,
+							new RuntimeError(
+								"internal_error",
+								"AI decision provider returned no decision."));
+						break;
+					}
 				}
 				catch (Exception ex)
 				{

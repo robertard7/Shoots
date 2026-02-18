@@ -8,6 +8,17 @@ namespace Shoots.Runtime.Tests;
 
 public sealed class ProviderExecutionContractsJsonTests
 {
+    private static string CanonicalJson<T>(T value)
+    {
+        return JsonSerializer.Serialize(value, new JsonSerializerOptions
+        {
+            WriteIndented = false,
+            PropertyNamingPolicy = null,
+            DictionaryKeyPolicy = null
+        });
+    }
+
+
     [Fact]
     public void Tool_execution_envelope_round_trips()
     {
@@ -30,7 +41,7 @@ public sealed class ProviderExecutionContractsJsonTests
         var roundTrip = JsonSerializer.Deserialize<ProviderExecutionEnvelope>(json);
 
         Assert.NotNull(roundTrip);
-        Assert.Equal(envelope, roundTrip);
+        Assert.Equal(CanonicalJson(envelope), CanonicalJson(roundTrip));
     }
 
     [Fact]
@@ -52,7 +63,7 @@ public sealed class ProviderExecutionContractsJsonTests
         var roundTrip = JsonSerializer.Deserialize<ProviderExecutionEnvelope>(json);
 
         Assert.NotNull(roundTrip);
-        Assert.Equal(envelope, roundTrip);
+        Assert.Equal(CanonicalJson(envelope), CanonicalJson(roundTrip));
     }
 
     [Fact]
@@ -73,7 +84,7 @@ public sealed class ProviderExecutionContractsJsonTests
         var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
 
         Assert.NotNull(roundTrip);
-        Assert.Equal(result, roundTrip);
+        Assert.Equal(CanonicalJson(result), CanonicalJson(roundTrip));
     }
 
     [Fact]
@@ -94,7 +105,7 @@ public sealed class ProviderExecutionContractsJsonTests
         var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
 
         Assert.NotNull(roundTrip);
-        Assert.Equal(result, roundTrip);
+        Assert.Equal(CanonicalJson(result), CanonicalJson(roundTrip));
     }
 
     [Fact]
@@ -112,6 +123,6 @@ public sealed class ProviderExecutionContractsJsonTests
         var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
 
         Assert.NotNull(roundTrip);
-        Assert.Equal(result, roundTrip);
+        Assert.Equal(CanonicalJson(result), CanonicalJson(roundTrip));
     }
 }

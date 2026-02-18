@@ -65,7 +65,7 @@ public sealed class RoutingLoopTests
         Assert.Equal(RoutingStatus.Halted, result.State.Status);
         Assert.Equal("select", result.State.CurrentNodeId);
         Assert.Empty(result.ToolResults);
-        Assert.Empty(result.Telemetry);
+        Assert.Contains(result.Telemetry, record => record.Event == RoutingTraceEventKind.Halted);
     }
 
     [Fact]

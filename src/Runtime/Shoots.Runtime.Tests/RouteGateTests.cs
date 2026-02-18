@@ -119,7 +119,12 @@ public sealed class RouteGateTests
             Assert.Null(error);
             Assert.Equal("validate", nextState.CurrentNodeId);
 
-            advanced = RouteGate.TryAdvance(plan, nextState, null, registry, out var finalState, out error);
+            advanced = RouteGate.TryAdvance(plan, nextState, null, registry, out var terminalState, out error);
+            Assert.True(advanced);
+            Assert.Null(error);
+            Assert.Equal("terminate", terminalState.CurrentNodeId);
+
+            advanced = RouteGate.TryAdvance(plan, terminalState, null, registry, out var finalState, out error);
             Assert.True(advanced);
             Assert.Null(error);
             Assert.Equal(RoutingStatus.Completed, finalState.Status);
