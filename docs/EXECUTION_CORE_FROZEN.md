@@ -89,6 +89,9 @@ Error:
 
 ## Run Eligibility Law
 
+- WorkOrderId = lineage identity.
+- PlanHash = plan content identity.
+- PlanId may be used as a persistence key, but never as a plan-change continuity signal.
 - Hash is identity, not a trigger.
 - Waiting is terminal for a single run.
 - Host rerun requires explicit progress via `RuntimeRunOptions`:

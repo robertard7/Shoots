@@ -139,6 +139,43 @@ public sealed class RouteGateTests
         Assert.Equal("terminate", nextState.CurrentNodeId);
     }
 
+
+    [Fact]
+    public void TryAdvance_bypass_uses_graph_next_node_even_when_fallback_next_node_matches_allowed_node()
+    {
+        var fallbackTool = new ToolSpec(
+            new ToolId("tools.fallback"),
+            "Fallback tool.",
+            new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+            new List<ToolInputSpec>(),
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
+
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule(
+                    "select",
+                    RouteIntent.SelectTool,
+                    DecisionOwner.Ai,
+                    "tool.selection",
+                    MermaidNodeKind.Start,
+                    new[] { "terminate" },
+                    DecisionPolicy.Bypass,
+                    new FallbackToolSelection(fallbackTool.ToolId, new Dictionary<string, object?>()),
+                    "terminate"),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+            });
+
+        var state = RoutingState.CreateInitial(plan);
+        var advanced = RouteGate.TryAdvance(plan, state, null, new SnapshotOnlyRegistry(fallbackTool), out var nextState, out var error);
+
+        Assert.True(advanced);
+        Assert.Null(error);
+        Assert.Equal("terminate", nextState.CurrentNodeId);
+    }
+
     [Fact]
     public void TryAdvance_halts_when_policy_is_error_and_decision_missing()
     {

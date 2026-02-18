@@ -246,6 +246,58 @@ public sealed class RoutingLoopTests
         Assert.Equal("terminate", second.State.CurrentNodeId);
     }
 
+
+    [Fact]
+    public void Bypass_trace_uses_graph_transition_nodes()
+    {
+        var workOrder = new WorkOrder(
+            new WorkOrderId("wo-bypass-trace"),
+            "Original request.",
+            "Route loop bypass trace.",
+            new List<string>(),
+            new List<string>());
+
+        var request = new BuildRequest(
+            workOrder,
+            "core.route",
+            new Dictionary<string, object?>(),
+            new[]
+            {
+                new RouteRule(
+                    "select",
+                    RouteIntent.SelectTool,
+                    DecisionOwner.Ai,
+                    "tool.selection",
+                    MermaidNodeKind.Start,
+                    new[] { "terminate" },
+                    DecisionPolicy.Bypass,
+                    new FallbackToolSelection(new ToolId("tools.sample"), new Dictionary<string, object?>()),
+                    "rogue-node"),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+            });
+
+        var steps = new BuildStep[]
+        {
+            new RouteStep("select", "Select tool.", "select", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+            new RouteStep("terminate", "Terminate route.", "terminate", RouteIntent.Terminate, DecisionOwner.Rule, workOrder.Id)
+        };
+
+        var plan = BuildPlanTestFactory.CreatePlan(request, steps);
+
+        var result = new RoutingLoop(
+            plan,
+            new SampleToolRegistry(),
+            new RefusingAiDecisionProvider(),
+            NullRuntimeNarrator.Instance,
+            new SuccessfulProviderClient(new ToolId("tools.sample")))
+            .Run();
+
+        Assert.Equal(RoutingStatus.Completed, result.State.Status);
+        var bypass = Assert.Single(result.Trace.Entries, e => e.Event == RoutingTraceEventKind.DecisionGateBypassed);
+        Assert.Equal("select", bypass.FromNodeId);
+        Assert.Equal("terminate", bypass.ToNodeId);
+    }
+
     [Fact]
     public void Provider_failure_halts_with_trace_error()
     {

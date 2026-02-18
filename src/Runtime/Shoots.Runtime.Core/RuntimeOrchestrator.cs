@@ -267,10 +267,7 @@ public sealed class RuntimeOrchestrator
 
     private static string ResolvePlanHash(BuildPlan plan)
     {
-        if (plan is null)
-            throw new ArgumentNullException(nameof(plan));
-
-        return plan.PlanId;
+        return BuildPlanIdentity.ComputePlanHash(plan);
     }
 
     private static RoutingTrace AppendHostEvent(RoutingTrace trace, RoutingTraceEventKind eventKind, string detail)

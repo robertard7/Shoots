@@ -464,7 +464,7 @@ public sealed class RoutingLoop
             step.NodeId,
             state.CurrentNodeId,
             RouteIntentTokenFactory.ComputeTokenHash(state.IntentToken),
-            plan.PlanId,
+            BuildPlanIdentity.ComputePlanHash(plan),
             rule.DecisionPolicy,
             rule.FallbackToolSelection is not null || !string.IsNullOrWhiteSpace(rule.FallbackNextNodeId),
             "decision_required",

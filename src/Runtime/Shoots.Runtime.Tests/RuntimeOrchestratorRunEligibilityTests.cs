@@ -75,7 +75,7 @@ public sealed class RuntimeOrchestratorRunEligibilityTests
         var waiting = orchestrator.Run(firstPlan);
         Assert.Equal(RoutingStatus.Waiting, waiting.State.Status);
 
-        var secondPlan = firstPlan with { PlanId = "plan-v2" };
+        var secondPlan = CreatePlan("wo-run-planchange", commandId: "core.route.v2");
 
         decisions.Enabled = true;
 
@@ -122,6 +122,69 @@ public sealed class RuntimeOrchestratorRunEligibilityTests
         Assert.Equal(before.ProgressToken, after.ProgressToken);
     }
 
+
+    [Fact]
+    public void Waiting_plan_hash_change_with_injected_decision_digest_allows_progress()
+    {
+        var persistence = new InMemoryRuntimePersistence();
+        var decisions = new ToggleDecisionProvider();
+        var orchestrator = new RuntimeOrchestrator(
+            new SampleToolRegistry(),
+            decisions,
+            NullRuntimeNarrator.Instance,
+            new SuccessfulProviderClient(),
+            persistence);
+
+        var firstPlan = CreatePlan("wo-run-planchange-inject", commandId: "core.route.v1");
+        var waiting = orchestrator.Run(firstPlan);
+        Assert.Equal(RoutingStatus.Waiting, waiting.State.Status);
+
+        decisions.Enabled = true;
+
+        var secondPlan = CreatePlan("wo-run-planchange-inject", commandId: "core.route.v2");
+        var resumed = orchestrator.Run(secondPlan, new RuntimeRunOptions(ResumeMode.InjectDecision, "digest-v2"));
+
+        Assert.Equal(RoutingStatus.Completed, resumed.State.Status);
+        Assert.True(decisions.Calls >= 2);
+    }
+
+    [Fact]
+    public void Waiting_plan_hash_change_override_flag_and_mode_are_equivalent()
+    {
+        var persistence = new InMemoryRuntimePersistence();
+        var decisions = new ToggleDecisionProvider();
+        var orchestrator = new RuntimeOrchestrator(
+            new SampleToolRegistry(),
+            decisions,
+            NullRuntimeNarrator.Instance,
+            new SuccessfulProviderClient(),
+            persistence);
+
+        var firstPlan = CreatePlan("wo-run-planchange-eq", commandId: "core.route.v1");
+        var waiting = orchestrator.Run(firstPlan);
+        Assert.Equal(RoutingStatus.Waiting, waiting.State.Status);
+
+        var secondPlan = CreatePlan("wo-run-planchange-eq", commandId: "core.route.v2");
+        var stateStore = (IRunResumeStateStore)persistence;
+        var before = stateStore.LoadByWorkOrderId("wo-run-planchange-eq")!;
+
+        var overrideByMode = orchestrator.Run(secondPlan, new RuntimeRunOptions(ResumeMode.OverridePlanChange));
+        Assert.Equal(RoutingStatus.Waiting, overrideByMode.State.Status);
+        Assert.Equal(RoutingTraceEventKind.HostResumeOverridePlanChange, overrideByMode.Trace.Entries[^1].Event);
+
+        var afterMode = stateStore.LoadByWorkOrderId("wo-run-planchange-eq")!;
+        Assert.Equal(before.AttemptCounter, afterMode.AttemptCounter);
+        Assert.Equal(before.ProgressToken, afterMode.ProgressToken);
+
+        var overrideByFlag = orchestrator.Run(secondPlan, new RuntimeRunOptions(ResumeMode.None, null, AllowPlanChangeOverride: true));
+        Assert.Equal(RoutingStatus.Waiting, overrideByFlag.State.Status);
+        Assert.Equal(RoutingTraceEventKind.HostResumeOverridePlanChange, overrideByFlag.Trace.Entries[^1].Event);
+
+        var afterFlag = stateStore.LoadByWorkOrderId("wo-run-planchange-eq")!;
+        Assert.Equal(before.AttemptCounter, afterFlag.AttemptCounter);
+        Assert.Equal(before.ProgressToken, afterFlag.ProgressToken);
+    }
+
     [Fact]
     public void Discard_waiting_start_over_emits_host_discard_marker()
     {
@@ -143,7 +206,7 @@ public sealed class RuntimeOrchestratorRunEligibilityTests
         Assert.Equal(RoutingTraceEventKind.HostResumeDiscardWaiting, restarted.Trace.Entries[^1].Event);
     }
 
-    private static BuildPlan CreatePlan(string workOrderId)
+    private static BuildPlan CreatePlan(string workOrderId, string commandId = "core.route")
     {
         var workOrder = new WorkOrder(
             new WorkOrderId(workOrderId),
@@ -154,7 +217,7 @@ public sealed class RuntimeOrchestratorRunEligibilityTests
 
         var request = new BuildRequest(
             workOrder,
-            "core.route",
+            commandId,
             new Dictionary<string, object?>(),
             new[]
             {

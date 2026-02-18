@@ -17,6 +17,7 @@ public sealed class InMemoryRuntimePersistence : IRuntimePersistence, IRunResume
             throw new ArgumentNullException(nameof(envelope));
 
         _store[envelope.Plan.PlanId] = envelope;
+        _store[BuildPlanIdentity.ComputePlanHash(envelope.Plan)] = envelope;
     }
 
     public ExecutionEnvelope? Load(string planId)

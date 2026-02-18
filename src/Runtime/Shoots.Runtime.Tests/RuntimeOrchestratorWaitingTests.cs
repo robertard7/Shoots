@@ -50,8 +50,51 @@ public sealed class RuntimeOrchestratorWaitingTests
         Assert.Equal("tool.selection", envelope.Waiting.DecisionPromptKey);
         Assert.Equal(DecisionOwner.Ai, envelope.Waiting.DecisionOwner);
         Assert.Equal(DecisionPolicy.Hard, envelope.Waiting.Policy);
-        Assert.Equal(plan.PlanId, envelope.Waiting.PlanHash);
+        Assert.Equal(BuildPlanIdentity.ComputePlanHash(plan), envelope.Waiting.PlanHash);
         Assert.Equal("decision_required", envelope.Waiting.ReasonCode);
+    }
+
+
+    [Fact]
+    public void Run_waiting_payload_plan_hash_uses_plan_content_identity_not_plan_id()
+    {
+        var workOrder = new WorkOrder(
+            new WorkOrderId("wo-host-waiting-content"),
+            "Original request.",
+            "Waiting payload.",
+            new List<string>(),
+            new List<string>());
+
+        var request = new BuildRequest(
+            workOrder,
+            "core.route",
+            new Dictionary<string, object?>(),
+            new[]
+            {
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, System.Array.Empty<string>())
+            });
+
+        var canonicalPlan = BuildPlanTestFactory.CreatePlan(request, new BuildStep[]
+        {
+            new RouteStep("select", "Select tool.", "select", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+            new RouteStep("terminate", "Terminate route.", "terminate", RouteIntent.Terminate, DecisionOwner.Rule, workOrder.Id)
+        });
+
+        var plan = canonicalPlan with { PlanId = "plan-id-overridden" };
+
+        var envelope = new RuntimeOrchestrator(
+            new EmptyToolRegistry(),
+            new RefusingAiDecisionProvider(),
+            NullRuntimeNarrator.Instance,
+            new NullProviderClient())
+            .Run(plan);
+
+        Assert.Equal(RoutingStatus.Waiting, envelope.State.Status);
+        Assert.NotNull(envelope.Waiting);
+        Assert.Equal(BuildPlanIdentity.ComputePlanHash(plan), envelope.Waiting!.PlanHash);
+        Assert.NotEqual(plan.PlanId, envelope.Waiting.PlanHash);
+        Assert.Equal(BuildPlanIdentity.ComputePlanHash(canonicalPlan), envelope.Waiting.PlanHash);
     }
 
     private sealed class RefusingAiDecisionProvider : IAiDecisionProvider
