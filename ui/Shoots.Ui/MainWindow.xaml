@@ -100,7 +100,85 @@
         </StackPanel>
       </GroupBox>
     </StackPanel>
-    <TabControl Grid.Column="1" SelectedIndex="{Binding StartupTabIndex, Mode=OneWay}">
+    <TabControl Grid.Column="1" SelectedIndex="0">
+      <TabItem Header="Chat Intake">
+        <Grid Margin="12">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2*" />
+            <ColumnDefinition Width="3*" />
+            <ColumnDefinition Width="3*" />
+          </Grid.ColumnDefinitions>
+          <StackPanel Grid.Column="0" Margin="0,0,10,0">
+            <TextBlock Text="Sessions / WorkOrders" FontWeight="SemiBold" />
+            <ListBox Margin="0,8,0,0"
+                     ItemsSource="{Binding ChatSessions}"
+                     SelectedItem="{Binding SelectedChatSession, Mode=TwoWay}">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel>
+                    <TextBlock Text="{Binding WorkOrderId}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding PlanHash}" FontSize="11" Foreground="#FF6B7280" />
+                    <TextBlock Text="{Binding LastStatus}" FontSize="11" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Margin="0,0,10,0">
+            <TextBlock Text="Chat / Intake" FontWeight="SemiBold" />
+            <TextBlock Margin="0,8,0,0" Text="Intent" />
+            <TextBox Text="{Binding IntakeIntent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="80" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="{Binding IsWorkOrderLocked}" />
+            <TextBlock Margin="0,8,0,0" Text="Target" />
+            <TextBox Text="{Binding IntakeTarget, Mode=TwoWay}" IsReadOnly="{Binding IsWorkOrderLocked}" />
+            <TextBlock Margin="0,8,0,0" Text="Attachments (one per line / csv)" />
+            <TextBox Text="{Binding IntakeAttachments, Mode=TwoWay}" Height="60" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="{Binding IsWorkOrderLocked}" />
+            <TextBlock Margin="0,8,0,0" Text="Stack" />
+            <TextBox Text="{Binding IntakeStack, Mode=TwoWay}" IsReadOnly="{Binding IsWorkOrderLocked}" />
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+              <Button Content="Lock WorkOrder" Command="{Binding LockWorkOrderCommand}" />
+              <Button Content="Unlock" Command="{Binding UnlockWorkOrderCommand}" Margin="8,0,0,0" />
+              <Button Content="Generate Plan" Command="{Binding GeneratePlanCommand}" Margin="8,0,0,0" />
+              <Button Content="Run" Command="{Binding RunIntakePlanCommand}" Margin="8,0,0,0" />
+            </StackPanel>
+            <TextBlock Margin="0,8,0,0" Text="{Binding JobSpecDigest}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />
+            <ListBox Margin="0,8,0,0" ItemsSource="{Binding ChatMessages}" Height="140" />
+          </StackPanel>
+
+          <TabControl Grid.Column="2">
+            <TabItem Header="WorkOrder">
+              <StackPanel Margin="8">
+                <TextBlock Text="Digest" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding JobSpecDigest}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />
+              </StackPanel>
+            </TabItem>
+            <TabItem Header="Plan">
+              <StackPanel Margin="8">
+                <TextBlock Text="PlanHash" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding PlanHashLabel}" FontFamily="Consolas" />
+                <TextBlock Margin="0,8,0,0" Text="PlanId" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding PlanIdLabel}" FontFamily="Consolas" />
+              </StackPanel>
+            </TabItem>
+            <TabItem Header="Waiting">
+              <StackPanel Margin="8">
+                <TextBlock Text="Decision Gate" FontWeight="SemiBold" Visibility="{Binding LastWaitingInfo, Converter={StaticResource NullToVisibilityConverter}}" />
+                <TextBlock Text="{Binding LastWaitingInfo.ReasonCode}" />
+                <TextBlock Text="{Binding LastWaitingInfo.Policy}" />
+                <TextBlock Text="{Binding LastWaitingInfo.DecisionPromptKey}" />
+                <TextBlock Text="{Binding LastWaitingInfo.DecisionOwner}" />
+                <TextBlock Text="{Binding LastWaitingInfo.PlanHash}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />
+                <Button Content="Resume (Inject Decision)" Command="{Binding ResumeInjectDecisionCommand}" Margin="0,8,0,0" />
+              </StackPanel>
+            </TabItem>
+            <TabItem Header="Trace">
+              <StackPanel Margin="8">
+                <TextBlock Text="Use existing Execution and Narration tabs for full trace details." TextWrapping="Wrap" />
+              </StackPanel>
+            </TabItem>
+          </TabControl>
+        </Grid>
+      </TabItem>
       <TabItem Header="Startup" IsEnabled="{Binding IsStartupTabEnabled}">
         <Grid Margin="16">
           <Grid.RowDefinitions>

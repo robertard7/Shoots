@@ -125,6 +125,16 @@ STARTUP FLOW STATUS
 Startup flow is complete and frozen. Provider extensibility begins next and is
 explicitly out of scope for startup changes.
 
+UI FRONT DOOR: CHAT INTAKE
+---------------------------
+
+The UI now opens on a Chat Intake front door tab. Intake creates a WorkOrder
+lineage id and deterministic job-spec digest, then generates a plan preview that
+surfaces PlanId (persistence key) and PlanHash (content identity).
+
+If runtime returns WAITING, the UI stops and shows decision-gate details. Resume
+actions are explicit host intents only; the UI does not auto-rerun while waiting.
+
 PROJECT WORKSPACE NOTES
 -----------------------
 

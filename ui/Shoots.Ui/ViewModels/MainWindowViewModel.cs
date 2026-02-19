@@ -25,7 +25,7 @@ using UiRootFsDescriptor = Shoots.UI.ExecutionEnvironments.RootFsDescriptor;
 
 namespace Shoots.UI.ViewModels;
 
-public sealed class MainWindowViewModel : INotifyPropertyChanged
+public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 {
     private readonly IExecutionCommandService _commandService;
     private readonly IEnvironmentProfileService _environmentService;
@@ -201,6 +201,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         LoadEnvironmentScript();
         LoadAiPolicy();
         RegisterAiSurfaces();
+        InitializeChatIntake();
         _ = RefreshAiHelpAsync();
     }
 
@@ -2130,6 +2131,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             var records = BuildToolExecutionRecords(Plan, envelope.ToolResults);
             var session = ToolExecutionSessionViewModel.CreateRun(Plan, DateTimeOffset.UtcNow, records);
+            LastWaitingInfo = envelope.Waiting is null ? null : ToWaitingInfoViewModel(envelope.Waiting);
             _toolExecutionSessions.Insert(0, session);
             SelectedToolExecutionSession = session;
             ComparisonToolExecutionSession ??= session;
@@ -2140,6 +2142,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             var records = BuildToolExecutionRecords(liveEnvelope.Plan, liveEnvelope.ToolResults);
             var session = ToolExecutionSessionViewModel.CreateRun(liveEnvelope.Plan, DateTimeOffset.UtcNow, records);
+            LastWaitingInfo = liveEnvelope.Waiting is null ? null : ToWaitingInfoViewModel(liveEnvelope.Waiting);
             _toolExecutionSessions.Insert(0, session);
             SelectedToolExecutionSession = session;
             ComparisonToolExecutionSession ??= session;
@@ -2147,6 +2150,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var fallbackRecords = BuildToolExecutionRecords(Plan, Plan.ToolResult);
+        LastWaitingInfo = null;
         var fallbackSession = ToolExecutionSessionViewModel.CreateRun(Plan, DateTimeOffset.UtcNow, fallbackRecords);
         _toolExecutionSessions.Insert(0, fallbackSession);
         SelectedToolExecutionSession = fallbackSession;
