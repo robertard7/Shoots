@@ -163,6 +163,9 @@
             <TabItem Header="Waiting">
               <StackPanel Margin="8">
                 <TextBlock Text="Decision Gate" FontWeight="SemiBold" Visibility="{Binding LastWaitingInfo, Converter={StaticResource NullToVisibilityConverter}}" />
+                <Border Background="#FFEFF6FF" CornerRadius="4" Padding="8" Margin="0,8,0,0">
+                  <TextBlock Text="{Binding WaitingExplanation}" TextWrapping="Wrap" />
+                </Border>
                 <TextBlock Text="Reason" FontWeight="SemiBold" Margin="0,8,0,0" />
                 <TextBlock Text="{Binding LastWaitingInfo.ReasonCode}" />
                 <TextBlock Text="Gate" FontWeight="SemiBold" Margin="0,8,0,0" />
@@ -177,6 +180,8 @@
                 <TextBlock Text="{Binding LastWaitingInfo.FallbackPresent}" />
                 <TextBlock Text="Allowed Next Nodes" FontWeight="SemiBold" Margin="0,8,0,0" />
                 <ItemsControl ItemsSource="{Binding LastWaitingInfo.AllowedNextNodes}" />
+                <TextBlock Text="Run Mode" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <ComboBox ItemsSource="{Binding RunModes}" SelectedItem="{Binding SelectedRunMode, Mode=TwoWay}" />
                 <TextBlock Text="Decision Tool Id" FontWeight="SemiBold" Margin="0,8,0,0" />
                 <ComboBox ItemsSource="{Binding LastWaitingInfo.AllowedNextNodes}" SelectedItem="{Binding DecisionToolId, Mode=TwoWay}" IsEditable="True" />
                 <TextBlock Text="Decision Bindings (json)" FontWeight="SemiBold" Margin="0,8,0,0" />
@@ -187,7 +192,13 @@
                 <TextBlock Text="{Binding LastWaitingInfo.PlanHash}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />
                 <TextBlock Text="WorkOrderId" FontWeight="SemiBold" Margin="0,8,0,0" />
                 <TextBlock Text="{Binding LastWaitingInfo.WorkOrderId}" FontFamily="Consolas" FontSize="11" />
-                <Button Content="Resume (Inject Decision)" Command="{Binding ResumeInjectDecisionCommand}" Margin="0,8,0,0" />
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                  <Button Content="Use fallback tool" Command="{Binding UseFallbackToolCommand}" />
+                  <Button Content="Resume with selection" Command="{Binding ResumeInjectDecisionCommand}" Margin="8,0,0,0" />
+                  <Button Content="Copy resume payload" Command="{Binding CopyResumePayloadCommand}" Margin="8,0,0,0" />
+                </StackPanel>
+                <TextBlock Text="Resume payload" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBox Text="{Binding LastResumePayload}" Height="80" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="True" FontFamily="Consolas" FontSize="11" />
               </StackPanel>
             </TabItem>
             <TabItem Header="Trace">

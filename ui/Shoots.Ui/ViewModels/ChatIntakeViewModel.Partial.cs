@@ -29,6 +29,8 @@ public sealed partial class MainWindowViewModel
     private string _decisionToolId = string.Empty;
     private string _decisionBindingsJson = "{}";
     private string _injectedDecisionDigest = string.Empty;
+    private ResumeMode _selectedRunMode = ResumeMode.None;
+    private string _lastResumePayload = string.Empty;
 
     public ReadOnlyObservableCollection<ChatSessionViewModel> ChatSessions { get; private set; } = null!;
 
@@ -202,6 +204,53 @@ public sealed partial class MainWindowViewModel
         }
     }
 
+
+    public ResumeMode SelectedRunMode
+    {
+        get => _selectedRunMode;
+        set
+        {
+            if (_selectedRunMode == value)
+                return;
+
+            _selectedRunMode = value;
+            OnPropertyChanged(nameof(SelectedRunMode));
+            ResumeInjectDecisionCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    public IReadOnlyList<ResumeMode> RunModes { get; } = Enum.GetValues<ResumeMode>();
+
+    public string WaitingExplanation
+    {
+        get
+        {
+            if (LastWaitingInfo is null)
+                return "No waiting gate is active.";
+
+            if (LastWaitingInfo.Policy == DecisionPolicy.Bypass.ToString() && LastWaitingInfo.FallbackPresent)
+                return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting: bypass policy has fallback available but requires explicit host resume intent.";
+
+            if (LastWaitingInfo.AllowedNextNodes.Count > 1)
+                return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting for explicit selection among multiple graph-derived candidates.";
+
+            return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting for explicit decision input.";
+        }
+    }
+
+    public string LastResumePayload
+    {
+        get => _lastResumePayload;
+        private set
+        {
+            if (_lastResumePayload == value)
+                return;
+
+            _lastResumePayload = value;
+            OnPropertyChanged(nameof(LastResumePayload));
+        }
+    }
+
     public DecisionGateWaitingInfoViewModel? LastWaitingInfo
     {
         get => _lastWaitingInfo;
@@ -213,6 +262,7 @@ public sealed partial class MainWindowViewModel
             _lastWaitingInfo = value;
             OnPropertyChanged(nameof(LastWaitingInfo));
             OnPropertyChanged(nameof(HasWaitingInfo));
+            OnPropertyChanged(nameof(WaitingExplanation));
 
             if (_lastWaitingInfo is not null && string.IsNullOrWhiteSpace(_decisionToolId) && _lastWaitingInfo.AllowedNextNodes.Count > 0)
             {
@@ -227,7 +277,7 @@ public sealed partial class MainWindowViewModel
 
     public bool HasWaitingInfo => LastWaitingInfo is not null;
 
-    public bool CanResumeInjectDecision => HasWaitingInfo && IsWorkOrderLocked && Plan is not null && !string.IsNullOrWhiteSpace(InjectedDecisionDigest);
+    public bool CanResumeInjectDecision => HasWaitingInfo && IsWorkOrderLocked && Plan is not null && (SelectedRunMode != ResumeMode.InjectDecision || !string.IsNullOrWhiteSpace(InjectedDecisionDigest));
 
 
     public IReadOnlyList<ToolCatalogItemViewModel> ToolCatalogEntries
@@ -266,6 +316,10 @@ public sealed partial class MainWindowViewModel
 
     public AsyncRelayCommand ResumeInjectDecisionCommand { get; private set; } = null!;
 
+    public AsyncRelayCommand UseFallbackToolCommand { get; private set; } = null!;
+
+    public AsyncRelayCommand CopyResumePayloadCommand { get; private set; } = null!;
+
     private void InitializeChatIntake()
     {
         ChatSessions = new ReadOnlyObservableCollection<ChatSessionViewModel>(_chatSessions);
@@ -276,6 +330,8 @@ public sealed partial class MainWindowViewModel
         GeneratePlanCommand = new AsyncRelayCommand(GeneratePlanFromIntakeAsync, () => IsWorkOrderLocked);
         RunIntakePlanCommand = new AsyncRelayCommand(StartAsync, CanStart);
         ResumeInjectDecisionCommand = new AsyncRelayCommand(ResumeWithInjectedDecisionAsync, () => CanResumeInjectDecision);
+        UseFallbackToolCommand = new AsyncRelayCommand(UseFallbackToolAsync, () => HasWaitingInfo && LastWaitingInfo?.FallbackPresent == true);
+        CopyResumePayloadCommand = new AsyncRelayCommand(CopyResumePayloadAsync, () => HasWaitingInfo && !string.IsNullOrWhiteSpace(InjectedDecisionDigest));
 
         _chatMessages.Add("System: Start a new work order from chat intake.");
     }
@@ -391,10 +447,41 @@ public sealed partial class MainWindowViewModel
         if (Plan is null || !CanResumeInjectDecision)
             return;
 
-        var options = new RuntimeRunOptions(ResumeMode.InjectDecision, InjectedDecisionDigest);
+        var options = SelectedRunMode switch
+        {
+            ResumeMode.OverridePlanChange => new RuntimeRunOptions(ResumeMode.OverridePlanChange, InjectedDecisionDigest, AllowPlanChangeOverride: true),
+            ResumeMode.DiscardWaitingStartOver => new RuntimeRunOptions(ResumeMode.DiscardWaitingStartOver, InjectedDecisionDigest, DiscardWaiting: true),
+            ResumeMode.InjectDecision => new RuntimeRunOptions(ResumeMode.InjectDecision, InjectedDecisionDigest),
+            _ => new RuntimeRunOptions(ResumeMode.None, InjectedDecisionDigest)
+        };
+
         var result = await _commandService.StartAsync(Plan, options).ConfigureAwait(true);
         if (result.Ok)
             RecordExecutionSession(result);
+    }
+
+    private Task UseFallbackToolAsync()
+    {
+        if (LastWaitingInfo is null || !LastWaitingInfo.FallbackPresent || LastWaitingInfo.AllowedNextNodes.Count == 0)
+            return Task.CompletedTask;
+
+        DecisionToolId = LastWaitingInfo.AllowedNextNodes[0];
+        return Task.CompletedTask;
+    }
+
+    private Task CopyResumePayloadAsync()
+    {
+        if (LastWaitingInfo is null)
+            return Task.CompletedTask;
+
+        LastResumePayload = JsonSerializer.Serialize(new DecisionInjectionRequest(
+            LastWaitingInfo.WorkOrderId,
+            LastWaitingInfo.PlanHash,
+            LastWaitingInfo.RouteGateId,
+            DecisionToolId,
+            CanonicalJson.Normalize(DecisionBindingsJson)));
+
+        return Task.CompletedTask;
     }
 
     private void RefreshInjectedDecisionDigest()

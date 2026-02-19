@@ -17,3 +17,10 @@
 
 - Runtime hang probe runs with blame-hang timeout.
 - UI tests run on Windows runner.
+
+## Identity semantics
+
+- `WorkOrderId` = lineage identity.
+- `PlanHash` = content identity.
+- `PlanId` = persistence key only.
+- Mermaid graph owns transitions; provider/model selection never chooses next node.

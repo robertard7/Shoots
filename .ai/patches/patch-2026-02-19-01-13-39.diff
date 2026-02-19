@@ -1,0 +1,425 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 9c3c66c..972164d 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -12,6 +12,9 @@ jobs:
+       - name: Checkout
+         uses: actions/checkout@v4
+ 
++      - name: Verify provider adapter naming
++        run: bash scripts/verify_provideradapter_naming.sh
++
+       - name: Setup .NET
+         uses: actions/setup-dotnet@v4
+         with:
+@@ -26,6 +29,9 @@ jobs:
+       - name: Test Runtime (trx)
+         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --logger "trx;LogFileName=runtime-linux.trx"
+ 
++      - name: Test Host contracts/core (trx)
++        run: dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release --logger "trx;LogFileName=host-linux.trx"
++
+       - name: Runtime hang probe (blame-hang)
+         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
+ 
+@@ -35,6 +41,7 @@ jobs:
+           name: runtime-linux-artifacts
+           path: |
+             **/runtime-linux.trx
++            **/host-linux.trx
+ 
+   full-windows:
+     name: full-windows
+@@ -43,6 +50,10 @@ jobs:
+       - name: Checkout
+         uses: actions/checkout@v4
+ 
++      - name: Verify provider adapter naming
++        shell: pwsh
++        run: ./scripts/verify_provideradapter_naming.ps1
++
+       - name: Setup .NET
+         uses: actions/setup-dotnet@v4
+         with:
+@@ -54,6 +65,9 @@ jobs:
+       - name: Build
+         run: dotnet build Shoots.sln -c Release --no-restore
+ 
++      - name: Test Host contracts/core on Windows (trx)
++        run: dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release --logger "trx;LogFileName=host-windows.trx"
++
+       - name: Test Runtime on Windows (trx)
+         run: dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -m:1 --logger "trx;LogFileName=runtime-windows.trx"
+ 
+@@ -80,6 +94,7 @@ jobs:
+           path: |
+             **/solution.trx
+             **/runtime-windows.trx
++            **/host-windows.trx
+             **/ui-tests.trx
+ 
+   determinism-guard:
+@@ -89,6 +104,10 @@ jobs:
+       - name: Checkout
+         uses: actions/checkout@v4
+ 
++      - name: Verify provider adapter naming
++        shell: pwsh
++        run: ./scripts/verify_provideradapter_naming.ps1
++
+       - name: Setup .NET
+         uses: actions/setup-dotnet@v4
+         with:
+diff --git a/Shoots.sln b/Shoots.sln
+index 6925d0d..ec29687 100644
+--- a/Shoots.sln
++++ b/Shoots.sln
+@@ -13,13 +13,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Providers", "Providers", "{
+ EndProject
+ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ui", "ui", "{9889E0D1-4029-411A-810B-AD8E977DB948}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Contracts.Core", "src\\Contracts\\Shoots.Contracts.Core\\Shoots.Contracts.Core.csproj", "{9D286002-0340-4561-8406-383AE1024734}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Contracts.Core", "src\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj", "{9D286002-0340-4561-8406-383AE1024734}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Contracts.Core.Tests", "src\\Contracts\\Shoots.Contracts.Core.Tests\\Shoots.Contracts.Core.Tests.csproj", "{8FA94BA7-3026-41E8-B7EF-8393BC8201AF}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Contracts.Core.Tests", "src\Contracts\Shoots.Contracts.Core.Tests\Shoots.Contracts.Core.Tests.csproj", "{8FA94BA7-3026-41E8-B7EF-8393BC8201AF}"
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Abstractions", "src\Runtime\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj", "{D3F206DE-8617-4990-AB87-EB8F6E088FE2}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Ui.Abstractions", "src\\Runtime\\Shoots.Runtime.Ui.Abstractions\\Shoots.Runtime.Ui.Abstractions.csproj", "{422866F3-12DA-4AC7-93C5-2B35BB649C78}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Ui.Abstractions", "src\Runtime\Shoots.Runtime.Ui.Abstractions\Shoots.Runtime.Ui.Abstractions.csproj", "{422866F3-12DA-4AC7-93C5-2B35BB649C78}"
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Runtime.Core", "src\Runtime\Shoots.Runtime.Core\Shoots.Runtime.Core.csproj", "{7785F63F-C691-403E-9C32-075A9C81A529}"
+ EndProject
+@@ -41,19 +41,27 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Cli", "src\B
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Builder.Tests", "src\Builder\Shoots.Builder.Tests\Shoots.Builder.Tests.csproj", "{6E86F625-BE6A-4072-AADD-AD65542091C2}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Bridge", "src\\ProviderAdapters\\Shoots.ProviderAdapters.Bridge\\Shoots.ProviderAdapters.Bridge.csproj", "{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Bridge", "src\ProviderAdapters\Shoots.ProviderAdapters.Bridge\Shoots.ProviderAdapters.Bridge.csproj", "{6DE646CD-375D-4674-A3EC-D7DEE5AC718E}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Embedded", "src\\ProviderAdapters\\Shoots.ProviderAdapters.Embedded\\Shoots.ProviderAdapters.Embedded.csproj", "{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Embedded", "src\ProviderAdapters\Shoots.ProviderAdapters.Embedded\Shoots.ProviderAdapters.Embedded.csproj", "{C57F49DA-540B-4AE3-AFAF-6B159C1F394E}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Fake", "src\\ProviderAdapters\\Shoots.ProviderAdapters.Fake\\Shoots.ProviderAdapters.Fake.csproj", "{A7363365-209B-4597-8CC3-36F386D4E2BA}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Fake", "src\ProviderAdapters\Shoots.ProviderAdapters.Fake\Shoots.ProviderAdapters.Fake.csproj", "{A7363365-209B-4597-8CC3-36F386D4E2BA}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Ollama", "src\\ProviderAdapters\\Shoots.ProviderAdapters.Ollama\\Shoots.ProviderAdapters.Ollama.csproj", "{7906E143-EAB9-40EE-B6F1-95E82AF2F212}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Ollama", "src\ProviderAdapters\Shoots.ProviderAdapters.Ollama\Shoots.ProviderAdapters.Ollama.csproj", "{7906E143-EAB9-40EE-B6F1-95E82AF2F212}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Ollama.Tests", "src\\ProviderAdapters\\Shoots.ProviderAdapters.Ollama.Tests\\Shoots.ProviderAdapters.Ollama.Tests.csproj", "{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.ProviderAdapters.Ollama.Tests", "src\ProviderAdapters\Shoots.ProviderAdapters.Ollama.Tests\Shoots.ProviderAdapters.Ollama.Tests.csproj", "{7C18480D-4786-4EE3-ACC8-02B0301BA3E4}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Ui", "ui\\Shoots.Ui\\Shoots.Ui.csproj", "{688E1C29-155C-44CD-8807-D423BB580733}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Ui", "ui\Shoots.Ui\Shoots.Ui.csproj", "{688E1C29-155C-44CD-8807-D423BB580733}"
+ EndProject
+-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Ui.Tests", "ui\\Shoots.Ui.Tests\\Shoots.Ui.Tests.csproj", "{28677199-139B-4888-8D57-5AABDF612BA4}"
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Ui.Tests", "ui\Shoots.Ui.Tests\Shoots.Ui.Tests.csproj", "{28677199-139B-4888-8D57-5AABDF612BA4}"
++EndProject
++Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Host", "Host", "{32051D05-A4A1-4BFD-A3D7-7BC556E7DF81}"
++EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Host.Abstractions", "src\Host\Shoots.Host.Abstractions\Shoots.Host.Abstractions.csproj", "{0C592D53-942A-44C8-8389-2477028AA54D}"
++EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Host.Core", "src\Host\Shoots.Host.Core\Shoots.Host.Core.csproj", "{2429878D-AB72-49AD-92B8-EC8EA45BF224}"
++EndProject
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shoots.Host.Tests", "src\Host\Shoots.Host.Tests\Shoots.Host.Tests.csproj", "{F5351184-B154-4D8F-8808-B7A156E30FDF}"
+ EndProject
+ Global
+ 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+@@ -144,6 +152,18 @@ Global
+ 		{28677199-139B-4888-8D57-5AABDF612BA4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+ 		{28677199-139B-4888-8D57-5AABDF612BA4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+ 		{28677199-139B-4888-8D57-5AABDF612BA4}.Release|Any CPU.Build.0 = Release|Any CPU
++		{0C592D53-942A-44C8-8389-2477028AA54D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{0C592D53-942A-44C8-8389-2477028AA54D}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{0C592D53-942A-44C8-8389-2477028AA54D}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{0C592D53-942A-44C8-8389-2477028AA54D}.Release|Any CPU.Build.0 = Release|Any CPU
++		{2429878D-AB72-49AD-92B8-EC8EA45BF224}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{2429878D-AB72-49AD-92B8-EC8EA45BF224}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{2429878D-AB72-49AD-92B8-EC8EA45BF224}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{2429878D-AB72-49AD-92B8-EC8EA45BF224}.Release|Any CPU.Build.0 = Release|Any CPU
++		{F5351184-B154-4D8F-8808-B7A156E30FDF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{F5351184-B154-4D8F-8808-B7A156E30FDF}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{F5351184-B154-4D8F-8808-B7A156E30FDF}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{F5351184-B154-4D8F-8808-B7A156E30FDF}.Release|Any CPU.Build.0 = Release|Any CPU
+ 	EndGlobalSection
+ 	GlobalSection(NestedProjects) = preSolution
+ 		{621484DB-F2E4-454F-82C4-A9A9FF05BF48} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
+@@ -170,5 +190,9 @@ Global
+ 		{7C18480D-4786-4EE3-ACC8-02B0301BA3E4} = {7393D93E-D9D8-4F2F-AA6C-8DF591F0FAD8}
+ 		{688E1C29-155C-44CD-8807-D423BB580733} = {9889E0D1-4029-411A-810B-AD8E977DB948}
+ 		{28677199-139B-4888-8D57-5AABDF612BA4} = {9889E0D1-4029-411A-810B-AD8E977DB948}
++		{32051D05-A4A1-4BFD-A3D7-7BC556E7DF81} = {6D3E7AD1-5B9D-4573-BD07-70E9220B1BD4}
++		{0C592D53-942A-44C8-8389-2477028AA54D} = {32051D05-A4A1-4BFD-A3D7-7BC556E7DF81}
++		{2429878D-AB72-49AD-92B8-EC8EA45BF224} = {32051D05-A4A1-4BFD-A3D7-7BC556E7DF81}
++		{F5351184-B154-4D8F-8808-B7A156E30FDF} = {32051D05-A4A1-4BFD-A3D7-7BC556E7DF81}
+ 	EndGlobalSection
+ EndGlobal
+diff --git a/build.ps1 b/build.ps1
+index 1183b7d..b6d66d3 100644
+--- a/build.ps1
++++ b/build.ps1
+@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
+ dotnet restore src/Runtime/Shoots.Runtime.sln
+ dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore
+ dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release -m:1
++dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -m:1
+ 
+ dotnet restore ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj
+ dotnet test ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -c Release -m:1 --logger "trx;LogFileName=ui-tests.trx"
+diff --git a/build.sh b/build.sh
+index 68e336c..762b6ec 100755
+--- a/build.sh
++++ b/build.sh
+@@ -4,3 +4,4 @@ set -euo pipefail
+ dotnet restore src/Runtime/Shoots.Runtime.sln
+ dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore
+ dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release -m:1
++dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -m:1
+diff --git a/docs/INDEX.md b/docs/INDEX.md
+index ac32b77..6438561 100644
+--- a/docs/INDEX.md
++++ b/docs/INDEX.md
+@@ -12,3 +12,4 @@
+ - VERIFICATION_POLICY.md
+ - laws/no-spin-law.md
+ - repo-layout.md
++- architecture/repo-map.md
+diff --git a/docs/UI_CHAT_INTAKE_FRONTDOOR.md b/docs/UI_CHAT_INTAKE_FRONTDOOR.md
+index 812c7de..1d81863 100644
+--- a/docs/UI_CHAT_INTAKE_FRONTDOOR.md
++++ b/docs/UI_CHAT_INTAKE_FRONTDOOR.md
+@@ -21,3 +21,8 @@
+ - Waiting panel surfaces RouteGateId, CurrentNodeId, policy, fallback flag, allowed next nodes, WorkOrderId, and PlanHash.
+ - User provides decision tool id and JSON bindings; UI computes deterministic `InjectedDecisionDigest` from canonical JSON.
+ - Resume runs only when WAITING and digest is present; no automatic rerun occurs.
++
++## Host boundary
++
++- UI gathers input and displays state; host services own canonicalization, decision digesting, and runtime run/resume option construction.
++- Resume requires explicit host intent (`ResumeMode` and digest/override/discard flags); WAITING does not auto-rerun.
+diff --git a/docs/laws/no-spin-law.md b/docs/laws/no-spin-law.md
+index 5709caa..adbce6a 100644
+--- a/docs/laws/no-spin-law.md
++++ b/docs/laws/no-spin-law.md
+@@ -17,3 +17,10 @@
+ 
+ - Runtime hang probe runs with blame-hang timeout.
+ - UI tests run on Windows runner.
++
++## Identity semantics
++
++- `WorkOrderId` = lineage identity.
++- `PlanHash` = content identity.
++- `PlanId` = persistence key only.
++- Mermaid graph owns transitions; provider/model selection never chooses next node.
+diff --git a/src/Runtime/Shoots.Runtime.Ui.Abstractions/Shoots.Runtime.Ui.Abstractions.csproj b/src/Runtime/Shoots.Runtime.Ui.Abstractions/Shoots.Runtime.Ui.Abstractions.csproj
+index cb9f68c..9451922 100644
+--- a/src/Runtime/Shoots.Runtime.Ui.Abstractions/Shoots.Runtime.Ui.Abstractions.csproj
++++ b/src/Runtime/Shoots.Runtime.Ui.Abstractions/Shoots.Runtime.Ui.Abstractions.csproj
+@@ -8,5 +8,6 @@
+   <ItemGroup>
+     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+     <ProjectReference Include="..\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
++    <ProjectReference Include="..\..\Host\Shoots.Host.Abstractions\Shoots.Host.Abstractions.csproj" />
+   </ItemGroup>
+ </Project>
+diff --git a/ui/Shoots.Ui/MainWindow.xaml b/ui/Shoots.Ui/MainWindow.xaml
+index 52cff94..8f010d6 100644
+--- a/ui/Shoots.Ui/MainWindow.xaml
++++ b/ui/Shoots.Ui/MainWindow.xaml
+@@ -163,6 +163,9 @@
+             <TabItem Header="Waiting">
+               <StackPanel Margin="8">
+                 <TextBlock Text="Decision Gate" FontWeight="SemiBold" Visibility="{Binding LastWaitingInfo, Converter={StaticResource NullToVisibilityConverter}}" />
++                <Border Background="#FFEFF6FF" CornerRadius="4" Padding="8" Margin="0,8,0,0">
++                  <TextBlock Text="{Binding WaitingExplanation}" TextWrapping="Wrap" />
++                </Border>
+                 <TextBlock Text="Reason" FontWeight="SemiBold" Margin="0,8,0,0" />
+                 <TextBlock Text="{Binding LastWaitingInfo.ReasonCode}" />
+                 <TextBlock Text="Gate" FontWeight="SemiBold" Margin="0,8,0,0" />
+@@ -177,6 +180,8 @@
+                 <TextBlock Text="{Binding LastWaitingInfo.FallbackPresent}" />
+                 <TextBlock Text="Allowed Next Nodes" FontWeight="SemiBold" Margin="0,8,0,0" />
+                 <ItemsControl ItemsSource="{Binding LastWaitingInfo.AllowedNextNodes}" />
++                <TextBlock Text="Run Mode" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <ComboBox ItemsSource="{Binding RunModes}" SelectedItem="{Binding SelectedRunMode, Mode=TwoWay}" />
+                 <TextBlock Text="Decision Tool Id" FontWeight="SemiBold" Margin="0,8,0,0" />
+                 <ComboBox ItemsSource="{Binding LastWaitingInfo.AllowedNextNodes}" SelectedItem="{Binding DecisionToolId, Mode=TwoWay}" IsEditable="True" />
+                 <TextBlock Text="Decision Bindings (json)" FontWeight="SemiBold" Margin="0,8,0,0" />
+@@ -187,7 +192,13 @@
+                 <TextBlock Text="{Binding LastWaitingInfo.PlanHash}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />
+                 <TextBlock Text="WorkOrderId" FontWeight="SemiBold" Margin="0,8,0,0" />
+                 <TextBlock Text="{Binding LastWaitingInfo.WorkOrderId}" FontFamily="Consolas" FontSize="11" />
+-                <Button Content="Resume (Inject Decision)" Command="{Binding ResumeInjectDecisionCommand}" Margin="0,8,0,0" />
++                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
++                  <Button Content="Use fallback tool" Command="{Binding UseFallbackToolCommand}" />
++                  <Button Content="Resume with selection" Command="{Binding ResumeInjectDecisionCommand}" Margin="8,0,0,0" />
++                  <Button Content="Copy resume payload" Command="{Binding CopyResumePayloadCommand}" Margin="8,0,0,0" />
++                </StackPanel>
++                <TextBlock Text="Resume payload" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <TextBox Text="{Binding LastResumePayload}" Height="80" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="True" FontFamily="Consolas" FontSize="11" />
+               </StackPanel>
+             </TabItem>
+             <TabItem Header="Trace">
+diff --git a/ui/Shoots.Ui/Shoots.Ui.csproj b/ui/Shoots.Ui/Shoots.Ui.csproj
+index 2519a98..ebf9d42 100644
+--- a/ui/Shoots.Ui/Shoots.Ui.csproj
++++ b/ui/Shoots.Ui/Shoots.Ui.csproj
+@@ -12,6 +12,7 @@
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\..\src\Runtime\Shoots.Runtime.Ui.Abstractions\Shoots.Runtime.Ui.Abstractions.csproj" />
++    <ProjectReference Include="..\..\src\Host\Shoots.Host.Core\Shoots.Host.Core.csproj" />
+   </ItemGroup>
+ 
+ </Project>
+diff --git a/ui/Shoots.Ui/ViewModels/ChatIntakeViewModel.Partial.cs b/ui/Shoots.Ui/ViewModels/ChatIntakeViewModel.Partial.cs
+index 8e7a74a..2647f40 100644
+--- a/ui/Shoots.Ui/ViewModels/ChatIntakeViewModel.Partial.cs
++++ b/ui/Shoots.Ui/ViewModels/ChatIntakeViewModel.Partial.cs
+@@ -29,6 +29,8 @@ public sealed partial class MainWindowViewModel
+     private string _decisionToolId = string.Empty;
+     private string _decisionBindingsJson = "{}";
+     private string _injectedDecisionDigest = string.Empty;
++    private ResumeMode _selectedRunMode = ResumeMode.None;
++    private string _lastResumePayload = string.Empty;
+ 
+     public ReadOnlyObservableCollection<ChatSessionViewModel> ChatSessions { get; private set; } = null!;
+ 
+@@ -202,6 +204,53 @@ public sealed partial class MainWindowViewModel
+         }
+     }
+ 
++
++    public ResumeMode SelectedRunMode
++    {
++        get => _selectedRunMode;
++        set
++        {
++            if (_selectedRunMode == value)
++                return;
++
++            _selectedRunMode = value;
++            OnPropertyChanged(nameof(SelectedRunMode));
++            ResumeInjectDecisionCommand.RaiseCanExecuteChanged();
++        }
++    }
++
++    public IReadOnlyList<ResumeMode> RunModes { get; } = Enum.GetValues<ResumeMode>();
++
++    public string WaitingExplanation
++    {
++        get
++        {
++            if (LastWaitingInfo is null)
++                return "No waiting gate is active.";
++
++            if (LastWaitingInfo.Policy == DecisionPolicy.Bypass.ToString() && LastWaitingInfo.FallbackPresent)
++                return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting: bypass policy has fallback available but requires explicit host resume intent.";
++
++            if (LastWaitingInfo.AllowedNextNodes.Count > 1)
++                return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting for explicit selection among multiple graph-derived candidates.";
++
++            return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting for explicit decision input.";
++        }
++    }
++
++    public string LastResumePayload
++    {
++        get => _lastResumePayload;
++        private set
++        {
++            if (_lastResumePayload == value)
++                return;
++
++            _lastResumePayload = value;
++            OnPropertyChanged(nameof(LastResumePayload));
++        }
++    }
++
+     public DecisionGateWaitingInfoViewModel? LastWaitingInfo
+     {
+         get => _lastWaitingInfo;
+@@ -213,6 +262,7 @@ public sealed partial class MainWindowViewModel
+             _lastWaitingInfo = value;
+             OnPropertyChanged(nameof(LastWaitingInfo));
+             OnPropertyChanged(nameof(HasWaitingInfo));
++            OnPropertyChanged(nameof(WaitingExplanation));
+ 
+             if (_lastWaitingInfo is not null && string.IsNullOrWhiteSpace(_decisionToolId) && _lastWaitingInfo.AllowedNextNodes.Count > 0)
+             {
+@@ -227,7 +277,7 @@ public sealed partial class MainWindowViewModel
+ 
+     public bool HasWaitingInfo => LastWaitingInfo is not null;
+ 
+-    public bool CanResumeInjectDecision => HasWaitingInfo && IsWorkOrderLocked && Plan is not null && !string.IsNullOrWhiteSpace(InjectedDecisionDigest);
++    public bool CanResumeInjectDecision => HasWaitingInfo && IsWorkOrderLocked && Plan is not null && (SelectedRunMode != ResumeMode.InjectDecision || !string.IsNullOrWhiteSpace(InjectedDecisionDigest));
+ 
+ 
+     public IReadOnlyList<ToolCatalogItemViewModel> ToolCatalogEntries
+@@ -266,6 +316,10 @@ public sealed partial class MainWindowViewModel
+ 
+     public AsyncRelayCommand ResumeInjectDecisionCommand { get; private set; } = null!;
+ 
++    public AsyncRelayCommand UseFallbackToolCommand { get; private set; } = null!;
++
++    public AsyncRelayCommand CopyResumePayloadCommand { get; private set; } = null!;
++
+     private void InitializeChatIntake()
+     {
+         ChatSessions = new ReadOnlyObservableCollection<ChatSessionViewModel>(_chatSessions);
+@@ -276,6 +330,8 @@ public sealed partial class MainWindowViewModel
+         GeneratePlanCommand = new AsyncRelayCommand(GeneratePlanFromIntakeAsync, () => IsWorkOrderLocked);
+         RunIntakePlanCommand = new AsyncRelayCommand(StartAsync, CanStart);
+         ResumeInjectDecisionCommand = new AsyncRelayCommand(ResumeWithInjectedDecisionAsync, () => CanResumeInjectDecision);
++        UseFallbackToolCommand = new AsyncRelayCommand(UseFallbackToolAsync, () => HasWaitingInfo && LastWaitingInfo?.FallbackPresent == true);
++        CopyResumePayloadCommand = new AsyncRelayCommand(CopyResumePayloadAsync, () => HasWaitingInfo && !string.IsNullOrWhiteSpace(InjectedDecisionDigest));
+ 
+         _chatMessages.Add("System: Start a new work order from chat intake.");
+     }
+@@ -391,12 +447,43 @@ public sealed partial class MainWindowViewModel
+         if (Plan is null || !CanResumeInjectDecision)
+             return;
+ 
+-        var options = new RuntimeRunOptions(ResumeMode.InjectDecision, InjectedDecisionDigest);
++        var options = SelectedRunMode switch
++        {
++            ResumeMode.OverridePlanChange => new RuntimeRunOptions(ResumeMode.OverridePlanChange, InjectedDecisionDigest, AllowPlanChangeOverride: true),
++            ResumeMode.DiscardWaitingStartOver => new RuntimeRunOptions(ResumeMode.DiscardWaitingStartOver, InjectedDecisionDigest, DiscardWaiting: true),
++            ResumeMode.InjectDecision => new RuntimeRunOptions(ResumeMode.InjectDecision, InjectedDecisionDigest),
++            _ => new RuntimeRunOptions(ResumeMode.None, InjectedDecisionDigest)
++        };
++
+         var result = await _commandService.StartAsync(Plan, options).ConfigureAwait(true);
+         if (result.Ok)
+             RecordExecutionSession(result);
+     }
+ 
++    private Task UseFallbackToolAsync()
++    {
++        if (LastWaitingInfo is null || !LastWaitingInfo.FallbackPresent || LastWaitingInfo.AllowedNextNodes.Count == 0)
++            return Task.CompletedTask;
++
++        DecisionToolId = LastWaitingInfo.AllowedNextNodes[0];
++        return Task.CompletedTask;
++    }
++
++    private Task CopyResumePayloadAsync()
++    {
++        if (LastWaitingInfo is null)
++            return Task.CompletedTask;
++
++        LastResumePayload = JsonSerializer.Serialize(new DecisionInjectionRequest(
++            LastWaitingInfo.WorkOrderId,
++            LastWaitingInfo.PlanHash,
++            LastWaitingInfo.RouteGateId,
++            DecisionToolId,
++            CanonicalJson.Normalize(DecisionBindingsJson)));
++
++        return Task.CompletedTask;
++    }
++
+     private void RefreshInjectedDecisionDigest()
+     {
+         if (!HasWaitingInfo || string.IsNullOrWhiteSpace(DecisionToolId))

@@ -12,3 +12,4 @@
 - VERIFICATION_POLICY.md
 - laws/no-spin-law.md
 - repo-layout.md
+- architecture/repo-map.md

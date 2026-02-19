@@ -21,3 +21,8 @@
 - Waiting panel surfaces RouteGateId, CurrentNodeId, policy, fallback flag, allowed next nodes, WorkOrderId, and PlanHash.
 - User provides decision tool id and JSON bindings; UI computes deterministic `InjectedDecisionDigest` from canonical JSON.
 - Resume runs only when WAITING and digest is present; no automatic rerun occurs.
+
+## Host boundary
+
+- UI gathers input and displays state; host services own canonicalization, decision digesting, and runtime run/resume option construction.
+- Resume requires explicit host intent (`ResumeMode` and digest/override/discard flags); WAITING does not auto-rerun.

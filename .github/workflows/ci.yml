@@ -12,6 +12,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify provider adapter naming
+        run: bash scripts/verify_provideradapter_naming.sh
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -26,6 +29,9 @@ jobs:
       - name: Test Runtime (trx)
         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --logger "trx;LogFileName=runtime-linux.trx"
 
+      - name: Test Host contracts/core (trx)
+        run: dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release --logger "trx;LogFileName=host-linux.trx"
+
       - name: Runtime hang probe (blame-hang)
         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
 
@@ -35,6 +41,7 @@ jobs:
           name: runtime-linux-artifacts
           path: |
             **/runtime-linux.trx
+            **/host-linux.trx
 
   full-windows:
     name: full-windows
@@ -42,6 +49,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify provider adapter naming
+        shell: pwsh
+        run: ./scripts/verify_provideradapter_naming.ps1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -53,6 +64,9 @@ jobs:
 
       - name: Build
         run: dotnet build Shoots.sln -c Release --no-restore
+
+      - name: Test Host contracts/core on Windows (trx)
+        run: dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release --logger "trx;LogFileName=host-windows.trx"
 
       - name: Test Runtime on Windows (trx)
         run: dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -m:1 --logger "trx;LogFileName=runtime-windows.trx"
@@ -80,6 +94,7 @@ jobs:
           path: |
             **/solution.trx
             **/runtime-windows.trx
+            **/host-windows.trx
             **/ui-tests.trx
 
   determinism-guard:
@@ -88,6 +103,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify provider adapter naming
+        shell: pwsh
+        run: ./scripts/verify_provideradapter_naming.ps1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
