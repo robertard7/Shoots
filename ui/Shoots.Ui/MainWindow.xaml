@@ -140,6 +140,7 @@
               <Button Content="Unlock" Command="{Binding UnlockWorkOrderCommand}" Margin="8,0,0,0" />
               <Button Content="Generate Plan" Command="{Binding GeneratePlanCommand}" Margin="8,0,0,0" />
               <Button Content="Run" Command="{Binding RunIntakePlanCommand}" Margin="8,0,0,0" />
+              <Button Content="Quick Start" Command="{Binding QuickStartCommand}" Margin="8,0,0,0" />
             </StackPanel>
             <TextBlock Margin="0,8,0,0" Text="{Binding JobSpecDigest}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />
             <ListBox Margin="0,8,0,0" ItemsSource="{Binding ChatMessages}" Height="140" />

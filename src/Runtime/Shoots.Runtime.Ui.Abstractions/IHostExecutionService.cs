@@ -12,7 +12,7 @@ public interface IHostExecutionService
 
     Task<RuntimeResult> RunAsync(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default);
 
-    Task<RuntimeResult> ResumeAsync(BuildPlan plan, DecisionInjectionRequest request, CancellationToken ct = default);
+    Task<RuntimeResult> ResumeAsync(BuildPlan plan, DecisionInjectionRequest request, HostResumeIntent intent, CancellationToken ct = default);
 
     Shoots.Contracts.Core.ToolCatalogSnapshot GetToolCatalogSnapshot(BuildPlan plan);
 }

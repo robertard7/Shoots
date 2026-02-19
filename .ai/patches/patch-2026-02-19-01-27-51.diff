@@ -1,0 +1,64 @@
+diff --git a/ui/Shoots.Ui.Tests/ChatIntakeViewModelTests.cs b/ui/Shoots.Ui.Tests/ChatIntakeViewModelTests.cs
+index ce122e2..ccfa9a1 100644
+--- a/ui/Shoots.Ui.Tests/ChatIntakeViewModelTests.cs
++++ b/ui/Shoots.Ui.Tests/ChatIntakeViewModelTests.cs
+@@ -59,8 +59,8 @@ public sealed class ChatIntakeViewModelTests
+     [Fact]
+     public void Canonical_json_normalizes_property_order_for_stable_digest()
+     {
+-        const string left = "{"b":2,"a":1,"nested":{"z":true,"x":"v"}}";
+-        const string right = "{"nested":{"x":"v","z":true},"a":1,"b":2}";
++        const string left = "{\"b\":2,\"a\":1,\"nested\":{\"z\":true,\"x\":\"v\"}}";
++        const string right = "{\"nested\":{\"x\":\"v\",\"z\":true},\"a\":1,\"b\":2}";
+ 
+         var normalizedLeft = CanonicalJson.Normalize(left);
+         var normalizedRight = CanonicalJson.Normalize(right);
+@@ -75,8 +75,8 @@ public sealed class ChatIntakeViewModelTests
+     [Fact]
+     public void Decision_digest_changes_when_tool_or_bindings_change()
+     {
+-        var baseBindings = CanonicalJson.Normalize("{"a":1}");
+-        var changedBindings = CanonicalJson.Normalize("{"a":2}");
++        var baseBindings = CanonicalJson.Normalize("{\"a\":1}");
++        var changedBindings = CanonicalJson.Normalize("{\"a\":2}");
+ 
+         var digestA = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = baseBindings });
+         var digestB = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.beta", bindings = baseBindings });
+@@ -90,14 +90,14 @@ public sealed class ChatIntakeViewModelTests
+     [Fact]
+     public void Canonical_json_number_and_null_handling_is_stable()
+     {
+-        const string left = "{"a":1,"b":null}";
+-        const string right = "{"b":null,"a":1}";
++        const string left = "{\"a\":1,\"b\":null}";
++        const string right = "{\"b\":null,\"a\":1}";
+ 
+         var n1 = CanonicalJson.Normalize(left);
+         var n2 = CanonicalJson.Normalize(right);
+ 
+         Assert.Equal(n1, n2);
+-        Assert.Equal("{"a":1,"b":null}", n1);
++        Assert.Equal("{\"a\":1,\"b\":null}", n1);
+     }
+ 
+     [Fact]
+@@ -106,15 +106,15 @@ public sealed class ChatIntakeViewModelTests
+         var baseDigest = JobSpecDigestBuilder.HashCanonical(new
+         {
+             toolId = "tool.alpha",
+-            bindings = CanonicalJson.Normalize("{"k":1}"),
++            bindings = CanonicalJson.Normalize("{\"k\":1}"),
+             planHash = "plan-a",
+             intentTokenHash = "intent-a",
+             workOrderId = "wo-a"
+         });
+ 
+-        var changedPlan = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = CanonicalJson.Normalize("{"k":1}"), planHash = "plan-b", intentTokenHash = "intent-a", workOrderId = "wo-a" });
+-        var changedIntent = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = CanonicalJson.Normalize("{"k":1}"), planHash = "plan-a", intentTokenHash = "intent-b", workOrderId = "wo-a" });
+-        var changedWorkOrder = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = CanonicalJson.Normalize("{"k":1}"), planHash = "plan-a", intentTokenHash = "intent-a", workOrderId = "wo-b" });
++        var changedPlan = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = CanonicalJson.Normalize("{\"k\":1}"), planHash = "plan-b", intentTokenHash = "intent-a", workOrderId = "wo-a" });
++        var changedIntent = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = CanonicalJson.Normalize("{\"k\":1}"), planHash = "plan-a", intentTokenHash = "intent-b", workOrderId = "wo-a" });
++        var changedWorkOrder = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = CanonicalJson.Normalize("{\"k\":1}"), planHash = "plan-a", intentTokenHash = "intent-a", workOrderId = "wo-b" });
+ 
+         Assert.NotEqual(baseDigest, changedPlan);
+         Assert.NotEqual(baseDigest, changedIntent);

@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core;
+using Shoots.Host.Abstractions;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.UI.ViewModels;
@@ -277,7 +278,7 @@ public sealed partial class MainWindowViewModel
 
     public bool HasWaitingInfo => LastWaitingInfo is not null;
 
-    public bool CanResumeInjectDecision => HasWaitingInfo && IsWorkOrderLocked && Plan is not null && (SelectedRunMode != ResumeMode.InjectDecision || !string.IsNullOrWhiteSpace(InjectedDecisionDigest));
+    public bool CanResumeInjectDecision => HasWaitingInfo && IsWorkOrderLocked && Plan is not null && !string.IsNullOrWhiteSpace(InjectedDecisionDigest);
 
 
     public IReadOnlyList<ToolCatalogItemViewModel> ToolCatalogEntries
@@ -314,6 +315,8 @@ public sealed partial class MainWindowViewModel
 
     public AsyncRelayCommand RunIntakePlanCommand { get; private set; } = null!;
 
+    public AsyncRelayCommand QuickStartCommand { get; private set; } = null!;
+
     public AsyncRelayCommand ResumeInjectDecisionCommand { get; private set; } = null!;
 
     public AsyncRelayCommand UseFallbackToolCommand { get; private set; } = null!;
@@ -329,11 +332,23 @@ public sealed partial class MainWindowViewModel
         UnlockWorkOrderCommand = new AsyncRelayCommand(UnlockWorkOrderAsync, () => IsWorkOrderLocked);
         GeneratePlanCommand = new AsyncRelayCommand(GeneratePlanFromIntakeAsync, () => IsWorkOrderLocked);
         RunIntakePlanCommand = new AsyncRelayCommand(StartAsync, CanStart);
+        QuickStartCommand = new AsyncRelayCommand(QuickStartAsync, () => !string.IsNullOrWhiteSpace(IntakeIntent));
         ResumeInjectDecisionCommand = new AsyncRelayCommand(ResumeWithInjectedDecisionAsync, () => CanResumeInjectDecision);
         UseFallbackToolCommand = new AsyncRelayCommand(UseFallbackToolAsync, () => HasWaitingInfo && LastWaitingInfo?.FallbackPresent == true);
         CopyResumePayloadCommand = new AsyncRelayCommand(CopyResumePayloadAsync, () => HasWaitingInfo && !string.IsNullOrWhiteSpace(InjectedDecisionDigest));
 
         _chatMessages.Add("System: Start a new work order from chat intake.");
+    }
+
+    private async Task QuickStartAsync()
+    {
+        if (!IsWorkOrderLocked)
+            await LockWorkOrderAsync().ConfigureAwait(true);
+
+        if (Plan is null)
+            await GeneratePlanFromIntakeAsync().ConfigureAwait(true);
+
+        await StartAsync().ConfigureAwait(true);
     }
 
     private Task LockWorkOrderAsync()
@@ -447,15 +462,22 @@ public sealed partial class MainWindowViewModel
         if (Plan is null || !CanResumeInjectDecision)
             return;
 
-        var options = SelectedRunMode switch
+        var request = new DecisionInjectionRequest(
+            LastWaitingInfo!.WorkOrderId,
+            LastWaitingInfo.PlanHash,
+            LastWaitingInfo.RouteGateId,
+            DecisionToolId,
+            CanonicalJson.Normalize(DecisionBindingsJson));
+
+        var intent = SelectedRunMode switch
         {
-            ResumeMode.OverridePlanChange => new RuntimeRunOptions(ResumeMode.OverridePlanChange, InjectedDecisionDigest, AllowPlanChangeOverride: true),
-            ResumeMode.DiscardWaitingStartOver => new RuntimeRunOptions(ResumeMode.DiscardWaitingStartOver, InjectedDecisionDigest, DiscardWaiting: true),
-            ResumeMode.InjectDecision => new RuntimeRunOptions(ResumeMode.InjectDecision, InjectedDecisionDigest),
-            _ => new RuntimeRunOptions(ResumeMode.None, InjectedDecisionDigest)
+            ResumeMode.OverridePlanChange => new HostResumeIntent(HostResumeIntentMode.OverridePlanChange),
+            ResumeMode.DiscardWaitingStartOver => new HostResumeIntent(HostResumeIntentMode.DiscardWaitingStartOver),
+            ResumeMode.InjectDecision => new HostResumeIntent(HostResumeIntentMode.InjectDecision),
+            _ => new HostResumeIntent(HostResumeIntentMode.None)
         };
 
-        var result = await _commandService.StartAsync(Plan, options).ConfigureAwait(true);
+        var result = await _hostExecutionService.ResumeAsync(Plan, request, intent).ConfigureAwait(true);
         if (result.Ok)
             RecordExecutionSession(result);
     }

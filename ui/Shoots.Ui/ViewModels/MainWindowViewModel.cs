@@ -28,6 +28,7 @@ namespace Shoots.UI.ViewModels;
 public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 {
     private readonly IExecutionCommandService _commandService;
+    private readonly IHostExecutionService _hostExecutionService;
     private readonly IEnvironmentProfileService _environmentService;
     private readonly IEnvironmentCapabilityProvider _capabilityProvider;
     private readonly IEnvironmentProfilePrompt _profilePrompt;
@@ -106,6 +107,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         IAiHelpFacade aiHelpFacade)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
+        _hostExecutionService = new HostExecutionService(_commandService);
         _environmentService = environmentService ?? throw new ArgumentNullException(nameof(environmentService));
         _capabilityProvider = capabilityProvider ?? throw new ArgumentNullException(nameof(capabilityProvider));
         _profilePrompt = profilePrompt ?? throw new ArgumentNullException(nameof(profilePrompt));

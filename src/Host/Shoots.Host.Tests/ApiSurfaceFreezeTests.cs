@@ -18,7 +18,7 @@ public sealed class ApiSurfaceFreezeTests
         Assert.Equal(new[]
         {
             "BuildPlan PreviewPlan(BuildRequest request, DelegationAuthority authority, IReadOnlyList`1 steps, IReadOnlyList`1 artifacts)",
-            "Task`1 ResumeAsync(BuildPlan plan, DecisionInjectionRequest request, CancellationToken ct)",
+            "Task`1 ResumeAsync(BuildPlan plan, DecisionInjectionRequest request, HostResumeIntent intent, CancellationToken ct)",
             "Task`1 RunAsync(BuildPlan plan, RuntimeRunOptions options, CancellationToken ct)",
             "ToolCatalogSnapshot GetToolCatalogSnapshot(BuildPlan plan)",
             "WorkOrder CreateWorkOrder(String originalRequest, String intent, IReadOnlyList`1 constraints, IReadOnlyList`1 requestedArtifacts)"

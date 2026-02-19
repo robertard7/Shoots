@@ -8,7 +8,15 @@ public sealed record HostPolicyOptions(
     bool AllowRemote,
     bool AllowLocal,
     bool AllowCloudAssist
-);
+)
+{
+    public static HostPolicyOptions Default { get; } = new(
+        ProviderTimeout: TimeSpan.FromSeconds(30),
+        MaxRetries: 1,
+        AllowRemote: true,
+        AllowLocal: true,
+        AllowCloudAssist: false);
+}
 
 public sealed record ModelDescriptor(
     string ModelId,
@@ -48,3 +56,13 @@ public sealed record DecisionInjectionRequest(
     string ToolId,
     string BindingsJsonCanonical
 );
+
+public enum HostResumeIntentMode
+{
+    None = 0,
+    InjectDecision = 1,
+    OverridePlanChange = 2,
+    DiscardWaitingStartOver = 3
+}
+
+public sealed record HostResumeIntent(HostResumeIntentMode Mode);

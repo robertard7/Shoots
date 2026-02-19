@@ -59,8 +59,8 @@ public sealed class ChatIntakeViewModelTests
     [Fact]
     public void Canonical_json_normalizes_property_order_for_stable_digest()
     {
-        const string left = "{"b":2,"a":1,"nested":{"z":true,"x":"v"}}";
-        const string right = "{"nested":{"x":"v","z":true},"a":1,"b":2}";
+        const string left = "{\"b\":2,\"a\":1,\"nested\":{\"z\":true,\"x\":\"v\"}}";
+        const string right = "{\"nested\":{\"x\":\"v\",\"z\":true},\"a\":1,\"b\":2}";
 
         var normalizedLeft = CanonicalJson.Normalize(left);
         var normalizedRight = CanonicalJson.Normalize(right);
@@ -75,8 +75,8 @@ public sealed class ChatIntakeViewModelTests
     [Fact]
     public void Decision_digest_changes_when_tool_or_bindings_change()
     {
-        var baseBindings = CanonicalJson.Normalize("{"a":1}");
-        var changedBindings = CanonicalJson.Normalize("{"a":2}");
+        var baseBindings = CanonicalJson.Normalize("{\"a\":1}");
+        var changedBindings = CanonicalJson.Normalize("{\"a\":2}");
 
         var digestA = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = baseBindings });
         var digestB = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.beta", bindings = baseBindings });
@@ -84,6 +84,41 @@ public sealed class ChatIntakeViewModelTests
 
         Assert.NotEqual(digestA, digestB);
         Assert.NotEqual(digestA, digestC);
+    }
+
+
+    [Fact]
+    public void Canonical_json_number_and_null_handling_is_stable()
+    {
+        const string left = "{\"a\":1,\"b\":null}";
+        const string right = "{\"b\":null,\"a\":1}";
+
+        var n1 = CanonicalJson.Normalize(left);
+        var n2 = CanonicalJson.Normalize(right);
+
+        Assert.Equal(n1, n2);
+        Assert.Equal("{\"a\":1,\"b\":null}", n1);
+    }
+
+    [Fact]
+    public void Decision_digest_includes_all_identity_fields()
+    {
+        var baseDigest = JobSpecDigestBuilder.HashCanonical(new
+        {
+            toolId = "tool.alpha",
+            bindings = CanonicalJson.Normalize("{\"k\":1}"),
+            planHash = "plan-a",
+            intentTokenHash = "intent-a",
+            workOrderId = "wo-a"
+        });
+
+        var changedPlan = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = CanonicalJson.Normalize("{\"k\":1}"), planHash = "plan-b", intentTokenHash = "intent-a", workOrderId = "wo-a" });
+        var changedIntent = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = CanonicalJson.Normalize("{\"k\":1}"), planHash = "plan-a", intentTokenHash = "intent-b", workOrderId = "wo-a" });
+        var changedWorkOrder = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = CanonicalJson.Normalize("{\"k\":1}"), planHash = "plan-a", intentTokenHash = "intent-a", workOrderId = "wo-b" });
+
+        Assert.NotEqual(baseDigest, changedPlan);
+        Assert.NotEqual(baseDigest, changedIntent);
+        Assert.NotEqual(baseDigest, changedWorkOrder);
     }
 
     private static MainWindowViewModel BuildViewModel()

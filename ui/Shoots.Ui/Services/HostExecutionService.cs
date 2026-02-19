@@ -30,10 +30,18 @@ public sealed class HostExecutionService : IHostExecutionService
     public Task<RuntimeResult> RunAsync(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default)
         => _execution.StartAsync(plan, options, ct);
 
-    public Task<RuntimeResult> ResumeAsync(BuildPlan plan, DecisionInjectionRequest request, CancellationToken ct = default)
+    public Task<RuntimeResult> ResumeAsync(BuildPlan plan, DecisionInjectionRequest request, HostResumeIntent intent, CancellationToken ct = default)
     {
         var digest = DecisionDigest.Compute(request);
-        return _execution.StartAsync(plan, new RuntimeRunOptions(ResumeMode.InjectDecision, digest), ct);
+        var options = intent.Mode switch
+        {
+            HostResumeIntentMode.OverridePlanChange => new RuntimeRunOptions(ResumeMode.OverridePlanChange, digest, AllowPlanChangeOverride: true),
+            HostResumeIntentMode.DiscardWaitingStartOver => new RuntimeRunOptions(ResumeMode.DiscardWaitingStartOver, digest, DiscardWaiting: true),
+            HostResumeIntentMode.InjectDecision => new RuntimeRunOptions(ResumeMode.InjectDecision, digest),
+            _ => new RuntimeRunOptions(ResumeMode.None, digest)
+        };
+
+        return _execution.StartAsync(plan, options, ct);
     }
 
     public Shoots.Contracts.Core.ToolCatalogSnapshot GetToolCatalogSnapshot(BuildPlan plan)

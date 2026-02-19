@@ -33,7 +33,8 @@ public sealed class HostRunCoordinatorTests
     public void Blocked_rerun_does_not_mutate_attempt_or_progress_token()
     {
         var persistence = new InMemoryRuntimePersistence();
-        var coordinator = new HostRunCoordinator(new NullToolRegistry(), new WaitingDecisionProvider(), persistence);
+        var provider = new WaitingDecisionProvider();
+        var coordinator = new HostRunCoordinator(new NullToolRegistry(), provider, persistence);
         var plan = CreatePlan("plan-a");
 
         var first = coordinator.Run(plan);
@@ -50,6 +51,8 @@ public sealed class HostRunCoordinatorTests
         Assert.NotNull(runStateAfter);
         Assert.Equal(runStateBefore!.AttemptCounter, runStateAfter!.AttemptCounter);
         Assert.Equal(runStateBefore.ProgressToken, runStateAfter.ProgressToken);
+        Assert.Equal(1, provider.CallCount);
+        Assert.Equal(RoutingTraceEventKind.HostBlockedRerunWaiting, second.Trace.Entries[^1].Event);
     }
 
     private static BuildPlan CreatePlan(string planId)
@@ -83,7 +86,12 @@ public sealed class HostRunCoordinatorTests
 
     private sealed class WaitingDecisionProvider : IAiDecisionProvider
     {
+        public int CallCount { get; private set; }
+
         public ToolSelectionDecision? RequestDecision(AiDecisionRequest request)
-            => null;
+        {
+            CallCount++;
+            return null;
+        }
     }
 }
