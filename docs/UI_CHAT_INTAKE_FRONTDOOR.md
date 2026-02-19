@@ -15,3 +15,9 @@
 4. `Run` executes via host command service.
 5. If runtime returns `WAITING`, the UI displays waiting details and remains idle.
 6. Resume happens only through explicit user action (`Resume (Inject Decision)`), never auto-rerun.
+
+## Waiting + Resume
+
+- Waiting panel surfaces RouteGateId, CurrentNodeId, policy, fallback flag, allowed next nodes, WorkOrderId, and PlanHash.
+- User provides decision tool id and JSON bindings; UI computes deterministic `InjectedDecisionDigest` from canonical JSON.
+- Resume runs only when WAITING and digest is present; no automatic rerun occurs.

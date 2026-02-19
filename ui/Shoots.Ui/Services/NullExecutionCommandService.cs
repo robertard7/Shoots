@@ -10,10 +10,11 @@ namespace Shoots.UI.Services;
 
 public sealed class NullExecutionCommandService : IExecutionCommandService
 {
-    public Task<RuntimeResult> StartAsync(BuildPlan plan, CancellationToken ct = default)
+    public Task<RuntimeResult> StartAsync(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default)
     {
         _ = plan;
         _ = ct;
+        _ = options;
 
         return Task.FromResult(
             RuntimeResult.Fail(
@@ -25,12 +26,14 @@ public sealed class NullExecutionCommandService : IExecutionCommandService
     public Task CancelAsync(CancellationToken ct = default)
     {
         _ = ct;
+        _ = options;
         return Task.CompletedTask;
     }
 
     public Task<IRuntimeStatusSnapshot> RefreshStatusAsync(CancellationToken ct = default)
     {
         _ = ct;
+        _ = options;
 
         return Task.FromResult<IRuntimeStatusSnapshot>(
             new NullRuntimeStatusSnapshot(

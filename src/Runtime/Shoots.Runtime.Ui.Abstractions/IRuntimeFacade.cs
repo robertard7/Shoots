@@ -5,7 +5,7 @@ namespace Shoots.Runtime.Ui.Abstractions;
 
 public interface IRuntimeFacade
 {
-    Task<RuntimeResult> StartExecution(BuildPlan plan, CancellationToken ct = default);
+    Task<RuntimeResult> StartExecution(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default);
 
     Task<IRuntimeStatusSnapshot> QueryStatus(CancellationToken ct = default);
 

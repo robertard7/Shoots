@@ -1,0 +1,504 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 998d102..9c3c66c 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -54,7 +54,23 @@ jobs:
+       - name: Build
+         run: dotnet build Shoots.sln -c Release --no-restore
+ 
+-      - name: Test (trx)
++      - name: Test Runtime on Windows (trx)
++        run: dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -m:1 --logger "trx;LogFileName=runtime-windows.trx"
++
++      - name: Test UI (trx)
++        shell: pwsh
++        run: |
++          $job = Start-Job -ScriptBlock {
++            dotnet test ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -c Release -m:1 --logger "trx;LogFileName=ui-tests.trx"
++          }
++          if (-not (Wait-Job -Job $job -Timeout 600)) {
++            Stop-Job -Job $job
++            Receive-Job -Job $job -Keep
++            throw "UI test timeout exceeded 10 minutes."
++          }
++          Receive-Job -Job $job
++
++      - name: Test full solution (trx)
+         run: dotnet test Shoots.sln -c Release --no-build --logger "trx;LogFileName=solution.trx"
+ 
+       - name: Upload test artifacts
+@@ -63,6 +79,8 @@ jobs:
+           name: full-windows-artifacts
+           path: |
+             **/solution.trx
++            **/runtime-windows.trx
++            **/ui-tests.trx
+ 
+   determinism-guard:
+     name: determinism-guard
+diff --git a/docs/INDEX.md b/docs/INDEX.md
+index d8470c5..ac32b77 100644
+--- a/docs/INDEX.md
++++ b/docs/INDEX.md
+@@ -10,3 +10,5 @@
+ - UI_WPF_LAYOUT_DEFERRED.md
+ - UNIVERSAL_AI_LAYER.md
+ - VERIFICATION_POLICY.md
++- laws/no-spin-law.md
++- repo-layout.md
+diff --git a/docs/UI_CHAT_INTAKE_FRONTDOOR.md b/docs/UI_CHAT_INTAKE_FRONTDOOR.md
+index da845a9..812c7de 100644
+--- a/docs/UI_CHAT_INTAKE_FRONTDOOR.md
++++ b/docs/UI_CHAT_INTAKE_FRONTDOOR.md
+@@ -15,3 +15,9 @@
+ 4. `Run` executes via host command service.
+ 5. If runtime returns `WAITING`, the UI displays waiting details and remains idle.
+ 6. Resume happens only through explicit user action (`Resume (Inject Decision)`), never auto-rerun.
++
++## Waiting + Resume
++
++- Waiting panel surfaces RouteGateId, CurrentNodeId, policy, fallback flag, allowed next nodes, WorkOrderId, and PlanHash.
++- User provides decision tool id and JSON bindings; UI computes deterministic `InjectedDecisionDigest` from canonical JSON.
++- Resume runs only when WAITING and digest is present; no automatic rerun occurs.
+diff --git a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+index b087030..e192e10 100644
+--- a/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
++++ b/src/Runtime/Shoots.Runtime.Loader/RuntimeFacade.cs
+@@ -29,10 +29,16 @@ public sealed class RuntimeFacade : IRuntimeFacade
+         EnforceEmbeddedProvider();
+     }
+ 
+-    public Task<RuntimeResult> StartExecution(BuildPlan plan, CancellationToken ct = default)
+-        => Task.FromResult(RuntimeResult.Fail(
++    public Task<RuntimeResult> StartExecution(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default)
++    {
++        _ = plan;
++        _ = options;
++        _ = ct;
++
++        return Task.FromResult(RuntimeResult.Fail(
+             RuntimeError.Internal("Runtime facade execution is not configured.")
+         ));
++    }
+ 
+     public Task<IRuntimeStatusSnapshot> QueryStatus(CancellationToken ct = default)
+         => Task.FromResult<IRuntimeStatusSnapshot>(
+diff --git a/src/Runtime/Shoots.Runtime.Ui.Abstractions/IRuntimeFacade.cs b/src/Runtime/Shoots.Runtime.Ui.Abstractions/IRuntimeFacade.cs
+index 4b72fd4..bcec0f5 100644
+--- a/src/Runtime/Shoots.Runtime.Ui.Abstractions/IRuntimeFacade.cs
++++ b/src/Runtime/Shoots.Runtime.Ui.Abstractions/IRuntimeFacade.cs
+@@ -5,7 +5,7 @@ namespace Shoots.Runtime.Ui.Abstractions;
+ 
+ public interface IRuntimeFacade
+ {
+-    Task<RuntimeResult> StartExecution(BuildPlan plan, CancellationToken ct = default);
++    Task<RuntimeResult> StartExecution(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default);
+ 
+     Task<IRuntimeStatusSnapshot> QueryStatus(CancellationToken ct = default);
+ 
+diff --git a/ui/Shoots.Ui.Tests/ChatIntakeViewModelTests.cs b/ui/Shoots.Ui.Tests/ChatIntakeViewModelTests.cs
+index d07b171..5d8e94e 100644
+--- a/ui/Shoots.Ui.Tests/ChatIntakeViewModelTests.cs
++++ b/ui/Shoots.Ui.Tests/ChatIntakeViewModelTests.cs
+@@ -55,6 +55,37 @@ public sealed class ChatIntakeViewModelTests
+         Assert.False(vm.ResumeInjectDecisionCommand.CanExecute(null));
+     }
+ 
++
++    [Fact]
++    public void Canonical_json_normalizes_property_order_for_stable_digest()
++    {
++        const string left = "{"b":2,"a":1,"nested":{"z":true,"x":"v"}}";
++        const string right = "{"nested":{"x":"v","z":true},"a":1,"b":2}";
++
++        var normalizedLeft = CanonicalJson.Normalize(left);
++        var normalizedRight = CanonicalJson.Normalize(right);
++
++        var digestLeft = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = normalizedLeft });
++        var digestRight = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = normalizedRight });
++
++        Assert.Equal(normalizedLeft, normalizedRight);
++        Assert.Equal(digestLeft, digestRight);
++    }
++
++    [Fact]
++    public void Decision_digest_changes_when_tool_or_bindings_change()
++    {
++        var baseBindings = CanonicalJson.Normalize("{"a":1}");
++        var changedBindings = CanonicalJson.Normalize("{"a":2}");
++
++        var digestA = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = baseBindings });
++        var digestB = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.beta", bindings = baseBindings });
++        var digestC = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = changedBindings });
++
++        Assert.NotEqual(digestA, digestB);
++        Assert.NotEqual(digestA, digestC);
++    }
++
+     private static MainWindowViewModel BuildViewModel()
+     {
+         var workspaceStore = new ProjectWorkspaceStore();
+diff --git a/ui/Shoots.Ui/MainWindow.xaml b/ui/Shoots.Ui/MainWindow.xaml
+index 29806e4..52cff94 100644
+--- a/ui/Shoots.Ui/MainWindow.xaml
++++ b/ui/Shoots.Ui/MainWindow.xaml
+@@ -163,11 +163,30 @@
+             <TabItem Header="Waiting">
+               <StackPanel Margin="8">
+                 <TextBlock Text="Decision Gate" FontWeight="SemiBold" Visibility="{Binding LastWaitingInfo, Converter={StaticResource NullToVisibilityConverter}}" />
++                <TextBlock Text="Reason" FontWeight="SemiBold" Margin="0,8,0,0" />
+                 <TextBlock Text="{Binding LastWaitingInfo.ReasonCode}" />
+-                <TextBlock Text="{Binding LastWaitingInfo.Policy}" />
++                <TextBlock Text="Gate" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <TextBlock Text="{Binding LastWaitingInfo.RouteGateId}" FontFamily="Consolas" FontSize="11" />
++                <TextBlock Text="Node" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <TextBlock Text="{Binding LastWaitingInfo.CurrentNodeId}" FontFamily="Consolas" FontSize="11" />
++                <TextBlock Text="Prompt Key" FontWeight="SemiBold" Margin="0,8,0,0" />
+                 <TextBlock Text="{Binding LastWaitingInfo.DecisionPromptKey}" />
+-                <TextBlock Text="{Binding LastWaitingInfo.DecisionOwner}" />
++                <TextBlock Text="Policy" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <TextBlock Text="{Binding LastWaitingInfo.Policy}" />
++                <TextBlock Text="Fallback" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <TextBlock Text="{Binding LastWaitingInfo.FallbackPresent}" />
++                <TextBlock Text="Allowed Next Nodes" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <ItemsControl ItemsSource="{Binding LastWaitingInfo.AllowedNextNodes}" />
++                <TextBlock Text="Decision Tool Id" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <ComboBox ItemsSource="{Binding LastWaitingInfo.AllowedNextNodes}" SelectedItem="{Binding DecisionToolId, Mode=TwoWay}" IsEditable="True" />
++                <TextBlock Text="Decision Bindings (json)" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <TextBox Text="{Binding DecisionBindingsJson, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="80" TextWrapping="Wrap" AcceptsReturn="True" FontFamily="Consolas" FontSize="11" />
++                <TextBlock Text="Injected Decision Digest" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <TextBlock Text="{Binding InjectedDecisionDigest}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />
++                <TextBlock Text="PlanHash" FontWeight="SemiBold" Margin="0,8,0,0" />
+                 <TextBlock Text="{Binding LastWaitingInfo.PlanHash}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />
++                <TextBlock Text="WorkOrderId" FontWeight="SemiBold" Margin="0,8,0,0" />
++                <TextBlock Text="{Binding LastWaitingInfo.WorkOrderId}" FontFamily="Consolas" FontSize="11" />
+                 <Button Content="Resume (Inject Decision)" Command="{Binding ResumeInjectDecisionCommand}" Margin="0,8,0,0" />
+               </StackPanel>
+             </TabItem>
+@@ -176,6 +195,22 @@
+                 <TextBlock Text="Use existing Execution and Narration tabs for full trace details." TextWrapping="Wrap" />
+               </StackPanel>
+             </TabItem>
++            <TabItem Header="Tool Catalog">
++              <StackPanel Margin="8">
++                <TextBlock Text="Deterministic tool catalog snapshot" FontWeight="SemiBold" />
++                <ListBox Margin="0,8,0,0" ItemsSource="{Binding ToolCatalogEntries}">
++                  <ListBox.ItemTemplate>
++                    <DataTemplate>
++                      <StackPanel>
++                        <TextBlock Text="{Binding ToolId}" FontWeight="SemiBold" />
++                        <TextBlock Text="{Binding Category}" FontSize="11" Foreground="#FF6B7280" />
++                        <TextBlock Text="{Binding Authority}" FontSize="11" />
++                      </StackPanel>
++                    </DataTemplate>
++                  </ListBox.ItemTemplate>
++                </ListBox>
++              </StackPanel>
++            </TabItem>
+           </TabControl>
+         </Grid>
+       </TabItem>
+diff --git a/ui/Shoots.Ui/Services/ExecutionCommandService.cs b/ui/Shoots.Ui/Services/ExecutionCommandService.cs
+index 5ae6abf..e776507 100644
+--- a/ui/Shoots.Ui/Services/ExecutionCommandService.cs
++++ b/ui/Shoots.Ui/Services/ExecutionCommandService.cs
+@@ -15,7 +15,7 @@ namespace Shoots.Ui.Services;
+ /// </summary>
+ public interface IExecutionCommandService
+ {
+-    Task<RuntimeResult> StartAsync(BuildPlan plan, CancellationToken ct = default);
++    Task<RuntimeResult> StartAsync(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default);
+ 
+     Task CancelAsync(CancellationToken ct = default);
+ 
+@@ -31,8 +31,8 @@ public sealed class ExecutionCommandService : IExecutionCommandService
+         _runtimeFacade = runtimeFacade ?? throw new ArgumentNullException(nameof(runtimeFacade));
+     }
+ 
+-    public Task<RuntimeResult> StartAsync(BuildPlan plan, CancellationToken ct = default)
+-        => _runtimeFacade.StartExecution(plan, ct);
++    public Task<RuntimeResult> StartAsync(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default)
++        => _runtimeFacade.StartExecution(plan, options, ct);
+ 
+     public Task CancelAsync(CancellationToken ct = default)
+         => _runtimeFacade.CancelExecution(ct);
+diff --git a/ui/Shoots.Ui/Services/IExecutionCommandService.cs b/ui/Shoots.Ui/Services/IExecutionCommandService.cs
+index b371cf0..e5ec42d 100644
+--- a/ui/Shoots.Ui/Services/IExecutionCommandService.cs
++++ b/ui/Shoots.Ui/Services/IExecutionCommandService.cs
+@@ -10,7 +10,7 @@ namespace Shoots.UI.Services;
+ 
+ public interface IExecutionCommandService
+ {
+-    Task<RuntimeResult> StartAsync(BuildPlan plan, CancellationToken ct = default);
++    Task<RuntimeResult> StartAsync(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default);
+ 
+     Task CancelAsync(CancellationToken ct = default);
+ 
+diff --git a/ui/Shoots.Ui/Services/NullExecutionCommandService.cs b/ui/Shoots.Ui/Services/NullExecutionCommandService.cs
+index fc47a48..373f65b 100644
+--- a/ui/Shoots.Ui/Services/NullExecutionCommandService.cs
++++ b/ui/Shoots.Ui/Services/NullExecutionCommandService.cs
+@@ -10,10 +10,11 @@ namespace Shoots.UI.Services;
+ 
+ public sealed class NullExecutionCommandService : IExecutionCommandService
+ {
+-    public Task<RuntimeResult> StartAsync(BuildPlan plan, CancellationToken ct = default)
++    public Task<RuntimeResult> StartAsync(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default)
+     {
+         _ = plan;
+         _ = ct;
++        _ = options;
+ 
+         return Task.FromResult(
+             RuntimeResult.Fail(
+@@ -25,12 +26,14 @@ public sealed class NullExecutionCommandService : IExecutionCommandService
+     public Task CancelAsync(CancellationToken ct = default)
+     {
+         _ = ct;
++        _ = options;
+         return Task.CompletedTask;
+     }
+ 
+     public Task<IRuntimeStatusSnapshot> RefreshStatusAsync(CancellationToken ct = default)
+     {
+         _ = ct;
++        _ = options;
+ 
+         return Task.FromResult<IRuntimeStatusSnapshot>(
+             new NullRuntimeStatusSnapshot(
+diff --git a/ui/Shoots.Ui/ViewModels/ChatIntakeViewModel.Partial.cs b/ui/Shoots.Ui/ViewModels/ChatIntakeViewModel.Partial.cs
+index f2d968c..8e7a74a 100644
+--- a/ui/Shoots.Ui/ViewModels/ChatIntakeViewModel.Partial.cs
++++ b/ui/Shoots.Ui/ViewModels/ChatIntakeViewModel.Partial.cs
+@@ -26,6 +26,9 @@ public sealed partial class MainWindowViewModel
+     private string _planHashLabel = "(none)";
+     private string _planIdLabel = "(none)";
+     private DecisionGateWaitingInfoViewModel? _lastWaitingInfo;
++    private string _decisionToolId = string.Empty;
++    private string _decisionBindingsJson = "{}";
++    private string _injectedDecisionDigest = string.Empty;
+ 
+     public ReadOnlyObservableCollection<ChatSessionViewModel> ChatSessions { get; private set; } = null!;
+ 
+@@ -154,6 +157,51 @@ public sealed partial class MainWindowViewModel
+         }
+     }
+ 
++
++    public string DecisionToolId
++    {
++        get => _decisionToolId;
++        set
++        {
++            if (_decisionToolId == value)
++                return;
++
++            _decisionToolId = value;
++            OnPropertyChanged(nameof(DecisionToolId));
++            RefreshInjectedDecisionDigest();
++            OnPropertyChanged(nameof(ToolCatalogEntries));
++        }
++    }
++
++    public string DecisionBindingsJson
++    {
++        get => _decisionBindingsJson;
++        set
++        {
++            if (_decisionBindingsJson == value)
++                return;
++
++            _decisionBindingsJson = value;
++            OnPropertyChanged(nameof(DecisionBindingsJson));
++            RefreshInjectedDecisionDigest();
++            OnPropertyChanged(nameof(ToolCatalogEntries));
++        }
++    }
++
++    public string InjectedDecisionDigest
++    {
++        get => _injectedDecisionDigest;
++        private set
++        {
++            if (_injectedDecisionDigest == value)
++                return;
++
++            _injectedDecisionDigest = value;
++            OnPropertyChanged(nameof(InjectedDecisionDigest));
++            ResumeInjectDecisionCommand.RaiseCanExecuteChanged();
++        }
++    }
++
+     public DecisionGateWaitingInfoViewModel? LastWaitingInfo
+     {
+         get => _lastWaitingInfo;
+@@ -165,11 +213,47 @@ public sealed partial class MainWindowViewModel
+             _lastWaitingInfo = value;
+             OnPropertyChanged(nameof(LastWaitingInfo));
+             OnPropertyChanged(nameof(HasWaitingInfo));
++
++            if (_lastWaitingInfo is not null && string.IsNullOrWhiteSpace(_decisionToolId) && _lastWaitingInfo.AllowedNextNodes.Count > 0)
++            {
++                _decisionToolId = _lastWaitingInfo.AllowedNextNodes[0];
++                OnPropertyChanged(nameof(DecisionToolId));
++            }
++
++            RefreshInjectedDecisionDigest();
++            OnPropertyChanged(nameof(ToolCatalogEntries));
+         }
+     }
+ 
+     public bool HasWaitingInfo => LastWaitingInfo is not null;
+ 
++    public bool CanResumeInjectDecision => HasWaitingInfo && IsWorkOrderLocked && Plan is not null && !string.IsNullOrWhiteSpace(InjectedDecisionDigest);
++
++
++    public IReadOnlyList<ToolCatalogItemViewModel> ToolCatalogEntries
++    {
++        get
++        {
++            var fromPlan = Plan?.Steps
++                .OfType<ToolBuildStep>()
++                .Select(step => step.ToolId.Value)
++                .Distinct(StringComparer.Ordinal)
++                .Select(id => new ToolCatalogItemViewModel(id, id, "runtime", Plan?.Authority.ProviderId.Value ?? "unknown"))
++                .ToList() ?? new List<ToolCatalogItemViewModel>();
++
++            if (LastWaitingInfo is not null)
++            {
++                foreach (var node in LastWaitingInfo.AllowedNextNodes)
++                {
++                    if (!fromPlan.Any(x => string.Equals(x.ToolId, node, StringComparison.Ordinal)))
++                        fromPlan.Add(new ToolCatalogItemViewModel(node, node, "waiting", Plan?.Authority.ProviderId.Value ?? "unknown"));
++                }
++            }
++
++            return fromPlan;
++        }
++    }
++
+     public bool CanLockWorkOrder => !IsWorkOrderLocked && !string.IsNullOrWhiteSpace(IntakeIntent);
+ 
+     public AsyncRelayCommand LockWorkOrderCommand { get; private set; } = null!;
+@@ -191,7 +275,7 @@ public sealed partial class MainWindowViewModel
+         UnlockWorkOrderCommand = new AsyncRelayCommand(UnlockWorkOrderAsync, () => IsWorkOrderLocked);
+         GeneratePlanCommand = new AsyncRelayCommand(GeneratePlanFromIntakeAsync, () => IsWorkOrderLocked);
+         RunIntakePlanCommand = new AsyncRelayCommand(StartAsync, CanStart);
+-        ResumeInjectDecisionCommand = new AsyncRelayCommand(StartAsync, () => HasWaitingInfo && IsWorkOrderLocked && Plan is not null);
++        ResumeInjectDecisionCommand = new AsyncRelayCommand(ResumeWithInjectedDecisionAsync, () => CanResumeInjectDecision);
+ 
+         _chatMessages.Add("System: Start a new work order from chat intake.");
+     }
+@@ -287,6 +371,7 @@ public sealed partial class MainWindowViewModel
+         SetPlan(plan);
+         PlanHashLabel = planHash;
+         PlanIdLabel = plan.PlanId;
++        OnPropertyChanged(nameof(ToolCatalogEntries));
+ 
+         if (SelectedChatSession is not null)
+         {
+@@ -301,6 +386,42 @@ public sealed partial class MainWindowViewModel
+         return Task.CompletedTask;
+     }
+ 
++    private async Task ResumeWithInjectedDecisionAsync()
++    {
++        if (Plan is null || !CanResumeInjectDecision)
++            return;
++
++        var options = new RuntimeRunOptions(ResumeMode.InjectDecision, InjectedDecisionDigest);
++        var result = await _commandService.StartAsync(Plan, options).ConfigureAwait(true);
++        if (result.Ok)
++            RecordExecutionSession(result);
++    }
++
++    private void RefreshInjectedDecisionDigest()
++    {
++        if (!HasWaitingInfo || string.IsNullOrWhiteSpace(DecisionToolId))
++        {
++            InjectedDecisionDigest = string.Empty;
++            return;
++        }
++
++        try
++        {
++            var canonicalBindings = CanonicalJson.Normalize(DecisionBindingsJson);
++            InjectedDecisionDigest = JobSpecDigestBuilder.HashCanonical(new
++            {
++                toolId = DecisionToolId.Trim(),
++                bindings = canonicalBindings,
++                planHash = LastWaitingInfo?.PlanHash,
++                workOrderId = LastWaitingInfo?.WorkOrderId
++            });
++        }
++        catch (JsonException)
++        {
++            InjectedDecisionDigest = string.Empty;
++        }
++    }
++
+     private static IReadOnlyList<string> ParseList(string value)
+         => string.IsNullOrWhiteSpace(value)
+             ? Array.Empty<string>()
+@@ -329,6 +450,8 @@ public sealed partial class MainWindowViewModel
+ 
+ public sealed record ChatSessionViewModel(string WorkOrderId, string PlanId, string PlanHash, string LastStatus);
+ 
++public sealed record ToolCatalogItemViewModel(string ToolId, string Title, string Category, string Authority);
++
+ public sealed record DecisionGateWaitingInfoViewModel(
+     string WorkOrderId,
+     string RouteGateId,
+@@ -351,9 +474,16 @@ public sealed record JobSpecDigestInput(
+ 
+ public static class JobSpecDigestBuilder
+ {
++    public static string HashCanonical(object value)
++    {
++        var canonical = JsonSerializer.Serialize(value);
++        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
++        return Convert.ToHexString(bytes).ToLowerInvariant();
++    }
++
+     public static string Compute(JobSpecDigestInput input)
+     {
+-        var canonical = JsonSerializer.Serialize(new
++        return HashCanonical(new
+         {
+             intent = input.Intent.Trim(),
+             target = input.Target.Trim(),
+@@ -361,8 +491,31 @@ public static class JobSpecDigestBuilder
+             attachments = input.Attachments.OrderBy(x => x, StringComparer.Ordinal),
+             constraints = input.Constraints.OrderBy(x => x, StringComparer.Ordinal)
+         });
++    }
++}
+ 
+-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+-        return Convert.ToHexString(bytes).ToLowerInvariant();
++
++public static class CanonicalJson
++{
++    public static string Normalize(string json)
++    {
++        if (string.IsNullOrWhiteSpace(json))
++            return "{}";
++
++        using var doc = JsonDocument.Parse(json);
++        return NormalizeElement(doc.RootElement);
+     }
++
++    private static string NormalizeElement(JsonElement element)
++        => element.ValueKind switch
++        {
++            JsonValueKind.Object => "{" + string.Join(",", element.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal).Select(p => JsonSerializer.Serialize(p.Name) + ":" + NormalizeElement(p.Value))) + "}",
++            JsonValueKind.Array => "[" + string.Join(",", element.EnumerateArray().Select(NormalizeElement)) + "]",
++            JsonValueKind.String => JsonSerializer.Serialize(element.GetString()),
++            JsonValueKind.Number => element.GetRawText(),
++            JsonValueKind.True => "true",
++            JsonValueKind.False => "false",
++            JsonValueKind.Null => "null",
++            _ => "null"
++        };
+ }

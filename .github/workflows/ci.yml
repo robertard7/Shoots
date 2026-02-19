@@ -54,7 +54,23 @@ jobs:
       - name: Build
         run: dotnet build Shoots.sln -c Release --no-restore
 
-      - name: Test (trx)
+      - name: Test Runtime on Windows (trx)
+        run: dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -m:1 --logger "trx;LogFileName=runtime-windows.trx"
+
+      - name: Test UI (trx)
+        shell: pwsh
+        run: |
+          $job = Start-Job -ScriptBlock {
+            dotnet test ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -c Release -m:1 --logger "trx;LogFileName=ui-tests.trx"
+          }
+          if (-not (Wait-Job -Job $job -Timeout 600)) {
+            Stop-Job -Job $job
+            Receive-Job -Job $job -Keep
+            throw "UI test timeout exceeded 10 minutes."
+          }
+          Receive-Job -Job $job
+
+      - name: Test full solution (trx)
         run: dotnet test Shoots.sln -c Release --no-build --logger "trx;LogFileName=solution.trx"
 
       - name: Upload test artifacts
@@ -63,6 +79,8 @@ jobs:
           name: full-windows-artifacts
           path: |
             **/solution.trx
+            **/runtime-windows.trx
+            **/ui-tests.trx
 
   determinism-guard:
     name: determinism-guard

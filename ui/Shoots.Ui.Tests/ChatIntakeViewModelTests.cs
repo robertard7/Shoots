@@ -55,6 +55,37 @@ public sealed class ChatIntakeViewModelTests
         Assert.False(vm.ResumeInjectDecisionCommand.CanExecute(null));
     }
 
+
+    [Fact]
+    public void Canonical_json_normalizes_property_order_for_stable_digest()
+    {
+        const string left = "{"b":2,"a":1,"nested":{"z":true,"x":"v"}}";
+        const string right = "{"nested":{"x":"v","z":true},"a":1,"b":2}";
+
+        var normalizedLeft = CanonicalJson.Normalize(left);
+        var normalizedRight = CanonicalJson.Normalize(right);
+
+        var digestLeft = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = normalizedLeft });
+        var digestRight = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = normalizedRight });
+
+        Assert.Equal(normalizedLeft, normalizedRight);
+        Assert.Equal(digestLeft, digestRight);
+    }
+
+    [Fact]
+    public void Decision_digest_changes_when_tool_or_bindings_change()
+    {
+        var baseBindings = CanonicalJson.Normalize("{"a":1}");
+        var changedBindings = CanonicalJson.Normalize("{"a":2}");
+
+        var digestA = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = baseBindings });
+        var digestB = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.beta", bindings = baseBindings });
+        var digestC = JobSpecDigestBuilder.HashCanonical(new { toolId = "tool.alpha", bindings = changedBindings });
+
+        Assert.NotEqual(digestA, digestB);
+        Assert.NotEqual(digestA, digestC);
+    }
+
     private static MainWindowViewModel BuildViewModel()
     {
         var workspaceStore = new ProjectWorkspaceStore();

@@ -26,6 +26,9 @@ public sealed partial class MainWindowViewModel
     private string _planHashLabel = "(none)";
     private string _planIdLabel = "(none)";
     private DecisionGateWaitingInfoViewModel? _lastWaitingInfo;
+    private string _decisionToolId = string.Empty;
+    private string _decisionBindingsJson = "{}";
+    private string _injectedDecisionDigest = string.Empty;
 
     public ReadOnlyObservableCollection<ChatSessionViewModel> ChatSessions { get; private set; } = null!;
 
@@ -154,6 +157,51 @@ public sealed partial class MainWindowViewModel
         }
     }
 
+
+    public string DecisionToolId
+    {
+        get => _decisionToolId;
+        set
+        {
+            if (_decisionToolId == value)
+                return;
+
+            _decisionToolId = value;
+            OnPropertyChanged(nameof(DecisionToolId));
+            RefreshInjectedDecisionDigest();
+            OnPropertyChanged(nameof(ToolCatalogEntries));
+        }
+    }
+
+    public string DecisionBindingsJson
+    {
+        get => _decisionBindingsJson;
+        set
+        {
+            if (_decisionBindingsJson == value)
+                return;
+
+            _decisionBindingsJson = value;
+            OnPropertyChanged(nameof(DecisionBindingsJson));
+            RefreshInjectedDecisionDigest();
+            OnPropertyChanged(nameof(ToolCatalogEntries));
+        }
+    }
+
+    public string InjectedDecisionDigest
+    {
+        get => _injectedDecisionDigest;
+        private set
+        {
+            if (_injectedDecisionDigest == value)
+                return;
+
+            _injectedDecisionDigest = value;
+            OnPropertyChanged(nameof(InjectedDecisionDigest));
+            ResumeInjectDecisionCommand.RaiseCanExecuteChanged();
+        }
+    }
+
     public DecisionGateWaitingInfoViewModel? LastWaitingInfo
     {
         get => _lastWaitingInfo;
@@ -165,10 +213,46 @@ public sealed partial class MainWindowViewModel
             _lastWaitingInfo = value;
             OnPropertyChanged(nameof(LastWaitingInfo));
             OnPropertyChanged(nameof(HasWaitingInfo));
+
+            if (_lastWaitingInfo is not null && string.IsNullOrWhiteSpace(_decisionToolId) && _lastWaitingInfo.AllowedNextNodes.Count > 0)
+            {
+                _decisionToolId = _lastWaitingInfo.AllowedNextNodes[0];
+                OnPropertyChanged(nameof(DecisionToolId));
+            }
+
+            RefreshInjectedDecisionDigest();
+            OnPropertyChanged(nameof(ToolCatalogEntries));
         }
     }
 
     public bool HasWaitingInfo => LastWaitingInfo is not null;
+
+    public bool CanResumeInjectDecision => HasWaitingInfo && IsWorkOrderLocked && Plan is not null && !string.IsNullOrWhiteSpace(InjectedDecisionDigest);
+
+
+    public IReadOnlyList<ToolCatalogItemViewModel> ToolCatalogEntries
+    {
+        get
+        {
+            var fromPlan = Plan?.Steps
+                .OfType<ToolBuildStep>()
+                .Select(step => step.ToolId.Value)
+                .Distinct(StringComparer.Ordinal)
+                .Select(id => new ToolCatalogItemViewModel(id, id, "runtime", Plan?.Authority.ProviderId.Value ?? "unknown"))
+                .ToList() ?? new List<ToolCatalogItemViewModel>();
+
+            if (LastWaitingInfo is not null)
+            {
+                foreach (var node in LastWaitingInfo.AllowedNextNodes)
+                {
+                    if (!fromPlan.Any(x => string.Equals(x.ToolId, node, StringComparison.Ordinal)))
+                        fromPlan.Add(new ToolCatalogItemViewModel(node, node, "waiting", Plan?.Authority.ProviderId.Value ?? "unknown"));
+                }
+            }
+
+            return fromPlan;
+        }
+    }
 
     public bool CanLockWorkOrder => !IsWorkOrderLocked && !string.IsNullOrWhiteSpace(IntakeIntent);
 
@@ -191,7 +275,7 @@ public sealed partial class MainWindowViewModel
         UnlockWorkOrderCommand = new AsyncRelayCommand(UnlockWorkOrderAsync, () => IsWorkOrderLocked);
         GeneratePlanCommand = new AsyncRelayCommand(GeneratePlanFromIntakeAsync, () => IsWorkOrderLocked);
         RunIntakePlanCommand = new AsyncRelayCommand(StartAsync, CanStart);
-        ResumeInjectDecisionCommand = new AsyncRelayCommand(StartAsync, () => HasWaitingInfo && IsWorkOrderLocked && Plan is not null);
+        ResumeInjectDecisionCommand = new AsyncRelayCommand(ResumeWithInjectedDecisionAsync, () => CanResumeInjectDecision);
 
         _chatMessages.Add("System: Start a new work order from chat intake.");
     }
@@ -287,6 +371,7 @@ public sealed partial class MainWindowViewModel
         SetPlan(plan);
         PlanHashLabel = planHash;
         PlanIdLabel = plan.PlanId;
+        OnPropertyChanged(nameof(ToolCatalogEntries));
 
         if (SelectedChatSession is not null)
         {
@@ -299,6 +384,42 @@ public sealed partial class MainWindowViewModel
 
         _chatMessages.Add($"System: Plan generated (hash {planHash[..12]}...).");
         return Task.CompletedTask;
+    }
+
+    private async Task ResumeWithInjectedDecisionAsync()
+    {
+        if (Plan is null || !CanResumeInjectDecision)
+            return;
+
+        var options = new RuntimeRunOptions(ResumeMode.InjectDecision, InjectedDecisionDigest);
+        var result = await _commandService.StartAsync(Plan, options).ConfigureAwait(true);
+        if (result.Ok)
+            RecordExecutionSession(result);
+    }
+
+    private void RefreshInjectedDecisionDigest()
+    {
+        if (!HasWaitingInfo || string.IsNullOrWhiteSpace(DecisionToolId))
+        {
+            InjectedDecisionDigest = string.Empty;
+            return;
+        }
+
+        try
+        {
+            var canonicalBindings = CanonicalJson.Normalize(DecisionBindingsJson);
+            InjectedDecisionDigest = JobSpecDigestBuilder.HashCanonical(new
+            {
+                toolId = DecisionToolId.Trim(),
+                bindings = canonicalBindings,
+                planHash = LastWaitingInfo?.PlanHash,
+                workOrderId = LastWaitingInfo?.WorkOrderId
+            });
+        }
+        catch (JsonException)
+        {
+            InjectedDecisionDigest = string.Empty;
+        }
     }
 
     private static IReadOnlyList<string> ParseList(string value)
@@ -329,6 +450,8 @@ public sealed partial class MainWindowViewModel
 
 public sealed record ChatSessionViewModel(string WorkOrderId, string PlanId, string PlanHash, string LastStatus);
 
+public sealed record ToolCatalogItemViewModel(string ToolId, string Title, string Category, string Authority);
+
 public sealed record DecisionGateWaitingInfoViewModel(
     string WorkOrderId,
     string RouteGateId,
@@ -351,9 +474,16 @@ public sealed record JobSpecDigestInput(
 
 public static class JobSpecDigestBuilder
 {
+    public static string HashCanonical(object value)
+    {
+        var canonical = JsonSerializer.Serialize(value);
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
     public static string Compute(JobSpecDigestInput input)
     {
-        var canonical = JsonSerializer.Serialize(new
+        return HashCanonical(new
         {
             intent = input.Intent.Trim(),
             target = input.Target.Trim(),
@@ -361,8 +491,31 @@ public static class JobSpecDigestBuilder
             attachments = input.Attachments.OrderBy(x => x, StringComparer.Ordinal),
             constraints = input.Constraints.OrderBy(x => x, StringComparer.Ordinal)
         });
-
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
-        return Convert.ToHexString(bytes).ToLowerInvariant();
     }
+}
+
+
+public static class CanonicalJson
+{
+    public static string Normalize(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return "{}";
+
+        using var doc = JsonDocument.Parse(json);
+        return NormalizeElement(doc.RootElement);
+    }
+
+    private static string NormalizeElement(JsonElement element)
+        => element.ValueKind switch
+        {
+            JsonValueKind.Object => "{" + string.Join(",", element.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal).Select(p => JsonSerializer.Serialize(p.Name) + ":" + NormalizeElement(p.Value))) + "}",
+            JsonValueKind.Array => "[" + string.Join(",", element.EnumerateArray().Select(NormalizeElement)) + "]",
+            JsonValueKind.String => JsonSerializer.Serialize(element.GetString()),
+            JsonValueKind.Number => element.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.Null => "null",
+            _ => "null"
+        };
 }

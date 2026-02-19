@@ -10,3 +10,5 @@
 - UI_WPF_LAYOUT_DEFERRED.md
 - UNIVERSAL_AI_LAYER.md
 - VERIFICATION_POLICY.md
+- laws/no-spin-law.md
+- repo-layout.md

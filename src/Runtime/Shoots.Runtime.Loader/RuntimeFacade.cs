@@ -29,10 +29,16 @@ public sealed class RuntimeFacade : IRuntimeFacade
         EnforceEmbeddedProvider();
     }
 
-    public Task<RuntimeResult> StartExecution(BuildPlan plan, CancellationToken ct = default)
-        => Task.FromResult(RuntimeResult.Fail(
+    public Task<RuntimeResult> StartExecution(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default)
+    {
+        _ = plan;
+        _ = options;
+        _ = ct;
+
+        return Task.FromResult(RuntimeResult.Fail(
             RuntimeError.Internal("Runtime facade execution is not configured.")
         ));
+    }
 
     public Task<IRuntimeStatusSnapshot> QueryStatus(CancellationToken ct = default)
         => Task.FromResult<IRuntimeStatusSnapshot>(
