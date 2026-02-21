@@ -15,3 +15,5 @@
 - architecture/repo-map.md
 - repo_topology.md
 - architecture/repo_map.mmd
+- providers/PROVIDER_BOUNDARY.md
+- first-run/AI_BUILDER_QUICKSTART.md

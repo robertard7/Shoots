@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,6 +9,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core;
 using Shoots.Host.Abstractions;
+using Shoots.Host.Core.ModelCatalog;
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.UI.ViewModels;
@@ -16,6 +18,9 @@ public sealed partial class MainWindowViewModel
 {
     private readonly ObservableCollection<ChatSessionViewModel> _chatSessions = new();
     private readonly ObservableCollection<string> _chatMessages = new();
+    private readonly ObservableCollection<TraceEntryViewModel> _traceEntries = new();
+    private readonly ObservableCollection<ArtifactViewModel> _artifacts = new();
+    private readonly LocalModelCatalog _modelCatalog = new();
 
     private ChatSessionViewModel? _selectedChatSession;
     private string _intakeIntent = string.Empty;
@@ -30,12 +35,19 @@ public sealed partial class MainWindowViewModel
     private string _decisionToolId = string.Empty;
     private string _decisionBindingsJson = "{}";
     private string _injectedDecisionDigest = string.Empty;
+    private string _selectedModelId = "local.default";
     private ResumeMode _selectedRunMode = ResumeMode.None;
     private string _lastResumePayload = string.Empty;
+    private string _traceFilterText = string.Empty;
+    private string _traceEventFilter = "All";
 
     public ReadOnlyObservableCollection<ChatSessionViewModel> ChatSessions { get; private set; } = null!;
 
     public ReadOnlyObservableCollection<string> ChatMessages { get; private set; } = null!;
+
+    public ReadOnlyObservableCollection<TraceEntryViewModel> TraceEntries { get; private set; } = null!;
+
+    public ReadOnlyObservableCollection<ArtifactViewModel> Artifacts { get; private set; } = null!;
 
     public ChatSessionViewModel? SelectedChatSession
     {
@@ -47,6 +59,13 @@ public sealed partial class MainWindowViewModel
 
             _selectedChatSession = value;
             OnPropertyChanged(nameof(SelectedChatSession));
+
+            if (_selectedChatSession is not null)
+            {
+                PlanIdLabel = _selectedChatSession.PlanId;
+                PlanHashLabel = _selectedChatSession.PlanHash;
+                LastWaitingInfo = _selectedChatSession.LastWaitingInfo;
+            }
         }
     }
 
@@ -100,6 +119,23 @@ public sealed partial class MainWindowViewModel
 
             _intakeStack = value;
             OnPropertyChanged(nameof(IntakeStack));
+        }
+    }
+
+
+    public IReadOnlyList<string> AvailableModels => _modelCatalog.ListModels().Select(x => x.ModelId).ToList();
+
+    public string SelectedModelId
+    {
+        get => _selectedModelId;
+        set
+        {
+            if (_selectedModelId == value)
+                return;
+
+            _selectedModelId = value;
+            OnPropertyChanged(nameof(SelectedModelId));
+            JobSpecDigest = JobSpecDigestBuilder.Compute(new JobSpecDigestInput(IntakeIntent, IntakeTarget, ParseList(IntakeAttachments), IntakeStack, Array.Empty<string>(), SelectedModelId));
         }
     }
 
@@ -239,6 +275,46 @@ public sealed partial class MainWindowViewModel
         }
     }
 
+
+    public string TraceFilterText
+    {
+        get => _traceFilterText;
+        set
+        {
+            if (_traceFilterText == value)
+                return;
+            _traceFilterText = value;
+            OnPropertyChanged(nameof(TraceFilterText));
+            OnPropertyChanged(nameof(FilteredTraceEntries));
+        }
+    }
+
+    public string TraceEventFilter
+    {
+        get => _traceEventFilter;
+        set
+        {
+            if (_traceEventFilter == value)
+                return;
+            _traceEventFilter = value;
+            OnPropertyChanged(nameof(TraceEventFilter));
+            OnPropertyChanged(nameof(FilteredTraceEntries));
+        }
+    }
+
+    public IReadOnlyList<string> TraceEventFilters => new[] { "All", "Host", "DecisionGate", "Tool", "Error" };
+
+    public IReadOnlyList<TraceEntryViewModel> FilteredTraceEntries => TraceEntries
+        .Where(entry => (TraceEventFilter == "All"
+            || (TraceEventFilter == "Host" && entry.Event.StartsWith("Host", StringComparison.Ordinal))
+            || (TraceEventFilter == "DecisionGate" && entry.Event.Contains("DecisionGate", StringComparison.Ordinal))
+            || (TraceEventFilter == "Tool" && entry.Event.Contains("Tool", StringComparison.Ordinal))
+            || (TraceEventFilter == "Error" && (entry.Event.Contains("Error", StringComparison.Ordinal) || entry.Event.Contains("Halted", StringComparison.Ordinal))))
+            && (string.IsNullOrWhiteSpace(TraceFilterText)
+                || entry.Event.Contains(TraceFilterText, StringComparison.OrdinalIgnoreCase)
+                || (entry.Detail?.Contains(TraceFilterText, StringComparison.OrdinalIgnoreCase) ?? false)))
+        .ToList();
+
     public string LastResumePayload
     {
         get => _lastResumePayload;
@@ -327,6 +403,10 @@ public sealed partial class MainWindowViewModel
     {
         ChatSessions = new ReadOnlyObservableCollection<ChatSessionViewModel>(_chatSessions);
         ChatMessages = new ReadOnlyObservableCollection<string>(_chatMessages);
+        TraceEntries = new ReadOnlyObservableCollection<TraceEntryViewModel>(_traceEntries);
+        Artifacts = new ReadOnlyObservableCollection<ArtifactViewModel>(_artifacts);
+
+        LoadPersistedSessions();
 
         LockWorkOrderCommand = new AsyncRelayCommand(LockWorkOrderAsync, () => CanLockWorkOrder);
         UnlockWorkOrderCommand = new AsyncRelayCommand(UnlockWorkOrderAsync, () => IsWorkOrderLocked);
@@ -336,6 +416,11 @@ public sealed partial class MainWindowViewModel
         ResumeInjectDecisionCommand = new AsyncRelayCommand(ResumeWithInjectedDecisionAsync, () => CanResumeInjectDecision);
         UseFallbackToolCommand = new AsyncRelayCommand(UseFallbackToolAsync, () => HasWaitingInfo && LastWaitingInfo?.FallbackPresent == true);
         CopyResumePayloadCommand = new AsyncRelayCommand(CopyResumePayloadAsync, () => HasWaitingInfo && !string.IsNullOrWhiteSpace(InjectedDecisionDigest));
+
+        var defaultModel = _modelCatalog.ResolveDefaultModel();
+        _selectedModelId = defaultModel.ModelId;
+        OnPropertyChanged(nameof(SelectedModelId));
+        OnPropertyChanged(nameof(AvailableModels));
 
         _chatMessages.Add("System: Start a new work order from chat intake.");
     }
@@ -361,16 +446,18 @@ public sealed partial class MainWindowViewModel
             IntakeTarget,
             ParseList(IntakeAttachments),
             IntakeStack,
-            Array.Empty<string>()));
+            Array.Empty<string>(),
+            SelectedModelId));
 
         JobSpecDigest = digest;
         IsWorkOrderLocked = true;
 
         var workOrderId = $"wo-{digest[..12]}";
-        var session = new ChatSessionViewModel(workOrderId, PlanIdLabel, PlanHashLabel, "Draft");
+        var session = new ChatSessionViewModel(workOrderId, PlanIdLabel, PlanHashLabel, "Draft", DateTimeOffset.UtcNow, null);
         _chatSessions.Insert(0, session);
         SelectedChatSession = session;
         _chatMessages.Add($"System: WorkOrder locked ({workOrderId}).");
+        SavePersistedSessions();
         return Task.CompletedTask;
     }
 
@@ -408,7 +495,8 @@ public sealed partial class MainWindowViewModel
             {
                 ["intake.target"] = IntakeTarget,
                 ["intake.stack"] = IntakeStack,
-                ["intake.digest"] = JobSpecDigest
+                ["intake.digest"] = JobSpecDigest,
+                ["intake.model"] = SelectedModelId
             },
             routeRules);
 
@@ -446,7 +534,7 @@ public sealed partial class MainWindowViewModel
 
         if (SelectedChatSession is not null)
         {
-            var updated = SelectedChatSession with { PlanId = plan.PlanId, PlanHash = planHash, LastStatus = "PlanReady" };
+            var updated = SelectedChatSession with { PlanId = plan.PlanId, PlanHash = planHash, LastStatus = "PlanReady", LastUpdatedUtc = DateTimeOffset.UtcNow };
             var idx = _chatSessions.IndexOf(SelectedChatSession);
             if (idx >= 0)
                 _chatSessions[idx] = updated;
@@ -454,6 +542,7 @@ public sealed partial class MainWindowViewModel
         }
 
         _chatMessages.Add($"System: Plan generated (hash {planHash[..12]}...).");
+        SavePersistedSessions();
         return Task.CompletedTask;
     }
 
@@ -531,6 +620,52 @@ public sealed partial class MainWindowViewModel
         }
     }
 
+    private string SessionStatePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Shoots", "chat-intake-sessions.json");
+
+    private void LoadPersistedSessions()
+    {
+        var path = SessionStatePath;
+        if (!File.Exists(path))
+            return;
+
+        var persisted = JsonSerializer.Deserialize<List<ChatSessionViewModel>>(File.ReadAllText(path)) ?? new List<ChatSessionViewModel>();
+        foreach (var session in persisted.OrderByDescending(x => x.LastUpdatedUtc))
+            _chatSessions.Add(session);
+    }
+
+    private void SavePersistedSessions()
+    {
+        var path = SessionStatePath;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(_chatSessions.ToList()));
+    }
+
+    public void CaptureExecutionSnapshot(ExecutionEnvelope envelope)
+    {
+        _traceEntries.Clear();
+        foreach (var entry in envelope.Trace.Entries)
+            _traceEntries.Add(new TraceEntryViewModel(entry.Tick, entry.Event.ToString(), entry.Detail));
+
+        _artifacts.Clear();
+        foreach (var artifact in envelope.Artifacts)
+            _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
+
+        OnPropertyChanged(nameof(FilteredTraceEntries));
+    }
+
+    public void CaptureExecutionSnapshot(ExecutionEnvelopeDto envelope)
+    {
+        _traceEntries.Clear();
+        foreach (var entry in envelope.Trace.Entries)
+            _traceEntries.Add(new TraceEntryViewModel(entry.Tick, entry.Event.ToString(), entry.Detail));
+
+        _artifacts.Clear();
+        foreach (var artifact in envelope.Artifacts)
+            _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
+
+        OnPropertyChanged(nameof(FilteredTraceEntries));
+    }
+
     private static IReadOnlyList<string> ParseList(string value)
         => string.IsNullOrWhiteSpace(value)
             ? Array.Empty<string>()
@@ -557,7 +692,11 @@ public sealed partial class MainWindowViewModel
             waiting.DecisionOwner.ToString());
 }
 
-public sealed record ChatSessionViewModel(string WorkOrderId, string PlanId, string PlanHash, string LastStatus);
+public sealed record ChatSessionViewModel(string WorkOrderId, string PlanId, string PlanHash, string LastStatus, DateTimeOffset LastUpdatedUtc, DecisionGateWaitingInfoViewModel? LastWaitingInfo);
+
+public sealed record TraceEntryViewModel(int Tick, string Event, string? Detail);
+
+public sealed record ArtifactViewModel(string Id, string Description, string Path);
 
 public sealed record ToolCatalogItemViewModel(string ToolId, string Title, string Category, string Authority);
 
@@ -579,7 +718,8 @@ public sealed record JobSpecDigestInput(
     string Target,
     IReadOnlyList<string> Attachments,
     string Stack,
-    IReadOnlyList<string> Constraints);
+    IReadOnlyList<string> Constraints,
+    string ModelId);
 
 public static class JobSpecDigestBuilder
 {
@@ -597,6 +737,7 @@ public static class JobSpecDigestBuilder
             intent = input.Intent.Trim(),
             target = input.Target.Trim(),
             stack = input.Stack.Trim(),
+            modelId = input.ModelId.Trim(),
             attachments = input.Attachments.OrderBy(x => x, StringComparer.Ordinal),
             constraints = input.Constraints.OrderBy(x => x, StringComparer.Ordinal)
         });

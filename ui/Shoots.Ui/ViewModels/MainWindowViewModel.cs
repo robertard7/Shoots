@@ -2134,6 +2134,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             var records = BuildToolExecutionRecords(Plan, envelope.ToolResults);
             var session = ToolExecutionSessionViewModel.CreateRun(Plan, DateTimeOffset.UtcNow, records);
             LastWaitingInfo = envelope.Waiting is null ? null : ToWaitingInfoViewModel(envelope.Waiting);
+            CaptureExecutionSnapshot(envelope);
+            UpdateSelectedChatSession(envelope.FinalStatus.ToString());
             _toolExecutionSessions.Insert(0, session);
             SelectedToolExecutionSession = session;
             ComparisonToolExecutionSession ??= session;
@@ -2145,6 +2147,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             var records = BuildToolExecutionRecords(liveEnvelope.Plan, liveEnvelope.ToolResults);
             var session = ToolExecutionSessionViewModel.CreateRun(liveEnvelope.Plan, DateTimeOffset.UtcNow, records);
             LastWaitingInfo = liveEnvelope.Waiting is null ? null : ToWaitingInfoViewModel(liveEnvelope.Waiting);
+            CaptureExecutionSnapshot(liveEnvelope);
+            UpdateSelectedChatSession(liveEnvelope.FinalStatus.ToString());
             _toolExecutionSessions.Insert(0, session);
             SelectedToolExecutionSession = session;
             ComparisonToolExecutionSession ??= session;
@@ -2153,10 +2157,31 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         var fallbackRecords = BuildToolExecutionRecords(Plan, Plan.ToolResult);
         LastWaitingInfo = null;
+        UpdateSelectedChatSession("Unknown");
         var fallbackSession = ToolExecutionSessionViewModel.CreateRun(Plan, DateTimeOffset.UtcNow, fallbackRecords);
         _toolExecutionSessions.Insert(0, fallbackSession);
         SelectedToolExecutionSession = fallbackSession;
         ComparisonToolExecutionSession ??= fallbackSession;
+    }
+
+    private void UpdateSelectedChatSession(string status)
+    {
+        if (SelectedChatSession is null)
+            return;
+
+        var updated = SelectedChatSession with
+        {
+            LastStatus = status,
+            LastUpdatedUtc = DateTimeOffset.UtcNow,
+            LastWaitingInfo = LastWaitingInfo
+        };
+
+        var idx = _chatSessions.IndexOf(SelectedChatSession);
+        if (idx >= 0)
+            _chatSessions[idx] = updated;
+
+        SelectedChatSession = updated;
+        SavePersistedSessions();
     }
 
     private IReadOnlyList<ToolExecutionRecordViewModel> BuildToolExecutionRecords(
@@ -2171,6 +2196,26 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 return ToolExecutionRecordViewModel.FromPlanStep(step, toolResult, owner);
             })
             .ToList();
+    }
+
+    private void UpdateSelectedChatSession(string status)
+    {
+        if (SelectedChatSession is null)
+            return;
+
+        var updated = SelectedChatSession with
+        {
+            LastStatus = status,
+            LastUpdatedUtc = DateTimeOffset.UtcNow,
+            LastWaitingInfo = LastWaitingInfo
+        };
+
+        var idx = _chatSessions.IndexOf(SelectedChatSession);
+        if (idx >= 0)
+            _chatSessions[idx] = updated;
+
+        SelectedChatSession = updated;
+        SavePersistedSessions();
     }
 
     private IReadOnlyList<ToolExecutionRecordViewModel> BuildToolExecutionRecords(
@@ -2202,6 +2247,26 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                     DateTimeOffset.UtcNow);
             })
             .ToList();
+    }
+
+    private void UpdateSelectedChatSession(string status)
+    {
+        if (SelectedChatSession is null)
+            return;
+
+        var updated = SelectedChatSession with
+        {
+            LastStatus = status,
+            LastUpdatedUtc = DateTimeOffset.UtcNow,
+            LastWaitingInfo = LastWaitingInfo
+        };
+
+        var idx = _chatSessions.IndexOf(SelectedChatSession);
+        if (idx >= 0)
+            _chatSessions[idx] = updated;
+
+        SelectedChatSession = updated;
+        SavePersistedSessions();
     }
 
     private IReadOnlyList<ToolExecutionRecordViewModel> BuildToolExecutionRecords(

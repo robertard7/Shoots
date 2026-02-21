@@ -75,7 +75,7 @@ jobs:
         shell: pwsh
         run: |
           $job = Start-Job -ScriptBlock {
-            dotnet test ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -c Release -m:1 --logger "trx;LogFileName=ui-tests.trx"
+            dotnet test ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -c Release -m:1 --logger "trx;LogFileName=trx-ui-tests.trx"
           }
           if (-not (Wait-Job -Job $job -Timeout 600)) {
             Stop-Job -Job $job
@@ -87,6 +87,17 @@ jobs:
       - name: Test full solution (trx)
         run: dotnet test Shoots.sln -c Release --no-build --logger "trx;LogFileName=solution.trx"
 
+
+      - name: Package UI zip
+        shell: pwsh
+        run: ./scripts/package_ui.ps1 -Configuration Release -Version "${{ github.run_number }}"
+
+      - name: Upload UI package
+        uses: actions/upload-artifact@v4
+        with:
+          name: shoots-ui-zip
+          path: artifacts/ui/${{ github.run_number }}/Shoots.Ui.zip
+
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -95,7 +106,7 @@ jobs:
             **/solution.trx
             **/runtime-windows.trx
             **/host-windows.trx
-            **/ui-tests.trx
+            **/trx-ui-tests.trx
 
   determinism-guard:
     name: determinism-guard

@@ -119,6 +119,7 @@
                     <TextBlock Text="{Binding WorkOrderId}" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding PlanHash}" FontSize="11" Foreground="#FF6B7280" />
                     <TextBlock Text="{Binding LastStatus}" FontSize="11" />
+                    <TextBlock Text="{Binding LastUpdatedUtc}" FontSize="10" Foreground="#FF6B7280" />
                   </StackPanel>
                 </DataTemplate>
               </ListBox.ItemTemplate>
@@ -135,6 +136,8 @@
             <TextBox Text="{Binding IntakeAttachments, Mode=TwoWay}" Height="60" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="{Binding IsWorkOrderLocked}" />
             <TextBlock Margin="0,8,0,0" Text="Stack" />
             <TextBox Text="{Binding IntakeStack, Mode=TwoWay}" IsReadOnly="{Binding IsWorkOrderLocked}" />
+            <TextBlock Margin="0,8,0,0" Text="Model" />
+            <ComboBox ItemsSource="{Binding AvailableModels}" SelectedItem="{Binding SelectedModelId, Mode=TwoWay}" />
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
               <Button Content="Lock WorkOrder" Command="{Binding LockWorkOrderCommand}" />
               <Button Content="Unlock" Command="{Binding UnlockWorkOrderCommand}" Margin="8,0,0,0" />
@@ -204,8 +207,36 @@
             </TabItem>
             <TabItem Header="Trace">
               <StackPanel Margin="8">
-                <TextBlock Text="Use existing Execution and Narration tabs for full trace details." TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal">
+                  <TextBox Width="180" Text="{Binding TraceFilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                  <ComboBox Width="140" Margin="8,0,0,0" ItemsSource="{Binding TraceEventFilters}" SelectedItem="{Binding TraceEventFilter, Mode=TwoWay}" />
+                  <Button Margin="8,0,0,0" Content="Copy Trace" Command="{Binding CopyResumePayloadCommand}" />
+                </StackPanel>
+                <ListBox Margin="0,8,0,0" ItemsSource="{Binding FilteredTraceEntries}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Width="36" Text="{Binding Tick}" FontFamily="Consolas" />
+                        <TextBlock Width="200" Text="{Binding Event}" />
+                        <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
               </StackPanel>
+            </TabItem>
+            <TabItem Header="Artifacts">
+              <ListBox Margin="8" ItemsSource="{Binding Artifacts}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel>
+                      <TextBlock Text="{Binding Id}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding Description}" FontSize="11" />
+                      <TextBlock Text="{Binding Path}" FontFamily="Consolas" FontSize="10" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
             </TabItem>
             <TabItem Header="Tool Catalog">
               <StackPanel Margin="8">
