@@ -4,6 +4,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $IsWindows) {
+    throw 'scripts/run_ui.ps1 must be run on Windows.'
+}
+
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+    throw 'dotnet CLI not found in PATH.'
+}
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $uiProject = Join-Path $repoRoot 'ui/Shoots.Ui/Shoots.Ui.csproj'
 $logRoot = Join-Path $repoRoot 'artifacts/ui/logs'
