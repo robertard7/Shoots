@@ -47,6 +47,19 @@ public sealed class LocalModelCatalog : IModelCatalog
     public ModelDescriptor ResolveDefaultModel()
         => ListModels().First();
 
+    public ModelDescriptor ResolveEffectiveModel(string? modelId)
+    {
+        var models = ListModels();
+        if (!string.IsNullOrWhiteSpace(modelId))
+        {
+            var selected = models.FirstOrDefault(m => string.Equals(m.ModelId, modelId, StringComparison.Ordinal));
+            if (selected is not null)
+                return selected;
+        }
+
+        return ResolveDefaultModel();
+    }
+
     public void ResetCatalogToDefaults()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_catalogPath)!);

@@ -32,15 +32,7 @@ public sealed class HostExecutionService : IHostExecutionService
 
     public Task<RuntimeResult> ResumeAsync(BuildPlan plan, DecisionInjectionRequest request, HostResumeIntent intent, CancellationToken ct = default)
     {
-        var digest = DecisionDigest.Compute(request);
-        var options = intent.Mode switch
-        {
-            HostResumeIntentMode.OverridePlanChange => new RuntimeRunOptions(ResumeMode.OverridePlanChange, digest, AllowPlanChangeOverride: true),
-            HostResumeIntentMode.DiscardWaitingStartOver => new RuntimeRunOptions(ResumeMode.DiscardWaitingStartOver, digest, DiscardWaiting: true),
-            HostResumeIntentMode.InjectDecision => new RuntimeRunOptions(ResumeMode.InjectDecision, digest),
-            _ => new RuntimeRunOptions(ResumeMode.None, digest)
-        };
-
+        var options = HostRunCoordinator.CreateResumeOptions(request, intent);
         return _execution.StartAsync(plan, options, ct);
     }
 

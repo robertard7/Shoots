@@ -53,6 +53,21 @@ public sealed class LocalModelCatalogTests
         Assert.Equal(new[] { "a", "b", "c" }, models);
     }
 
+
+    [Fact]
+    public void Resolve_effective_model_prefers_selected_and_falls_back_to_default()
+    {
+        var root = CreateTempRoot();
+        var catalogPath = Path.Combine(root, ".state", "models.catalog.json");
+        var catalog = new LocalModelCatalog(catalogPath);
+
+        var selected = catalog.ResolveEffectiveModel("remote.assist");
+        Assert.Equal("remote.assist", selected.ModelId);
+
+        var fallback = catalog.ResolveEffectiveModel("missing.model");
+        Assert.Equal(catalog.ResolveDefaultModel().ModelId, fallback.ModelId);
+    }
+
     private static string CreateTempRoot()
     {
         var path = Path.Combine(Path.GetTempPath(), "shoots-host-tests", Guid.NewGuid().ToString("n"));

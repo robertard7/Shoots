@@ -31,7 +31,9 @@ public sealed class DeterministicProviderPolicy : IProviderPolicy
     {
         var filtered = models.Where(m =>
                 (request.Policy.AllowRemote || !m.IsRemote) &&
-                (request.Policy.AllowLocal || m.IsRemote))
+                (request.Policy.AllowLocal || m.IsRemote) &&
+                (request.Policy.AllowedProviderIds.Count == 0 || request.Policy.AllowedProviderIds.Contains(m.ProviderId, StringComparer.Ordinal)) &&
+                (request.Policy.AllowedModelIds.Count == 0 || request.Policy.AllowedModelIds.Contains(m.ModelId, StringComparer.Ordinal)))
             .ToList();
 
         if (request.PreferredModelId is not null)
@@ -45,5 +47,20 @@ public sealed class DeterministicProviderPolicy : IProviderPolicy
             ?? throw new InvalidOperationException("No model matched provider policy.");
 
         return new ProviderSelection(chosen.ProviderId, chosen.ModelId, chosen.IsRemote);
+    }
+}
+
+
+public static class HostPolicyGuards
+{
+    public static bool IsToolAllowed(HostPolicyOptions policy, string toolId)
+    {
+        if (policy.DeniedToolIds.Contains(toolId, StringComparer.Ordinal))
+            return false;
+
+        if (policy.AllowedToolIds.Count == 0)
+            return true;
+
+        return policy.AllowedToolIds.Contains(toolId, StringComparer.Ordinal);
     }
 }

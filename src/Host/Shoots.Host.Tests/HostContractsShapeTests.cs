@@ -9,7 +9,7 @@ public sealed class HostContractsShapeTests
     public void Host_policy_options_shape_is_frozen()
     {
         var names = typeof(HostPolicyOptions).GetProperties().Select(x => x.Name).ToArray();
-        Assert.Equal(new[] { "ProviderTimeout", "MaxRetries", "AllowRemote", "AllowLocal", "AllowCloudAssist", "Default" }, names);
+        Assert.Equal(new[] { "ProviderTimeout", "MaxRetries", "AllowRemote", "AllowLocal", "AllowCloudAssist", "AllowedProviderIds", "AllowedModelIds", "AllowedToolIds", "DeniedToolIds", "Default" }, names);
     }
 
     [Fact]
@@ -28,6 +28,10 @@ public sealed class HostContractsShapeTests
         Assert.True(d.AllowRemote);
         Assert.True(d.AllowLocal);
         Assert.False(d.AllowCloudAssist);
+        Assert.Empty(d.AllowedProviderIds);
+        Assert.Empty(d.AllowedModelIds);
+        Assert.Empty(d.AllowedToolIds);
+        Assert.Empty(d.DeniedToolIds);
     }
 
     [Fact]
@@ -61,6 +65,21 @@ public sealed class HostContractsShapeTests
     {
         var names = typeof(HostResumeIntent).GetProperties().Select(x => x.Name).ToArray();
         Assert.Equal(new[] { "Mode" }, names);
+    }
+
+
+    [Fact]
+    public void Tool_policy_denies_explicit_tool_ids_deterministically()
+    {
+        var policy = HostPolicyOptions.Default with
+        {
+            AllowedToolIds = new[] { "tools.alpha", "tools.beta" },
+            DeniedToolIds = new[] { "tools.beta" }
+        };
+
+        Assert.True(Shoots.Host.Core.HostPolicyGuards.IsToolAllowed(policy, "tools.alpha"));
+        Assert.False(Shoots.Host.Core.HostPolicyGuards.IsToolAllowed(policy, "tools.beta"));
+        Assert.False(Shoots.Host.Core.HostPolicyGuards.IsToolAllowed(policy, "tools.gamma"));
     }
 
 }

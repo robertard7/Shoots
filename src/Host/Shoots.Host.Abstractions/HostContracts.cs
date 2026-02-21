@@ -7,7 +7,11 @@ public sealed record HostPolicyOptions(
     int MaxRetries,
     bool AllowRemote,
     bool AllowLocal,
-    bool AllowCloudAssist
+    bool AllowCloudAssist,
+    IReadOnlyList<string> AllowedProviderIds,
+    IReadOnlyList<string> AllowedModelIds,
+    IReadOnlyList<string> AllowedToolIds,
+    IReadOnlyList<string> DeniedToolIds
 )
 {
     public static HostPolicyOptions Default { get; } = new(
@@ -15,7 +19,11 @@ public sealed record HostPolicyOptions(
         MaxRetries: 1,
         AllowRemote: true,
         AllowLocal: true,
-        AllowCloudAssist: false);
+        AllowCloudAssist: false,
+        AllowedProviderIds: Array.Empty<string>(),
+        AllowedModelIds: Array.Empty<string>(),
+        AllowedToolIds: Array.Empty<string>(),
+        DeniedToolIds: Array.Empty<string>());
 }
 
 public sealed record ModelDescriptor(

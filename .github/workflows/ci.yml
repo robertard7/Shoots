@@ -38,6 +38,9 @@ jobs:
       - name: Test Host contracts/core (trx)
         run: dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release --logger "trx;LogFileName=host-linux.trx"
 
+      - name: Test Client (trx)
+        run: dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release --logger "trx;LogFileName=client-linux.trx"
+
       - name: Runtime hang probe (blame-hang)
         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
 
@@ -57,11 +60,13 @@ jobs:
           path: |
             **/runtime-linux.trx
             **/host-linux.trx
+            **/client-linux.trx
             artifacts/smoke/${{ github.run_id }}/**
 
   full-windows:
     name: full-windows
     runs-on: [self-hosted, Windows, X64, Shoots]
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,6 +101,7 @@ jobs:
         run: dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --logger "trx;LogFileName=runtime-windows.trx"
 
       - name: Test UI (trx)
+        timeout-minutes: 15
         shell: pwsh
         run: |
           $job = Start-Job -ScriptBlock {
@@ -131,6 +137,16 @@ jobs:
           name: shoots-ui-zip
           path: artifacts/ui/${{ github.run_number }}/Shoots.Ui.zip
 
+      - name: Package release bundle
+        shell: pwsh
+        run: ./scripts/package_all.ps1 -Configuration Release
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: shoots-release-bundle
+          path: artifacts/release/*/shoots-release-bundle.zip
+
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -165,6 +181,7 @@ jobs:
         run: |
           dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release -m:1
           dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -m:1
+          dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -m:1
 
       - name: Pack release candidate
         run: |
@@ -172,6 +189,7 @@ jobs:
           dotnet pack src/Contracts/Shoots.Contracts.Core/Shoots.Contracts.Core.csproj -c Release -o artifacts/nuget
           dotnet pack src/Host/Shoots.Host.Abstractions/Shoots.Host.Abstractions.csproj -c Release -o artifacts/nuget
           dotnet pack src/Runtime/Shoots.Runtime.Abstractions/Shoots.Runtime.Abstractions.csproj -c Release -o artifacts/nuget
+          dotnet pack src/Client/Shoots.Client/Shoots.Client.csproj -c Release -o artifacts/nuget
 
       - name: Upload nuget artifacts
         uses: actions/upload-artifact@v4

@@ -13,4 +13,9 @@ if ! rg -n "not.*Shoots\.Provider|separate .*Shoots\.Provider" src/ProviderAdapt
   exit 1
 fi
 
+if rg -n "src/(Shoots\.Provider|Shoots\.Engine)" --glob "*.sln" >/dev/null; then
+  echo "error: solution files must not reference src/Shoots.Provider or src/Shoots.Engine" >&2
+  exit 1
+fi
+
 echo "repo topology guard passed"

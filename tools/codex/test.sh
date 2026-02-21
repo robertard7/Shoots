@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-dotnet test -c Release
+timeout 10m dotnet test -c Release
