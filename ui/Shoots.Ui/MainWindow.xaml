@@ -137,7 +137,13 @@
             <TextBlock Margin="0,8,0,0" Text="Stack" />
             <TextBox Text="{Binding IntakeStack, Mode=TwoWay}" IsReadOnly="{Binding IsWorkOrderLocked}" />
             <TextBlock Margin="0,8,0,0" Text="Model" />
-            <ComboBox ItemsSource="{Binding AvailableModels}" SelectedItem="{Binding SelectedModelId, Mode=TwoWay}" />
+            <StackPanel>
+              <StackPanel Orientation="Horizontal">
+                <ComboBox Width="220" ItemsSource="{Binding AvailableModels}" SelectedItem="{Binding SelectedModelId, Mode=TwoWay}" />
+                <Button Content="Refresh" Command="{Binding RefreshModelCatalogCommand}" Margin="8,0,0,0" />
+              </StackPanel>
+              <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="#FF6B7280" Text="{Binding DefaultModelId, StringFormat=Default model: {0}}" />
+            </StackPanel>
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
               <Button Content="Lock WorkOrder" Command="{Binding LockWorkOrderCommand}" />
               <Button Content="Unlock" Command="{Binding UnlockWorkOrderCommand}" Margin="8,0,0,0" />
@@ -210,7 +216,8 @@
                 <StackPanel Orientation="Horizontal">
                   <TextBox Width="180" Text="{Binding TraceFilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                   <ComboBox Width="140" Margin="8,0,0,0" ItemsSource="{Binding TraceEventFilters}" SelectedItem="{Binding TraceEventFilter, Mode=TwoWay}" />
-                  <Button Margin="8,0,0,0" Content="Copy Trace" Command="{Binding CopyResumePayloadCommand}" />
+                  <Button Margin="8,0,0,0" Content="Copy Trace" Command="{Binding CopyTraceCommand}" />
+                  <Button Margin="8,0,0,0" Content="Copy Trace Path" Command="{Binding CopyTracePathCommand}" />
                 </StackPanel>
                 <ListBox Margin="0,8,0,0" ItemsSource="{Binding FilteredTraceEntries}">
                   <ListBox.ItemTemplate>
@@ -226,17 +233,26 @@
               </StackPanel>
             </TabItem>
             <TabItem Header="Artifacts">
-              <ListBox Margin="8" ItemsSource="{Binding Artifacts}">
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
-                    <StackPanel>
-                      <TextBlock Text="{Binding Id}" FontWeight="SemiBold" />
-                      <TextBlock Text="{Binding Description}" FontSize="11" />
-                      <TextBlock Text="{Binding Path}" FontFamily="Consolas" FontSize="10" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
+              <StackPanel Margin="8">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Artifacts output:" />
+                  <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="{Binding ArtifactsOutputPath}" FontFamily="Consolas" FontSize="11" />
+                  <Button Margin="8,0,0,0" Content="Copy path" Command="{Binding CopyArtifactsPathCommand}" />
+                </StackPanel>
+                <ListBox Margin="0,8,0,0" ItemsSource="{Binding Artifacts}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel>
+                        <TextBlock Text="{Binding Id}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Description}" FontSize="11" />
+                        <TextBlock Text="{Binding Path}" FontFamily="Consolas" FontSize="10" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Margin="0,8,0,0" Text="Copied payload / trace" FontWeight="SemiBold" />
+                <TextBox Height="70" Text="{Binding LastTracePayload}" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="True" FontFamily="Consolas" FontSize="11" />
+              </StackPanel>
             </TabItem>
             <TabItem Header="Tool Catalog">
               <StackPanel Margin="8">

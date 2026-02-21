@@ -5,7 +5,7 @@ if ($tracked) {
   throw 'tracked files under src/Providers are forbidden; use src/ProviderAdapters'
 }
 
-$matches = rg -n "Shoots\.Providers\." src ui docs -S
+$matches = rg -n "Shoots\.Providers\." src ui .github/workflows -S
 if ($LASTEXITCODE -eq 0 -and $matches) {
   $matches
   throw 'Shoots.Providers namespace references are forbidden'

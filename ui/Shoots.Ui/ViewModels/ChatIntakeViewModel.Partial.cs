@@ -40,6 +40,10 @@ public sealed partial class MainWindowViewModel
     private string _lastResumePayload = string.Empty;
     private string _traceFilterText = string.Empty;
     private string _traceEventFilter = "All";
+    private string _defaultModelId = "local.default";
+    private string _lastTracePayload = string.Empty;
+    private string _traceLogPath = string.Empty;
+    private string _artifactsOutputPath = string.Empty;
 
     public ReadOnlyObservableCollection<ChatSessionViewModel> ChatSessions { get; private set; } = null!;
 
@@ -123,7 +127,9 @@ public sealed partial class MainWindowViewModel
     }
 
 
-    public IReadOnlyList<string> AvailableModels => _modelCatalog.ListModels().Select(x => x.ModelId).ToList();
+    public IReadOnlyList<string> AvailableModels => _modelCatalog.ListModels().Select(x => x.ModelId).OrderBy(x => x, StringComparer.Ordinal).ToList();
+
+    public string DefaultModelId => _defaultModelId;
 
     public string SelectedModelId
     {
@@ -328,6 +334,46 @@ public sealed partial class MainWindowViewModel
         }
     }
 
+
+    public string LastTracePayload
+    {
+        get => _lastTracePayload;
+        private set
+        {
+            if (_lastTracePayload == value)
+                return;
+
+            _lastTracePayload = value;
+            OnPropertyChanged(nameof(LastTracePayload));
+        }
+    }
+
+    public string TraceLogPath
+    {
+        get => _traceLogPath;
+        private set
+        {
+            if (_traceLogPath == value)
+                return;
+
+            _traceLogPath = value;
+            OnPropertyChanged(nameof(TraceLogPath));
+        }
+    }
+
+    public string ArtifactsOutputPath
+    {
+        get => _artifactsOutputPath;
+        private set
+        {
+            if (_artifactsOutputPath == value)
+                return;
+
+            _artifactsOutputPath = value;
+            OnPropertyChanged(nameof(ArtifactsOutputPath));
+        }
+    }
+
     public DecisionGateWaitingInfoViewModel? LastWaitingInfo
     {
         get => _lastWaitingInfo;
@@ -399,6 +445,14 @@ public sealed partial class MainWindowViewModel
 
     public AsyncRelayCommand CopyResumePayloadCommand { get; private set; } = null!;
 
+    public AsyncRelayCommand CopyTraceCommand { get; private set; } = null!;
+
+    public AsyncRelayCommand CopyTracePathCommand { get; private set; } = null!;
+
+    public AsyncRelayCommand CopyArtifactsPathCommand { get; private set; } = null!;
+
+    public AsyncRelayCommand RefreshModelCatalogCommand { get; private set; } = null!;
+
     private void InitializeChatIntake()
     {
         ChatSessions = new ReadOnlyObservableCollection<ChatSessionViewModel>(_chatSessions);
@@ -416,8 +470,13 @@ public sealed partial class MainWindowViewModel
         ResumeInjectDecisionCommand = new AsyncRelayCommand(ResumeWithInjectedDecisionAsync, () => CanResumeInjectDecision);
         UseFallbackToolCommand = new AsyncRelayCommand(UseFallbackToolAsync, () => HasWaitingInfo && LastWaitingInfo?.FallbackPresent == true);
         CopyResumePayloadCommand = new AsyncRelayCommand(CopyResumePayloadAsync, () => HasWaitingInfo && !string.IsNullOrWhiteSpace(InjectedDecisionDigest));
+        CopyTraceCommand = new AsyncRelayCommand(CopyTraceAsync, () => _traceEntries.Count > 0);
+        CopyTracePathCommand = new AsyncRelayCommand(CopyTracePathAsync, () => !string.IsNullOrWhiteSpace(TraceLogPath));
+        CopyArtifactsPathCommand = new AsyncRelayCommand(CopyArtifactsPathAsync, () => !string.IsNullOrWhiteSpace(ArtifactsOutputPath));
+        RefreshModelCatalogCommand = new AsyncRelayCommand(RefreshModelCatalogAsync);
 
         var defaultModel = _modelCatalog.ResolveDefaultModel();
+        _defaultModelId = defaultModel.ModelId;
         _selectedModelId = defaultModel.ModelId;
         OnPropertyChanged(nameof(SelectedModelId));
         OnPropertyChanged(nameof(AvailableModels));
@@ -595,6 +654,38 @@ public sealed partial class MainWindowViewModel
         return Task.CompletedTask;
     }
 
+
+
+    private Task CopyTraceAsync()
+    {
+        LastTracePayload = JsonSerializer.Serialize(FilteredTraceEntries);
+        return Task.CompletedTask;
+    }
+
+    private Task CopyTracePathAsync()
+    {
+        LastTracePayload = TraceLogPath;
+        return Task.CompletedTask;
+    }
+
+    private Task CopyArtifactsPathAsync()
+    {
+        LastTracePayload = ArtifactsOutputPath;
+        return Task.CompletedTask;
+    }
+
+    private Task RefreshModelCatalogAsync()
+    {
+        var models = _modelCatalog.ListModels();
+        _defaultModelId = _modelCatalog.ResolveDefaultModel().ModelId;
+        if (!models.Any(m => string.Equals(m.ModelId, _selectedModelId, StringComparison.Ordinal)))
+            _selectedModelId = _defaultModelId;
+
+        OnPropertyChanged(nameof(DefaultModelId));
+        OnPropertyChanged(nameof(AvailableModels));
+        OnPropertyChanged(nameof(SelectedModelId));
+        return Task.CompletedTask;
+    }
     private void RefreshInjectedDecisionDigest()
     {
         if (!HasWaitingInfo || string.IsNullOrWhiteSpace(DecisionToolId))
@@ -620,11 +711,12 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    private string SessionStatePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Shoots", "chat-intake-sessions.json");
+    private string SessionStatePath => Path.GetFullPath(Path.Combine(".state", "chat-intake-sessions.json"));
 
     private void LoadPersistedSessions()
     {
         var path = SessionStatePath;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         if (!File.Exists(path))
             return;
 
@@ -637,7 +729,8 @@ public sealed partial class MainWindowViewModel
     {
         var path = SessionStatePath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(_chatSessions.ToList()));
+        var ordered = _chatSessions.OrderByDescending(x => x.LastUpdatedUtc).ThenBy(x => x.WorkOrderId, StringComparer.Ordinal).ToList();
+        File.WriteAllText(path, JsonSerializer.Serialize(ordered));
     }
 
     public void CaptureExecutionSnapshot(ExecutionEnvelope envelope)
@@ -650,6 +743,11 @@ public sealed partial class MainWindowViewModel
         foreach (var artifact in envelope.Artifacts)
             _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
 
+        TraceLogPath = Path.GetFullPath(Path.Combine(".state", "trace", $"{envelope.State.WorkOrderId.Value}.trace.json"));
+        ArtifactsOutputPath = Path.GetFullPath(Path.Combine(".state", "artifacts", envelope.State.WorkOrderId.Value));
+        CopyTraceCommand.RaiseCanExecuteChanged();
+        CopyTracePathCommand.RaiseCanExecuteChanged();
+        CopyArtifactsPathCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(FilteredTraceEntries));
     }
 
@@ -663,6 +761,11 @@ public sealed partial class MainWindowViewModel
         foreach (var artifact in envelope.Artifacts)
             _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
 
+        TraceLogPath = Path.GetFullPath(Path.Combine(".state", "trace", $"{envelope.State.WorkOrderId.Value}.trace.json"));
+        ArtifactsOutputPath = Path.GetFullPath(Path.Combine(".state", "artifacts", envelope.State.WorkOrderId.Value));
+        CopyTraceCommand.RaiseCanExecuteChanged();
+        CopyTracePathCommand.RaiseCanExecuteChanged();
+        CopyArtifactsPathCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(FilteredTraceEntries));
     }
 

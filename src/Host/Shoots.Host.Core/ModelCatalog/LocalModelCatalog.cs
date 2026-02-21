@@ -12,18 +12,27 @@ public sealed class LocalModelCatalog : IModelCatalog
         _catalogPath = catalogPath ?? Path.GetFullPath(Path.Combine(".state", "models.catalog.json"));
     }
 
+    private string TemplatePath => Path.GetFullPath(Path.Combine("etc", "models.catalog.template.json"));
+
     public IReadOnlyList<ModelDescriptor> ListModels()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_catalogPath)!);
         if (!File.Exists(_catalogPath))
         {
-            var seed = new[]
+            if (File.Exists(TemplatePath))
             {
-                new ModelDescriptor("local.default", "provider.local", 0, IsRemote: false, SupportsTools: true),
-                new ModelDescriptor("remote.assist", "provider.remote", 10, IsRemote: true, SupportsTools: true)
-            };
-            File.WriteAllText(_catalogPath, JsonSerializer.Serialize(seed, new JsonSerializerOptions { WriteIndented = true }));
-            return seed;
+                File.Copy(TemplatePath, _catalogPath, overwrite: false);
+            }
+            else
+            {
+                var seed = new[]
+                {
+                    new ModelDescriptor("local.default", "provider.local", 0, IsRemote: false, SupportsTools: true),
+                    new ModelDescriptor("remote.assist", "provider.remote", 10, IsRemote: true, SupportsTools: true)
+                };
+                File.WriteAllText(_catalogPath, JsonSerializer.Serialize(seed, new JsonSerializerOptions { WriteIndented = true }));
+                return seed;
+            }
         }
 
         var models = JsonSerializer.Deserialize<List<ModelDescriptor>>(File.ReadAllText(_catalogPath))

@@ -1,0 +1,16 @@
+[
+  {
+    "ModelId": "local.default",
+    "ProviderId": "provider.local",
+    "Priority": 0,
+    "IsRemote": false,
+    "SupportsTools": true
+  },
+  {
+    "ModelId": "remote.assist",
+    "ProviderId": "provider.remote",
+    "Priority": 10,
+    "IsRemote": true,
+    "SupportsTools": true
+  }
+]

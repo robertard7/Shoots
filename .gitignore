@@ -16,3 +16,6 @@
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Local deterministic state cache
+.state/
