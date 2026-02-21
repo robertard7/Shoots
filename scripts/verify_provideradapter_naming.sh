@@ -6,8 +6,13 @@ if git ls-files src/Providers | grep -q .; then
   exit 1
 fi
 
-if rg -n "Shoots\.Providers\." src ui .github/workflows -S; then
-  echo "error: Shoots.Providers namespace references are forbidden" >&2
+if rg -n "Shoots\.Providers\." src -S; then
+  echo "error: Shoots.Providers namespace references are forbidden under src" >&2
+  exit 1
+fi
+
+if rg -n "Shoots\.Providers\." ui .github/workflows -S; then
+  echo "error: Shoots.Providers namespace references are forbidden in ui/workflows" >&2
   exit 1
 fi
 

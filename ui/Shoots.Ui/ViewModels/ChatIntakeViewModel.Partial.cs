@@ -44,6 +44,7 @@ public sealed partial class MainWindowViewModel
     private string _lastTracePayload = string.Empty;
     private string _traceLogPath = string.Empty;
     private string _artifactsOutputPath = string.Empty;
+    private string _modelCatalogError = string.Empty;
 
     public ReadOnlyObservableCollection<ChatSessionViewModel> ChatSessions { get; private set; } = null!;
 
@@ -130,6 +131,22 @@ public sealed partial class MainWindowViewModel
     public IReadOnlyList<string> AvailableModels => _modelCatalog.ListModels().Select(x => x.ModelId).OrderBy(x => x, StringComparer.Ordinal).ToList();
 
     public string DefaultModelId => _defaultModelId;
+
+    public string ModelCatalogError
+    {
+        get => _modelCatalogError;
+        private set
+        {
+            if (_modelCatalogError == value)
+                return;
+
+            _modelCatalogError = value;
+            OnPropertyChanged(nameof(ModelCatalogError));
+            OnPropertyChanged(nameof(HasModelCatalogError));
+        }
+    }
+
+    public bool HasModelCatalogError => !string.IsNullOrWhiteSpace(ModelCatalogError);
 
     public string SelectedModelId
     {
@@ -453,6 +470,8 @@ public sealed partial class MainWindowViewModel
 
     public AsyncRelayCommand RefreshModelCatalogCommand { get; private set; } = null!;
 
+    public AsyncRelayCommand ResetModelCatalogCommand { get; private set; } = null!;
+
     private void InitializeChatIntake()
     {
         ChatSessions = new ReadOnlyObservableCollection<ChatSessionViewModel>(_chatSessions);
@@ -474,12 +493,9 @@ public sealed partial class MainWindowViewModel
         CopyTracePathCommand = new AsyncRelayCommand(CopyTracePathAsync, () => !string.IsNullOrWhiteSpace(TraceLogPath));
         CopyArtifactsPathCommand = new AsyncRelayCommand(CopyArtifactsPathAsync, () => !string.IsNullOrWhiteSpace(ArtifactsOutputPath));
         RefreshModelCatalogCommand = new AsyncRelayCommand(RefreshModelCatalogAsync);
+        ResetModelCatalogCommand = new AsyncRelayCommand(ResetModelCatalogAsync, () => HasModelCatalogError);
 
-        var defaultModel = _modelCatalog.ResolveDefaultModel();
-        _defaultModelId = defaultModel.ModelId;
-        _selectedModelId = defaultModel.ModelId;
-        OnPropertyChanged(nameof(SelectedModelId));
-        OnPropertyChanged(nameof(AvailableModels));
+        LoadModelCatalogState();
 
         _chatMessages.Add("System: Start a new work order from chat intake.");
     }
@@ -676,15 +692,39 @@ public sealed partial class MainWindowViewModel
 
     private Task RefreshModelCatalogAsync()
     {
-        var models = _modelCatalog.ListModels();
-        _defaultModelId = _modelCatalog.ResolveDefaultModel().ModelId;
-        if (!models.Any(m => string.Equals(m.ModelId, _selectedModelId, StringComparison.Ordinal)))
+        LoadModelCatalogState();
+        return Task.CompletedTask;
+    }
+
+    private Task ResetModelCatalogAsync()
+    {
+        _modelCatalog.ResetCatalogToDefaults();
+        LoadModelCatalogState();
+        return Task.CompletedTask;
+    }
+
+    private void LoadModelCatalogState()
+    {
+        try
+        {
+            var models = _modelCatalog.ListModels();
+            _defaultModelId = _modelCatalog.ResolveDefaultModel().ModelId;
+            if (!models.Any(m => string.Equals(m.ModelId, _selectedModelId, StringComparison.Ordinal)))
+                _selectedModelId = _defaultModelId;
+
+            ModelCatalogError = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            ModelCatalogError = $"Model catalog load failed: {ex.Message}";
+            _defaultModelId = "local.default";
             _selectedModelId = _defaultModelId;
+        }
 
         OnPropertyChanged(nameof(DefaultModelId));
         OnPropertyChanged(nameof(AvailableModels));
         OnPropertyChanged(nameof(SelectedModelId));
-        return Task.CompletedTask;
+        ResetModelCatalogCommand.RaiseCanExecuteChanged();
     }
     private void RefreshInjectedDecisionDigest()
     {

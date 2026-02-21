@@ -12,7 +12,8 @@ cd Shoots
 
 1. Open **Chat Intake**.
 2. Enter intent text.
-3. Click **Quick Start** (creates WorkOrder, previews plan, runs).
+3. Select a model (or click **Refresh** / **Reset catalog** in the Model row if catalog errors are shown).
+4. Click **Quick Start** (creates WorkOrder, previews plan, runs).
 
 ## 3. WAITING flow
 
@@ -46,3 +47,7 @@ When a decision gate returns WAITING:
 - In **Artifacts** tab, click **Copy path** and confirm it points to `.state/artifacts/<workorder>/` (folder exists even if empty).
 - Session list state is persisted in `.state/chat-intake-sessions.json`.
 - Model catalog is read from `.state/models.catalog.json` (created from template on first run).
+
+
+## Optional reset
+Use `./scripts/clean_state.ps1 -PreserveModelsCatalog` to clear trace/artifact/session state between smoke runs.
