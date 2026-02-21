@@ -743,8 +743,10 @@ public sealed partial class MainWindowViewModel
         foreach (var artifact in envelope.Artifacts)
             _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
 
-        TraceLogPath = Path.GetFullPath(Path.Combine(".state", "trace", $"{envelope.State.WorkOrderId.Value}.trace.json"));
-        ArtifactsOutputPath = Path.GetFullPath(Path.Combine(".state", "artifacts", envelope.State.WorkOrderId.Value));
+        TraceLogPath = ResolveTraceLogPath(envelope.State.WorkOrderId.Value);
+        ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.State.WorkOrderId.Value);
+        PersistTrace(TraceLogPath, _traceEntries);
+        EnsureArtifactsDirectory(ArtifactsOutputPath);
         CopyTraceCommand.RaiseCanExecuteChanged();
         CopyTracePathCommand.RaiseCanExecuteChanged();
         CopyArtifactsPathCommand.RaiseCanExecuteChanged();
@@ -761,13 +763,31 @@ public sealed partial class MainWindowViewModel
         foreach (var artifact in envelope.Artifacts)
             _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
 
-        TraceLogPath = Path.GetFullPath(Path.Combine(".state", "trace", $"{envelope.State.WorkOrderId.Value}.trace.json"));
-        ArtifactsOutputPath = Path.GetFullPath(Path.Combine(".state", "artifacts", envelope.State.WorkOrderId.Value));
+        TraceLogPath = ResolveTraceLogPath(envelope.State.WorkOrderId.Value);
+        ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.State.WorkOrderId.Value);
+        PersistTrace(TraceLogPath, _traceEntries);
+        EnsureArtifactsDirectory(ArtifactsOutputPath);
         CopyTraceCommand.RaiseCanExecuteChanged();
         CopyTracePathCommand.RaiseCanExecuteChanged();
         CopyArtifactsPathCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(FilteredTraceEntries));
     }
+
+
+    private static string ResolveTraceLogPath(string workOrderId)
+        => Path.GetFullPath(Path.Combine(".state", "trace", $"{workOrderId}.trace.json"));
+
+    private static string ResolveArtifactsOutputPath(string workOrderId)
+        => Path.GetFullPath(Path.Combine(".state", "artifacts", workOrderId));
+
+    private static void PersistTrace(string path, IEnumerable<TraceEntryViewModel> entries)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(entries.ToList(), new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static void EnsureArtifactsDirectory(string path)
+        => Directory.CreateDirectory(path);
 
     private static IReadOnlyList<string> ParseList(string value)
         => string.IsNullOrWhiteSpace(value)
