@@ -45,6 +45,8 @@ public sealed partial class MainWindowViewModel
     private string _traceLogPath = string.Empty;
     private string _artifactsOutputPath = string.Empty;
     private string _modelCatalogError = string.Empty;
+    private string _catalogHash = string.Empty;
+    private string _lastSmokeRunId = string.Empty;
 
     public ReadOnlyObservableCollection<ChatSessionViewModel> ChatSessions { get; private set; } = null!;
 
@@ -70,6 +72,8 @@ public sealed partial class MainWindowViewModel
                 PlanIdLabel = _selectedChatSession.PlanId;
                 PlanHashLabel = _selectedChatSession.PlanHash;
                 LastWaitingInfo = _selectedChatSession.LastWaitingInfo;
+                OnPropertyChanged(nameof(LastWorkOrderId));
+                OnPropertyChanged(nameof(LastRunStatus));
             }
         }
     }
@@ -147,6 +151,26 @@ public sealed partial class MainWindowViewModel
     }
 
     public bool HasModelCatalogError => !string.IsNullOrWhiteSpace(ModelCatalogError);
+
+
+    public string CatalogHash => _catalogHash;
+
+    public string LastWorkOrderId => SelectedChatSession?.WorkOrderId ?? string.Empty;
+
+    public string LastRunStatus => SelectedChatSession?.LastStatus ?? string.Empty;
+
+    public string LastSmokeRunId
+    {
+        get => _lastSmokeRunId;
+        private set
+        {
+            if (_lastSmokeRunId == value)
+                return;
+
+            _lastSmokeRunId = value;
+            OnPropertyChanged(nameof(LastSmokeRunId));
+        }
+    }
 
     public string SelectedModelId
     {
@@ -472,6 +496,8 @@ public sealed partial class MainWindowViewModel
 
     public AsyncRelayCommand ResetModelCatalogCommand { get; private set; } = null!;
 
+    public AsyncRelayCommand OpenStateFolderCommand { get; private set; } = null!;
+
     private void InitializeChatIntake()
     {
         ChatSessions = new ReadOnlyObservableCollection<ChatSessionViewModel>(_chatSessions);
@@ -494,8 +520,10 @@ public sealed partial class MainWindowViewModel
         CopyArtifactsPathCommand = new AsyncRelayCommand(CopyArtifactsPathAsync, () => !string.IsNullOrWhiteSpace(ArtifactsOutputPath));
         RefreshModelCatalogCommand = new AsyncRelayCommand(RefreshModelCatalogAsync);
         ResetModelCatalogCommand = new AsyncRelayCommand(ResetModelCatalogAsync, () => HasModelCatalogError);
+        OpenStateFolderCommand = new AsyncRelayCommand(OpenStateFolderAsync);
 
         LoadModelCatalogState();
+        LastSmokeRunId = ResolveLastSmokeRunId();
 
         _chatMessages.Add("System: Start a new work order from chat intake.");
     }
@@ -713,19 +741,58 @@ public sealed partial class MainWindowViewModel
                 _selectedModelId = _defaultModelId;
 
             ModelCatalogError = string.Empty;
+            _catalogHash = JobSpecDigestBuilder.HashCanonical(models.Select(m => new { m.ModelId, m.ProviderId, m.Priority, m.IsRemote, m.SupportsTools }).ToArray());
         }
         catch (Exception ex)
         {
             ModelCatalogError = $"Model catalog load failed: {ex.Message}";
             _defaultModelId = "local.default";
             _selectedModelId = _defaultModelId;
+            _catalogHash = string.Empty;
         }
 
         OnPropertyChanged(nameof(DefaultModelId));
+        OnPropertyChanged(nameof(CatalogHash));
         OnPropertyChanged(nameof(AvailableModels));
         OnPropertyChanged(nameof(SelectedModelId));
         ResetModelCatalogCommand.RaiseCanExecuteChanged();
     }
+    private Task OpenStateFolderAsync()
+    {
+        var statePath = Path.GetFullPath(Path.Combine(".state"));
+        if (OperatingSystem.IsWindows())
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = statePath,
+                UseShellExecute = true
+            });
+        }
+        else
+        {
+            LastTracePayload = statePath;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static string ResolveLastSmokeRunId()
+    {
+        var traceRoot = Path.GetFullPath(Path.Combine(".state", "trace"));
+        if (!Directory.Exists(traceRoot))
+            return string.Empty;
+
+        var latest = Directory.EnumerateFiles(traceRoot, "wo-smoke-*.trace.json")
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+
+        if (latest is null)
+            return string.Empty;
+
+        return Path.GetFileNameWithoutExtension(latest);
+    }
+
     private void RefreshInjectedDecisionDigest()
     {
         if (!HasWaitingInfo || string.IsNullOrWhiteSpace(DecisionToolId))

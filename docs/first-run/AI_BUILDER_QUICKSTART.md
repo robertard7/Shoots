@@ -1,21 +1,27 @@
 # AI Builder Quickstart
 
-## 1. Clone and launch (Windows)
+## 1. Clone and preflight (Windows)
 
 ```powershell
 git clone <repo-url>
 cd Shoots
+./scripts/first_run_check.ps1
+```
+
+## 2. Launch UI
+
+```powershell
 ./scripts/run_ui.ps1 -Configuration Release
 ```
 
-## 2. Quick Start flow
+## 3. Quick Start flow
 
 1. Open **Chat Intake**.
 2. Enter intent text.
 3. Select a model (or click **Refresh** / **Reset catalog** in the Model row if catalog errors are shown).
 4. Click **Quick Start** (creates WorkOrder, previews plan, runs).
 
-## 3. WAITING flow
+## 4. WAITING flow
 
 When a decision gate returns WAITING:
 
@@ -24,12 +30,12 @@ When a decision gate returns WAITING:
 - Choose run mode.
 - Click **Resume with selection**.
 
-## 4. Confirm no auto-rerun
+## 5. Confirm no auto-rerun
 
 - WAITING state remains idle until you click resume.
 - Re-running without progress emits blocked host marker in trace.
 
-## 5. Trace and artifacts
+## 6. Trace and artifacts
 
 - Use Trace tab to inspect runtime markers.
 - Use Artifacts tab for plan artifact listing/path copy.
@@ -50,4 +56,13 @@ When a decision gate returns WAITING:
 
 
 ## Optional reset
-Use `./scripts/clean_state.ps1 -PreserveModelsCatalog` to clear trace/artifact/session state between smoke runs.
+Use `./scripts/clean_state.ps1 -KeepModels` to clear trace/artifact/session state between smoke runs.
+
+
+## 7. Host smoke harness (cross-platform)
+```bash
+./scripts/run_host_smoke.sh
+```
+```powershell
+./scripts/run_host_smoke.ps1
+```

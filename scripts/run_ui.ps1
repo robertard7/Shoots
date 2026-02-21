@@ -14,6 +14,7 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
 }
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $uiProject = Join-Path $repoRoot 'ui/Shoots.Ui/Shoots.Ui.csproj'
+$resolvedVersion = dotnet msbuild $uiProject -nologo -getProperty:Version
 $logRoot = Join-Path $repoRoot 'artifacts/ui/logs'
 $artifactRoot = Join-Path $repoRoot 'artifacts/ui/output'
 $stateRoot = Join-Path $repoRoot '.state'
@@ -26,6 +27,7 @@ New-Item -ItemType Directory -Force -Path $artifactRoot | Out-Null
 
 Write-Host "Repo root: $repoRoot"
 Write-Host "Configuration: $Configuration"
+Write-Host "Resolved version: $resolvedVersion"
 Write-Host "UI build output: $uiBuildOutput"
 Write-Host ".state root: $stateRoot"
 Write-Host "Trace file pattern: $tracePattern"

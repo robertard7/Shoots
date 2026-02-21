@@ -43,4 +43,24 @@ public sealed class HostContractsShapeTests
         var names = typeof(IModelCatalog).GetMethods().Select(m => m.Name).OrderBy(x => x, StringComparer.Ordinal).ToArray();
         Assert.Equal(new[] { "ListModels" }, names);
     }
+
+    [Fact]
+    public void Host_resume_intent_mode_order_is_frozen()
+    {
+        var names = Enum.GetNames<HostResumeIntentMode>();
+        Assert.Equal(new[] { "None", "InjectDecision", "OverridePlanChange", "DiscardWaitingStartOver" }, names);
+
+        Assert.Equal(0, (int)HostResumeIntentMode.None);
+        Assert.Equal(1, (int)HostResumeIntentMode.InjectDecision);
+        Assert.Equal(2, (int)HostResumeIntentMode.OverridePlanChange);
+        Assert.Equal(3, (int)HostResumeIntentMode.DiscardWaitingStartOver);
+    }
+
+    [Fact]
+    public void Host_resume_intent_shape_is_frozen()
+    {
+        var names = typeof(HostResumeIntent).GetProperties().Select(x => x.Name).ToArray();
+        Assert.Equal(new[] { "Mode" }, names);
+    }
+
 }

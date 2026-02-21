@@ -142,6 +142,7 @@
                 <ComboBox Width="220" ItemsSource="{Binding AvailableModels}" SelectedItem="{Binding SelectedModelId, Mode=TwoWay}" />
                 <Button Content="Refresh" Command="{Binding RefreshModelCatalogCommand}" Margin="8,0,0,0" />
                 <Button Content="Reset catalog" Command="{Binding ResetModelCatalogCommand}" Margin="8,0,0,0" />
+                <Button Content="Open .state" Command="{Binding OpenStateFolderCommand}" Margin="8,0,0,0" />
               </StackPanel>
                             <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="#FF6B7280" Text="{Binding DefaultModelId, StringFormat=Default model: {0}}" />
               <TextBlock Margin="0,2,0,0" FontSize="11" Foreground="#FFB91C1C" TextWrapping="Wrap" Text="{Binding ModelCatalogError}" Visibility="{Binding HasModelCatalogError, Converter={StaticResource BooleanToVisibilityConverter}}" />
@@ -155,6 +156,15 @@
             </StackPanel>
             <TextBlock Margin="0,8,0,0" Text="{Binding JobSpecDigest}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" />
             <ListBox Margin="0,8,0,0" ItemsSource="{Binding ChatMessages}" Height="140" />
+            <GroupBox Margin="0,8,0,0" Header="Operator Health">
+              <StackPanel Margin="8,4,8,8">
+                <TextBlock Text="{Binding CatalogHash, StringFormat=Catalog Hash: {0}}" FontFamily="Consolas" FontSize="11" />
+                <TextBlock Margin="0,4,0,0" Text="{Binding SelectedModelId, StringFormat=Selected Model: {0}}" />
+                <TextBlock Margin="0,4,0,0" Text="{Binding LastWorkOrderId, StringFormat=Last WorkOrder: {0}}" FontFamily="Consolas" FontSize="11" />
+                <TextBlock Margin="0,4,0,0" Text="{Binding LastRunStatus, StringFormat=Last Status: {0}}" />
+                <TextBlock Margin="0,4,0,0" Text="{Binding LastSmokeRunId, StringFormat=Last Smoke Run: {0}}" FontFamily="Consolas" FontSize="11" />
+              </StackPanel>
+            </GroupBox>
           </StackPanel>
 
           <TabControl Grid.Column="2">

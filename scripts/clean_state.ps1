@@ -1,5 +1,6 @@
 param(
-    [switch]$PreserveModelsCatalog
+    [Alias("PreserveModelsCatalog")]
+    [switch]$KeepModels
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,9 +16,9 @@ if (Test-Path $traceRoot) { Remove-Item -Recurse -Force $traceRoot }
 if (Test-Path $artifactsRoot) { Remove-Item -Recurse -Force $artifactsRoot }
 if (Test-Path $sessionsPath) { Remove-Item -Force $sessionsPath }
 
-if (-not $PreserveModelsCatalog -and (Test-Path $modelsPath)) {
+if (-not $KeepModels -and (Test-Path $modelsPath)) {
     Remove-Item -Force $modelsPath
 }
 
 Write-Host "Cleaned state under: $stateRoot"
-Write-Host "Preserved models catalog: $PreserveModelsCatalog"
+Write-Host "Preserved models catalog: $KeepModels"
