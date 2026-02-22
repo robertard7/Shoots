@@ -19,3 +19,4 @@
 - first-run/AI_BUILDER_QUICKSTART.md
 - state/STATE_LAYOUT.md
 - topology/REPO_TOPOLOGY.md
+- release/WHAT_SHIPS.md

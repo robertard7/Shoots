@@ -67,6 +67,17 @@ public sealed class HostContractsShapeTests
         Assert.Equal(new[] { "Mode" }, names);
     }
 
+    [Fact]
+    public void Tool_policy_allow_list_only_blocks_all_other_tools_deterministically()
+    {
+        var policy = HostPolicyOptions.Default with
+        {
+            AllowedToolIds = new[] { "tools.allowed" }
+        };
+
+        Assert.True(Shoots.Host.Core.HostPolicyGuards.IsToolAllowed(policy, "tools.allowed"));
+        Assert.False(Shoots.Host.Core.HostPolicyGuards.IsToolAllowed(policy, "tools.denied"));
+    }
 
     [Fact]
     public void Tool_policy_denies_explicit_tool_ids_deterministically()
