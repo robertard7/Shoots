@@ -1,17 +1,12 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-<<<<<<< HEAD:src/ProviderAdapters/Shoots.ProviderAdapters.Null/NullProviderClient.cs
 using Shoots.ProviderAdapters.Abstractions;
 using Shoots.Runtime.Abstractions.Provider;
-
-namespace Shoots.ProviderAdapters.Null;
-=======
 using Shoots.Providers.Abstractions;
 using Shoots.Runtime.Abstractions.Provider;
 
-namespace Shoots.Providers.Null;
->>>>>>> origin/main:src/Providers/Shoots.Providers.Null/NullProviderClient.cs
+namespace Shoots.ProviderAdapters.Null;
 
 public sealed class NullProviderClient : IProviderClient
 {

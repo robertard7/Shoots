@@ -262,7 +262,7 @@ public static class RouteGate
             ToolSelectionDecision? effectiveDecision = explicitDecision ?? invocationDecision;
             if (effectiveDecision is null)
             {
-<<<<<<< HEAD
+
                 switch (rule.DecisionPolicy)
                 {
                     case DecisionPolicy.Bypass when rule.FallbackToolSelection is not null:
@@ -313,12 +313,12 @@ public static class RouteGate
                         error = null;
                         return false;
                 }
-=======
+
                 nextState = state.WithStatus(RoutingStatus.Waiting);
                 narrator?.OnDecisionRequired(nextState, routeStep, state.IntentToken, allowedNextNodes);
                 error = null;
                 return false;
->>>>>>> origin/main
+
             }
 
             if (!TryValidateToolSelection(plan, snapshot, effectiveDecision, out error))

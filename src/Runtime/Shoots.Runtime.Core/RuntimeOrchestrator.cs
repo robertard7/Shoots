@@ -2,15 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
-<<<<<<< HEAD
 using Shoots.ProviderAdapters.Bridge;
 using Shoots.ProviderAdapters.Abstractions;
 using Shoots.ProviderAdapters.Null;
-=======
-using Shoots.Providers.Bridge;
-using Shoots.Providers.Abstractions;
-using Shoots.Providers.Null;
->>>>>>> origin/main
+
 using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Runtime.Core;

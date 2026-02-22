@@ -2,13 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Shoots.Contracts.Core;
-<<<<<<< HEAD
+
 using Shoots.ProviderAdapters.Abstractions;
 using Shoots.ProviderAdapters.Null;
-=======
-using Shoots.Providers.Abstractions;
-using Shoots.Providers.Null;
->>>>>>> origin/main
+
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Abstractions.Provider;
 using Shoots.Runtime.Core;
