@@ -16,7 +16,7 @@
   - `artifacts/ops/<runid>/smoke.log`
   - `artifacts/ops/<runid>/env.json`
 - Release bundle:
-  - `artifacts/release/<version>/shoots-release-bundle.zip`
+  - `artifacts/release/<version>/Shoots-<version>.zip`
 - Release layout:
   - `artifacts/release/<version>/nuget/`
   - `artifacts/release/<version>/ui/Shoots.Ui.zip`

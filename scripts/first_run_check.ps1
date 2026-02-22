@@ -1,3 +1,8 @@
+param(
+    [ValidateSet('Debug','Release')]
+    [string]$Configuration = 'Release'
+)
+
 $ErrorActionPreference = 'Stop'
 
 if (-not $IsWindows) {

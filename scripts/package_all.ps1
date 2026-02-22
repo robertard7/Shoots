@@ -30,7 +30,7 @@ if (Test-Path (Join-Path $repoRoot 'artifacts/ops')) {
     Copy-Item -Recurse -Force (Join-Path $repoRoot 'artifacts/ops/*') $opsRoot
 }
 
-$bundle = Join-Path $repoRoot "artifacts/release/$version/shoots-release-bundle.zip"
+$bundle = Join-Path $repoRoot "artifacts/release/$version/Shoots-$version.zip"
 if (Test-Path $bundle) { Remove-Item -Force $bundle }
 Compress-Archive -Path (Join-Path $releaseRoot '*') -DestinationPath $bundle
 Write-Host "Release bundle: $bundle"

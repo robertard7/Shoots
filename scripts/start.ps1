@@ -1,3 +1,8 @@
+param(
+    [ValidateSet('Debug','Release')]
+    [string]$Configuration = 'Release'
+)
+
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $runId = Get-Date -AsUTC -Format 'yyyyMMdd-HHmmss'
@@ -29,6 +34,6 @@ $lines = @(
 )
 $lines | Tee-Object -FilePath (Join-Path $opsRoot 'start.log')
 
-& (Join-Path $repoRoot 'scripts/first_run_check.ps1') | Tee-Object -Append -FilePath (Join-Path $opsRoot 'start.log')
+& (Join-Path $repoRoot 'scripts/first_run_check.ps1') -Configuration $Configuration | Tee-Object -Append -FilePath (Join-Path $opsRoot 'start.log')
 & (Join-Path $repoRoot 'scripts/run_host_smoke.ps1') | Tee-Object -FilePath (Join-Path $opsRoot 'smoke.log')
-& (Join-Path $repoRoot 'scripts/run_ui.ps1')
+& (Join-Path $repoRoot 'scripts/run_ui.ps1') -Configuration $Configuration

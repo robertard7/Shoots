@@ -42,6 +42,20 @@ public sealed class ShootsClientApiFreezeTests
         Assert.DoesNotContain(refs, r => r.Contains("Shoots.Runtime.Core.csproj", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Client_sample_project_does_not_reference_runtime_core()
+    {
+        var root = ResolveRepoRoot();
+        var sampleCsproj = Path.Combine(root, "src", "Client", "Shoots.Client.Sample", "Shoots.Client.Sample.csproj");
+        var doc = XDocument.Load(sampleCsproj);
+
+        var refs = doc.Descendants("ProjectReference")
+            .Select(x => x.Attribute("Include")?.Value ?? string.Empty)
+            .ToArray();
+
+        Assert.DoesNotContain(refs, r => r.Contains("Shoots.Runtime.Core.csproj", StringComparison.Ordinal));
+    }
+
     private static string ResolveRepoRoot()
     {
         var dir = AppContext.BaseDirectory;

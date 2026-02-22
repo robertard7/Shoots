@@ -26,6 +26,9 @@ jobs:
       - name: Verify repo topology guard
         run: bash scripts/verify_repo_topology_guard.sh
 
+      - name: Verify no-spin timeout guard
+        run: bash scripts/verify_no_spin_timeouts.sh
+
       - name: Restore Runtime
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
@@ -46,6 +49,9 @@ jobs:
 
       - name: Host smoke (ChatIntakeSmoke)
         run: dotnet run --project src/Host/Shoots.Host.Smoke/Shoots.Host.Smoke.csproj -c Release -- ChatIntakeSmoke
+
+      - name: Run Client sample golden flow
+        run: dotnet run --project src/Client/Shoots.Client.Sample/Shoots.Client.Sample.csproj -c Release
 
       - name: Collect smoke artifacts (linux)
         run: |
@@ -87,6 +93,14 @@ jobs:
       - name: Verify repo topology guard
         shell: pwsh
         run: ./scripts/verify_repo_topology_guard.ps1
+
+      - name: Verify no-spin timeout guard
+        shell: pwsh
+        run: ./scripts/verify_no_spin_timeouts.ps1
+
+      - name: Verify no-spin timeout guard
+        shell: pwsh
+        run: ./scripts/verify_no_spin_timeouts.ps1
 
       - name: Restore
         run: dotnet restore Shoots.sln
@@ -145,7 +159,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: shoots-release-bundle
-          path: artifacts/release/*/shoots-release-bundle.zip
+          path: artifacts/release/*/Shoots-*.zip
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
