@@ -8,4 +8,4 @@ Shoots is the hub repository containing Contracts, Runtime, Host, ProviderAdapte
 Future integration path:
 1. keep native provider in `Shoots.Provider`;
 2. integrate via submodule/package/binary drop at release boundaries;
-3. keep runtime contracts stable and avoid namespace drift back to `Shoots.Providers.*`.
+3. keep runtime contracts stable and avoid namespace drift back to `Shoots.ProviderAdapters.*`.
