@@ -463,8 +463,16 @@ public sealed class LinuxToolsTests
 
             var inputs = tool.GetProperty("inputs").EnumerateArray().ToArray();
             var outputs = tool.GetProperty("outputs").EnumerateArray().ToArray();
-            Assert.All(inputs, input => Assert.False(string.IsNullOrWhiteSpace(input.GetProperty("name").GetString())));
-            Assert.All(outputs, output => Assert.False(string.IsNullOrWhiteSpace(output.GetProperty("name").GetString())));
+            Assert.All(inputs, input =>
+            {
+                Assert.False(string.IsNullOrWhiteSpace(input.GetProperty("name").GetString()));
+                Assert.False(string.IsNullOrWhiteSpace(input.GetProperty("type").GetString()));
+            });
+            Assert.All(outputs, output =>
+            {
+                Assert.False(string.IsNullOrWhiteSpace(output.GetProperty("name").GetString()));
+                Assert.False(string.IsNullOrWhiteSpace(output.GetProperty("type").GetString()));
+            });
         });
     }
 

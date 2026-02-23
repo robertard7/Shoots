@@ -26,6 +26,7 @@ public sealed class EmbeddedToolProviderClientTests
         Assert.False(result.ToolResult!.Success);
         Assert.Equal("linux.unknown.v1", result.ToolResult.Outputs["tool_id"]);
         Assert.Equal("tool.not_available", result.ToolResult.Outputs["error.code"]);
+        Assert.Equal("Tool 'linux.unknown.v1' is not available.", result.ToolResult.Outputs["error.message"]);
     }
 
     [Fact]
