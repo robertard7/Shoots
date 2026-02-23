@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using System.Text.Json;
 using Shoots.Contracts.Core;
 using Shoots.Tools.Abstractions;
 
@@ -439,12 +440,43 @@ public sealed class LinuxToolsTests
     [Fact]
     public void Catalog_has_unique_sorted_linux_versioned_ids()
     {
-        var entries = LinuxToolCatalog.LoadEntries(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "etc", "tools.catalog.json"));
-        var ids = entries.Select(e => e.Spec.ToolId.Value).ToArray();
+        var catalogPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "etc", "tools.catalog.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(catalogPath));
+        var tools = doc.RootElement.GetProperty("tools").EnumerateArray().ToArray();
+        var ids = tools.Select(t => t.GetProperty("id").GetString() ?? string.Empty).ToArray();
         var sorted = ids.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         Assert.Equal(sorted, ids);
         Assert.Equal(ids.Length, ids.Distinct(StringComparer.Ordinal).Count());
         Assert.All(ids, id => Assert.Matches(@"^linux\.[a-z0-9_]+\.[a-z0-9_]+\.v[0-9]+$", id));
+
+        Assert.All(tools, tool =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(tool.GetProperty("description").GetString()));
+
+            var requiredAuthority = tool.GetProperty("requiredAuthority");
+            Assert.Equal("Embedded", requiredAuthority.GetProperty("providerKind").GetString());
+            var capabilities = requiredAuthority.GetProperty("capabilities").EnumerateArray().Select(x => x.GetString()).ToArray();
+            Assert.Contains("ToolExecution", capabilities);
+
+            var tags = tool.GetProperty("tags").EnumerateArray().Select(t => t.GetString() ?? string.Empty).ToArray();
+            Assert.Contains("linux", tags);
+
+            var inputs = tool.GetProperty("inputs").EnumerateArray().ToArray();
+            var outputs = tool.GetProperty("outputs").EnumerateArray().ToArray();
+            Assert.All(inputs, input => Assert.False(string.IsNullOrWhiteSpace(input.GetProperty("name").GetString())));
+            Assert.All(outputs, output => Assert.False(string.IsNullOrWhiteSpace(output.GetProperty("name").GetString())));
+        });
+    }
+
+    [Fact]
+    public void Registry_has_unique_tool_ids()
+    {
+        var entries = LinuxToolCatalog.LoadEntries(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "etc", "tools.catalog.json"));
+        var registry = LinuxToolHandlerRegistry.CreateDefault();
+        var ids = entries.Select(e => e.Spec.ToolId.Value).ToArray();
+
+        Assert.Equal(ids.Length, ids.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(ids, id => Assert.NotNull(registry.Resolve(new ToolId(id))));
     }
 
     [Fact]
