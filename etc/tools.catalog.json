@@ -1,6 +1,80 @@
 {
   "tools": [
     {
+      "id": "linux.archive.unzip.v1",
+      "description": "Extract a zip archive to a destination directory.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "zip_path", "type": "string", "required": true, "description": "Repository-relative zip path." },
+        { "name": "dest_dir", "type": "string", "required": true, "description": "Destination directory." },
+        { "name": "overwrite", "type": "bool", "required": false, "description": "Overwrite existing files." }
+      ],
+      "outputs": [
+        { "name": "extracted", "type": "bool", "description": "Whether extraction succeeded." },
+        { "name": "files_count", "type": "int", "description": "Extracted file count." }
+      ],
+      "tags": ["linux", "archive"]
+    },
+    {
+      "id": "linux.archive.zip.v1",
+      "description": "Create a zip archive from a source directory.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "source_dir", "type": "string", "required": true, "description": "Source directory path." },
+        { "name": "zip_path", "type": "string", "required": true, "description": "Output zip path." },
+        { "name": "include_hidden", "type": "bool", "required": false, "description": "Include dotfiles." }
+      ],
+      "outputs": [
+        { "name": "archived", "type": "bool", "description": "Whether archive was created." },
+        { "name": "files_count", "type": "int", "description": "Archived file count." }
+      ],
+      "tags": ["linux", "archive"]
+    },
+    {
+      "id": "linux.fs.append_text.v1",
+      "description": "Append text content to a file.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "path", "type": "string", "required": true, "description": "Repository-relative file path." },
+        { "name": "text", "type": "string", "required": true, "description": "Text to append." },
+        { "name": "newline", "type": "bool", "required": false, "description": "Append newline after text." }
+      ],
+      "outputs": [
+        { "name": "bytes_appended", "type": "int", "description": "Appended byte count." }
+      ],
+      "tags": ["linux", "fs"]
+    },
+    {
+      "id": "linux.fs.copy.v1",
+      "description": "Copy file or directory within repository root.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "from", "type": "string", "required": true, "description": "Source relative path." },
+        { "name": "to", "type": "string", "required": true, "description": "Destination relative path." },
+        { "name": "overwrite", "type": "bool", "required": false, "description": "Overwrite destination when file exists." }
+      ],
+      "outputs": [
+        { "name": "copied", "type": "bool", "description": "Whether copy succeeded." }
+      ],
+      "tags": ["linux", "fs"]
+    },
+    {
+      "id": "linux.fs.ls.v1",
+      "description": "List directory entries with stable sort.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "path", "type": "string", "required": true, "description": "Directory path." },
+        { "name": "recursive", "type": "bool", "required": false, "description": "List recursively." },
+        { "name": "include_hidden", "type": "bool", "required": false, "description": "Include hidden files." },
+        { "name": "max_entries", "type": "int", "required": false, "description": "Maximum emitted entries." }
+      ],
+      "outputs": [
+        { "name": "entries", "type": "string", "description": "Newline-delimited relative entries." },
+        { "name": "count", "type": "int", "description": "Emitted entry count." }
+      ],
+      "tags": ["linux", "fs"]
+    },
+    {
       "id": "linux.fs.mkdir.v1",
       "description": "Create a directory on Linux.",
       "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
@@ -15,18 +89,15 @@
       "tags": ["linux", "fs"]
     },
     {
-      "id": "linux.fs.write_text.v1",
-      "description": "Write text to a file.",
+      "id": "linux.fs.move.v1",
+      "description": "Move file or directory within repository root.",
       "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
       "inputs": [
-        { "name": "path", "type": "string", "required": true, "description": "Repository-relative file path." },
-        { "name": "text", "type": "string", "required": true, "description": "Text content." },
-        { "name": "encoding", "type": "string", "required": false, "description": "Text encoding." },
-        { "name": "overwrite", "type": "bool", "required": false, "description": "Whether to overwrite." }
+        { "name": "from", "type": "string", "required": true, "description": "Source relative path." },
+        { "name": "to", "type": "string", "required": true, "description": "Destination relative path." }
       ],
       "outputs": [
-        { "name": "path", "type": "string", "description": "Resolved path." },
-        { "name": "bytes_written", "type": "int", "description": "Written byte count." }
+        { "name": "moved", "type": "bool", "description": "Whether move succeeded." }
       ],
       "tags": ["linux", "fs"]
     },
@@ -48,6 +119,96 @@
       "tags": ["linux", "fs"]
     },
     {
+      "id": "linux.fs.rm.v1",
+      "description": "Remove file or directory from repository root.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "path", "type": "string", "required": true, "description": "Path to remove." },
+        { "name": "recursive", "type": "bool", "required": false, "description": "Recursive directory delete." },
+        { "name": "force", "type": "bool", "required": false, "description": "No-error when missing." }
+      ],
+      "outputs": [
+        { "name": "removed", "type": "bool", "description": "Whether path was removed." },
+        { "name": "path", "type": "string", "description": "Removed relative path." }
+      ],
+      "tags": ["linux", "fs"]
+    },
+    {
+      "id": "linux.fs.stat.v1",
+      "description": "Stat a path in repository root.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "path", "type": "string", "required": true, "description": "Relative path to inspect." }
+      ],
+      "outputs": [
+        { "name": "exists", "type": "bool", "description": "Path existence." },
+        { "name": "kind", "type": "string", "description": "file|dir|symlink|other." },
+        { "name": "size_bytes", "type": "long", "description": "File byte size." },
+        { "name": "mtime_utc", "type": "string", "description": "Last write timestamp in RFC3339/ISO-8601." }
+      ],
+      "tags": ["linux", "fs"]
+    },
+    {
+      "id": "linux.fs.write_text.v1",
+      "description": "Write text to a file.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "path", "type": "string", "required": true, "description": "Repository-relative file path." },
+        { "name": "text", "type": "string", "required": true, "description": "Text content." },
+        { "name": "encoding", "type": "string", "required": false, "description": "Text encoding." },
+        { "name": "overwrite", "type": "bool", "required": false, "description": "Whether to overwrite." }
+      ],
+      "outputs": [
+        { "name": "path", "type": "string", "description": "Resolved path." },
+        { "name": "bytes_written", "type": "int", "description": "Written byte count." }
+      ],
+      "tags": ["linux", "fs"]
+    },
+    {
+      "id": "linux.git.clone.v1",
+      "description": "Clone a repository with git executable.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "url", "type": "string", "required": true, "description": "Git URL." },
+        { "name": "dest_path", "type": "string", "required": true, "description": "Destination path." },
+        { "name": "depth", "type": "int", "required": false, "description": "Optional clone depth." }
+      ],
+      "outputs": [
+        { "name": "dest_path", "type": "string", "description": "Destination path." },
+        { "name": "cloned", "type": "bool", "description": "Whether clone succeeded." }
+      ],
+      "tags": ["linux", "git"]
+    },
+    {
+      "id": "linux.git.status.v1",
+      "description": "Run git status --porcelain in a repository.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "repo_path", "type": "string", "required": true, "description": "Repository root path." }
+      ],
+      "outputs": [
+        { "name": "porcelain", "type": "string", "description": "Porcelain output." },
+        { "name": "clean", "type": "bool", "description": "True when no changes." }
+      ],
+      "tags": ["linux", "git"]
+    },
+    {
+      "id": "linux.net.http_get_text.v1",
+      "description": "Fetch UTF-8 text over HTTP when network is enabled.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "url", "type": "string", "required": true, "description": "URL to fetch." },
+        { "name": "timeout_ms", "type": "int", "required": false, "description": "Request timeout in milliseconds." },
+        { "name": "max_bytes", "type": "int", "required": false, "description": "Maximum bytes returned." },
+        { "name": "allow_redirects", "type": "bool", "required": false, "description": "Allow HTTP redirects." }
+      ],
+      "outputs": [
+        { "name": "status_code", "type": "int", "description": "HTTP status code." },
+        { "name": "text", "type": "string", "description": "Truncated UTF-8 response body." }
+      ],
+      "tags": ["linux", "net"]
+    },
+    {
       "id": "linux.proc.exec.v1",
       "description": "Execute a Linux process without shell expansion.",
       "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
@@ -67,32 +228,20 @@
       "tags": ["linux", "proc"]
     },
     {
-      "id": "linux.git.status.v1",
-      "description": "Run git status --porcelain in a repository.",
+      "id": "linux.text.replace.v1",
+      "description": "Replace deterministic text occurrences in UTF-8 files.",
       "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
       "inputs": [
-        { "name": "repo_path", "type": "string", "required": true, "description": "Repository root path." }
+        { "name": "path", "type": "string", "required": true, "description": "Text file path." },
+        { "name": "search", "type": "string", "required": true, "description": "Search text." },
+        { "name": "replace", "type": "string", "required": true, "description": "Replacement text." },
+        { "name": "count", "type": "int", "required": false, "description": "0 or omitted means replace all." }
       ],
       "outputs": [
-        { "name": "porcelain", "type": "string", "description": "Porcelain output." },
-        { "name": "clean", "type": "bool", "description": "True when no changes." }
+        { "name": "replacements", "type": "int", "description": "Number of replacements made." },
+        { "name": "written", "type": "bool", "description": "Whether file content changed." }
       ],
-      "tags": ["linux", "git"]
-    },
-    {
-      "id": "linux.git.clone.v1",
-      "description": "Clone a repository with git executable.",
-      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
-      "inputs": [
-        { "name": "url", "type": "string", "required": true, "description": "Git URL." },
-        { "name": "dest_path", "type": "string", "required": true, "description": "Destination path." },
-        { "name": "depth", "type": "int", "required": false, "description": "Optional clone depth." }
-      ],
-      "outputs": [
-        { "name": "dest_path", "type": "string", "description": "Destination path." },
-        { "name": "cloned", "type": "bool", "description": "Whether clone succeeded." }
-      ],
-      "tags": ["linux", "git"]
+      "tags": ["linux", "text"]
     }
   ]
 }

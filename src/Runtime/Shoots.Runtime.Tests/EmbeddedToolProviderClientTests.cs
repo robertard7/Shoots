@@ -26,4 +26,25 @@ public sealed class EmbeddedToolProviderClientTests
         Assert.False(result.ToolResult!.Success);
         Assert.Equal("tool.not_available", result.ToolResult.Outputs["error.code"]);
     }
+
+    [Fact]
+    public async Task Network_tool_is_guarded_when_disabled()
+    {
+        var client = new EmbeddedToolProviderClient(Directory.GetCurrentDirectory(), allowNetwork: false);
+
+        var result = await client.ExecuteAsync(new ProviderExecutionEnvelope(
+            "req-2",
+            ProviderExecutionEnvelopeKind.Tool,
+            new ToolId("linux.net.http_get_text.v1"),
+            new Dictionary<string, object?> { ["url"] = "https://example.com" },
+            null,
+            null,
+            new Dictionary<string, object?>()),
+            CancellationToken.None);
+
+        Assert.Equal(ProviderExecutionResultKind.ToolExecuted, result.Kind);
+        Assert.NotNull(result.ToolResult);
+        Assert.False(result.ToolResult!.Success);
+        Assert.Equal("network_disabled", result.ToolResult.Outputs["error.code"]);
+    }
 }
