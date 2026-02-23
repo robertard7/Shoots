@@ -224,6 +224,49 @@ public sealed class EmbeddedToolGoldenFlowTests
         }
     }
 
+
+    [Fact]
+    public void Golden_flow_batch8_meminfo_tool_completes()
+    {
+        var root = Directory.CreateTempSubdirectory("runtime-tools-").FullName;
+        try
+        {
+            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-8"), "goal", WorkOrderState.Pending, DateTimeOffset.UtcNow);
+            var request = new BuildRequest(
+                workOrder,
+                "core.route",
+                new Dictionary<string, object?>(),
+                new[]
+                {
+                    new RouteRule("mem", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "done" }),
+                    new RouteRule("done", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+                });
+
+            var plan = BuildPlanTestFactory.CreatePlan(request, new BuildStep[]
+            {
+                new RouteStep("mem", "Mem", "mem", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+                new RouteStep("done", "Done", "done", RouteIntent.Terminate, DecisionOwner.Rule, workOrder.Id)
+            });
+
+            var registry = new SnapshotToolRegistry(CreateToolSpec("linux.sys.meminfo.v1"));
+            var decisions = new Queue<ToolSelectionDecision>(new[]
+            {
+                new ToolSelectionDecision(new ToolId("linux.sys.meminfo.v1"), new Dictionary<string, object?>())
+            });
+
+            var loop = new RoutingLoop(plan, registry, new QueuedDecisionProvider(decisions), NullRuntimeNarrator.Instance, new EmbeddedToolProviderClient(root));
+            var result = loop.Run();
+
+            Assert.Equal(RoutingStatus.Completed, result.State.Status);
+            Assert.Single(result.ToolResults);
+            Assert.True(result.ToolResults[0].Success);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static ToolSpec CreateToolSpec(string id, params string[] requiredInputs) => new(
         new ToolId(id),
         id,

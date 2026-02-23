@@ -585,7 +585,7 @@ public sealed class LinuxToolsTests
             var toJson = new LinuxTextToJsonHandler().Execute(new ToolInvocation(new ToolId("linux.text.to_json.v1"), new Dictionary<string, object?> { ["map"] = new Dictionary<string, object?> { ["b"] = 2, ["a"] = 1 } }, wo), ctx);
             Assert.True(toJson.Success);
 
-            var fromJson = new LinuxTextFromJsonHandler().Execute(new ToolInvocation(new ToolId("linux.text.from_json.v1"), new Dictionary<string, object?> { ["json"] = "{"x":1,"y":2}" }, wo), ctx);
+            var fromJson = new LinuxTextFromJsonHandler().Execute(new ToolInvocation(new ToolId("linux.text.from_json.v1"), new Dictionary<string, object?> { ["json"] = "{\"x\":1,\"y\":2}" }, wo), ctx);
             Assert.True(fromJson.Success);
             Assert.Equal(2, fromJson.Outputs["count"]);
 
@@ -625,6 +625,82 @@ public sealed class LinuxToolsTests
 
             var tag = new LinuxGitTagAnnotatedHandler().Execute(new ToolInvocation(new ToolId("linux.git.tag_annotated.v1"), new Dictionary<string, object?> { ["cwd"] = "repo", ["tag"] = "v1", ["message"] = "m" }, wo), ctx);
             Assert.True(tag.Success);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+
+    [Fact]
+    public void Batch7_git_changed_files_and_is_clean_are_deterministic()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var repo = Path.Combine(root, "repo");
+            Directory.CreateDirectory(repo);
+            Run("git", $"init {repo}", root);
+            File.WriteAllText(Path.Combine(repo, "b.txt"), "b");
+            File.WriteAllText(Path.Combine(repo, "a.txt"), "a");
+
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            var changed = new LinuxGitChangedFilesHandler().Execute(new ToolInvocation(new ToolId("linux.git.changed_files.v1"), new Dictionary<string, object?>
+            {
+                ["cwd"] = "repo"
+            }, wo), ctx);
+
+            Assert.True(changed.Success);
+            Assert.Equal("a.txt
+b.txt", changed.Outputs["files"]);
+            Assert.Equal(2, changed.Outputs["count"]);
+
+            var clean = new LinuxGitIsCleanHandler().Execute(new ToolInvocation(new ToolId("linux.git.is_clean.v1"), new Dictionary<string, object?>
+            {
+                ["cwd"] = "repo"
+            }, wo), ctx);
+
+            Assert.True(clean.Success);
+            Assert.Equal(false, clean.Outputs["is_clean"]);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void Batch8_hash_and_sys_tools_return_stable_shapes()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "x.txt"), "x");
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            var fileHash = new LinuxHashFileSha256Handler().Execute(new ToolInvocation(new ToolId("linux.hash.file_sha256.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "x.txt"
+            }, wo), ctx);
+
+            Assert.True(fileHash.Success);
+            Assert.Matches("^[0-9a-f]{64}$", Convert.ToString(fileHash.Outputs["sha256"]) ?? string.Empty);
+
+            var manifest = new LinuxHashDirManifestHandler().Execute(new ToolInvocation(new ToolId("linux.hash.dir_manifest.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "."
+            }, wo), ctx);
+
+            Assert.True(manifest.Success);
+            Assert.True(Convert.ToInt32(manifest.Outputs["count"]) >= 1);
+
+            var meminfo = new LinuxSysMemInfoHandler().Execute(new ToolInvocation(new ToolId("linux.sys.meminfo.v1"), new Dictionary<string, object?>(), wo), ctx);
+            Assert.True(meminfo.Success);
+            Assert.True(Convert.ToInt32(meminfo.Outputs["count"]) >= 1);
         }
         finally
         {

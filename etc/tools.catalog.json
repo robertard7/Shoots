@@ -417,6 +417,41 @@
       ]
     },
     {
+      "id": "linux.build.cmake_install.v1",
+      "description": "Run cmake --install.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "build_dir_rel",
+          "type": "string",
+          "required": true,
+          "description": "Build directory path."
+        },
+        {
+          "name": "prefix_rel",
+          "type": "string",
+          "required": false,
+          "description": "Install prefix path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "installed",
+          "type": "bool",
+          "description": "Whether install succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "build"
+      ]
+    },
+    {
       "id": "linux.build.dotnet_build.v1",
       "description": "Run dotnet build with bounded options.",
       "requiredAuthority": {
@@ -450,6 +485,88 @@
           "name": "built",
           "type": "bool",
           "description": "Whether build succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "build"
+      ]
+    },
+    {
+      "id": "linux.build.dotnet_clean.v1",
+      "description": "Run dotnet clean.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "sln_or_proj_rel",
+          "type": "string",
+          "required": false,
+          "description": "Solution or project path."
+        },
+        {
+          "name": "configuration",
+          "type": "string",
+          "required": false,
+          "description": "Build configuration."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cleaned",
+          "type": "bool",
+          "description": "Whether clean succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "build"
+      ]
+    },
+    {
+      "id": "linux.build.dotnet_format_verify.v1",
+      "description": "Run dotnet format in verify mode.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "sln_rel",
+          "type": "string",
+          "required": false,
+          "description": "Solution path."
+        },
+        {
+          "name": "severity",
+          "type": "string",
+          "required": false,
+          "description": "Severity filter."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "verified",
+          "type": "bool",
+          "description": "Whether format verification succeeded."
         }
       ],
       "tags": [
@@ -526,6 +643,65 @@
           "name": "packed",
           "type": "bool",
           "description": "Whether pack succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "build"
+      ]
+    },
+    {
+      "id": "linux.build.dotnet_publish.v1",
+      "description": "Run dotnet publish.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "proj_rel",
+          "type": "string",
+          "required": true,
+          "description": "Project path."
+        },
+        {
+          "name": "configuration",
+          "type": "string",
+          "required": false,
+          "description": "Build configuration."
+        },
+        {
+          "name": "runtime",
+          "type": "string",
+          "required": false,
+          "description": "Target runtime."
+        },
+        {
+          "name": "self_contained",
+          "type": "bool",
+          "required": false,
+          "description": "Self-contained output."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": false,
+          "description": "Publish output path."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "published",
+          "type": "bool",
+          "description": "Whether publish succeeded."
         }
       ],
       "tags": [
@@ -1433,6 +1609,88 @@
       ]
     },
     {
+      "id": "linux.git.branch_create.v1",
+      "description": "Create git branch.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Branch name."
+        },
+        {
+          "name": "start_point",
+          "type": "string",
+          "required": false,
+          "description": "Optional start point."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "Whether branch was created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.branch_delete.v1",
+      "description": "Delete git branch.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Branch name."
+        },
+        {
+          "name": "force",
+          "type": "bool",
+          "required": false,
+          "description": "Use force delete."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "deleted",
+          "type": "bool",
+          "description": "Whether branch was deleted."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
       "id": "linux.git.branch_list.v1",
       "description": "List git branches sorted.",
       "requiredAuthority": {
@@ -1459,6 +1717,58 @@
           "name": "count",
           "type": "int",
           "description": "Branch count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.changed_files.v1",
+      "description": "List changed files sorted.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "base",
+          "type": "string",
+          "required": false,
+          "description": "Base ref."
+        },
+        {
+          "name": "head",
+          "type": "string",
+          "required": false,
+          "description": "Head ref."
+        },
+        {
+          "name": "staged",
+          "type": "bool",
+          "required": false,
+          "description": "Use staged diff."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "files",
+          "type": "string",
+          "description": "Newline-delimited files."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Changed file count."
         }
       ],
       "tags": [
@@ -1641,6 +1951,47 @@
       ]
     },
     {
+      "id": "linux.git.describe.v1",
+      "description": "Describe current commit.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "match",
+          "type": "string",
+          "required": false,
+          "description": "Match pattern."
+        },
+        {
+          "name": "dirty_mark",
+          "type": "string",
+          "required": false,
+          "description": "Dirty mark suffix."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "describe",
+          "type": "string",
+          "description": "Describe output."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
       "id": "linux.git.diff_names.v1",
       "description": "List changed file names between refs.",
       "requiredAuthority": {
@@ -1711,6 +2062,47 @@
       ]
     },
     {
+      "id": "linux.git.fetch_all.v1",
+      "description": "Fetch all remotes non-interactively.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "repo_rel",
+          "type": "string",
+          "required": false,
+          "description": "Repository relative path."
+        },
+        {
+          "name": "prune",
+          "type": "bool",
+          "required": false,
+          "description": "Whether to prune removed refs."
+        },
+        {
+          "name": "tags",
+          "type": "bool",
+          "required": false,
+          "description": "Whether to fetch tags."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "fetched",
+          "type": "bool",
+          "description": "Whether fetch succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
       "id": "linux.git.init.v1",
       "description": "Initialize git repository.",
       "requiredAuthority": {
@@ -1732,6 +2124,35 @@
           "name": "initialized",
           "type": "bool",
           "description": "Whether init succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.is_clean.v1",
+      "description": "Check if repo is clean.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "is_clean",
+          "type": "bool",
+          "description": "Whether repository is clean."
         }
       ],
       "tags": [
@@ -1859,6 +2280,47 @@
           "type": "string",
           "required": false,
           "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pulled",
+          "type": "bool",
+          "description": "Whether pull succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.pull_rebase_ff_only.v1",
+      "description": "Pull with rebase and ff-only.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "repo_rel",
+          "type": "string",
+          "required": false,
+          "description": "Repository relative path."
+        },
+        {
+          "name": "remote",
+          "type": "string",
+          "required": false,
+          "description": "Remote name."
+        },
+        {
+          "name": "branch",
+          "type": "string",
+          "required": false,
+          "description": "Branch name."
         }
       ],
       "outputs": [
@@ -2157,6 +2619,114 @@
       ]
     },
     {
+      "id": "linux.git.tag_list.v1",
+      "description": "List tags sorted.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "pattern",
+          "type": "string",
+          "required": false,
+          "description": "Tag pattern filter."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tags",
+          "type": "string",
+          "description": "Newline-delimited tags."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Tag count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.hash.dir_manifest.v1",
+      "description": "Compute sorted hash manifest for directory.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Relative directory path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "manifest",
+          "type": "string",
+          "description": "Hash manifest lines."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "File count."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "Whether output was truncated."
+        }
+      ],
+      "tags": [
+        "linux",
+        "hash"
+      ]
+    },
+    {
+      "id": "linux.hash.file_sha256.v1",
+      "description": "Compute SHA-256 for file.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Relative file path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "description": "Hex SHA-256 digest."
+        }
+      ],
+      "tags": [
+        "linux",
+        "hash"
+      ]
+    },
+    {
       "id": "linux.net.http_get_text.v1",
       "description": "Fetch UTF-8 text over HTTP when network is enabled.",
       "requiredAuthority": {
@@ -2330,6 +2900,83 @@
       "tags": [
         "linux",
         "proc"
+      ]
+    },
+    {
+      "id": "linux.sys.disk_usage.v1",
+      "description": "Deterministic disk usage listing.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": false,
+          "description": "Path to inspect."
+        },
+        {
+          "name": "max_depth",
+          "type": "int",
+          "required": false,
+          "description": "Maximum traversal depth."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "entries",
+          "type": "string",
+          "description": "Newline-delimited entries."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Entry count."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "Whether output was truncated."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
+      "id": "linux.sys.meminfo.v1",
+      "description": "Parse /proc/meminfo deterministically.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "meminfo",
+          "type": "string",
+          "description": "Meminfo lines."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Line count."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "Whether output was truncated."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
       ]
     },
     {

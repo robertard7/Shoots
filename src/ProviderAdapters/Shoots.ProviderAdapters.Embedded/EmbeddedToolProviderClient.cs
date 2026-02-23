@@ -36,6 +36,7 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
         {
             var unavailable = new ToolResult(toolId, new Dictionary<string, object?>
             {
+                ["tool_id"] = toolId.Value,
                 ["error.code"] = "tool.not_available",
                 ["error.message"] = $"Tool '{toolId.Value}' is not available."
             }, false);

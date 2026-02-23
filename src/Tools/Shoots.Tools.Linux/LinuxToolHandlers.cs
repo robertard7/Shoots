@@ -86,7 +86,23 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxArchiveZipDirHandler(),
             new LinuxArchiveUnzipToDirHandler(),
             new LinuxGitTagAnnotatedHandler(),
-            new LinuxGitPushTagHandler()
+            new LinuxGitPushTagHandler(),
+            new LinuxGitFetchAllHandler(),
+            new LinuxGitPullRebaseFfOnlyHandler(),
+            new LinuxGitBranchCreateHandler(),
+            new LinuxGitBranchDeleteHandler(),
+            new LinuxGitTagListHandler(),
+            new LinuxGitDescribeHandler(),
+            new LinuxGitChangedFilesHandler(),
+            new LinuxGitIsCleanHandler(),
+            new LinuxBuildDotnetCleanHandler(),
+            new LinuxBuildDotnetPublishHandler(),
+            new LinuxBuildDotnetFormatVerifyHandler(),
+            new LinuxBuildCMakeInstallHandler(),
+            new LinuxSysDiskUsageHandler(),
+            new LinuxSysMemInfoHandler(),
+            new LinuxHashFileSha256Handler(),
+            new LinuxHashDirManifestHandler()
         });
 }
 
@@ -1123,8 +1139,7 @@ public sealed class LinuxGitBranchListHandler : IToolHandler
             return run;
 
         var branches = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty)
-            .Split('
-', StringSplitOptions.RemoveEmptyEntries)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(static s => s.Trim())
             .Where(static s => s.Length > 0)
             .OrderBy(static s => s, StringComparer.Ordinal)
@@ -1132,8 +1147,7 @@ public sealed class LinuxGitBranchListHandler : IToolHandler
 
         return new ToolResult(Id, new Dictionary<string, object?>
         {
-            ["branches"] = string.Join("
-", branches),
+            ["branches"] = string.Join("\n", branches),
             ["count"] = branches.Length
         }, true);
     }
@@ -1228,8 +1242,7 @@ public sealed class LinuxFsFindFilesHandler : IToolHandler
                 .ToArray();
             return new ToolResult(Id, new Dictionary<string, object?>
             {
-                ["files"] = string.Join("
-", files),
+                ["files"] = string.Join("\n", files),
                 ["count"] = files.Length
             }, true);
         }
@@ -1257,8 +1270,7 @@ public sealed class LinuxFsGlobHandler : IToolHandler
                 .ToArray();
             return new ToolResult(Id, new Dictionary<string, object?>
             {
-                ["matches"] = string.Join("
-", matches),
+                ["matches"] = string.Join("\n", matches),
                 ["count"] = matches.Length
             }, true);
         }
@@ -1334,8 +1346,7 @@ public sealed class LinuxTextReplaceInFilesHandler : IToolHandler
             return new ToolResult(Id, new Dictionary<string, object?>
             {
                 ["total_replacements"] = total,
-                ["files"] = string.Join("
-", perFile)
+                ["files"] = string.Join("\n", perFile)
             }, true);
         }
         catch (Exception ex)
@@ -1591,8 +1602,7 @@ public sealed class LinuxGitRemoteListHandler : IToolHandler
             return run;
 
         var remotes = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty)
-            .Split('
-', StringSplitOptions.RemoveEmptyEntries)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(static s => s.Trim())
             .Where(static s => s.Length > 0)
             .OrderBy(static s => s, StringComparer.Ordinal)
@@ -1600,8 +1610,7 @@ public sealed class LinuxGitRemoteListHandler : IToolHandler
 
         return new ToolResult(Id, new Dictionary<string, object?>
         {
-            ["remotes"] = string.Join("
-", remotes),
+            ["remotes"] = string.Join("\n", remotes),
             ["count"] = remotes.Length
         }, true);
     }
@@ -1722,8 +1731,7 @@ public sealed class LinuxTextFromJsonHandler : IToolHandler
                 : Array.Empty<string>();
             return new ToolResult(Id, new Dictionary<string, object?>
             {
-                ["keys"] = string.Join("
-", keys),
+                ["keys"] = string.Join("\n", keys),
                 ["count"] = keys.Length
             }, true);
         }
@@ -1754,8 +1762,7 @@ public sealed class LinuxBuildDotnetSlnListProjectsHandler : IToolHandler
             return ToolResultFactory.Error(Id, "build.dotnet_sln_list_projects_failed", Convert.ToString(result.Outputs["stderr"]) ?? "dotnet sln list failed");
 
         var lines = (Convert.ToString(result.Outputs["stdout"]) ?? string.Empty)
-            .Split('
-', StringSplitOptions.RemoveEmptyEntries)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(static l => l.Trim())
             .Where(static l => l.Length > 0 && !l.StartsWith("Project(s)", StringComparison.Ordinal))
             .OrderBy(static l => l, StringComparer.Ordinal)
@@ -1763,8 +1770,7 @@ public sealed class LinuxBuildDotnetSlnListProjectsHandler : IToolHandler
 
         return new ToolResult(Id, new Dictionary<string, object?>
         {
-            ["projects"] = string.Join("
-", lines),
+            ["projects"] = string.Join("\n", lines),
             ["count"] = lines.Length
         }, true);
     }
@@ -1816,8 +1822,7 @@ public sealed class LinuxProcPsHandler : IToolHandler
             return ToolResultFactory.Error(Id, "proc.ps_failed", Convert.ToString(result.Outputs["error.message"]) ?? "ps failed");
 
         var lines = (Convert.ToString(result.Outputs["stdout"]) ?? string.Empty)
-            .Split('
-', StringSplitOptions.RemoveEmptyEntries)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Skip(1)
             .Select(static x => x.Trim())
             .Where(static x => x.Length > 0)
@@ -1826,8 +1831,7 @@ public sealed class LinuxProcPsHandler : IToolHandler
 
         return new ToolResult(Id, new Dictionary<string, object?>
         {
-            ["processes"] = string.Join("
-", lines),
+            ["processes"] = string.Join("\n", lines),
             ["count"] = lines.Length
         }, true);
     }
@@ -1882,5 +1886,366 @@ public sealed class LinuxGitPushTagHandler : IToolHandler
         var remote = invocation.Bindings.TryGetValue("remote", out var r) ? Convert.ToString(r) : "origin";
         var run = GitRunner.RunGit(Id, invocation, ctx, "push", remote ?? "origin", tag);
         return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["pushed"] = true }, true) : run;
+    }
+}
+
+
+public sealed class LinuxGitFetchAllHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.fetch_all.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var args = new List<string> { "fetch", "--all" };
+        if (!invocation.Bindings.TryGetValue("prune", out var pruneObj) || Convert.ToBoolean(pruneObj))
+            args.Add("--prune");
+        if (invocation.Bindings.TryGetValue("tags", out var tagsObj) && Convert.ToBoolean(tagsObj))
+            args.Add("--tags");
+        var run = GitRunner.RunGit(Id, invocation, ctx, args.ToArray());
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["fetched"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitPullRebaseFfOnlyHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.pull_rebase_ff_only.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var remote = invocation.Bindings.TryGetValue("remote", out var remoteObj) ? Convert.ToString(remoteObj) : "origin";
+        var branch = invocation.Bindings.TryGetValue("branch", out var branchObj) ? Convert.ToString(branchObj) : null;
+        var args = new List<string> { "pull", "--ff-only", "--rebase", remote ?? "origin" };
+        if (!string.IsNullOrWhiteSpace(branch))
+            args.Add(branch);
+        var run = GitRunner.RunGit(Id, invocation, ctx, args.ToArray());
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["pulled"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitBranchCreateHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.branch_create.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var name = Convert.ToString(invocation.Bindings["name"]) ?? string.Empty;
+        var start = invocation.Bindings.TryGetValue("start_point", out var startObj) ? Convert.ToString(startObj) : null;
+        var args = string.IsNullOrWhiteSpace(start) ? new[] { "branch", name } : new[] { "branch", name, start! };
+        var run = GitRunner.RunGit(Id, invocation, ctx, args);
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["created"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitBranchDeleteHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.branch_delete.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var name = Convert.ToString(invocation.Bindings["name"]) ?? string.Empty;
+        var force = invocation.Bindings.TryGetValue("force", out var f) && Convert.ToBoolean(f);
+        var run = GitRunner.RunGit(Id, invocation, ctx, "branch", force ? "-D" : "-d", name);
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["deleted"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitTagListHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.tag_list.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var pattern = invocation.Bindings.TryGetValue("pattern", out var p) ? Convert.ToString(p) : null;
+        var args = string.IsNullOrWhiteSpace(pattern) ? new[] { "tag", "--list" } : new[] { "tag", "--list", pattern! };
+        var run = GitRunner.RunGit(Id, invocation, ctx, args);
+        if (!run.Success)
+            return run;
+        var tags = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static x => x.Trim()).Where(static x => x.Length > 0).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+        return new ToolResult(Id, new Dictionary<string, object?> { ["tags"] = string.Join("\n", tags), ["count"] = tags.Length }, true);
+    }
+}
+
+public sealed class LinuxGitDescribeHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.describe.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var args = new List<string> { "describe", "--tags" };
+        if (invocation.Bindings.TryGetValue("match", out var m) && !string.IsNullOrWhiteSpace(Convert.ToString(m)))
+        {
+            args.Add("--match");
+            args.Add(Convert.ToString(m)!);
+        }
+        if (invocation.Bindings.TryGetValue("dirty_mark", out var d) && !string.IsNullOrWhiteSpace(Convert.ToString(d)))
+            args.Add($"--dirty={Convert.ToString(d)}");
+        var run = GitRunner.RunGit(Id, invocation, ctx, args.ToArray());
+        if (!run.Success)
+            return run;
+        return new ToolResult(Id, new Dictionary<string, object?> { ["describe"] = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Trim() }, true);
+    }
+}
+
+public sealed class LinuxGitChangedFilesHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.changed_files.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var args = new List<string>();
+        if (invocation.Bindings.TryGetValue("staged", out var st) && Convert.ToBoolean(st))
+            args.AddRange(new[] { "diff", "--name-only", "--cached" });
+        else
+            args.AddRange(new[] { "diff", "--name-only" });
+        if (invocation.Bindings.TryGetValue("base", out var b) && !string.IsNullOrWhiteSpace(Convert.ToString(b)))
+            args.Add(Convert.ToString(b)!);
+        if (invocation.Bindings.TryGetValue("head", out var h) && !string.IsNullOrWhiteSpace(Convert.ToString(h)))
+            args.Add(Convert.ToString(h)!);
+        var run = GitRunner.RunGit(Id, invocation, ctx, args.ToArray());
+        if (!run.Success)
+            return run;
+        var files = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static x => x.Trim()).Where(static x => x.Length > 0).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+        return new ToolResult(Id, new Dictionary<string, object?> { ["files"] = string.Join("\n", files), ["count"] = files.Length }, true);
+    }
+}
+
+public sealed class LinuxGitIsCleanHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.is_clean.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var run = GitRunner.RunGit(Id, invocation, ctx, "status", "--porcelain");
+        if (!run.Success)
+            return run;
+        var output = Convert.ToString(run.Outputs["stdout"]) ?? string.Empty;
+        return new ToolResult(Id, new Dictionary<string, object?> { ["is_clean"] = string.IsNullOrWhiteSpace(output) }, true);
+    }
+}
+
+public sealed class LinuxBuildDotnetCleanHandler : IToolHandler
+{
+    public ToolId Id => new("linux.build.dotnet_clean.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var target = invocation.Bindings.TryGetValue("sln_or_proj_rel", out var t) ? Convert.ToString(t) : string.Empty;
+        var cfg = invocation.Bindings.TryGetValue("configuration", out var c) ? Convert.ToString(c) : "Release";
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "dotnet",
+            ["args"] = new object?[] { "clean", target ?? string.Empty, "--nologo", "--verbosity", "minimal", "-c", cfg ?? "Release" },
+            ["cwd"] = invocation.Bindings.TryGetValue("cwd", out var cwd) ? cwd : null,
+            ["timeout_ms"] = Math.Min(600000, ctx.MaxTimeoutMs)
+        }, invocation.WorkOrderId), ctx);
+        if (!result.Success || Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "build.dotnet_clean_failed", Convert.ToString(result.Outputs["stderr"]) ?? "dotnet clean failed");
+        return new ToolResult(Id, new Dictionary<string, object?> { ["cleaned"] = true }, true);
+    }
+}
+
+public sealed class LinuxBuildDotnetPublishHandler : IToolHandler
+{
+    public ToolId Id => new("linux.build.dotnet_publish.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var proj = Convert.ToString(invocation.Bindings["proj_rel"]) ?? string.Empty;
+        var cfg = invocation.Bindings.TryGetValue("configuration", out var c) ? Convert.ToString(c) : "Release";
+        var args = new List<object?> { "publish", proj, "--nologo", "--verbosity", "minimal", "-c", cfg ?? "Release" };
+        if (invocation.Bindings.TryGetValue("runtime", out var runtime) && !string.IsNullOrWhiteSpace(Convert.ToString(runtime)))
+        {
+            args.Add("-r"); args.Add(Convert.ToString(runtime));
+        }
+        if (invocation.Bindings.TryGetValue("self_contained", out var sc))
+        {
+            args.Add("--self-contained"); args.Add(Convert.ToBoolean(sc) ? "true" : "false");
+        }
+        if (invocation.Bindings.TryGetValue("output_rel", out var outRel) && !string.IsNullOrWhiteSpace(Convert.ToString(outRel)))
+        {
+            args.Add("-o"); args.Add(ToolPath.ResolveWithinRoot(ctx, Convert.ToString(outRel) ?? string.Empty));
+        }
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "dotnet",
+            ["args"] = args.ToArray(),
+            ["cwd"] = invocation.Bindings.TryGetValue("cwd", out var cwd) ? cwd : null,
+            ["timeout_ms"] = Math.Min(600000, ctx.MaxTimeoutMs)
+        }, invocation.WorkOrderId), ctx);
+        if (!result.Success || Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "build.dotnet_publish_failed", Convert.ToString(result.Outputs["stderr"]) ?? "dotnet publish failed");
+        return new ToolResult(Id, new Dictionary<string, object?> { ["published"] = true }, true);
+    }
+}
+
+public sealed class LinuxBuildDotnetFormatVerifyHandler : IToolHandler
+{
+    public ToolId Id => new("linux.build.dotnet_format_verify.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var sln = invocation.Bindings.TryGetValue("sln_rel", out var s) ? Convert.ToString(s) : string.Empty;
+        var severity = invocation.Bindings.TryGetValue("severity", out var sev) ? Convert.ToString(sev) : null;
+        var args = new List<object?> { "format" };
+        if (!string.IsNullOrWhiteSpace(sln)) args.Add(sln);
+        args.Add("--verify-no-changes");
+        if (!string.IsNullOrWhiteSpace(severity)) { args.Add("--severity"); args.Add(severity); }
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "dotnet",
+            ["args"] = args.ToArray(),
+            ["cwd"] = invocation.Bindings.TryGetValue("cwd", out var cwd) ? cwd : null,
+            ["timeout_ms"] = Math.Min(600000, ctx.MaxTimeoutMs)
+        }, invocation.WorkOrderId), ctx);
+        if (!result.Success)
+            return result;
+        if (Convert.ToInt32(result.Outputs["exit_code"]) == 127 || Convert.ToInt32(result.Outputs["exit_code"]) == 1 && (Convert.ToString(result.Outputs["stderr"]) ?? string.Empty).Contains("could not execute", StringComparison.OrdinalIgnoreCase))
+            return ToolResultFactory.Error(Id, "tool.unavailable", "dotnet format is unavailable");
+        if (Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "build.dotnet_format_verify_failed", Convert.ToString(result.Outputs["stderr"]) ?? "dotnet format verify failed");
+        return new ToolResult(Id, new Dictionary<string, object?> { ["verified"] = true }, true);
+    }
+}
+
+public sealed class LinuxBuildCMakeInstallHandler : IToolHandler
+{
+    public ToolId Id => new("linux.build.cmake_install.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var buildDir = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["build_dir_rel"]) ?? string.Empty);
+        var args = new List<object?> { "--install", buildDir };
+        if (invocation.Bindings.TryGetValue("prefix_rel", out var p) && !string.IsNullOrWhiteSpace(Convert.ToString(p)))
+        {
+            args.Add("--prefix"); args.Add(ToolPath.ResolveWithinRoot(ctx, Convert.ToString(p) ?? string.Empty));
+        }
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "cmake",
+            ["args"] = args.ToArray(),
+            ["timeout_ms"] = Math.Min(600000, ctx.MaxTimeoutMs)
+        }, invocation.WorkOrderId), ctx);
+        if (!result.Success || Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "build.cmake_install_failed", Convert.ToString(result.Outputs["stderr"]) ?? "cmake install failed");
+        return new ToolResult(Id, new Dictionary<string, object?> { ["installed"] = true }, true);
+    }
+}
+
+public sealed class LinuxSysDiskUsageHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.disk_usage.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, invocation.Bindings.TryGetValue("path_rel", out var p) ? Convert.ToString(p) ?? "." : ".");
+            var maxDepth = invocation.Bindings.TryGetValue("max_depth", out var d) ? Math.Max(0, Convert.ToInt32(d)) : 3;
+            var lines = new List<string>();
+            Walk(path, 0, maxDepth, lines, ctx);
+            var ordered = lines.OrderBy(static l => l, StringComparer.Ordinal).ToArray();
+            var text = string.Join("\n", ordered);
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["entries"] = ToolResultFactory.TruncateUtf8(text, ctx.MaxBytesOut),
+                ["count"] = ordered.Length,
+                ["truncated"] = Encoding.UTF8.GetByteCount(text) > ctx.MaxBytesOut
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "sys.disk_usage_failed", ex.Message);
+        }
+    }
+
+    private static void Walk(string path, int depth, int maxDepth, List<string> lines, ToolExecutionContext ctx)
+    {
+        var attr = File.GetAttributes(path);
+        if (attr.HasFlag(FileAttributes.Directory))
+        {
+            long size = 0;
+            foreach (var f in Directory.EnumerateFiles(path, "*", SearchOption.TopDirectoryOnly))
+                size += new FileInfo(f).Length;
+            lines.Add($"{ToolPath.ToRepoRelative(ctx, path)}	{size}");
+            if (depth >= maxDepth) return;
+            foreach (var child in Directory.EnumerateFileSystemEntries(path, "*", SearchOption.TopDirectoryOnly).OrderBy(static x => x, StringComparer.Ordinal))
+                Walk(child, depth + 1, maxDepth, lines, ctx);
+        }
+        else
+        {
+            lines.Add($"{ToolPath.ToRepoRelative(ctx, path)}	{new FileInfo(path).Length}");
+        }
+    }
+}
+
+public sealed class LinuxSysMemInfoHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.meminfo.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var lines = File.ReadAllLines("/proc/meminfo")
+                .Select(static line => line.Trim())
+                .Where(static line => line.Length > 0)
+                .Select(static line => line.Replace(":", string.Empty))
+                .OrderBy(static line => line, StringComparer.Ordinal)
+                .ToArray();
+            var joined = string.Join("\n", lines);
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["meminfo"] = ToolResultFactory.TruncateUtf8(joined, ctx.MaxBytesOut),
+                ["count"] = lines.Length,
+                ["truncated"] = Encoding.UTF8.GetByteCount(joined) > ctx.MaxBytesOut
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "sys.meminfo_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxHashFileSha256Handler : IToolHandler
+{
+    public ToolId Id => new("linux.hash.file_sha256.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            using var stream = File.OpenRead(path);
+            var hash = Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
+            return new ToolResult(Id, new Dictionary<string, object?> { ["sha256"] = hash }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "hash.file_sha256_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxHashDirManifestHandler : IToolHandler
+{
+    public ToolId Id => new("linux.hash.dir_manifest.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var root = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? ".");
+            var lines = new List<string>();
+            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).OrderBy(static f => f, StringComparer.Ordinal))
+            {
+                using var sha = System.Security.Cryptography.SHA256.Create();
+                using var stream = File.OpenRead(file);
+                var hash = Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
+                lines.Add($"{hash}  {Path.GetRelativePath(root, file).Replace('\', '/')}");
+            }
+            var joined = string.Join("\n", lines);
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["manifest"] = ToolResultFactory.TruncateUtf8(joined, ctx.MaxBytesOut),
+                ["count"] = lines.Count,
+                ["truncated"] = Encoding.UTF8.GetByteCount(joined) > ctx.MaxBytesOut
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "hash.dir_manifest_failed", ex.Message);
+        }
     }
 }
