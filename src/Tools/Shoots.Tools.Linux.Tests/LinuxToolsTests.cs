@@ -480,6 +480,18 @@ public sealed class LinuxToolsTests
     }
 
     [Fact]
+    public void Registry_constructor_rejects_duplicate_ids()
+    {
+        var handlers = new IToolHandler[]
+        {
+            new LinuxFsExistsHandler(),
+            new LinuxFsExistsHandler()
+        };
+
+        Assert.Throws<InvalidOperationException>(() => new LinuxToolHandlerRegistry(handlers));
+    }
+
+    [Fact]
     public void Batch4_git_init_branch_and_clean_tools_work()
     {
         var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;

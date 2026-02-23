@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Linq;
 using System.Text;
 using Shoots.Contracts.Core;
 using Shoots.Tools.Abstractions;
@@ -12,7 +13,16 @@ public sealed class LinuxToolHandlerRegistry
 
     public LinuxToolHandlerRegistry(IEnumerable<IToolHandler> handlers)
     {
-        _handlers = handlers.ToDictionary(h => h.Id.Value, StringComparer.Ordinal);
+        var ordered = handlers.OrderBy(h => h.Id.Value, StringComparer.Ordinal).ToArray();
+        var duplicate = ordered
+            .GroupBy(h => h.Id.Value, StringComparer.Ordinal)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+        {
+            throw new InvalidOperationException($"duplicate tool handler id: {duplicate.Key}");
+        }
+
+        _handlers = ordered.ToDictionary(h => h.Id.Value, StringComparer.Ordinal);
     }
 
     public IToolHandler? Resolve(ToolId id)
