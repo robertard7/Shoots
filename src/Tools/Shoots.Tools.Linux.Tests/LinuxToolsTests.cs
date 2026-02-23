@@ -421,6 +421,101 @@ public sealed class LinuxToolsTests
         }
     }
 
+
+    [Fact]
+    public void Catalog_has_unique_sorted_linux_versioned_ids()
+    {
+        var entries = LinuxToolCatalog.LoadEntries(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "etc", "tools.catalog.json"));
+        var ids = entries.Select(e => e.Spec.ToolId.Value).ToArray();
+        var sorted = ids.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        Assert.Equal(sorted, ids);
+        Assert.Equal(ids.Length, ids.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(ids, id => Assert.Matches("^linux\.[a-z0-9_]+\.[a-z0-9_]+\.v[0-9]+$", id));
+    }
+
+    [Fact]
+    public void Batch4_git_init_branch_and_clean_tools_work()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var repo = Path.Combine(root, "repo");
+            Directory.CreateDirectory(repo);
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+            Assert.True(new LinuxGitInitHandler().Execute(new ToolInvocation(new ToolId("linux.git.init.v1"), new Dictionary<string, object?> { ["cwd"] = "repo" }, wo), ctx).Success);
+
+            var branches = new LinuxGitBranchListHandler().Execute(new ToolInvocation(new ToolId("linux.git.branch_list.v1"), new Dictionary<string, object?> { ["cwd"] = "repo" }, wo), ctx);
+            Assert.True(branches.Success);
+            Assert.True(Convert.ToInt32(branches.Outputs["count"]) >= 1);
+
+            File.WriteAllText(Path.Combine(repo, "temp.txt"), "x");
+            Assert.True(new LinuxGitAddHandler().Execute(new ToolInvocation(new ToolId("linux.git.add.v1"), new Dictionary<string, object?>
+            {
+                ["paths"] = new object?[] { "temp.txt" },
+                ["cwd"] = "repo"
+            }, wo), ctx).Success);
+            var commit = new LinuxGitCommitHandler().Execute(new ToolInvocation(new ToolId("linux.git.commit.v1"), new Dictionary<string, object?>
+            {
+                ["message"] = "first",
+                ["cwd"] = "repo"
+            }, wo), ctx);
+            Assert.True(commit.Success);
+
+            var clean = new LinuxGitCleanFdHandler().Execute(new ToolInvocation(new ToolId("linux.git.clean_fd.v1"), new Dictionary<string, object?> { ["cwd"] = "repo" }, wo), ctx);
+            Assert.True(clean.Success);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void Batch4_fs_text_archive_hash_tools_work()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            Assert.True(new LinuxFsEnsureDirHandler().Execute(new ToolInvocation(new ToolId("linux.fs.ensure_dir.v1"), new Dictionary<string, object?> { ["path"] = "d" }, wo), ctx).Success);
+            Assert.True(new LinuxFsExistsHandler().Execute(new ToolInvocation(new ToolId("linux.fs.exists.v1"), new Dictionary<string, object?> { ["path"] = "d" }, wo), ctx).Success);
+
+            File.WriteAllText(Path.Combine(root, "d", "a.txt"), "alpha");
+            File.WriteAllText(Path.Combine(root, "d", "b.md"), "beta");
+
+            var find = new LinuxFsFindFilesHandler().Execute(new ToolInvocation(new ToolId("linux.fs.find_files.v1"), new Dictionary<string, object?> { ["path"] = "d", ["pattern"] = "*.txt" }, wo), ctx);
+            Assert.True(find.Success);
+            Assert.Equal(1, find.Outputs["count"]);
+
+            var glob = new LinuxFsGlobHandler().Execute(new ToolInvocation(new ToolId("linux.fs.glob.v1"), new Dictionary<string, object?> { ["path"] = "d", ["pattern"] = "*.md" }, wo), ctx);
+            Assert.True(glob.Success);
+            Assert.Equal(1, glob.Outputs["count"]);
+
+            var rg = new LinuxTextRgHandler().Execute(new ToolInvocation(new ToolId("linux.text.rg.v1"), new Dictionary<string, object?> { ["pattern"] = "alpha", ["path"] = "d" }, wo), ctx);
+            Assert.True(rg.Success);
+
+            var replace = new LinuxTextReplaceInFilesHandler().Execute(new ToolInvocation(new ToolId("linux.text.replace_in_files.v1"), new Dictionary<string, object?> { ["path"] = "d", ["search"] = "alpha", ["replace"] = "ALPHA" }, wo), ctx);
+            Assert.True(replace.Success);
+
+            var tar = new LinuxArchiveTarGzHandler().Execute(new ToolInvocation(new ToolId("linux.archive.tar_gz.v1"), new Dictionary<string, object?> { ["source_dir"] = "d", ["tar_path"] = "x.tar.gz" }, wo), ctx);
+            Assert.True(tar.Success);
+
+            var untar = new LinuxArchiveUntarGzHandler().Execute(new ToolInvocation(new ToolId("linux.archive.untar_gz.v1"), new Dictionary<string, object?> { ["tar_path"] = "x.tar.gz", ["dest_dir"] = "out" }, wo), ctx);
+            Assert.True(untar.Success);
+
+            var hash = new LinuxArtifactsHashTreeHandler().Execute(new ToolInvocation(new ToolId("linux.artifacts.hash_tree.v1"), new Dictionary<string, object?> { ["path"] = "out" }, wo), ctx);
+            Assert.True(hash.Success);
+            Assert.True(Convert.ToInt32(hash.Outputs["count"]) >= 1);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

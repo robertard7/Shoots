@@ -1,6 +1,76 @@
 {
   "tools": [
     {
+      "id": "linux.archive.tar_gz.v1",
+      "description": "Create tar.gz archive.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "source_dir",
+          "type": "string",
+          "required": true,
+          "description": "Source directory."
+        },
+        {
+          "name": "tar_path",
+          "type": "string",
+          "required": true,
+          "description": "Output tar.gz path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "archived",
+          "type": "bool",
+          "description": "Whether archive succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "archive"
+      ]
+    },
+    {
+      "id": "linux.archive.untar_gz.v1",
+      "description": "Extract tar.gz archive.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "tar_path",
+          "type": "string",
+          "required": true,
+          "description": "Input tar.gz path."
+        },
+        {
+          "name": "dest_dir",
+          "type": "string",
+          "required": true,
+          "description": "Destination directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "extracted",
+          "type": "bool",
+          "description": "Whether extraction succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "archive"
+      ]
+    },
+    {
       "id": "linux.archive.unzip.v1",
       "description": "Extract a zip archive to a destination directory.",
       "requiredAuthority": {
@@ -93,6 +163,45 @@
       ]
     },
     {
+      "id": "linux.artifacts.hash_tree.v1",
+      "description": "Compute deterministic hash list for directory tree.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "Root path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "hashes",
+          "type": "string",
+          "description": "Hash lines."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "File count."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "Whether output was truncated."
+        }
+      ],
+      "tags": [
+        "linux",
+        "artifacts"
+      ]
+    },
+    {
       "id": "linux.build.cmake_build.v1",
       "description": "Build using cmake --build.",
       "requiredAuthority": {
@@ -181,6 +290,41 @@
       ]
     },
     {
+      "id": "linux.build.cmake_ctest.v1",
+      "description": "Run ctest against build directory.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "buildDir",
+          "type": "string",
+          "required": true,
+          "description": "Build directory."
+        },
+        {
+          "name": "config",
+          "type": "string",
+          "required": false,
+          "description": "Configuration name."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tested",
+          "type": "bool",
+          "description": "Whether ctest succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "build"
+      ]
+    },
+    {
       "id": "linux.build.dotnet_build.v1",
       "description": "Run dotnet build with bounded options.",
       "requiredAuthority": {
@@ -214,6 +358,82 @@
           "name": "built",
           "type": "bool",
           "description": "Whether build succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "build"
+      ]
+    },
+    {
+      "id": "linux.build.dotnet_pack.v1",
+      "description": "Run dotnet pack with bounded settings.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "projectOrSln",
+          "type": "string",
+          "required": true,
+          "description": "Project or solution path."
+        },
+        {
+          "name": "configuration",
+          "type": "string",
+          "required": false,
+          "description": "Build configuration."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "packed",
+          "type": "bool",
+          "description": "Whether pack succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "build"
+      ]
+    },
+    {
+      "id": "linux.build.dotnet_restore.v1",
+      "description": "Run dotnet restore with bounded settings.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "projectOrSln",
+          "type": "string",
+          "required": true,
+          "description": "Project or solution path."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "restored",
+          "type": "bool",
+          "description": "Whether restore succeeded."
         }
       ],
       "tags": [
@@ -422,6 +642,171 @@
           "name": "copied",
           "type": "bool",
           "description": "Whether copy succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.ensure_dir.v1",
+      "description": "Ensure directory exists (mkdir -p semantics).",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "Directory path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ensured",
+          "type": "bool",
+          "description": "Whether ensure succeeded."
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "Whether directory was newly created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.exists.v1",
+      "description": "Check file or directory existence.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "Path to check."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "exists",
+          "type": "bool",
+          "description": "Whether path exists."
+        },
+        {
+          "name": "is_file",
+          "type": "bool",
+          "description": "Whether path is file."
+        },
+        {
+          "name": "is_dir",
+          "type": "bool",
+          "description": "Whether path is directory."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.find_files.v1",
+      "description": "Find files recursively by pattern.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "Search root path."
+        },
+        {
+          "name": "pattern",
+          "type": "string",
+          "required": false,
+          "description": "Search pattern."
+        },
+        {
+          "name": "max_entries",
+          "type": "int",
+          "required": false,
+          "description": "Maximum entries."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "files",
+          "type": "string",
+          "description": "Newline-delimited files."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Returned file count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.glob.v1",
+      "description": "Glob entries in a directory with restricted pattern.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "Search directory."
+        },
+        {
+          "name": "pattern",
+          "type": "string",
+          "required": true,
+          "description": "Glob pattern."
+        },
+        {
+          "name": "max_entries",
+          "type": "int",
+          "required": false,
+          "description": "Maximum entries."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "matches",
+          "type": "string",
+          "description": "Newline-delimited matches."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Match count."
         }
       ],
       "tags": [
@@ -790,6 +1175,40 @@
       ]
     },
     {
+      "id": "linux.git.branch_list.v1",
+      "description": "List git branches sorted.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "branches",
+          "type": "string",
+          "description": "Newline-delimited branch names."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Branch count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
       "id": "linux.git.checkout.v1",
       "description": "Run git checkout for a ref.",
       "requiredAuthority": {
@@ -817,6 +1236,35 @@
           "name": "checked_out",
           "type": "bool",
           "description": "Whether checkout succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.clean_fd.v1",
+      "description": "Run git clean -fd.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cleaned",
+          "type": "bool",
+          "description": "Whether clean succeeded."
         }
       ],
       "tags": [
@@ -947,6 +1395,35 @@
       ]
     },
     {
+      "id": "linux.git.init.v1",
+      "description": "Initialize git repository.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "initialized",
+          "type": "bool",
+          "description": "Whether init succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
       "id": "linux.git.log.v1",
       "description": "List commit hashes from git log.",
       "requiredAuthority": {
@@ -980,6 +1457,76 @@
           "name": "hashes",
           "type": "string",
           "description": "Newline-delimited commit hashes."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.merge.v1",
+      "description": "Merge git ref non-interactively.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "ref",
+          "type": "string",
+          "required": true,
+          "description": "Ref to merge."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "merged",
+          "type": "bool",
+          "description": "Whether merge succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.reset_hard.v1",
+      "description": "Run git reset --hard.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "target",
+          "type": "string",
+          "required": false,
+          "description": "Reset target (default HEAD)."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "reset",
+          "type": "bool",
+          "description": "Whether reset succeeded."
         }
       ],
       "tags": [
@@ -1250,6 +1797,97 @@
           "name": "written",
           "type": "bool",
           "description": "Whether file content changed."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.replace_in_files.v1",
+      "description": "Replace text across allowlisted text files.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "Search root path."
+        },
+        {
+          "name": "search",
+          "type": "string",
+          "required": true,
+          "description": "Search text."
+        },
+        {
+          "name": "replace",
+          "type": "string",
+          "required": true,
+          "description": "Replacement text."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "total_replacements",
+          "type": "int",
+          "description": "Total replacements."
+        },
+        {
+          "name": "files",
+          "type": "string",
+          "description": "Per-file replacement counts."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.rg.v1",
+      "description": "Run ripgrep with deterministic bounded output.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "pattern",
+          "type": "string",
+          "required": true,
+          "description": "Pattern to search."
+        },
+        {
+          "name": "path",
+          "type": "string",
+          "required": false,
+          "description": "Relative search path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "matches",
+          "type": "string",
+          "description": "Ripgrep output."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "Whether output was truncated."
+        },
+        {
+          "name": "bytes",
+          "type": "int",
+          "description": "Output bytes."
         }
       ],
       "tags": [

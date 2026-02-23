@@ -175,6 +175,55 @@ public sealed class EmbeddedToolGoldenFlowTests
         }
     }
 
+
+    [Fact]
+    public void Golden_flow_ensure_dir_then_exists_completes()
+    {
+        var root = Directory.CreateTempSubdirectory("runtime-tools-").FullName;
+        try
+        {
+            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-4"), "goal", WorkOrderState.Pending, DateTimeOffset.UtcNow);
+            var request = new BuildRequest(
+                workOrder,
+                "core.route",
+                new Dictionary<string, object?>(),
+                new[]
+                {
+                    new RouteRule("ensure", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "exists" }),
+                    new RouteRule("exists", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "done" }),
+                    new RouteRule("done", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+                });
+
+            var plan = BuildPlanTestFactory.CreatePlan(request, new BuildStep[]
+            {
+                new RouteStep("ensure", "Ensure", "ensure", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+                new RouteStep("exists", "Exists", "exists", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+                new RouteStep("done", "Done", "done", RouteIntent.Terminate, DecisionOwner.Rule, workOrder.Id)
+            });
+
+            var registry = new SnapshotToolRegistry(
+                CreateToolSpec("linux.fs.ensure_dir.v1", "path"),
+                CreateToolSpec("linux.fs.exists.v1", "path"));
+
+            var decisions = new Queue<ToolSelectionDecision>(new[]
+            {
+                new ToolSelectionDecision(new ToolId("linux.fs.ensure_dir.v1"), new Dictionary<string, object?> { ["path"] = "tmpd" }),
+                new ToolSelectionDecision(new ToolId("linux.fs.exists.v1"), new Dictionary<string, object?> { ["path"] = "tmpd" })
+            });
+
+            var loop = new RoutingLoop(plan, registry, new QueuedDecisionProvider(decisions), NullRuntimeNarrator.Instance, new EmbeddedToolProviderClient(root));
+            var result = loop.Run();
+
+            Assert.Equal(RoutingStatus.Completed, result.State.Status);
+            Assert.Equal(2, result.ToolResults.Count);
+            Assert.True(Directory.Exists(Path.Combine(root, "tmpd")));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static ToolSpec CreateToolSpec(string id, params string[] requiredInputs) => new(
         new ToolId(id),
         id,

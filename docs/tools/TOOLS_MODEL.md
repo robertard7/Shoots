@@ -21,3 +21,19 @@ Golden flow:
 - AI decision provider returns `ToolSelectionDecision`.
 - Runtime executes tool through provider client.
 - Graph advances to terminal node when RouteGate allows.
+
+## How the system actually runs
+
+```mermaid
+graph TD
+  Graph[Mermaid Graph + Route Rules] -->|SelectTool step| Decision[Provider ToolSelectionDecision]
+  Decision -->|ToolId + bindings| Runtime[Runtime ProviderExecutionEnvelopeKind.Tool]
+  Runtime --> Provider[IProviderClient]
+  Provider --> Handler[Tool Handler]
+  Handler --> Result[ToolResult]
+  Result --> Graph
+```
+
+- Mermaid graph/rules control route structure and allowed transitions.
+- Provider decision selects the tool and bindings.
+- Tool execution is provider-agnostic and contract-based.
