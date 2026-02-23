@@ -423,6 +423,21 @@ public sealed class LinuxToolsTests
 
 
     [Fact]
+    public void Catalog_contract_guard_has_no_duplicate_input_names_and_outputs()
+    {
+        var entries = LinuxToolCatalog.LoadEntries(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "etc", "tools.catalog.json"));
+        foreach (var entry in entries)
+        {
+            Assert.NotEmpty(entry.Spec.ToolId.Value);
+            Assert.NotNull(entry.Spec.Inputs);
+            Assert.NotNull(entry.Spec.Outputs);
+            var inputNames = entry.Spec.Inputs.Select(i => i.Name).ToArray();
+            Assert.Equal(inputNames.Length, inputNames.Distinct(StringComparer.Ordinal).Count());
+            Assert.All(entry.Spec.Outputs, output => Assert.False(string.IsNullOrWhiteSpace(output.Name)));
+        }
+    }
+
+    [Fact]
     public void Catalog_has_unique_sorted_linux_versioned_ids()
     {
         var entries = LinuxToolCatalog.LoadEntries(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "etc", "tools.catalog.json"));
@@ -509,6 +524,107 @@ public sealed class LinuxToolsTests
             var hash = new LinuxArtifactsHashTreeHandler().Execute(new ToolInvocation(new ToolId("linux.artifacts.hash_tree.v1"), new Dictionary<string, object?> { ["path"] = "out" }, wo), ctx);
             Assert.True(hash.Success);
             Assert.True(Convert.ToInt32(hash.Outputs["count"]) >= 1);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+
+    [Fact]
+    public void Batch5_git_status_and_branch_tools_work()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var repo = Path.Combine(root, "repo");
+            Directory.CreateDirectory(repo);
+            Run("git", $"init {repo}", root);
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            var branch = new LinuxGitCurrentBranchHandler().Execute(new ToolInvocation(new ToolId("linux.git.current_branch.v1"), new Dictionary<string, object?> { ["cwd"] = "repo" }, wo), ctx);
+            Assert.True(branch.Success);
+
+            var remotes = new LinuxGitRemoteListHandler().Execute(new ToolInvocation(new ToolId("linux.git.remote_list.v1"), new Dictionary<string, object?> { ["cwd"] = "repo" }, wo), ctx);
+            Assert.True(remotes.Success);
+            Assert.Equal(0, remotes.Outputs["count"]);
+
+            File.WriteAllText(Path.Combine(repo, "a.txt"), "x");
+            var status = new LinuxGitStatusPorcelainHandler().Execute(new ToolInvocation(new ToolId("linux.git.status_porcelain.v1"), new Dictionary<string, object?> { ["cwd"] = "repo" }, wo), ctx);
+            Assert.True(status.Success);
+            Assert.Equal(false, status.Outputs["clean"]);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void Batch5_pure_and_diag_tools_work()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            var join = new LinuxFsPathJoinHandler().Execute(new ToolInvocation(new ToolId("linux.fs.path_join.v1"), new Dictionary<string, object?> { ["parts"] = new object?[] { "a", "b", "c.txt" } }, wo), ctx);
+            Assert.True(join.Success);
+            Assert.Equal("a/b/c.txt", join.Outputs["path"]);
+
+            var temp = new LinuxFsTempDirHandler().Execute(new ToolInvocation(new ToolId("linux.fs.temp_dir.v1"), new Dictionary<string, object?> { ["seed"] = "seed", ["root"] = "tmp" }, wo), ctx);
+            Assert.True(temp.Success);
+
+            var trim = new LinuxTextTrimHandler().Execute(new ToolInvocation(new ToolId("linux.text.trim.v1"), new Dictionary<string, object?> { ["text"] = "  hello  " }, wo), ctx);
+            Assert.True(trim.Success);
+            Assert.Equal("hello", trim.Outputs["text"]);
+
+            var toJson = new LinuxTextToJsonHandler().Execute(new ToolInvocation(new ToolId("linux.text.to_json.v1"), new Dictionary<string, object?> { ["map"] = new Dictionary<string, object?> { ["b"] = 2, ["a"] = 1 } }, wo), ctx);
+            Assert.True(toJson.Success);
+
+            var fromJson = new LinuxTextFromJsonHandler().Execute(new ToolInvocation(new ToolId("linux.text.from_json.v1"), new Dictionary<string, object?> { ["json"] = "{"x":1,"y":2}" }, wo), ctx);
+            Assert.True(fromJson.Success);
+            Assert.Equal(2, fromJson.Outputs["count"]);
+
+            var ps = new LinuxProcPsHandler().Execute(new ToolInvocation(new ToolId("linux.proc.ps.v1"), new Dictionary<string, object?>(), wo), ctx);
+            Assert.True(ps.Success);
+            Assert.True(Convert.ToInt32(ps.Outputs["count"]) >= 1);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void Batch6_archive_and_tag_tools_present()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+            Directory.CreateDirectory(Path.Combine(root, "src"));
+            File.WriteAllText(Path.Combine(root, "src", "a.txt"), "x");
+
+            var zip = new LinuxArchiveZipDirHandler().Execute(new ToolInvocation(new ToolId("linux.archive.zip_dir.v1"), new Dictionary<string, object?> { ["source_dir"] = "src", ["zip_path"] = "a.zip" }, wo), ctx);
+            Assert.True(zip.Success);
+
+            var unzip = new LinuxArchiveUnzipToDirHandler().Execute(new ToolInvocation(new ToolId("linux.archive.unzip_to_dir.v1"), new Dictionary<string, object?> { ["zip_path"] = "a.zip", ["dest_dir"] = "out", ["overwrite"] = true }, wo), ctx);
+            Assert.True(unzip.Success);
+
+            var repo = Path.Combine(root, "repo");
+            Directory.CreateDirectory(repo);
+            Run("git", $"init {repo}", root);
+            File.WriteAllText(Path.Combine(repo, "a.txt"), "x");
+            Run("git", $"-C {repo} add .", root);
+            Run("git", $"-C {repo} -c user.email=a@b -c user.name=n commit -m init", root);
+
+            var tag = new LinuxGitTagAnnotatedHandler().Execute(new ToolInvocation(new ToolId("linux.git.tag_annotated.v1"), new Dictionary<string, object?> { ["cwd"] = "repo", ["tag"] = "v1", ["message"] = "m" }, wo), ctx);
+            Assert.True(tag.Success);
         }
         finally
         {

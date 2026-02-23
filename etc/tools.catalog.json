@@ -117,6 +117,52 @@
       ]
     },
     {
+      "id": "linux.archive.unzip_to_dir.v1",
+      "description": "Extract zip archive to directory.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "zip_path",
+          "type": "string",
+          "required": true,
+          "description": "Zip input path."
+        },
+        {
+          "name": "dest_dir",
+          "type": "string",
+          "required": true,
+          "description": "Destination directory."
+        },
+        {
+          "name": "overwrite",
+          "type": "bool",
+          "required": false,
+          "description": "Overwrite existing files."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "extracted",
+          "type": "bool",
+          "description": "Whether extraction succeeded."
+        },
+        {
+          "name": "files_count",
+          "type": "int",
+          "description": "Extracted file count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "archive"
+      ]
+    },
+    {
       "id": "linux.archive.zip.v1",
       "description": "Create a zip archive from a source directory.",
       "requiredAuthority": {
@@ -150,6 +196,52 @@
           "name": "archived",
           "type": "bool",
           "description": "Whether archive was created."
+        },
+        {
+          "name": "files_count",
+          "type": "int",
+          "description": "Archived file count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "archive"
+      ]
+    },
+    {
+      "id": "linux.archive.zip_dir.v1",
+      "description": "Create zip archive from directory.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "source_dir",
+          "type": "string",
+          "required": true,
+          "description": "Source directory."
+        },
+        {
+          "name": "zip_path",
+          "type": "string",
+          "required": true,
+          "description": "Zip output path."
+        },
+        {
+          "name": "include_hidden",
+          "type": "bool",
+          "required": false,
+          "description": "Include hidden files."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "archived",
+          "type": "bool",
+          "description": "Whether archive succeeded."
         },
         {
           "name": "files_count",
@@ -366,6 +458,41 @@
       ]
     },
     {
+      "id": "linux.build.dotnet_list_packages.v1",
+      "description": "List packages for a project or solution.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "projectOrSln",
+          "type": "string",
+          "required": true,
+          "description": "Project or solution path."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "packages",
+          "type": "string",
+          "description": "Package list output."
+        }
+      ],
+      "tags": [
+        "linux",
+        "build"
+      ]
+    },
+    {
       "id": "linux.build.dotnet_pack.v1",
       "description": "Run dotnet pack with bounded settings.",
       "requiredAuthority": {
@@ -434,6 +561,46 @@
           "name": "restored",
           "type": "bool",
           "description": "Whether restore succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "build"
+      ]
+    },
+    {
+      "id": "linux.build.dotnet_sln_list_projects.v1",
+      "description": "List projects in a solution.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "sln",
+          "type": "string",
+          "required": true,
+          "description": "Solution path."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "projects",
+          "type": "string",
+          "description": "Newline project paths."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Project count."
         }
       ],
       "tags": [
@@ -642,6 +809,28 @@
           "name": "copied",
           "type": "bool",
           "description": "Whether copy succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.cwd.v1",
+      "description": "Return current working directory (repo-relative).",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "description": "Current working directory."
         }
       ],
       "tags": [
@@ -942,6 +1131,35 @@
       ]
     },
     {
+      "id": "linux.fs.path_join.v1",
+      "description": "Join path parts deterministically.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "parts",
+          "type": "array",
+          "required": true,
+          "description": "Path parts."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "path",
+          "type": "string",
+          "description": "Joined path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
       "id": "linux.fs.read_text.v1",
       "description": "Read text from a file with byte cap.",
       "requiredAuthority": {
@@ -1080,6 +1298,46 @@
           "name": "mtime_utc",
           "type": "string",
           "description": "Last write timestamp in RFC3339/ISO-8601."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.temp_dir.v1",
+      "description": "Create deterministic temp subdirectory by seed.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "seed",
+          "type": "string",
+          "required": true,
+          "description": "Deterministic seed."
+        },
+        {
+          "name": "root",
+          "type": "string",
+          "required": false,
+          "description": "Root directory for temp directories."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "path",
+          "type": "string",
+          "description": "Created path."
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "Whether directory exists."
         }
       ],
       "tags": [
@@ -1354,6 +1612,35 @@
       ]
     },
     {
+      "id": "linux.git.current_branch.v1",
+      "description": "Get current branch name.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "branch",
+          "type": "string",
+          "description": "Current branch."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
       "id": "linux.git.diff_names.v1",
       "description": "List changed file names between refs.",
       "requiredAuthority": {
@@ -1387,6 +1674,35 @@
           "name": "paths",
           "type": "string",
           "description": "Newline-delimited sorted paths."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.fetch.v1",
+      "description": "Fetch remotes non-interactively.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "fetched",
+          "type": "bool",
+          "description": "Whether fetch succeeded."
         }
       ],
       "tags": [
@@ -1500,6 +1816,168 @@
       ]
     },
     {
+      "id": "linux.git.merge_abort.v1",
+      "description": "Abort in-progress merge.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "aborted",
+          "type": "bool",
+          "description": "Whether merge abort succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.pull_ff_only.v1",
+      "description": "Pull with --ff-only.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pulled",
+          "type": "bool",
+          "description": "Whether pull succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.push_tag.v1",
+      "description": "Push git tag to remote.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "tag",
+          "type": "string",
+          "required": true,
+          "description": "Tag name."
+        },
+        {
+          "name": "remote",
+          "type": "string",
+          "required": false,
+          "description": "Remote name."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pushed",
+          "type": "bool",
+          "description": "Whether push succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.rebase_abort.v1",
+      "description": "Abort in-progress rebase.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "aborted",
+          "type": "bool",
+          "description": "Whether rebase abort succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.remote_list.v1",
+      "description": "List git remotes.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "remotes",
+          "type": "string",
+          "description": "Newline remotes."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Remote count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
       "id": "linux.git.reset_hard.v1",
       "description": "Run git reset --hard.",
       "requiredAuthority": {
@@ -1596,6 +2074,81 @@
           "name": "clean",
           "type": "bool",
           "description": "True when no changes."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.status_porcelain.v1",
+      "description": "Get git status porcelain output.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "porcelain",
+          "type": "string",
+          "description": "Porcelain output."
+        },
+        {
+          "name": "clean",
+          "type": "bool",
+          "description": "Whether clean."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.tag_annotated.v1",
+      "description": "Create annotated git tag.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "tag",
+          "type": "string",
+          "required": true,
+          "description": "Tag name."
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "required": true,
+          "description": "Tag message."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Repository working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tagged",
+          "type": "bool",
+          "description": "Whether tagging succeeded."
         }
       ],
       "tags": [
@@ -1724,6 +2277,33 @@
       ]
     },
     {
+      "id": "linux.proc.ps.v1",
+      "description": "List processes with bounded output.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "processes",
+          "type": "string",
+          "description": "Sorted process lines."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Process count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "proc"
+      ]
+    },
+    {
       "id": "linux.proc.which.v1",
       "description": "Resolve executable path from PATH.",
       "requiredAuthority": {
@@ -1750,6 +2330,40 @@
       "tags": [
         "linux",
         "proc"
+      ]
+    },
+    {
+      "id": "linux.text.from_json.v1",
+      "description": "Parse JSON and return top-level keys.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "json",
+          "type": "string",
+          "required": true,
+          "description": "Input JSON text."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "keys",
+          "type": "string",
+          "description": "Newline-delimited keys."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Key count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
       ]
     },
     {
@@ -1888,6 +2502,64 @@
           "name": "bytes",
           "type": "int",
           "description": "Output bytes."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.to_json.v1",
+      "description": "Serialize map to JSON.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "map",
+          "type": "object",
+          "required": true,
+          "description": "Map object."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "json",
+          "type": "string",
+          "description": "Serialized JSON."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.trim.v1",
+      "description": "Trim whitespace from text.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "text",
+          "type": "string",
+          "required": true,
+          "description": "Input text."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "type": "string",
+          "description": "Trimmed text."
         }
       ],
       "tags": [

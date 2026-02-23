@@ -66,7 +66,27 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxBuildCMakeCTestHandler(),
             new LinuxArchiveTarGzHandler(),
             new LinuxArchiveUntarGzHandler(),
-            new LinuxArtifactsHashTreeHandler()
+            new LinuxArtifactsHashTreeHandler(),
+            new LinuxGitFetchHandler(),
+            new LinuxGitPullFfOnlyHandler(),
+            new LinuxGitMergeAbortHandler(),
+            new LinuxGitRebaseAbortHandler(),
+            new LinuxGitStatusPorcelainHandler(),
+            new LinuxGitCurrentBranchHandler(),
+            new LinuxGitRemoteListHandler(),
+            new LinuxFsCwdHandler(),
+            new LinuxFsPathJoinHandler(),
+            new LinuxFsTempDirHandler(),
+            new LinuxTextTrimHandler(),
+            new LinuxTextToJsonHandler(),
+            new LinuxTextFromJsonHandler(),
+            new LinuxBuildDotnetSlnListProjectsHandler(),
+            new LinuxBuildDotnetListPackagesHandler(),
+            new LinuxProcPsHandler(),
+            new LinuxArchiveZipDirHandler(),
+            new LinuxArchiveUnzipToDirHandler(),
+            new LinuxGitTagAnnotatedHandler(),
+            new LinuxGitPushTagHandler()
         });
 }
 
@@ -1099,7 +1119,9 @@ public sealed class LinuxGitBranchListHandler : IToolHandler
     public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
     {
         var run = GitRunner.RunGit(Id, invocation, ctx, "branch", "--format=%(refname:short)");
-        if (!run.Success) return run;
+        if (!run.Success)
+            return run;
+
         var branches = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty)
             .Split('
 ', StringSplitOptions.RemoveEmptyEntries)
@@ -1107,6 +1129,7 @@ public sealed class LinuxGitBranchListHandler : IToolHandler
             .Where(static s => s.Length > 0)
             .OrderBy(static s => s, StringComparer.Ordinal)
             .ToArray();
+
         return new ToolResult(Id, new Dictionary<string, object?>
         {
             ["branches"] = string.Join("
@@ -1203,8 +1226,12 @@ public sealed class LinuxFsFindFilesHandler : IToolHandler
                 .OrderBy(static f => f, StringComparer.Ordinal)
                 .Take(max)
                 .ToArray();
-            return new ToolResult(Id, new Dictionary<string, object?> { ["files"] = string.Join("
-", files), ["count"] = files.Length }, true);
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["files"] = string.Join("
+", files),
+                ["count"] = files.Length
+            }, true);
         }
         catch (Exception ex)
         {
@@ -1228,8 +1255,12 @@ public sealed class LinuxFsGlobHandler : IToolHandler
                 .OrderBy(static f => f, StringComparer.Ordinal)
                 .Take(max)
                 .ToArray();
-            return new ToolResult(Id, new Dictionary<string, object?> { ["matches"] = string.Join("
-", matches), ["count"] = matches.Length }, true);
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["matches"] = string.Join("
+", matches),
+                ["count"] = matches.Length
+            }, true);
         }
         catch (Exception ex)
         {
@@ -1315,14 +1346,21 @@ public sealed class LinuxTextReplaceInFilesHandler : IToolHandler
 
     private static int CountOccurrences(string text, string search)
     {
-        if (search.Length == 0) return 0;
-        var count = 0; var idx = 0;
+        if (search.Length == 0)
+            return 0;
+
+        var count = 0;
+        var idx = 0;
         while (true)
         {
             idx = text.IndexOf(search, idx, StringComparison.Ordinal);
-            if (idx < 0) break;
-            count++; idx += search.Length;
+            if (idx < 0)
+                break;
+
+            count++;
+            idx += search.Length;
         }
+
         return count;
     }
 }
@@ -1451,10 +1489,9 @@ public sealed class LinuxArtifactsHashTreeHandler : IToolHandler
                 using var sha = System.Security.Cryptography.SHA256.Create();
                 using var stream = File.OpenRead(f);
                 var hash = Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
-                lines.Add($"{hash}  {Path.GetRelativePath(root, f).Replace('\', '/')}");
+                lines.Add($"{hash}  {Path.GetRelativePath(root, f).Replace('\\', '/')}");
             }
-            var joined = string.Join("
-", lines);
+            var joined = string.Join("\n", lines);
             return new ToolResult(Id, new Dictionary<string, object?>
             {
                 ["hashes"] = ToolResultFactory.TruncateUtf8(joined, ctx.MaxBytesOut),
@@ -1466,5 +1503,384 @@ public sealed class LinuxArtifactsHashTreeHandler : IToolHandler
         {
             return ToolResultFactory.Error(Id, "artifacts.hash_tree_failed", ex.Message);
         }
+    }
+}
+
+
+public sealed class LinuxGitFetchHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.fetch.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var run = GitRunner.RunGit(Id, invocation, ctx, "fetch", "--prune");
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["fetched"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitPullFfOnlyHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.pull_ff_only.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var run = GitRunner.RunGit(Id, invocation, ctx, "pull", "--ff-only");
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["pulled"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitMergeAbortHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.merge_abort.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var run = GitRunner.RunGit(Id, invocation, ctx, "merge", "--abort");
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["aborted"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitRebaseAbortHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.rebase_abort.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var run = GitRunner.RunGit(Id, invocation, ctx, "rebase", "--abort");
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["aborted"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitStatusPorcelainHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.status_porcelain.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var run = GitRunner.RunGit(Id, invocation, ctx, "status", "--porcelain");
+        if (!run.Success)
+            return run;
+
+        var text = Convert.ToString(run.Outputs["stdout"]) ?? string.Empty;
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["porcelain"] = ToolResultFactory.TruncateUtf8(text, ctx.MaxBytesOut),
+            ["clean"] = string.IsNullOrWhiteSpace(text)
+        }, true);
+    }
+}
+
+public sealed class LinuxGitCurrentBranchHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.current_branch.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var run = GitRunner.RunGit(Id, invocation, ctx, "rev-parse", "--abbrev-ref", "HEAD");
+        if (!run.Success)
+            return run;
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["branch"] = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Trim()
+        }, true);
+    }
+}
+
+public sealed class LinuxGitRemoteListHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.remote_list.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var run = GitRunner.RunGit(Id, invocation, ctx, "remote");
+        if (!run.Success)
+            return run;
+
+        var remotes = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty)
+            .Split('
+', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static s => s.Trim())
+            .Where(static s => s.Length > 0)
+            .OrderBy(static s => s, StringComparer.Ordinal)
+            .ToArray();
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["remotes"] = string.Join("
+", remotes),
+            ["count"] = remotes.Length
+        }, true);
+    }
+}
+
+public sealed class LinuxFsCwdHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.cwd.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+        => new(Id, new Dictionary<string, object?>
+        {
+            ["cwd"] = ToolPath.ToRepoRelative(ctx, ctx.WorkingDirectory)
+        }, true);
+}
+
+public sealed class LinuxFsPathJoinHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.path_join.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var parts = invocation.Bindings.TryGetValue("parts", out var value) && value is IEnumerable<object?> list
+            ? list.Select(static p => Convert.ToString(p) ?? string.Empty).ToArray()
+            : Array.Empty<string>();
+
+        var joined = parts.Length == 0 ? string.Empty : Path.Combine(parts);
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["path"] = joined.Replace('\', '/')
+        }, true);
+    }
+}
+
+public sealed class LinuxFsTempDirHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.temp_dir.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var seed = Convert.ToString(invocation.Bindings["seed"]) ?? string.Empty;
+            var rootRel = invocation.Bindings.TryGetValue("root", out var r) ? Convert.ToString(r) : ".tmp";
+            var root = ToolPath.ResolveWithinRoot(ctx, rootRel ?? ".tmp");
+            Directory.CreateDirectory(root);
+
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(seed)))
+                .ToLowerInvariant()[..12];
+            var path = Path.Combine(root, hash);
+            Directory.CreateDirectory(path);
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["path"] = ToolPath.ToRepoRelative(ctx, path),
+                ["created"] = true
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "fs.temp_dir_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxTextTrimHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.trim.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var text = Convert.ToString(invocation.Bindings["text"]) ?? string.Empty;
+        return new ToolResult(Id, new Dictionary<string, object?> { ["text"] = text.Trim() }, true);
+    }
+}
+
+public sealed class LinuxTextToJsonHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.to_json.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var map = invocation.Bindings.TryGetValue("map", out var m) && m is IReadOnlyDictionary<string, object?> dict
+                ? dict
+                : new Dictionary<string, object?>();
+            var ordered = map.OrderBy(static kv => kv.Key, StringComparer.Ordinal)
+                .ToDictionary(k => k.Key, v => v.Value, StringComparer.Ordinal);
+            var json = System.Text.Json.JsonSerializer.Serialize(ordered);
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["json"] = ToolResultFactory.TruncateUtf8(json, ctx.MaxBytesOut)
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "text.to_json_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxTextFromJsonHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.from_json.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var json = Convert.ToString(invocation.Bindings["json"]) ?? string.Empty;
+            if (Encoding.UTF8.GetByteCount(json) > ctx.MaxBytesOut)
+                return ToolResultFactory.Error(Id, "text.json_too_large", "json exceeds max bytes");
+
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var keys = doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+                ? doc.RootElement.EnumerateObject().Select(p => p.Name).OrderBy(static x => x, StringComparer.Ordinal).ToArray()
+                : Array.Empty<string>();
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["keys"] = string.Join("
+", keys),
+                ["count"] = keys.Length
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "text.from_json_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxBuildDotnetSlnListProjectsHandler : IToolHandler
+{
+    public ToolId Id => new("linux.build.dotnet_sln_list_projects.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var sln = Convert.ToString(invocation.Bindings["sln"]) ?? string.Empty;
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "dotnet",
+            ["args"] = new object?[] { "sln", sln, "list" },
+            ["cwd"] = invocation.Bindings.TryGetValue("cwd", out var cwd) ? cwd : null,
+            ["timeout_ms"] = Math.Min(60000, ctx.MaxTimeoutMs)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!result.Success || Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "build.dotnet_sln_list_projects_failed", Convert.ToString(result.Outputs["stderr"]) ?? "dotnet sln list failed");
+
+        var lines = (Convert.ToString(result.Outputs["stdout"]) ?? string.Empty)
+            .Split('
+', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static l => l.Trim())
+            .Where(static l => l.Length > 0 && !l.StartsWith("Project(s)", StringComparison.Ordinal))
+            .OrderBy(static l => l, StringComparer.Ordinal)
+            .ToArray();
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["projects"] = string.Join("
+", lines),
+            ["count"] = lines.Length
+        }, true);
+    }
+}
+
+public sealed class LinuxBuildDotnetListPackagesHandler : IToolHandler
+{
+    public ToolId Id => new("linux.build.dotnet_list_packages.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var target = Convert.ToString(invocation.Bindings["projectOrSln"]) ?? string.Empty;
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "dotnet",
+            ["args"] = new object?[] { "list", target, "package" },
+            ["cwd"] = invocation.Bindings.TryGetValue("cwd", out var cwd) ? cwd : null,
+            ["timeout_ms"] = Math.Min(60000, ctx.MaxTimeoutMs),
+            ["max_output_bytes"] = ctx.MaxBytesOut
+        }, invocation.WorkOrderId), ctx);
+
+        if (!result.Success || Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "build.dotnet_list_packages_failed", Convert.ToString(result.Outputs["stderr"]) ?? "dotnet list package failed");
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["packages"] = Convert.ToString(result.Outputs["stdout"]) ?? string.Empty
+        }, true);
+    }
+}
+
+public sealed class LinuxProcPsHandler : IToolHandler
+{
+    public ToolId Id => new("linux.proc.ps.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "ps",
+            ["args"] = new object?[] { "-eo", "pid,comm" },
+            ["timeout_ms"] = Math.Min(10000, ctx.MaxTimeoutMs),
+            ["max_output_bytes"] = ctx.MaxBytesOut
+        }, invocation.WorkOrderId), ctx);
+
+        if (!result.Success)
+            return ToolResultFactory.Error(Id, "proc.ps_failed", Convert.ToString(result.Outputs["error.message"]) ?? "ps failed");
+
+        var lines = (Convert.ToString(result.Outputs["stdout"]) ?? string.Empty)
+            .Split('
+', StringSplitOptions.RemoveEmptyEntries)
+            .Skip(1)
+            .Select(static x => x.Trim())
+            .Where(static x => x.Length > 0)
+            .OrderBy(static x => x, StringComparer.Ordinal)
+            .ToArray();
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["processes"] = string.Join("
+", lines),
+            ["count"] = lines.Length
+        }, true);
+    }
+}
+
+public sealed class LinuxArchiveZipDirHandler : IToolHandler
+{
+    public ToolId Id => new("linux.archive.zip_dir.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+        => new LinuxArchiveZipHandler().Execute(new ToolInvocation(new ToolId("linux.archive.zip.v1"), new Dictionary<string, object?>
+        {
+            ["source_dir"] = invocation.Bindings["source_dir"],
+            ["zip_path"] = invocation.Bindings["zip_path"],
+            ["include_hidden"] = invocation.Bindings.TryGetValue("include_hidden", out var h) ? h : false
+        }, invocation.WorkOrderId), ctx) with { ToolId = Id };
+}
+
+public sealed class LinuxArchiveUnzipToDirHandler : IToolHandler
+{
+    public ToolId Id => new("linux.archive.unzip_to_dir.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+        => new LinuxArchiveUnzipHandler().Execute(new ToolInvocation(new ToolId("linux.archive.unzip.v1"), new Dictionary<string, object?>
+        {
+            ["zip_path"] = invocation.Bindings["zip_path"],
+            ["dest_dir"] = invocation.Bindings["dest_dir"],
+            ["overwrite"] = invocation.Bindings.TryGetValue("overwrite", out var o) ? o : false
+        }, invocation.WorkOrderId), ctx) with { ToolId = Id };
+}
+
+public sealed class LinuxGitTagAnnotatedHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.tag_annotated.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var tag = Convert.ToString(invocation.Bindings["tag"]) ?? string.Empty;
+        var message = Convert.ToString(invocation.Bindings["message"]) ?? string.Empty;
+        var run = GitRunner.RunGit(Id, invocation, ctx, "tag", "-a", tag, "-m", message);
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["tagged"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitPushTagHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.push_tag.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var tag = Convert.ToString(invocation.Bindings["tag"]) ?? string.Empty;
+        var remote = invocation.Bindings.TryGetValue("remote", out var r) ? Convert.ToString(r) : "origin";
+        var run = GitRunner.RunGit(Id, invocation, ctx, "push", remote ?? "origin", tag);
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["pushed"] = true }, true) : run;
     }
 }
