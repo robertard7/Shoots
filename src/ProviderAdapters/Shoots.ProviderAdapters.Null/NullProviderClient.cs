@@ -3,8 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Shoots.ProviderAdapters.Abstractions;
 using Shoots.Runtime.Abstractions.Provider;
-using Shoots.Providers.Abstractions;
-using Shoots.Runtime.Abstractions.Provider;
 
 namespace Shoots.ProviderAdapters.Null;
 

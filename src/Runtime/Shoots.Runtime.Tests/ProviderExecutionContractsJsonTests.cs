@@ -30,11 +30,7 @@ public sealed class ProviderExecutionContractsJsonTests
         var roundTrip = JsonSerializer.Deserialize<ProviderExecutionEnvelope>(json);
 
         Assert.NotNull(roundTrip);
-
         StructuralAssert.Equal(envelope, roundTrip);
-
-        Assert.Equal(envelope, roundTrip);
-
     }
 
     [Fact]
@@ -56,11 +52,7 @@ public sealed class ProviderExecutionContractsJsonTests
         var roundTrip = JsonSerializer.Deserialize<ProviderExecutionEnvelope>(json);
 
         Assert.NotNull(roundTrip);
-
         StructuralAssert.Equal(envelope, roundTrip);
-
-        Assert.Equal(envelope, roundTrip);
-
     }
 
     [Fact]
@@ -81,11 +73,7 @@ public sealed class ProviderExecutionContractsJsonTests
         var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
 
         Assert.NotNull(roundTrip);
-
         StructuralAssert.Equal(result, roundTrip);
-
-        Assert.Equal(result, roundTrip);
-
     }
 
     [Fact]
@@ -106,11 +94,7 @@ public sealed class ProviderExecutionContractsJsonTests
         var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
 
         Assert.NotNull(roundTrip);
-
         StructuralAssert.Equal(result, roundTrip);
-
-        Assert.Equal(result, roundTrip);
-
     }
 
     [Fact]
@@ -128,10 +112,6 @@ public sealed class ProviderExecutionContractsJsonTests
         var roundTrip = JsonSerializer.Deserialize<ProviderExecutionResult>(json);
 
         Assert.NotNull(roundTrip);
-<<<<<<< HEAD
         StructuralAssert.Equal(result, roundTrip);
-=======
-        Assert.Equal(result, roundTrip);
->>>>>>> origin/main
     }
 }
