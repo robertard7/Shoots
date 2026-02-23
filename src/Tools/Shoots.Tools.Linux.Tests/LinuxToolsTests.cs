@@ -467,11 +467,13 @@ public sealed class LinuxToolsTests
             {
                 Assert.False(string.IsNullOrWhiteSpace(input.GetProperty("name").GetString()));
                 Assert.False(string.IsNullOrWhiteSpace(input.GetProperty("type").GetString()));
+                Assert.False(string.IsNullOrWhiteSpace(input.GetProperty("description").GetString()));
             });
             Assert.All(outputs, output =>
             {
                 Assert.False(string.IsNullOrWhiteSpace(output.GetProperty("name").GetString()));
                 Assert.False(string.IsNullOrWhiteSpace(output.GetProperty("type").GetString()));
+                Assert.False(string.IsNullOrWhiteSpace(output.GetProperty("description").GetString()));
             });
         });
     }
@@ -496,7 +498,8 @@ public sealed class LinuxToolsTests
             new LinuxFsExistsHandler()
         };
 
-        Assert.Throws<InvalidOperationException>(() => new LinuxToolHandlerRegistry(handlers));
+        var ex = Assert.Throws<InvalidOperationException>(() => new LinuxToolHandlerRegistry(handlers));
+        Assert.StartsWith("duplicate tool handler id:", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
