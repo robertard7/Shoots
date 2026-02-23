@@ -32,10 +32,23 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxFsRmHandler(),
             new LinuxFsStatHandler(),
             new LinuxFsWriteTextHandler(),
+            new LinuxGitAddHandler(),
+            new LinuxGitCheckoutHandler(),
             new LinuxGitCloneHandler(),
+            new LinuxGitCommitHandler(),
+            new LinuxGitDiffNamesHandler(),
+            new LinuxGitLogHandler(),
+            new LinuxGitRevParseHandler(),
             new LinuxGitStatusHandler(),
+            new LinuxBuildCMakeBuildHandler(),
+            new LinuxBuildCMakeConfigureHandler(),
+            new LinuxBuildDotnetBuildHandler(),
+            new LinuxBuildDotnetTestHandler(),
+            new LinuxEnvGetHandler(),
+            new LinuxEnvSetLocalHandler(),
             new LinuxHttpGetTextHandler(),
             new LinuxProcExecHandler(),
+            new LinuxProcWhichHandler(),
             new LinuxTextReplaceHandler()
         });
 }
@@ -574,7 +587,7 @@ public sealed class LinuxArchiveUnzipHandler : IToolHandler
 public sealed class LinuxProcExecHandler : IToolHandler
 {
     public ToolId Id => new("linux.proc.exec.v1");
-    private const int MaxTimeoutMs = 30000;
+    private const int DefaultTimeoutMs = 5000;
 
     public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
     {
@@ -586,7 +599,7 @@ public sealed class LinuxProcExecHandler : IToolHandler
                 : Array.Empty<string>();
             var cwdBinding = invocation.Bindings.TryGetValue("cwd", out var cwdObj) ? Convert.ToString(cwdObj) : null;
             var cwd = string.IsNullOrWhiteSpace(cwdBinding) ? ctx.WorkingDirectory : ToolPath.ResolveWithinRoot(ctx, cwdBinding);
-            var timeoutMs = Math.Min(invocation.Bindings.TryGetValue("timeout_ms", out var timeoutObj) ? Convert.ToInt32(timeoutObj) : 5000, MaxTimeoutMs);
+            var timeoutMs = Math.Min(invocation.Bindings.TryGetValue("timeout_ms", out var timeoutObj) ? Convert.ToInt32(timeoutObj) : DefaultTimeoutMs, ctx.MaxTimeoutMs);
             var maxOutputBytes = Math.Min(invocation.Bindings.TryGetValue("max_output_bytes", out var maxObj) ? Convert.ToInt32(maxObj) : ctx.MaxBytesOut, ctx.MaxBytesOut);
 
             var startInfo = new ProcessStartInfo
@@ -600,6 +613,20 @@ public sealed class LinuxProcExecHandler : IToolHandler
 
             foreach (var arg in args)
                 startInfo.ArgumentList.Add(arg);
+
+            if (invocation.Bindings.TryGetValue("env", out var envObj) && envObj is IReadOnlyDictionary<string, object?> envBindings)
+            {
+                foreach (var item in envBindings.OrderBy(static kvp => kvp.Key, StringComparer.Ordinal))
+                    startInfo.Environment[item.Key] = Convert.ToString(item.Value) ?? string.Empty;
+            }
+
+            foreach (var item in ctx.EnvOverlay.OrderBy(static kvp => kvp.Key, StringComparer.Ordinal))
+            {
+                if (item.Value is null)
+                    startInfo.Environment.Remove(item.Key);
+                else
+                    startInfo.Environment[item.Key] = item.Value;
+            }
 
             using var process = new Process { StartInfo = startInfo };
             process.Start();
@@ -737,5 +764,303 @@ public sealed class LinuxHttpGetTextHandler : IToolHandler
         {
             return ToolResultFactory.Error(Id, "network.http_get_failed", ex.Message);
         }
+    }
+}
+
+
+internal static class GitRunner
+{
+    public static ToolResult RunGit(ToolId targetToolId, ToolInvocation invocation, ToolExecutionContext ctx, params string[] args)
+    {
+        var cwdBinding = invocation.Bindings.TryGetValue("cwd", out var cwdObj) ? Convert.ToString(cwdObj) : null;
+        var exec = new LinuxProcExecHandler();
+        var env = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["GIT_TERMINAL_PROMPT"] = "0",
+            ["GIT_ASKPASS"] = "/bin/true",
+            ["GIT_PAGER"] = "cat",
+            ["LC_ALL"] = "C",
+            ["GIT_AUTHOR_NAME"] = "Shoots Tools",
+            ["GIT_AUTHOR_EMAIL"] = "tools@example.local",
+            ["GIT_COMMITTER_NAME"] = "Shoots Tools",
+            ["GIT_COMMITTER_EMAIL"] = "tools@example.local"
+        };
+
+        var result = exec.Execute(new ToolInvocation(exec.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "git",
+            ["args"] = args.Cast<object?>().ToArray(),
+            ["cwd"] = cwdBinding,
+            ["timeout_ms"] = 10000,
+            ["env"] = env
+        }, invocation.WorkOrderId), ctx);
+
+        if (!result.Success)
+            return ToolResultFactory.Error(targetToolId, "git.exec_failed", Convert.ToString(result.Outputs["error.message"]) ?? "git failed");
+
+        if (Convert.ToBoolean(result.Outputs["timed_out"]))
+            return ToolResultFactory.Error(targetToolId, "git.timeout", "git command timed out");
+
+        if (Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+        {
+            var stderr = Convert.ToString(result.Outputs["stderr"]) ?? string.Empty;
+            return ToolResultFactory.Error(targetToolId, "git.exit_nonzero", stderr);
+        }
+
+        return result;
+    }
+}
+
+public sealed class LinuxGitRevParseHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.rev_parse.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var args = invocation.Bindings.TryGetValue("args", out var arr) && arr is IEnumerable<object?> list
+            ? list.Select(static x => Convert.ToString(x) ?? string.Empty).ToArray()
+            : Array.Empty<string>();
+        var run = GitRunner.RunGit(Id, invocation, ctx, new[] { "rev-parse" }.Concat(args).ToArray());
+        if (!run.Success)
+            return run;
+        return new ToolResult(Id, new Dictionary<string, object?> { ["stdout"] = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Trim() }, true);
+    }
+}
+
+public sealed class LinuxGitLogHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.log.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var max = invocation.Bindings.TryGetValue("max", out var m) ? Math.Max(1, Convert.ToInt32(m)) : 10;
+        var args = new List<string> { "--no-pager", "log", $"--max-count={max}", "--pretty=format:%H" };
+        if (invocation.Bindings.TryGetValue("path", out var path) && !string.IsNullOrWhiteSpace(Convert.ToString(path)))
+        {
+            args.Add("--");
+            args.Add(Convert.ToString(path)!);
+        }
+        var run = GitRunner.RunGit(Id, invocation, ctx, args.ToArray());
+        if (!run.Success)
+            return run;
+        return new ToolResult(Id, new Dictionary<string, object?> { ["hashes"] = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Trim() }, true);
+    }
+}
+
+public sealed class LinuxGitDiffNamesHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.diff_names.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var args = new List<string> { "diff", "--name-only" };
+        if (invocation.Bindings.TryGetValue("base", out var b) && !string.IsNullOrWhiteSpace(Convert.ToString(b)))
+            args.Add(Convert.ToString(b)!);
+        if (invocation.Bindings.TryGetValue("head", out var h) && !string.IsNullOrWhiteSpace(Convert.ToString(h)))
+            args.Add(Convert.ToString(h)!);
+        var run = GitRunner.RunGit(Id, invocation, ctx, args.ToArray());
+        if (!run.Success)
+            return run;
+        var sorted = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static x => x.Trim())
+            .Where(static x => x.Length > 0)
+            .OrderBy(static x => x, StringComparer.Ordinal)
+            .ToArray();
+        return new ToolResult(Id, new Dictionary<string, object?> { ["paths"] = string.Join("\n", sorted) }, true);
+    }
+}
+
+public sealed class LinuxGitCheckoutHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.checkout.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var @ref = Convert.ToString(invocation.Bindings["ref"]) ?? string.Empty;
+        var run = GitRunner.RunGit(Id, invocation, ctx, "checkout", @ref);
+        return run.Success
+            ? new ToolResult(Id, new Dictionary<string, object?> { ["checked_out"] = true }, true)
+            : run;
+    }
+}
+
+public sealed class LinuxGitAddHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.add.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var paths = invocation.Bindings.TryGetValue("paths", out var p) && p is IEnumerable<object?> list
+            ? list.Select(static x => Convert.ToString(x) ?? string.Empty).Where(static x => x.Length > 0).ToArray()
+            : Array.Empty<string>();
+        var run = GitRunner.RunGit(Id, invocation, ctx, new[] { "add" }.Concat(paths).ToArray());
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["added"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitCommitHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.commit.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var message = Convert.ToString(invocation.Bindings["message"]) ?? string.Empty;
+        var run = GitRunner.RunGit(Id, invocation, ctx, "commit", "--no-verify", "--no-gpg-sign", "--no-edit", "-m", message);
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["committed"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxBuildDotnetBuildHandler : IToolHandler
+{
+    public ToolId Id => new("linux.build.dotnet_build.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var project = Convert.ToString(invocation.Bindings["projectOrSln"]) ?? string.Empty;
+        var cfg = invocation.Bindings.TryGetValue("configuration", out var c) ? Convert.ToString(c) : "Release";
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "dotnet",
+            ["args"] = new object?[] { "build", project, "--nologo", "--verbosity", "minimal", "-c", cfg ?? "Release" },
+            ["cwd"] = invocation.Bindings.TryGetValue("cwd", out var cwd) ? cwd : null,
+            ["timeout_ms"] = Math.Min(600000, ctx.MaxTimeoutMs)
+        }, invocation.WorkOrderId), ctx);
+        if (!result.Success || Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "build.dotnet_build_failed", Convert.ToString(result.Outputs["stderr"]) ?? "dotnet build failed");
+        return new ToolResult(Id, new Dictionary<string, object?> { ["built"] = true }, true);
+    }
+}
+
+public sealed class LinuxBuildDotnetTestHandler : IToolHandler
+{
+    public ToolId Id => new("linux.build.dotnet_test.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var project = Convert.ToString(invocation.Bindings["projectOrSln"]) ?? string.Empty;
+        var cfg = invocation.Bindings.TryGetValue("configuration", out var c) ? Convert.ToString(c) : "Release";
+        var args = new List<object?> { "test", project, "--nologo", "--verbosity", "minimal", "-c", cfg ?? "Release" };
+        if (invocation.Bindings.TryGetValue("filter", out var filter) && !string.IsNullOrWhiteSpace(Convert.ToString(filter)))
+        {
+            args.Add("--filter");
+            args.Add(Convert.ToString(filter));
+        }
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "dotnet",
+            ["args"] = args.ToArray(),
+            ["cwd"] = invocation.Bindings.TryGetValue("cwd", out var cwd) ? cwd : null,
+            ["timeout_ms"] = Math.Min(600000, ctx.MaxTimeoutMs)
+        }, invocation.WorkOrderId), ctx);
+        if (!result.Success || Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "build.dotnet_test_failed", Convert.ToString(result.Outputs["stderr"]) ?? "dotnet test failed");
+        return new ToolResult(Id, new Dictionary<string, object?> { ["tested"] = true }, true);
+    }
+}
+
+public sealed class LinuxBuildCMakeConfigureHandler : IToolHandler
+{
+    public ToolId Id => new("linux.build.cmake_configure.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var srcDir = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["srcDir"]) ?? string.Empty);
+        var buildDir = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["buildDir"]) ?? string.Empty);
+        Directory.CreateDirectory(buildDir);
+        var args = new List<object?> { "-S", srcDir, "-B", buildDir };
+        if (invocation.Bindings.TryGetValue("generator", out var g) && !string.IsNullOrWhiteSpace(Convert.ToString(g)))
+        {
+            args.Add("-G");
+            args.Add(Convert.ToString(g));
+        }
+        if (invocation.Bindings.TryGetValue("defs", out var defsObj) && defsObj is IReadOnlyDictionary<string, object?> defs)
+        {
+            foreach (var kvp in defs.OrderBy(static kvp => kvp.Key, StringComparer.Ordinal))
+                args.Add($"-D{kvp.Key}={Convert.ToString(kvp.Value) ?? string.Empty}");
+        }
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "cmake",
+            ["args"] = args.ToArray(),
+            ["timeout_ms"] = Math.Min(600000, ctx.MaxTimeoutMs)
+        }, invocation.WorkOrderId), ctx);
+        if (!result.Success || Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "build.cmake_configure_failed", Convert.ToString(result.Outputs["stderr"]) ?? "cmake configure failed");
+        return new ToolResult(Id, new Dictionary<string, object?> { ["configured"] = true }, true);
+    }
+}
+
+public sealed class LinuxBuildCMakeBuildHandler : IToolHandler
+{
+    public ToolId Id => new("linux.build.cmake_build.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var buildDir = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["buildDir"]) ?? string.Empty);
+        var args = new List<object?> { "--build", buildDir };
+        if (invocation.Bindings.TryGetValue("config", out var cfg) && !string.IsNullOrWhiteSpace(Convert.ToString(cfg)))
+        {
+            args.Add("--config");
+            args.Add(Convert.ToString(cfg));
+        }
+        if (invocation.Bindings.TryGetValue("target", out var t) && !string.IsNullOrWhiteSpace(Convert.ToString(t)))
+        {
+            args.Add("--target");
+            args.Add(Convert.ToString(t));
+        }
+        var proc = new LinuxProcExecHandler();
+        var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "cmake",
+            ["args"] = args.ToArray(),
+            ["timeout_ms"] = Math.Min(600000, ctx.MaxTimeoutMs)
+        }, invocation.WorkOrderId), ctx);
+        if (!result.Success || Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "build.cmake_build_failed", Convert.ToString(result.Outputs["stderr"]) ?? "cmake build failed");
+        return new ToolResult(Id, new Dictionary<string, object?> { ["built"] = true }, true);
+    }
+}
+
+public sealed class LinuxProcWhichHandler : IToolHandler
+{
+    public ToolId Id => new("linux.proc.which.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var name = Convert.ToString(invocation.Bindings["name"]) ?? string.Empty;
+        var pathValue = ctx.EnvOverlay.TryGetValue("PATH", out var overlayPath) ? overlayPath ?? string.Empty : (Environment.GetEnvironmentVariable("PATH") ?? string.Empty);
+        foreach (var segment in pathValue.Split(':', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = Path.Combine(segment, name);
+            if (File.Exists(candidate))
+                return new ToolResult(Id, new Dictionary<string, object?> { ["path"] = candidate }, true);
+        }
+
+        return ToolResultFactory.Error(Id, "proc.which_not_found", $"Executable '{name}' not found.");
+    }
+}
+
+public sealed class LinuxEnvGetHandler : IToolHandler
+{
+    public ToolId Id => new("linux.env.get.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var name = Convert.ToString(invocation.Bindings["name"]) ?? string.Empty;
+        var value = ctx.EnvOverlay.TryGetValue(name, out var overlay) ? overlay : Environment.GetEnvironmentVariable(name);
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["name"] = name,
+            ["value"] = value ?? string.Empty,
+            ["exists"] = value is not null
+        }, true);
+    }
+}
+
+public sealed class LinuxEnvSetLocalHandler : IToolHandler
+{
+    public ToolId Id => new("linux.env.set_local.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var name = Convert.ToString(invocation.Bindings["name"]) ?? string.Empty;
+        var value = Convert.ToString(invocation.Bindings["value"]) ?? string.Empty;
+        ctx.EnvOverlay[name] = value;
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["name"] = name,
+            ["set"] = true
+        }, true);
     }
 }

@@ -295,6 +295,132 @@ public sealed class LinuxToolsTests
         }
     }
 
+
+    [Fact]
+    public void Git_batch3_tools_work_non_interactive()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var repo = Path.Combine(root, "repo");
+            Directory.CreateDirectory(repo);
+            Run("git", $"init {repo}", root);
+            File.WriteAllText(Path.Combine(repo, "a.txt"), "hello");
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+            ctx.EnvOverlay["GIT_AUTHOR_NAME"] = "A";
+            ctx.EnvOverlay["GIT_AUTHOR_EMAIL"] = "a@example.com";
+            ctx.EnvOverlay["GIT_COMMITTER_NAME"] = "A";
+            ctx.EnvOverlay["GIT_COMMITTER_EMAIL"] = "a@example.com";
+
+            Assert.True(new LinuxGitAddHandler().Execute(new ToolInvocation(new ToolId("linux.git.add.v1"), new Dictionary<string, object?>
+            {
+                ["paths"] = new object?[] { "a.txt" },
+                ["cwd"] = "repo"
+            }, wo), ctx).Success);
+
+            Assert.True(new LinuxGitCommitHandler().Execute(new ToolInvocation(new ToolId("linux.git.commit.v1"), new Dictionary<string, object?>
+            {
+                ["message"] = "init",
+                ["cwd"] = "repo"
+            }, wo), ctx).Success);
+
+            var rev = new LinuxGitRevParseHandler().Execute(new ToolInvocation(new ToolId("linux.git.rev_parse.v1"), new Dictionary<string, object?>
+            {
+                ["args"] = new object?[] { "--abbrev-ref", "HEAD" },
+                ["cwd"] = "repo"
+            }, wo), ctx);
+            Assert.True(rev.Success);
+            Assert.Equal("master", rev.Outputs["stdout"]);
+
+            var log = new LinuxGitLogHandler().Execute(new ToolInvocation(new ToolId("linux.git.log.v1"), new Dictionary<string, object?>
+            {
+                ["max"] = 5,
+                ["cwd"] = "repo"
+            }, wo), ctx);
+            Assert.True(log.Success);
+            var hashes = Convert.ToString(log.Outputs["hashes"]) ?? string.Empty;
+            Assert.Matches("^[0-9a-f]{40}$", hashes.Split('
+')[0]);
+
+            File.WriteAllText(Path.Combine(repo, "b.txt"), "x");
+            var diff = new LinuxGitDiffNamesHandler().Execute(new ToolInvocation(new ToolId("linux.git.diff_names.v1"), new Dictionary<string, object?>
+            {
+                ["cwd"] = "repo"
+            }, wo), ctx);
+            Assert.True(diff.Success);
+            Assert.Equal("b.txt", Convert.ToString(diff.Outputs["paths"]));
+
+            Assert.True(new LinuxGitCheckoutHandler().Execute(new ToolInvocation(new ToolId("linux.git.checkout.v1"), new Dictionary<string, object?>
+            {
+                ["ref"] = "HEAD",
+                ["cwd"] = "repo"
+            }, wo), ctx).Success);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void Env_overlay_affects_proc_and_not_host()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+            var original = Environment.GetEnvironmentVariable("SHOOTS_TMP_ENV");
+
+            var set = new LinuxEnvSetLocalHandler().Execute(new ToolInvocation(new ToolId("linux.env.set_local.v1"), new Dictionary<string, object?>
+            {
+                ["name"] = "SHOOTS_TMP_ENV",
+                ["value"] = "local"
+            }, wo), ctx);
+            Assert.True(set.Success);
+
+            var get = new LinuxEnvGetHandler().Execute(new ToolInvocation(new ToolId("linux.env.get.v1"), new Dictionary<string, object?>
+            {
+                ["name"] = "SHOOTS_TMP_ENV"
+            }, wo), ctx);
+            Assert.True(get.Success);
+            Assert.Equal("local", get.Outputs["value"]);
+
+            var proc = new LinuxProcExecHandler().Execute(new ToolInvocation(new ToolId("linux.proc.exec.v1"), new Dictionary<string, object?>
+            {
+                ["file"] = "bash",
+                ["args"] = new object?[] { "-lc", "printf %s "$SHOOTS_TMP_ENV"" }
+            }, wo), ctx);
+            Assert.True(proc.Success);
+            Assert.Equal("local", Convert.ToString(proc.Outputs["stdout"]));
+            Assert.Equal(original, Environment.GetEnvironmentVariable("SHOOTS_TMP_ENV"));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void Proc_which_finds_git()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var result = new LinuxProcWhichHandler().Execute(new ToolInvocation(new ToolId("linux.proc.which.v1"), new Dictionary<string, object?>
+            {
+                ["name"] = "git"
+            }, new WorkOrderId("wo")), ToolExecutionContext.Create(root, CancellationToken.None));
+            Assert.True(result.Success);
+            Assert.NotEmpty(Convert.ToString(result.Outputs["path"]));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

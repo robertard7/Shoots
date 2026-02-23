@@ -40,3 +40,6 @@ Example catalog snippet:
   ]
 }
 ```
+
+- Tool handlers are provider-agnostic: they execute through `IProviderClient` contracts and do not depend on Ollama.
+- Ollama (when configured) supplies selection decisions; execution contracts remain unchanged.

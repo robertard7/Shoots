@@ -110,6 +110,71 @@ public sealed class EmbeddedToolGoldenFlowTests
         }
     }
 
+
+    [Fact]
+    public void Golden_flow_write_git_commit_log_terminates()
+    {
+        var root = Directory.CreateTempSubdirectory("runtime-tools-").FullName;
+        try
+        {
+            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-3"), "goal", WorkOrderState.Pending, DateTimeOffset.UtcNow);
+            var request = new BuildRequest(
+                workOrder,
+                "core.route",
+                new Dictionary<string, object?>(),
+                new[]
+                {
+                    new RouteRule("write", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "init" }),
+                    new RouteRule("init", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "add" }),
+                    new RouteRule("add", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "commit" }),
+                    new RouteRule("commit", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "log" }),
+                    new RouteRule("log", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "done" }),
+                    new RouteRule("done", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+                });
+
+            var plan = BuildPlanTestFactory.CreatePlan(request, new BuildStep[]
+            {
+                new RouteStep("write", "Write", "write", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+                new RouteStep("init", "Init", "init", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+                new RouteStep("add", "Add", "add", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+                new RouteStep("commit", "Commit", "commit", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+                new RouteStep("log", "Log", "log", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+                new RouteStep("done", "Done", "done", RouteIntent.Terminate, DecisionOwner.Rule, workOrder.Id)
+            });
+
+            var repoPath = Path.Combine(root, "repo");
+            Directory.CreateDirectory(repoPath);
+
+            var registry = new SnapshotToolRegistry(
+                CreateToolSpec("linux.fs.write_text.v1", "path", "text"),
+                CreateToolSpec("linux.proc.exec.v1", "file", "args", "cwd"),
+                CreateToolSpec("linux.env.set_local.v1", "name", "value"),
+                CreateToolSpec("linux.git.add.v1", "paths", "cwd"),
+                CreateToolSpec("linux.git.commit.v1", "message", "cwd"),
+                CreateToolSpec("linux.git.log.v1", "max", "cwd"));
+
+            var decisions = new Queue<ToolSelectionDecision>(new[]
+            {
+                new ToolSelectionDecision(new ToolId("linux.fs.write_text.v1"), new Dictionary<string, object?> { ["path"] = "repo/a.txt", ["text"] = "hello" }),
+                new ToolSelectionDecision(new ToolId("linux.proc.exec.v1"), new Dictionary<string, object?> { ["file"] = "git", ["args"] = new object?[] { "init" }, ["cwd"] = "repo" }),
+                new ToolSelectionDecision(new ToolId("linux.git.add.v1"), new Dictionary<string, object?> { ["paths"] = new object?[] { "a.txt" }, ["cwd"] = "repo" }),
+                new ToolSelectionDecision(new ToolId("linux.git.commit.v1"), new Dictionary<string, object?> { ["message"] = "init", ["cwd"] = "repo" }),
+                new ToolSelectionDecision(new ToolId("linux.git.log.v1"), new Dictionary<string, object?> { ["max"] = 1, ["cwd"] = "repo" })
+            });
+
+            var client = new EmbeddedToolProviderClient(root);
+            var loop = new RoutingLoop(plan, registry, new QueuedDecisionProvider(decisions), NullRuntimeNarrator.Instance, client);
+
+            var result = loop.Run();
+            Assert.Equal(RoutingStatus.Completed, result.State.Status);
+            Assert.Equal(5, result.ToolResults.Count);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static ToolSpec CreateToolSpec(string id, params string[] requiredInputs) => new(
         new ToolId(id),
         id,

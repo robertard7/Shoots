@@ -14,7 +14,9 @@ public sealed record ToolExecutionContext(
     string RepoRoot,
     string WorkingDirectory,
     int MaxBytesOut,
+    int MaxTimeoutMs,
     bool AllowNetwork,
+    IDictionary<string, string?> EnvOverlay,
     CancellationToken CancellationToken,
     IDeterministicClock Clock)
 {
@@ -22,12 +24,15 @@ public sealed record ToolExecutionContext(
         string repoRoot,
         CancellationToken ct,
         int maxBytesOut = 16384,
+        int maxTimeoutMs = 30000,
         bool allowNetwork = false)
         => new(
             repoRoot,
             repoRoot,
             maxBytesOut,
+            maxTimeoutMs,
             allowNetwork,
+            new Dictionary<string, string?>(StringComparer.Ordinal),
             ct,
             new SystemDeterministicClock());
 }

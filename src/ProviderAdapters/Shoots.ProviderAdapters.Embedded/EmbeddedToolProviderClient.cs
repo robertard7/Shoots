@@ -11,10 +11,10 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
     private readonly LinuxToolHandlerRegistry _registry;
     private readonly ToolExecutionContext _context;
 
-    public EmbeddedToolProviderClient(string repoRoot, int maxBytesOut = 16384, bool allowNetwork = false)
+    public EmbeddedToolProviderClient(string repoRoot, int maxBytesOut = 16384, int maxTimeoutMs = 30000, bool allowNetwork = false)
     {
         _registry = LinuxToolHandlerRegistry.CreateDefault();
-        _context = ToolExecutionContext.Create(repoRoot, CancellationToken.None, maxBytesOut, allowNetwork);
+        _context = ToolExecutionContext.Create(repoRoot, CancellationToken.None, maxBytesOut, maxTimeoutMs, allowNetwork);
     }
 
     public ValueTask<ProviderExecutionResult> ExecuteAsync(ProviderExecutionEnvelope envelope, CancellationToken ct)
