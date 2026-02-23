@@ -340,8 +340,7 @@ public sealed class LinuxToolsTests
             }, wo), ctx);
             Assert.True(log.Success);
             var hashes = Convert.ToString(log.Outputs["hashes"]) ?? string.Empty;
-            Assert.Matches("^[0-9a-f]{40}$", hashes.Split('
-')[0]);
+            Assert.Matches(@"^[0-9a-f]{40}$", hashes.Split('\n')[0]);
 
             File.WriteAllText(Path.Combine(repo, "b.txt"), "x");
             var diff = new LinuxGitDiffNamesHandler().Execute(new ToolInvocation(new ToolId("linux.git.diff_names.v1"), new Dictionary<string, object?>
@@ -445,7 +444,7 @@ public sealed class LinuxToolsTests
         var sorted = ids.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         Assert.Equal(sorted, ids);
         Assert.Equal(ids.Length, ids.Distinct(StringComparer.Ordinal).Count());
-        Assert.All(ids, id => Assert.Matches("^linux\.[a-z0-9_]+\.[a-z0-9_]+\.v[0-9]+$", id));
+        Assert.All(ids, id => Assert.Matches(@"^linux\.[a-z0-9_]+\.[a-z0-9_]+\.v[0-9]+$", id));
     }
 
     [Fact]
