@@ -1,0 +1,98 @@
+{
+  "tools": [
+    {
+      "id": "linux.fs.mkdir.v1",
+      "description": "Create a directory on Linux.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "path", "type": "string", "required": true, "description": "Repository-relative path." },
+        { "name": "recursive", "type": "bool", "required": false, "description": "Create nested directories." }
+      ],
+      "outputs": [
+        { "name": "path", "type": "string", "description": "Resolved path." },
+        { "name": "created", "type": "bool", "description": "Whether directory was created." }
+      ],
+      "tags": ["linux", "fs"]
+    },
+    {
+      "id": "linux.fs.write_text.v1",
+      "description": "Write text to a file.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "path", "type": "string", "required": true, "description": "Repository-relative file path." },
+        { "name": "text", "type": "string", "required": true, "description": "Text content." },
+        { "name": "encoding", "type": "string", "required": false, "description": "Text encoding." },
+        { "name": "overwrite", "type": "bool", "required": false, "description": "Whether to overwrite." }
+      ],
+      "outputs": [
+        { "name": "path", "type": "string", "description": "Resolved path." },
+        { "name": "bytes_written", "type": "int", "description": "Written byte count." }
+      ],
+      "tags": ["linux", "fs"]
+    },
+    {
+      "id": "linux.fs.read_text.v1",
+      "description": "Read text from a file with byte cap.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "path", "type": "string", "required": true, "description": "Repository-relative file path." },
+        { "name": "encoding", "type": "string", "required": false, "description": "Text encoding." },
+        { "name": "max_bytes", "type": "int", "required": false, "description": "Maximum bytes to read." }
+      ],
+      "outputs": [
+        { "name": "path", "type": "string", "description": "Resolved path." },
+        { "name": "text", "type": "string", "description": "Read text, truncated by bytes." },
+        { "name": "truncated", "type": "bool", "description": "Whether text was truncated." },
+        { "name": "bytes_read", "type": "int", "description": "Original byte size." }
+      ],
+      "tags": ["linux", "fs"]
+    },
+    {
+      "id": "linux.proc.exec.v1",
+      "description": "Execute a Linux process without shell expansion.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "file", "type": "string", "required": true, "description": "Executable name." },
+        { "name": "args", "type": "array", "required": false, "description": "Argument list." },
+        { "name": "cwd", "type": "string", "required": false, "description": "Optional working directory." },
+        { "name": "timeout_ms", "type": "int", "required": false, "description": "Execution timeout." },
+        { "name": "max_output_bytes", "type": "int", "required": false, "description": "Stdout/stderr cap." }
+      ],
+      "outputs": [
+        { "name": "exit_code", "type": "int", "description": "Exit code." },
+        { "name": "stdout", "type": "string", "description": "Truncated stdout." },
+        { "name": "stderr", "type": "string", "description": "Truncated stderr." },
+        { "name": "timed_out", "type": "bool", "description": "Whether timeout occurred." }
+      ],
+      "tags": ["linux", "proc"]
+    },
+    {
+      "id": "linux.git.status.v1",
+      "description": "Run git status --porcelain in a repository.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "repo_path", "type": "string", "required": true, "description": "Repository root path." }
+      ],
+      "outputs": [
+        { "name": "porcelain", "type": "string", "description": "Porcelain output." },
+        { "name": "clean", "type": "bool", "description": "True when no changes." }
+      ],
+      "tags": ["linux", "git"]
+    },
+    {
+      "id": "linux.git.clone.v1",
+      "description": "Clone a repository with git executable.",
+      "requiredAuthority": { "providerKind": "Embedded", "capabilities": ["ToolExecution"] },
+      "inputs": [
+        { "name": "url", "type": "string", "required": true, "description": "Git URL." },
+        { "name": "dest_path", "type": "string", "required": true, "description": "Destination path." },
+        { "name": "depth", "type": "int", "required": false, "description": "Optional clone depth." }
+      ],
+      "outputs": [
+        { "name": "dest_path", "type": "string", "description": "Destination path." },
+        { "name": "cloned", "type": "bool", "description": "Whether clone succeeded." }
+      ],
+      "tags": ["linux", "git"]
+    }
+  ]
+}

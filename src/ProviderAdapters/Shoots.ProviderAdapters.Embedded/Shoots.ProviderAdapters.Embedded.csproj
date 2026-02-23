@@ -7,9 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\\Shoots.ProviderAdapters.Abstractions\\Shoots.ProviderAdapters.Abstractions.csproj" />
-    <ProjectReference Include="..\\..\\Runtime\\Shoots.Runtime.Abstractions\\Shoots.Runtime.Abstractions.csproj" />
-    <ProjectReference Include="..\\..\\Contracts\\Shoots.Contracts.Core\\Shoots.Contracts.Core.csproj" />
+    <ProjectReference Include="..\Shoots.ProviderAdapters.Abstractions\Shoots.ProviderAdapters.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Runtime\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
+    <ProjectReference Include="..\..\Tools\Shoots.Tools.Abstractions\Shoots.Tools.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Tools\Shoots.Tools.Linux\Shoots.Tools.Linux.csproj" />
   </ItemGroup>
 
 </Project>
