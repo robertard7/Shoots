@@ -3277,6 +3277,40 @@
       ]
     },
     {
+      "id": "linux.sys.command_exists.v1",
+      "description": "Check whether command exists in PATH.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "command",
+          "type": "string",
+          "required": true,
+          "description": "Command name."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "exists",
+          "type": "bool",
+          "description": "Whether command exists."
+        },
+        {
+          "name": "path",
+          "type": "string",
+          "description": "Resolved path if found."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
       "id": "linux.sys.cpuinfo.v1",
       "description": "Read and summarize /proc/cpuinfo.",
       "requiredAuthority": {
@@ -3436,6 +3470,45 @@
           "name": "count",
           "type": "int",
           "description": "Line count."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "Whether output was truncated."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
+      "id": "linux.sys.tool_versions.v1",
+      "description": "Get tool versions for a requested tool list.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "tools",
+          "type": "array",
+          "required": true,
+          "description": "Tool names list."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "versions",
+          "type": "string",
+          "description": "Newline list tool=version."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Number of tools checked."
         },
         {
           "name": "truncated",

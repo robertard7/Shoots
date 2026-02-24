@@ -917,6 +917,49 @@ b.txt", changed.Outputs["files"]);
         finally { Directory.Delete(root, true); }
     }
 
+
+    [Fact]
+    public void Batch23_sys_command_exists_and_tool_versions_shapes_are_stable()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            var exists = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?>
+            {
+                ["command"] = "bash"
+            }, wo), ctx);
+            Assert.True(exists.Success);
+            Assert.True(Convert.ToBoolean(exists.Outputs["exists"]));
+
+            var missing = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?>
+            {
+                ["command"] = "definitely-not-a-real-command-xyz"
+            }, wo), ctx);
+            Assert.True(missing.Success);
+            Assert.False(Convert.ToBoolean(missing.Outputs["exists"]));
+
+            var versions = new LinuxSysToolVersionsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.tool_versions.v1"), new Dictionary<string, object?>
+            {
+                ["tools"] = new object?[] { "bash", "git", "definitely-not-a-real-command-xyz" }
+            }, wo), ctx);
+
+            Assert.True(versions.Success);
+            Assert.Equal(3, versions.Outputs["count"]);
+            var payload = Convert.ToString(versions.Outputs["versions"]) ?? string.Empty;
+            var lines = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var sorted = lines.OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+            Assert.Equal(sorted, lines);
+            Assert.Contains(lines, static l => l.StartsWith("definitely-not-a-real-command-xyz=not_found", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

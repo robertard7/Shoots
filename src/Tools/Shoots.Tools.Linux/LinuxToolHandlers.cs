@@ -130,6 +130,8 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxSysCpuinfoHandler(),
             new LinuxSysDiskFreeHandler(),
             new LinuxSysEnvDumpSafeHandler(),
+            new LinuxSysCommandExistsHandler(),
+            new LinuxSysToolVersionsHandler(),
             new LinuxHashFileSha256Handler(),
             new LinuxHashDirManifestHandler()
         });
@@ -2702,6 +2704,98 @@ public sealed class LinuxSysEnvDumpSafeHandler : IToolHandler
             .Select(key => $"{key}={Environment.GetEnvironmentVariable(key) ?? string.Empty}")
             .ToArray();
         return new ToolResult(Id, new Dictionary<string, object?> { ["env"] = string.Join("\n", lines) }, true);
+    }
+}
+
+public sealed class LinuxSysCommandExistsHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.command_exists.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var command = Convert.ToString(invocation.Bindings["command"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(command))
+                return ToolResultFactory.Error(Id, "sys.command_invalid", "Command is required.");
+
+            var proc = new LinuxProcExecHandler();
+            var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+            {
+                ["file"] = "which",
+                ["args"] = new object?[] { command },
+                ["timeout_ms"] = Math.Min(2000, ctx.MaxTimeoutMs)
+            }, invocation.WorkOrderId), ctx);
+
+            var exists = run.Success && Convert.ToInt32(run.Outputs["exit_code"]) == 0;
+            var resolved = exists ? (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty : string.Empty;
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["exists"] = exists,
+                ["path"] = resolved.Trim()
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "sys.command_exists_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxSysToolVersionsHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.tool_versions.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var tools = invocation.Bindings.TryGetValue("tools", out var listObj) && listObj is IEnumerable<object?> list
+                ? list.Select(static x => Convert.ToString(x) ?? string.Empty).Where(static x => x.Length > 0).Distinct(StringComparer.Ordinal).OrderBy(static x => x, StringComparer.Ordinal).ToArray()
+                : Array.Empty<string>();
+
+            var lines = new List<string>();
+            foreach (var tool in tools)
+            {
+                var check = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?> { ["command"] = tool }, invocation.WorkOrderId), ctx);
+                if (!check.Success || !(check.Outputs.TryGetValue("exists", out var exObj) && Convert.ToBoolean(exObj)))
+                {
+                    lines.Add($"{tool}=not_found");
+                    continue;
+                }
+
+                var proc = new LinuxProcExecHandler();
+                var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+                {
+                    ["file"] = tool,
+                    ["args"] = new object?[] { "--version" },
+                    ["timeout_ms"] = Math.Min(3000, ctx.MaxTimeoutMs),
+                    ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 8192)
+                }, invocation.WorkOrderId), ctx);
+
+                if (!run.Success)
+                {
+                    lines.Add($"{tool}=error");
+                    continue;
+                }
+
+                var stdout = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
+                var first = stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+                lines.Add($"{tool}={first.Trim()}");
+            }
+
+            var payload = string.Join("\n", lines.OrderBy(static x => x, StringComparer.Ordinal));
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["versions"] = ToolResultFactory.TruncateUtf8(payload, ctx.MaxBytesOut),
+                ["count"] = lines.Count,
+                ["truncated"] = Encoding.UTF8.GetByteCount(payload) > ctx.MaxBytesOut
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "sys.tool_versions_failed", ex.Message);
+        }
     }
 }
 
