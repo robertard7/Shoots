@@ -243,7 +243,7 @@ public sealed class LinuxToolsTests
             }, new WorkOrderId("wo")), ToolExecutionContext.Create(root, CancellationToken.None, allowNetwork: false));
 
             Assert.False(result.Success);
-            Assert.Equal("network_disabled", result.Outputs["error.code"]);
+            Assert.Equal("tool.network_disabled", result.Outputs["error.code"]);
         }
         finally
         {

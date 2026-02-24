@@ -47,6 +47,6 @@ public sealed class EmbeddedToolProviderClientTests
         Assert.Equal(ProviderExecutionResultKind.ToolExecuted, result.Kind);
         Assert.NotNull(result.ToolResult);
         Assert.False(result.ToolResult!.Success);
-        Assert.Equal("network_disabled", result.ToolResult.Outputs["error.code"]);
+        Assert.Equal("tool.network_disabled", result.ToolResult.Outputs["error.code"]);
     }
 }

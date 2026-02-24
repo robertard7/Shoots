@@ -798,7 +798,7 @@ public sealed class LinuxHttpGetTextHandler : IToolHandler
     public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
     {
         if (!ctx.AllowNetwork)
-            return ToolResultFactory.Error(Id, "network_disabled", "Network access is disabled for tool execution context.");
+            return ToolResultFactory.Error(Id, "tool.network_disabled", "Network access is disabled for tool execution context.");
 
         try
         {
