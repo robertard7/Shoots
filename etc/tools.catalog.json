@@ -3153,6 +3153,150 @@
       ]
     },
     {
+      "id": "linux.pkg.detect_manager.v1",
+      "description": "Detect available package manager.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "manager",
+          "type": "string",
+          "description": "Detected manager or none."
+        },
+        {
+          "name": "detected",
+          "type": "bool",
+          "description": "Whether manager detected."
+        }
+      ],
+      "tags": [
+        "linux",
+        "pkg"
+      ]
+    },
+    {
+      "id": "linux.pkg.install.v1",
+      "description": "Install packages using detected manager.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "packages",
+          "type": "array",
+          "required": true,
+          "description": "Packages list."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "installed",
+          "type": "string",
+          "description": "Installed package names newline list."
+        },
+        {
+          "name": "alreadyPresent",
+          "type": "string",
+          "description": "Already installed package names newline list."
+        },
+        {
+          "name": "failed",
+          "type": "string",
+          "description": "Failed package names newline list."
+        },
+        {
+          "name": "exitCode",
+          "type": "int",
+          "description": "Command exit code."
+        }
+      ],
+      "tags": [
+        "linux",
+        "pkg",
+        "net"
+      ]
+    },
+    {
+      "id": "linux.pkg.query_installed.v1",
+      "description": "Query installed packages with optional prefix.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "required": false,
+          "description": "Optional package name prefix."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "manager",
+          "type": "string",
+          "description": "Detected package manager."
+        },
+        {
+          "name": "packages",
+          "type": "string",
+          "description": "Installed package names newline list."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Matched package count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "pkg"
+      ]
+    },
+    {
+      "id": "linux.pkg.update_indexes.v1",
+      "description": "Update package indexes using detected manager.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "manager",
+          "type": "string",
+          "description": "Detected package manager."
+        },
+        {
+          "name": "updated",
+          "type": "bool",
+          "description": "Whether update command succeeded."
+        },
+        {
+          "name": "exitCode",
+          "type": "int",
+          "description": "Command exit code."
+        }
+      ],
+      "tags": [
+        "linux",
+        "pkg",
+        "net"
+      ]
+    },
+    {
       "id": "linux.proc.exec.v1",
       "description": "Execute a Linux process without shell expansion.",
       "requiredAuthority": {

@@ -132,6 +132,10 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxSysEnvDumpSafeHandler(),
             new LinuxSysCommandExistsHandler(),
             new LinuxSysToolVersionsHandler(),
+            new LinuxPkgDetectManagerHandler(),
+            new LinuxPkgUpdateIndexesHandler(),
+            new LinuxPkgInstallHandler(),
+            new LinuxPkgQueryInstalledHandler(),
             new LinuxHashFileSha256Handler(),
             new LinuxHashDirManifestHandler()
         });
@@ -2795,6 +2799,223 @@ public sealed class LinuxSysToolVersionsHandler : IToolHandler
         catch (Exception ex)
         {
             return ToolResultFactory.Error(Id, "sys.tool_versions_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxPkgDetectManagerHandler : IToolHandler
+{
+    public ToolId Id => new("linux.pkg.detect_manager.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var managers = new[] { "apt", "dnf", "yum", "pacman", "zypper", "apk" };
+            foreach (var manager in managers)
+            {
+                var check = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?>
+                {
+                    ["command"] = manager
+                }, invocation.WorkOrderId), ctx);
+                if (check.Success && Convert.ToBoolean(check.Outputs["exists"]))
+                    return new ToolResult(Id, new Dictionary<string, object?> { ["manager"] = manager, ["detected"] = true }, true);
+            }
+
+            return new ToolResult(Id, new Dictionary<string, object?> { ["manager"] = "none", ["detected"] = false }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "pkg.detect_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxPkgUpdateIndexesHandler : IToolHandler
+{
+    public ToolId Id => new("linux.pkg.update_indexes.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        if (!ctx.AllowNetwork)
+            return ToolResultFactory.Error(Id, "tool.network_disabled", "Network access is disabled for tool execution context.");
+
+        var managerResult = new LinuxPkgDetectManagerHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.detect_manager.v1"), new Dictionary<string, object?>(), invocation.WorkOrderId), ctx);
+        if (!managerResult.Success)
+            return managerResult;
+
+        var manager = Convert.ToString(managerResult.Outputs["manager"]) ?? "none";
+        if (manager == "none")
+            return ToolResultFactory.Error(Id, "tool.not_available", "No supported package manager found.");
+
+        var args = manager switch
+        {
+            "apt" => new object?[] { "update" },
+            "dnf" => new object?[] { "makecache" },
+            "yum" => new object?[] { "makecache" },
+            "pacman" => new object?[] { "-Sy" },
+            "zypper" => new object?[] { "refresh" },
+            "apk" => new object?[] { "update" },
+            _ => Array.Empty<object?>()
+        };
+
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = manager,
+            ["args"] = args,
+            ["timeout_ms"] = Math.Min(ctx.MaxTimeoutMs, 60000)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!run.Success)
+            return ToolResultFactory.Error(Id, "pkg.update_failed", Convert.ToString(run.Outputs["error.message"]) ?? "package index update failed");
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["manager"] = manager,
+            ["updated"] = Convert.ToInt32(run.Outputs["exit_code"]) == 0,
+            ["exitCode"] = Convert.ToInt32(run.Outputs["exit_code"])
+        }, true);
+    }
+}
+
+public sealed class LinuxPkgInstallHandler : IToolHandler
+{
+    public ToolId Id => new("linux.pkg.install.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        if (!ctx.AllowNetwork)
+            return ToolResultFactory.Error(Id, "tool.network_disabled", "Network access is disabled for tool execution context.");
+
+        try
+        {
+            var packages = invocation.Bindings.TryGetValue("packages", out var listObj) && listObj is IEnumerable<object?> list
+                ? list.Select(static x => Convert.ToString(x) ?? string.Empty)
+                    .Where(static x => x.Length > 0)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(static x => x, StringComparer.Ordinal)
+                    .ToArray()
+                : Array.Empty<string>();
+
+            if (packages.Length == 0)
+                return ToolResultFactory.Error(Id, "pkg.invalid_package", "At least one package is required.");
+
+            foreach (var pkg in packages)
+            {
+                if (pkg.Any(char.IsWhiteSpace) || pkg.Any(char.IsControl))
+                    return ToolResultFactory.Error(Id, "pkg.invalid_package", $"Invalid package token: {pkg}");
+            }
+
+            var managerResult = new LinuxPkgDetectManagerHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.detect_manager.v1"), new Dictionary<string, object?>(), invocation.WorkOrderId), ctx);
+            if (!managerResult.Success)
+                return managerResult;
+            var manager = Convert.ToString(managerResult.Outputs["manager"]) ?? "none";
+            if (manager == "none")
+                return ToolResultFactory.Error(Id, "tool.not_available", "No supported package manager found.");
+
+            var args = manager switch
+            {
+                "apt" => new object?[] { "install", "-y" }.Concat(packages.Cast<object?>()).ToArray(),
+                "dnf" => new object?[] { "install", "-y" }.Concat(packages.Cast<object?>()).ToArray(),
+                "yum" => new object?[] { "install", "-y" }.Concat(packages.Cast<object?>()).ToArray(),
+                "pacman" => new object?[] { "-S", "--noconfirm" }.Concat(packages.Cast<object?>()).ToArray(),
+                "zypper" => new object?[] { "install", "-y" }.Concat(packages.Cast<object?>()).ToArray(),
+                "apk" => new object?[] { "add" }.Concat(packages.Cast<object?>()).ToArray(),
+                _ => Array.Empty<object?>()
+            };
+
+            var proc = new LinuxProcExecHandler();
+            var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+            {
+                ["file"] = manager,
+                ["args"] = args,
+                ["timeout_ms"] = Math.Min(ctx.MaxTimeoutMs, 120000)
+            }, invocation.WorkOrderId), ctx);
+
+            var installed = Convert.ToInt32(run.Outputs["exit_code"]) == 0 ? packages : Array.Empty<string>();
+            var failed = Convert.ToInt32(run.Outputs["exit_code"]) == 0 ? Array.Empty<string>() : packages;
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["installed"] = string.Join("
+", installed),
+                ["alreadyPresent"] = string.Empty,
+                ["failed"] = string.Join("
+", failed),
+                ["exitCode"] = Convert.ToInt32(run.Outputs["exit_code"])
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "pkg.install_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxPkgQueryInstalledHandler : IToolHandler
+{
+    public ToolId Id => new("linux.pkg.query_installed.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var managerResult = new LinuxPkgDetectManagerHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.detect_manager.v1"), new Dictionary<string, object?>(), invocation.WorkOrderId), ctx);
+            if (!managerResult.Success)
+                return managerResult;
+            var manager = Convert.ToString(managerResult.Outputs["manager"]) ?? "none";
+            if (manager == "none")
+                return ToolResultFactory.Error(Id, "tool.not_available", "No supported package manager found.");
+
+            var prefix = Convert.ToString(invocation.Bindings.TryGetValue("prefix", out var p) ? p : string.Empty) ?? string.Empty;
+
+            var args = manager switch
+            {
+                "apt" => new object?[] { "list", "--installed" },
+                "dnf" => new object?[] { "list", "installed" },
+                "yum" => new object?[] { "list", "installed" },
+                "pacman" => new object?[] { "-Q" },
+                "zypper" => new object?[] { "search", "--installed-only" },
+                "apk" => new object?[] { "info", "-e" },
+                _ => Array.Empty<object?>()
+            };
+
+            var proc = new LinuxProcExecHandler();
+            var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+            {
+                ["file"] = manager,
+                ["args"] = args,
+                ["timeout_ms"] = Math.Min(ctx.MaxTimeoutMs, 15000),
+                ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 65536)
+            }, invocation.WorkOrderId), ctx);
+
+            if (!run.Success)
+                return ToolResultFactory.Error(Id, "pkg.query_failed", Convert.ToString(run.Outputs["error.message"]) ?? "package query failed");
+
+            var names = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty)
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(static line => line.Trim())
+                .Where(static line => line.Length > 0)
+                .Select(static line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty)
+                .Where(static line => line.Length > 0)
+                .Where(name => string.IsNullOrEmpty(prefix) || name.StartsWith(prefix, StringComparison.Ordinal))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(static x => x, StringComparer.Ordinal)
+                .ToArray();
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["manager"] = manager,
+                ["packages"] = string.Join("
+", names),
+                ["count"] = names.Length
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "pkg.query_failed", ex.Message);
         }
     }
 }

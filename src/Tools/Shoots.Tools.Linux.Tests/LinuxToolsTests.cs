@@ -960,6 +960,57 @@ b.txt", changed.Outputs["files"]);
         }
     }
 
+
+    [Fact]
+    public void Batch24_pkg_tools_network_gate_and_schema_are_stable()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var offline = ToolExecutionContext.Create(root, CancellationToken.None, allowNetwork: false);
+
+            var blockedUpdate = new LinuxPkgUpdateIndexesHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.update_indexes.v1"), new Dictionary<string, object?>(), wo), offline);
+            Assert.False(blockedUpdate.Success);
+            Assert.Equal("tool.network_disabled", blockedUpdate.Outputs["error.code"]);
+
+            var blockedInstall = new LinuxPkgInstallHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.install.v1"), new Dictionary<string, object?>
+            {
+                ["packages"] = new object?[] { "git" }
+            }, wo), offline);
+            Assert.False(blockedInstall.Success);
+            Assert.Equal("tool.network_disabled", blockedInstall.Outputs["error.code"]);
+
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+            var detect = new LinuxPkgDetectManagerHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.detect_manager.v1"), new Dictionary<string, object?>(), wo), ctx);
+            Assert.True(detect.Success);
+            Assert.True(detect.Outputs.ContainsKey("manager"));
+            Assert.True(detect.Outputs.ContainsKey("detected"));
+
+            var query = new LinuxPkgQueryInstalledHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.query_installed.v1"), new Dictionary<string, object?>
+            {
+                ["prefix"] = "git"
+            }, wo), ctx);
+
+            if (query.Success)
+            {
+                Assert.True(query.Outputs.ContainsKey("packages"));
+                var list = (Convert.ToString(query.Outputs["packages"]) ?? string.Empty)
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                var sorted = list.OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+                Assert.Equal(sorted, list);
+            }
+            else
+            {
+                Assert.Equal("tool.not_available", query.Outputs["error.code"]);
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
