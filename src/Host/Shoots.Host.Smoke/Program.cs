@@ -45,12 +45,12 @@ var resume = orchestrator.Run(plan, new RuntimeRunOptions(ResumeMode.InjectDecis
 if (resume.State.Status != RoutingStatus.Completed)
     throw new InvalidOperationException($"Expected COMPLETE after resume, got {resume.State.Status}.");
 
-if (resume.ToolResults.Count != 2)
-    throw new InvalidOperationException("Expected write_text then read_text tool chain.");
+if (resume.ToolResults.Count != 3)
+    throw new InvalidOperationException("Expected write_text then apply_unified_diff then read_text tool chain.");
 
 var readResult = resume.ToolResults.Last();
-if (!readResult.Outputs.TryGetValue("text", out var readText) || !string.Equals(Convert.ToString(readText), "smoke", StringComparison.Ordinal))
-    throw new InvalidOperationException("Expected read_text output to match written content.");
+if (!readResult.Outputs.TryGetValue("text", out var readText) || !string.Equals(Convert.ToString(readText), "smoke-patched", StringComparison.Ordinal))
+    throw new InvalidOperationException("Expected read_text output to match patched content.");
 
 var tracePath = Path.GetFullPath(Path.Combine(".state", "trace", $"{workOrderId}.trace.json"));
 var artifactDir = Path.GetFullPath(Path.Combine(".state", "artifacts", workOrderId));
@@ -64,7 +64,7 @@ if (!Directory.Exists(artifactDir))
     throw new InvalidOperationException("Expected artifacts directory.");
 
 Console.WriteLine($"Smoke OK. WorkOrder={workOrderId}");
-Console.WriteLine("Tools chain: linux.fs.write_text.v1 -> linux.fs.read_text.v1");
+Console.WriteLine("Tools chain: linux.fs.write_text.v1 -> linux.text.apply_unified_diff.v1 -> linux.fs.read_text.v1");
 Console.WriteLine($"Trace={tracePath}");
 Console.WriteLine($"Artifacts={artifactDir}");
 return 0;
@@ -74,7 +74,8 @@ static BuildPlan BuildPlan(string workOrderId)
     var workOrder = new WorkOrder(new WorkOrderId(workOrderId), "smoke request", "smoke intent", Array.Empty<string>(), Array.Empty<string>());
     var rules = new[]
     {
-        new RouteRule("select-write", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "select-read" }, DecisionPolicy.Hard),
+        new RouteRule("select-write", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "select-patch" }, DecisionPolicy.Hard),
+        new RouteRule("select-patch", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Step, new[] { "select-read" }, DecisionPolicy.Hard),
         new RouteRule("select-read", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Step, new[] { "finish" }, DecisionPolicy.Hard),
         new RouteRule("finish", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
     };
@@ -84,6 +85,7 @@ static BuildPlan BuildPlan(string workOrderId)
     var steps = new BuildStep[]
     {
         new RouteStep("select-write", "Select write tool", "select-write", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
+        new RouteStep("select-patch", "Select patch tool", "select-patch", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
         new RouteStep("select-read", "Select read tool", "select-read", RouteIntent.SelectTool, DecisionOwner.Ai, workOrder.Id),
         new RouteStep("finish", "Finish", "finish", RouteIntent.Terminate, DecisionOwner.Rule, workOrder.Id)
     };
@@ -104,6 +106,18 @@ file sealed class SmokeToolRegistry : IToolRegistry
                 {
                     new ToolInputSpec("path", "string", true, "path"),
                     new ToolInputSpec("text", "string", true, "text")
+                },
+                Array.Empty<ToolOutputSpec>(),
+                Array.Empty<string>())),
+        new ToolRegistryEntry(
+            new ToolSpec(
+                new ToolId("linux.text.apply_unified_diff.v1"),
+                "Smoke patch tool",
+                new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.Execute),
+                new[]
+                {
+                    new ToolInputSpec("base_dir_rel", "string", true, "path"),
+                    new ToolInputSpec("diff_text", "string", true, "diff")
                 },
                 Array.Empty<ToolOutputSpec>(),
                 Array.Empty<string>())),
@@ -142,6 +156,15 @@ file sealed class WaitingThenDecisionProvider : IAiDecisionProvider
             {
                 ["path"] = "artifacts/smoke/local/tool-smoke.txt",
                 ["text"] = "smoke"
+            });
+        }
+
+        if (_calls == 3)
+        {
+            return new ToolSelectionDecision(new ToolId("linux.text.apply_unified_diff.v1"), new Dictionary<string, object?>
+            {
+                ["base_dir_rel"] = "artifacts/smoke/local",
+                ["diff_text"] = "--- a/tool-smoke.txt\n+++ b/tool-smoke.txt\n@@ -1 +1 @@\n-smoke\n+smoke-patched\n"
             });
         }
 

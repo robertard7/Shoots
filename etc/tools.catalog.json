@@ -952,6 +952,47 @@
       ]
     },
     {
+      "id": "linux.fs.chmod.v1",
+      "description": "Change file mode bits.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Path."
+        },
+        {
+          "name": "mode_octal",
+          "type": "string",
+          "required": true,
+          "description": "Octal mode."
+        },
+        {
+          "name": "recursive",
+          "type": "bool",
+          "required": false,
+          "description": "Recurse directories."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "changed",
+          "type": "bool",
+          "description": "Whether chmod succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
       "id": "linux.fs.copy.v1",
       "description": "Copy file or directory within repository root.",
       "requiredAuthority": {
@@ -1041,6 +1082,46 @@
           "name": "created",
           "type": "bool",
           "description": "Whether directory was newly created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.ensure_file.v1",
+      "description": "Ensure file exists.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Path."
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": false,
+          "description": "Optional content."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "Whether file was created."
+        },
+        {
+          "name": "exists",
+          "type": "bool",
+          "description": "Whether file exists."
         }
       ],
       "tags": [
@@ -1392,6 +1473,64 @@
       ]
     },
     {
+      "id": "linux.fs.readlink.v1",
+      "description": "Read symbolic link target.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Symlink path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "target",
+          "type": "string",
+          "description": "Symlink target."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.realpath.v1",
+      "description": "Resolve canonical path.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "real_rel",
+          "type": "string",
+          "description": "Resolved repo-relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
       "id": "linux.fs.rm.v1",
       "description": "Remove file or directory from repository root.",
       "requiredAuthority": {
@@ -1482,6 +1621,41 @@
       ]
     },
     {
+      "id": "linux.fs.symlink.v1",
+      "description": "Create symbolic link.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "link_path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Link path."
+        },
+        {
+          "name": "target_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "linked",
+          "type": "bool",
+          "description": "Whether link was created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
       "id": "linux.fs.temp_dir.v1",
       "description": "Create deterministic temp subdirectory by seed.",
       "requiredAuthority": {
@@ -1514,6 +1688,35 @@
           "name": "created",
           "type": "bool",
           "description": "Whether directory exists."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.touch.v1",
+      "description": "Create file or update timestamp.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "touched",
+          "type": "bool",
+          "description": "Touch success."
         }
       ],
       "tags": [
@@ -1887,6 +2090,54 @@
       ]
     },
     {
+      "id": "linux.git.clone_depth.v1",
+      "description": "Clone git repository with depth.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "url",
+          "type": "string",
+          "required": true,
+          "description": "Repository URL."
+        },
+        {
+          "name": "dest_rel",
+          "type": "string",
+          "required": true,
+          "description": "Destination path."
+        },
+        {
+          "name": "branch",
+          "type": "string",
+          "required": false,
+          "description": "Branch name."
+        },
+        {
+          "name": "depth",
+          "type": "int",
+          "required": false,
+          "description": "Clone depth."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cloned",
+          "type": "bool",
+          "description": "Whether clone succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git",
+        "net"
+      ]
+    },
+    {
       "id": "linux.git.commit.v1",
       "description": "Run non-interactive git commit.",
       "requiredAuthority": {
@@ -1914,6 +2165,47 @@
           "name": "committed",
           "type": "bool",
           "description": "Whether commit succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.commit_amend.v1",
+      "description": "Amend latest git commit.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "message",
+          "type": "string",
+          "required": false,
+          "description": "Optional message."
+        },
+        {
+          "name": "no_edit",
+          "type": "bool",
+          "required": false,
+          "description": "Keep message."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amended",
+          "type": "bool",
+          "description": "Whether amend succeeded."
         }
       ],
       "tags": [
@@ -2440,6 +2732,47 @@
       ]
     },
     {
+      "id": "linux.git.remote_set_url.v1",
+      "description": "Set git remote URL.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Remote name."
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "required": true,
+          "description": "Remote URL."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "set",
+          "type": "bool",
+          "description": "Whether remote URL was set."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
       "id": "linux.git.reset_hard.v1",
       "description": "Run git reset --hard.",
       "requiredAuthority": {
@@ -2570,6 +2903,47 @@
           "name": "clean",
           "type": "bool",
           "description": "Whether clean."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.submodule_update.v1",
+      "description": "Update git submodules.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        },
+        {
+          "name": "init",
+          "type": "bool",
+          "required": false,
+          "description": "Initialize submodules."
+        },
+        {
+          "name": "recursive",
+          "type": "bool",
+          "required": false,
+          "description": "Recurse submodules."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "updated",
+          "type": "bool",
+          "description": "Whether update succeeded."
         }
       ],
       "tags": [
@@ -2903,6 +3277,72 @@
       ]
     },
     {
+      "id": "linux.sys.cpuinfo.v1",
+      "description": "Read and summarize /proc/cpuinfo.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "cpuinfo",
+          "type": "string",
+          "description": "cpuinfo text."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "CPU count."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "Whether output was truncated."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
+      "id": "linux.sys.disk_free.v1",
+      "description": "Get free/total disk bytes.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": false,
+          "description": "Path on target drive."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "bytes_free",
+          "type": "long",
+          "description": "Free bytes."
+        },
+        {
+          "name": "bytes_total",
+          "type": "long",
+          "description": "Total bytes."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
       "id": "linux.sys.disk_usage.v1",
       "description": "Deterministic disk usage listing.",
       "requiredAuthority": {
@@ -2948,6 +3388,35 @@
       ]
     },
     {
+      "id": "linux.sys.env_dump_safe.v1",
+      "description": "Dump allowlisted environment variables.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "allowlist",
+          "type": "string",
+          "required": false,
+          "description": "Allowlist newline list."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "env",
+          "type": "string",
+          "description": "Sorted KEY=VALUE lines."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
       "id": "linux.sys.meminfo.v1",
       "description": "Parse /proc/meminfo deterministically.",
       "requiredAuthority": {
@@ -2980,6 +3449,149 @@
       ]
     },
     {
+      "id": "linux.sys.uname.v1",
+      "description": "Run uname command.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "args",
+          "type": "string",
+          "required": false,
+          "description": "uname args."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "uname",
+          "type": "string",
+          "description": "uname output."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
+      "id": "linux.text.apply_unified_diff.v1",
+      "description": "Apply unified diff to files.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "base_dir_rel",
+          "type": "string",
+          "required": true,
+          "description": "Base directory."
+        },
+        {
+          "name": "diff_text",
+          "type": "string",
+          "required": true,
+          "description": "Unified diff text."
+        },
+        {
+          "name": "strip",
+          "type": "int",
+          "required": false,
+          "description": "Path strip components."
+        },
+        {
+          "name": "max_files",
+          "type": "int",
+          "required": false,
+          "description": "Maximum files to patch."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "applied",
+          "type": "bool",
+          "description": "Whether patch applied."
+        },
+        {
+          "name": "files_changed",
+          "type": "int",
+          "description": "Changed file count."
+        },
+        {
+          "name": "files",
+          "type": "string",
+          "description": "Changed files newline list."
+        },
+        {
+          "name": "rejected",
+          "type": "bool",
+          "description": "Whether patch was rejected."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.extract_between_markers.v1",
+      "description": "Extract text between markers.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "File path."
+        },
+        {
+          "name": "start_marker",
+          "type": "string",
+          "required": true,
+          "description": "Start marker."
+        },
+        {
+          "name": "end_marker",
+          "type": "string",
+          "required": true,
+          "description": "End marker."
+        },
+        {
+          "name": "include_markers",
+          "type": "bool",
+          "required": false,
+          "description": "Include marker text."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "type": "string",
+          "description": "Extracted text."
+        },
+        {
+          "name": "found",
+          "type": "bool",
+          "description": "Whether marker range was found."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
       "id": "linux.text.from_json.v1",
       "description": "Parse JSON and return top-level keys.",
       "requiredAuthority": {
@@ -3006,6 +3618,98 @@
           "name": "count",
           "type": "int",
           "description": "Key count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.insert_after_marker.v1",
+      "description": "Insert text after marker.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "File path."
+        },
+        {
+          "name": "marker",
+          "type": "string",
+          "required": true,
+          "description": "Marker text."
+        },
+        {
+          "name": "insert_text",
+          "type": "string",
+          "required": true,
+          "description": "Inserted text."
+        },
+        {
+          "name": "once",
+          "type": "bool",
+          "required": false,
+          "description": "Insert once only."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "written",
+          "type": "bool",
+          "description": "Whether file changed."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Insert count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.line_ending_normalize.v1",
+      "description": "Normalize line endings in a file.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "File path."
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": false,
+          "description": "lf or crlf."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "normalized",
+          "type": "bool",
+          "description": "Normalization completed."
+        },
+        {
+          "name": "changed",
+          "type": "bool",
+          "description": "Whether content changed."
         }
       ],
       "tags": [
