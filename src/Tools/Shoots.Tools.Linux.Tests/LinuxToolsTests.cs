@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using System.Security.Cryptography;
 using Shoots.Contracts.Core;
 using Shoots.Tools.Abstractions;
 
@@ -463,11 +464,14 @@ public sealed class LinuxToolsTests
 
             var inputs = tool.GetProperty("inputs").EnumerateArray().ToArray();
             var outputs = tool.GetProperty("outputs").EnumerateArray().ToArray();
+            Assert.True(outputs.Length >= 1);
             Assert.All(inputs, input =>
             {
                 Assert.False(string.IsNullOrWhiteSpace(input.GetProperty("name").GetString()));
                 Assert.False(string.IsNullOrWhiteSpace(input.GetProperty("type").GetString()));
                 Assert.False(string.IsNullOrWhiteSpace(input.GetProperty("description").GetString()));
+                Assert.True(input.TryGetProperty("required", out var required));
+                Assert.True(required.ValueKind is JsonValueKind.True or JsonValueKind.False);
             });
             Assert.All(outputs, output =>
             {
@@ -476,6 +480,16 @@ public sealed class LinuxToolsTests
                 Assert.False(string.IsNullOrWhiteSpace(output.GetProperty("description").GetString()));
             });
         });
+    }
+
+    [Fact]
+    public void Catalog_hash_is_reported_for_release_notes()
+    {
+        var catalogPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "etc", "tools.catalog.json");
+        var bytes = File.ReadAllBytes(catalogPath);
+        var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+        Assert.Matches(@"^[0-9a-f]{64}$", hash);
     }
 
     [Fact]
