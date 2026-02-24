@@ -49,4 +49,48 @@ public sealed class EmbeddedToolProviderClientTests
         Assert.False(result.ToolResult!.Success);
         Assert.Equal("tool.network_disabled", result.ToolResult.Outputs["error.code"]);
     }
+
+
+    [Fact]
+    public async Task Missing_required_binding_returns_bindings_invalid()
+    {
+        var client = new EmbeddedToolProviderClient(Directory.GetCurrentDirectory());
+
+        var result = await client.ExecuteAsync(new ProviderExecutionEnvelope(
+            "req-3",
+            ProviderExecutionEnvelopeKind.Tool,
+            new ToolId("linux.fs.write_text.v1"),
+            new Dictionary<string, object?> { ["path"] = "tmp/a.txt" },
+            null,
+            null,
+            new Dictionary<string, object?>()),
+            CancellationToken.None);
+
+        Assert.Equal(ProviderExecutionResultKind.ToolExecuted, result.Kind);
+        Assert.NotNull(result.ToolResult);
+        Assert.False(result.ToolResult!.Success);
+        Assert.Equal("tool.bindings_invalid", result.ToolResult.Outputs["error.code"]);
+    }
+
+    [Fact]
+    public async Task Unknown_binding_returns_bindings_invalid()
+    {
+        var client = new EmbeddedToolProviderClient(Directory.GetCurrentDirectory());
+
+        var result = await client.ExecuteAsync(new ProviderExecutionEnvelope(
+            "req-4",
+            ProviderExecutionEnvelopeKind.Tool,
+            new ToolId("linux.fs.read_text.v1"),
+            new Dictionary<string, object?> { ["path"] = "tmp/a.txt", ["nope"] = true },
+            null,
+            null,
+            new Dictionary<string, object?>()),
+            CancellationToken.None);
+
+        Assert.Equal(ProviderExecutionResultKind.ToolExecuted, result.Kind);
+        Assert.NotNull(result.ToolResult);
+        Assert.False(result.ToolResult!.Success);
+        Assert.Equal("tool.bindings_invalid", result.ToolResult.Outputs["error.code"]);
+    }
+
 }
