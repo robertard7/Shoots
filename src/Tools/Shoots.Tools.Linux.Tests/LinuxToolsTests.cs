@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Security.Cryptography;
+using System.Reflection;
 using Shoots.Contracts.Core;
 using Shoots.Tools.Abstractions;
 
@@ -501,6 +502,21 @@ public sealed class LinuxToolsTests
 
         Assert.Equal(ids.Length, ids.Distinct(StringComparer.Ordinal).Count());
         Assert.All(ids, id => Assert.NotNull(registry.Resolve(new ToolId(id))));
+    }
+
+
+    [Fact]
+    public void Registry_does_not_expose_handler_ids_missing_from_catalog()
+    {
+        var entries = LinuxToolCatalog.LoadEntries(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "etc", "tools.catalog.json"));
+        var catalogIds = entries.Select(e => e.Spec.ToolId.Value).ToHashSet(StringComparer.Ordinal);
+        var registry = LinuxToolHandlerRegistry.CreateDefault();
+
+        var handlersField = typeof(LinuxToolHandlerRegistry).GetField("_handlers", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(handlersField);
+        var handlers = Assert.IsType<Dictionary<string, IToolHandler>>(handlersField!.GetValue(registry));
+
+        Assert.All(handlers.Keys, id => Assert.Contains(id, catalogIds));
     }
 
     [Fact]
