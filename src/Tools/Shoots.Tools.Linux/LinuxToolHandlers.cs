@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Text;
 using Shoots.Contracts.Core;
 using Shoots.Tools.Abstractions;
@@ -42,6 +43,12 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxFsRmHandler(),
             new LinuxFsStatHandler(),
             new LinuxFsWriteTextHandler(),
+            new LinuxFsTouchHandler(),
+            new LinuxFsEnsureFileHandler(),
+            new LinuxFsChmodHandler(),
+            new LinuxFsSymlinkHandler(),
+            new LinuxFsReadlinkHandler(),
+            new LinuxFsRealpathHandler(),
             new LinuxGitAddHandler(),
             new LinuxGitCheckoutHandler(),
             new LinuxGitCloneHandler(),
@@ -60,6 +67,10 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxProcExecHandler(),
             new LinuxProcWhichHandler(),
             new LinuxTextReplaceHandler(),
+            new LinuxTextApplyUnifiedDiffHandler(),
+            new LinuxTextExtractBetweenMarkersHandler(),
+            new LinuxTextInsertAfterMarkerHandler(),
+            new LinuxTextLineEndingNormalizeHandler(),
             new LinuxGitInitHandler(),
             new LinuxGitBranchListHandler(),
             new LinuxGitMergeHandler(),
@@ -99,6 +110,10 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxGitPushTagHandler(),
             new LinuxGitFetchAllHandler(),
             new LinuxGitPullRebaseFfOnlyHandler(),
+            new LinuxGitCloneDepthHandler(),
+            new LinuxGitSubmoduleUpdateHandler(),
+            new LinuxGitRemoteSetUrlHandler(),
+            new LinuxGitCommitAmendHandler(),
             new LinuxGitBranchCreateHandler(),
             new LinuxGitBranchDeleteHandler(),
             new LinuxGitTagListHandler(),
@@ -111,9 +126,32 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxBuildCMakeInstallHandler(),
             new LinuxSysDiskUsageHandler(),
             new LinuxSysMemInfoHandler(),
+            new LinuxSysUnameHandler(),
+            new LinuxSysCpuinfoHandler(),
+            new LinuxSysDiskFreeHandler(),
+            new LinuxSysEnvDumpSafeHandler(),
+            new LinuxSysCommandExistsHandler(),
+            new LinuxSysToolVersionsHandler(),
+            new LinuxPkgDetectManagerHandler(),
+            new LinuxPkgUpdateIndexesHandler(),
+            new LinuxPkgInstallHandler(),
+            new LinuxPkgQueryInstalledHandler(),
             new LinuxHashFileSha256Handler(),
             new LinuxHashDirManifestHandler()
         });
+}
+
+internal static class LinuxTextPatchUtil
+{
+    public static string StripPrefix(string path, int strip)
+    {
+        var normalized = path.Replace('\\', '/');
+        if (normalized.StartsWith("a/", StringComparison.Ordinal) || normalized.StartsWith("b/", StringComparison.Ordinal))
+            normalized = normalized[2..];
+        var parts = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (strip <= 0) return string.Join('/', parts);
+        return strip >= parts.Length ? string.Empty : string.Join('/', parts.Skip(strip));
+    }
 }
 
 internal static class ToolResultFactory
@@ -560,6 +598,201 @@ public sealed class LinuxTextReplaceHandler : IToolHandler
 
         builder.Append(text, start, text.Length - start);
         return builder.ToString();
+    }
+}
+
+
+public sealed class LinuxTextApplyUnifiedDiffHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.apply_unified_diff.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var baseDirRel = Convert.ToString(invocation.Bindings["base_dir_rel"]) ?? ".";
+            var diffText = Convert.ToString(invocation.Bindings["diff_text"]) ?? string.Empty;
+            var strip = invocation.Bindings.TryGetValue("strip", out var s) ? Math.Max(0, Convert.ToInt32(s)) : 0;
+            var maxFiles = invocation.Bindings.TryGetValue("max_files", out var mf) ? Math.Max(1, Convert.ToInt32(mf)) : 200;
+            var entries = new List<(string Path, string Text)>();
+            var lines = diffText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+            var i = 0;
+            while (i < lines.Length)
+            {
+                if (!lines[i].StartsWith("--- ", StringComparison.Ordinal)) { i++; continue; }
+                if (i + 1 >= lines.Length || !lines[i + 1].StartsWith("+++ ", StringComparison.Ordinal))
+                    return ToolResultFactory.Error(Id, "text.patch_invalid", "Invalid unified diff header.");
+
+                var newPathRaw = lines[i + 1][4..].Trim();
+                var pathRel = LinuxTextPatchUtil.StripPrefix(newPathRaw, strip);
+                if (string.IsNullOrWhiteSpace(pathRel))
+                    return ToolResultFactory.Error(Id, "text.patch_invalid", "Invalid patch path.");
+
+                var fullPath = ToolPath.ResolveWithinRoot(ctx, Path.Combine(baseDirRel, pathRel));
+                var finalRel = ToolPath.ToRepoRelative(ctx, fullPath);
+                var old = File.Exists(fullPath) ? File.ReadAllText(fullPath, Encoding.UTF8) : string.Empty;
+                var originalLines = old.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n').ToList();
+                var output = new List<string>();
+                var sourceIndex = 0;
+                i += 2;
+
+                while (i < lines.Length && !lines[i].StartsWith("--- ", StringComparison.Ordinal))
+                {
+                    var line = lines[i];
+                    if (!line.StartsWith("@@ ", StringComparison.Ordinal)) { i++; continue; }
+                    var m = Regex.Match(line, "@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@");
+                    if (!m.Success)
+                        return ToolResultFactory.Error(Id, "text.patch_invalid", "Invalid hunk header.");
+
+                    var startOld = int.Parse(m.Groups[1].Value);
+                    while (sourceIndex < startOld - 1 && sourceIndex < originalLines.Count)
+                        output.Add(originalLines[sourceIndex++]);
+
+                    i++;
+                    while (i < lines.Length && !lines[i].StartsWith("@@ ", StringComparison.Ordinal) && !lines[i].StartsWith("--- ", StringComparison.Ordinal))
+                    {
+                        var h = lines[i];
+                        if (h.Length == 0) { i++; continue; }
+                        if (h[0] == ' ')
+                        {
+                            var expected = h[1..];
+                            if (sourceIndex >= originalLines.Count || !string.Equals(originalLines[sourceIndex], expected, StringComparison.Ordinal))
+                                return ToolResultFactory.Error(Id, "text.patch_apply_failed", "Patch context mismatch.");
+                            output.Add(originalLines[sourceIndex++]);
+                        }
+                        else if (h[0] == '-')
+                        {
+                            var expected = h[1..];
+                            if (sourceIndex >= originalLines.Count || !string.Equals(originalLines[sourceIndex], expected, StringComparison.Ordinal))
+                                return ToolResultFactory.Error(Id, "text.patch_apply_failed", "Patch removal mismatch.");
+                            sourceIndex++;
+                        }
+                        else if (h[0] == '+')
+                        {
+                            output.Add(h[1..]);
+                        }
+
+                        i++;
+                    }
+                }
+
+                while (sourceIndex < originalLines.Count)
+                    output.Add(originalLines[sourceIndex++]);
+                entries.Add((finalRel, string.Join("\n", output)));
+            }
+
+            if (entries.Count == 0)
+                return ToolResultFactory.Error(Id, "text.patch_invalid", "No patch entries found.");
+            if (entries.Count > maxFiles)
+                return ToolResultFactory.Error(Id, "text.patch_apply_failed", "Patch exceeds max_files.");
+
+            foreach (var e in entries.OrderBy(static x => x.Path, StringComparer.Ordinal))
+            {
+                var full = ToolPath.ResolveWithinRoot(ctx, e.Path);
+                Directory.CreateDirectory(Path.GetDirectoryName(full) ?? ctx.RepoRoot);
+                File.WriteAllText(full, e.Text, Encoding.UTF8);
+            }
+
+            var ordered = entries.Select(static e => e.Path).Distinct(StringComparer.Ordinal).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["applied"] = true,
+                ["files_changed"] = ordered.Length,
+                ["files"] = string.Join("\n", ordered),
+                ["rejected"] = false
+            }, true);
+        }
+        catch (InvalidOperationException)
+        {
+            return ToolResultFactory.Error(Id, "text.patch_path_escape", "Patch path escapes repo root.");
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "text.patch_apply_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxTextExtractBetweenMarkersHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.extract_between_markers.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
+            var startMarker = Convert.ToString(invocation.Bindings["start_marker"]) ?? string.Empty;
+            var endMarker = Convert.ToString(invocation.Bindings["end_marker"]) ?? string.Empty;
+            var includeMarkers = invocation.Bindings.TryGetValue("include_markers", out var im) && Convert.ToBoolean(im);
+            var text = File.ReadAllText(path, Encoding.UTF8);
+            var start = text.IndexOf(startMarker, StringComparison.Ordinal);
+            if (start < 0)
+                return ToolResultFactory.Error(Id, "text.marker_not_found", "Start marker not found.");
+            var end = text.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
+            if (end < 0)
+                return ToolResultFactory.Error(Id, "text.marker_not_found", "End marker not found.");
+            var segment = includeMarkers ? text[start..(end + endMarker.Length)] : text[(start + startMarker.Length)..end];
+            return new ToolResult(Id, new Dictionary<string, object?> { ["text"] = segment, ["found"] = true }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "fs.read_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxTextInsertAfterMarkerHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.insert_after_marker.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
+            var marker = Convert.ToString(invocation.Bindings["marker"]) ?? string.Empty;
+            var insertText = Convert.ToString(invocation.Bindings["insert_text"]) ?? string.Empty;
+            var once = invocation.Bindings.TryGetValue("once", out var o) && Convert.ToBoolean(o);
+            var text = File.ReadAllText(path, Encoding.UTF8);
+            var idx = text.IndexOf(marker, StringComparison.Ordinal);
+            if (idx < 0)
+                return ToolResultFactory.Error(Id, "text.marker_not_found", "Marker not found.");
+            if (once && text.Contains(marker + insertText, StringComparison.Ordinal))
+                return new ToolResult(Id, new Dictionary<string, object?> { ["written"] = false, ["count"] = 0 }, true);
+            var updated = text.Insert(idx + marker.Length, insertText);
+            File.WriteAllText(path, updated, Encoding.UTF8);
+            return new ToolResult(Id, new Dictionary<string, object?> { ["written"] = true, ["count"] = 1 }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "fs.write_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxTextLineEndingNormalizeHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.line_ending_normalize.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
+            var mode = (Convert.ToString(invocation.Bindings.TryGetValue("mode", out var m) ? m : "lf") ?? "lf").ToLowerInvariant();
+            var source = File.ReadAllText(path, Encoding.UTF8);
+            var normalized = source.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal);
+            var converted = mode == "crlf" ? normalized.Replace("\n", "\r\n", StringComparison.Ordinal) : normalized;
+            var changed = !string.Equals(source, converted, StringComparison.Ordinal);
+            if (changed)
+                File.WriteAllText(path, converted, Encoding.UTF8);
+            return new ToolResult(Id, new Dictionary<string, object?> { ["normalized"] = true, ["changed"] = changed }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "fs.write_failed", ex.Message);
+        }
     }
 }
 
@@ -1650,7 +1883,7 @@ public sealed class LinuxFsPathJoinHandler : IToolHandler
         var joined = parts.Length == 0 ? string.Empty : Path.Combine(parts);
         return new ToolResult(Id, new Dictionary<string, object?>
         {
-            ["path"] = joined.Replace('\', '/')
+            ["path"] = joined.Replace('\\', '/')
         }, true);
     }
 }
@@ -2209,6 +2442,584 @@ public sealed class LinuxSysMemInfoHandler : IToolHandler
     }
 }
 
+
+public sealed class LinuxFsTouchHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.touch.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ctx.RepoRoot);
+            if (!File.Exists(path)) File.WriteAllText(path, string.Empty, Encoding.UTF8);
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+            return new ToolResult(Id, new Dictionary<string, object?> { ["touched"] = true }, true);
+        }
+        catch (Exception ex) { return ToolResultFactory.Error(Id, "fs.write_failed", ex.Message); }
+    }
+}
+
+public sealed class LinuxFsEnsureFileHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.ensure_file.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
+            var hasContent = invocation.Bindings.TryGetValue("content", out var c);
+            var content = Convert.ToString(c) ?? string.Empty;
+            var existed = File.Exists(path);
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ctx.RepoRoot);
+            if (!existed) File.WriteAllText(path, hasContent ? content : string.Empty, Encoding.UTF8);
+            else if (hasContent) File.WriteAllText(path, content, Encoding.UTF8);
+            return new ToolResult(Id, new Dictionary<string, object?> { ["created"] = !existed, ["exists"] = true }, true);
+        }
+        catch (Exception ex) { return ToolResultFactory.Error(Id, "fs.write_failed", ex.Message); }
+    }
+}
+
+public sealed class LinuxFsChmodHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.chmod.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var mode = Convert.ToString(invocation.Bindings["mode_octal"]) ?? string.Empty;
+        if (!Regex.IsMatch(mode, "^[0-7]{3,4}$", RegexOptions.CultureInvariant))
+            return ToolResultFactory.Error(Id, "fs.chmod_failed", "Invalid octal mode.");
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
+            var recursive = invocation.Bindings.TryGetValue("recursive", out var r) && Convert.ToBoolean(r);
+            var args = recursive ? new object?[] { mode, "-R", path } : new object?[] { mode, path };
+            var proc = new LinuxProcExecHandler();
+            var result = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?> { ["file"] = "chmod", ["args"] = args }, invocation.WorkOrderId), ctx);
+            if (!result.Success || Convert.ToInt32(result.Outputs["exit_code"]) != 0)
+                return ToolResultFactory.Error(Id, "fs.chmod_failed", Convert.ToString(result.Outputs["stderr"]) ?? "chmod failed");
+            return new ToolResult(Id, new Dictionary<string, object?> { ["changed"] = true }, true);
+        }
+        catch (UnauthorizedAccessException ex) { return ToolResultFactory.Error(Id, "fs.permission_denied", ex.Message); }
+        catch (Exception ex) { return ToolResultFactory.Error(Id, "fs.chmod_failed", ex.Message); }
+    }
+}
+
+public sealed class LinuxFsSymlinkHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.symlink.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var link = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["link_path_rel"]) ?? string.Empty);
+            var targetRel = Convert.ToString(invocation.Bindings["target_rel"]) ?? string.Empty;
+            var target = ToolPath.ResolveWithinRoot(ctx, targetRel);
+            Directory.CreateDirectory(Path.GetDirectoryName(link) ?? ctx.RepoRoot);
+            if (File.Exists(link) || Directory.Exists(link)) File.Delete(link);
+            File.CreateSymbolicLink(link, target);
+            return new ToolResult(Id, new Dictionary<string, object?> { ["linked"] = true }, true);
+        }
+        catch (InvalidOperationException) { return ToolResultFactory.Error(Id, "fs.write_failed", "path escapes repo root"); }
+        catch (Exception ex) { return ToolResultFactory.Error(Id, "fs.write_failed", ex.Message); }
+    }
+}
+
+public sealed class LinuxFsReadlinkHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.readlink.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
+            var fi = new FileInfo(path);
+            var target = fi.ResolveLinkTarget(false);
+            if (target is null)
+                return ToolResultFactory.Error(Id, "fs.read_failed", "Path is not a symbolic link.");
+
+            var targetPath = target.FullName;
+            if (!Path.IsPathRooted(targetPath))
+                targetPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path) ?? ctx.RepoRoot, targetPath));
+
+            var normalizedRoot = Path.GetFullPath(ctx.RepoRoot).TrimEnd(Path.DirectorySeparatorChar);
+            var rootWithSlash = normalizedRoot + Path.DirectorySeparatorChar;
+            if (!string.Equals(targetPath, normalizedRoot, StringComparison.Ordinal)
+                && !targetPath.StartsWith(rootWithSlash, StringComparison.Ordinal))
+            {
+                return ToolResultFactory.Error(Id, "fs.read_failed", "Symlink target escapes repo root.");
+            }
+
+            return new ToolResult(Id, new Dictionary<string, object?> { ["target"] = ToolPath.ToRepoRelative(ctx, targetPath) }, true);
+        }
+        catch (Exception ex) { return ToolResultFactory.Error(Id, "fs.read_failed", ex.Message); }
+    }
+}
+
+public sealed class LinuxFsRealpathHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.realpath.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
+            var proc = new LinuxProcExecHandler();
+            var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+            {
+                ["file"] = "realpath",
+                ["args"] = new object?[] { path },
+                ["timeout_ms"] = Math.Min(5000, ctx.MaxTimeoutMs)
+            }, invocation.WorkOrderId), ctx);
+
+            if (!run.Success || Convert.ToInt32(run.Outputs["exit_code"]) != 0)
+                return ToolResultFactory.Error(Id, "fs.read_failed", Convert.ToString(run.Outputs["stderr"]) ?? "realpath failed");
+
+            var resolved = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Trim();
+            var full = ToolPath.ResolveWithinRoot(ctx, resolved);
+            return new ToolResult(Id, new Dictionary<string, object?> { ["real_rel"] = ToolPath.ToRepoRelative(ctx, full) }, true);
+        }
+        catch (Exception ex) { return ToolResultFactory.Error(Id, "fs.read_failed", ex.Message); }
+    }
+}
+
+public sealed class LinuxGitCloneDepthHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.clone_depth.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var url = Convert.ToString(invocation.Bindings["url"]) ?? string.Empty;
+        var isRemote = url.Contains("://", StringComparison.Ordinal) || url.StartsWith("git@", StringComparison.Ordinal);
+        if (isRemote && !ctx.AllowNetwork)
+            return ToolResultFactory.Error(Id, "tool.network_disabled", "Network access is disabled for tool execution context.");
+        var args = new List<string> { "clone" };
+        var branch = invocation.Bindings.TryGetValue("branch", out var b) ? Convert.ToString(b) : null;
+        var depth = invocation.Bindings.TryGetValue("depth", out var d) ? Convert.ToInt32(d) : 1;
+        if (!string.IsNullOrWhiteSpace(branch)) { args.Add("--branch"); args.Add(branch!); }
+        if (depth > 0) { args.Add("--depth"); args.Add(depth.ToString()); }
+        args.Add(url);
+        args.Add(ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["dest_rel"]) ?? string.Empty));
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?> { ["file"] = "git", ["args"] = args.Cast<object?>().ToArray() }, invocation.WorkOrderId), ctx);
+        if (!run.Success || Convert.ToInt32(run.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "git.clone_failed", Convert.ToString(run.Outputs["stderr"]) ?? "git clone failed");
+        return new ToolResult(Id, new Dictionary<string, object?> { ["cloned"] = true }, true);
+    }
+}
+
+public sealed class LinuxGitSubmoduleUpdateHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.submodule_update.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var args = new List<string> { "submodule", "update" };
+        if (invocation.Bindings.TryGetValue("init", out var i) && Convert.ToBoolean(i)) args.Add("--init");
+        if (invocation.Bindings.TryGetValue("recursive", out var r) && Convert.ToBoolean(r)) args.Add("--recursive");
+        var run = GitRunner.RunGit(Id, invocation, ctx, args.ToArray());
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["updated"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitRemoteSetUrlHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.remote_set_url.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var name = Convert.ToString(invocation.Bindings["name"]) ?? "origin";
+        var url = Convert.ToString(invocation.Bindings["url"]) ?? string.Empty;
+        var run = GitRunner.RunGit(Id, invocation, ctx, "remote", "set-url", name, url);
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["set"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxGitCommitAmendHandler : IToolHandler
+{
+    public ToolId Id => new("linux.git.commit_amend.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var args = new List<string> { "commit", "--amend", "--no-verify", "--no-gpg-sign" };
+        var noEdit = invocation.Bindings.TryGetValue("no_edit", out var ne) && Convert.ToBoolean(ne);
+        var message = invocation.Bindings.TryGetValue("message", out var m) ? Convert.ToString(m) : null;
+        if (noEdit || string.IsNullOrWhiteSpace(message)) args.Add("--no-edit");
+        else { args.Add("-m"); args.Add(message!); }
+        var run = GitRunner.RunGit(Id, invocation, ctx, args.ToArray());
+        return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["amended"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxSysUnameHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.uname.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var argsText = Convert.ToString(invocation.Bindings.TryGetValue("args", out var a) ? a : "-a") ?? "-a";
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?> { ["file"] = "uname", ["args"] = argsText.Split(' ', StringSplitOptions.RemoveEmptyEntries).Cast<object?>().ToArray() }, invocation.WorkOrderId), ctx);
+        if (!run.Success || Convert.ToInt32(run.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "sys.uname_failed", Convert.ToString(run.Outputs["stderr"]) ?? "uname failed");
+        return new ToolResult(Id, new Dictionary<string, object?> { ["uname"] = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Trim() }, true);
+    }
+}
+
+public sealed class LinuxSysCpuinfoHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.cpuinfo.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var lines = File.ReadAllLines("/proc/cpuinfo").OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+            var joined = string.Join("\n", lines);
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["cpuinfo"] = ToolResultFactory.TruncateUtf8(joined, ctx.MaxBytesOut),
+                ["count"] = lines.Count(l => l.StartsWith("processor", StringComparison.Ordinal)),
+                ["truncated"] = Encoding.UTF8.GetByteCount(joined) > ctx.MaxBytesOut
+            }, true);
+        }
+        catch (Exception ex) { return ToolResultFactory.Error(Id, "sys.cpuinfo_failed", ex.Message); }
+    }
+}
+
+public sealed class LinuxSysDiskFreeHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.disk_free.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var path = ToolPath.ResolveWithinRoot(ctx, invocation.Bindings.TryGetValue("path_rel", out var p) ? Convert.ToString(p) ?? "." : ".");
+            var root = Path.GetPathRoot(path) ?? "/";
+            var drive = new DriveInfo(root);
+            return new ToolResult(Id, new Dictionary<string, object?> { ["bytes_free"] = drive.AvailableFreeSpace, ["bytes_total"] = drive.TotalSize }, true);
+        }
+        catch (Exception ex) { return ToolResultFactory.Error(Id, "sys.disk_free_failed", ex.Message); }
+    }
+}
+
+public sealed class LinuxSysEnvDumpSafeHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.env_dump_safe.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var allow = invocation.Bindings.TryGetValue("allowlist", out var a)
+            ? (Convert.ToString(a) ?? string.Empty).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : new[] { "HOME", "PATH", "USER", "SHELL", "LANG", "TERM" };
+        var lines = allow.OrderBy(static x => x, StringComparer.Ordinal)
+            .Select(key => $"{key}={Environment.GetEnvironmentVariable(key) ?? string.Empty}")
+            .ToArray();
+        return new ToolResult(Id, new Dictionary<string, object?> { ["env"] = string.Join("\n", lines) }, true);
+    }
+}
+
+public sealed class LinuxSysCommandExistsHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.command_exists.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var command = Convert.ToString(invocation.Bindings["command"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(command))
+                return ToolResultFactory.Error(Id, "sys.command_invalid", "Command is required.");
+
+            var proc = new LinuxProcExecHandler();
+            var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+            {
+                ["file"] = "which",
+                ["args"] = new object?[] { command },
+                ["timeout_ms"] = Math.Min(2000, ctx.MaxTimeoutMs)
+            }, invocation.WorkOrderId), ctx);
+
+            var exists = run.Success && Convert.ToInt32(run.Outputs["exit_code"]) == 0;
+            var resolved = exists ? (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty : string.Empty;
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["exists"] = exists,
+                ["path"] = resolved.Trim()
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "sys.command_exists_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxSysToolVersionsHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.tool_versions.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var tools = invocation.Bindings.TryGetValue("tools", out var listObj) && listObj is IEnumerable<object?> list
+                ? list.Select(static x => Convert.ToString(x) ?? string.Empty).Where(static x => x.Length > 0).Distinct(StringComparer.Ordinal).OrderBy(static x => x, StringComparer.Ordinal).ToArray()
+                : Array.Empty<string>();
+
+            var lines = new List<string>();
+            foreach (var tool in tools)
+            {
+                var check = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?> { ["command"] = tool }, invocation.WorkOrderId), ctx);
+                if (!check.Success || !(check.Outputs.TryGetValue("exists", out var exObj) && Convert.ToBoolean(exObj)))
+                {
+                    lines.Add($"{tool}=not_found");
+                    continue;
+                }
+
+                var proc = new LinuxProcExecHandler();
+                var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+                {
+                    ["file"] = tool,
+                    ["args"] = new object?[] { "--version" },
+                    ["timeout_ms"] = Math.Min(3000, ctx.MaxTimeoutMs),
+                    ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 8192)
+                }, invocation.WorkOrderId), ctx);
+
+                if (!run.Success)
+                {
+                    lines.Add($"{tool}=error");
+                    continue;
+                }
+
+                var stdout = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
+                var first = stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+                lines.Add($"{tool}={first.Trim()}");
+            }
+
+            var payload = string.Join("\n", lines.OrderBy(static x => x, StringComparer.Ordinal));
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["versions"] = ToolResultFactory.TruncateUtf8(payload, ctx.MaxBytesOut),
+                ["count"] = lines.Count,
+                ["truncated"] = Encoding.UTF8.GetByteCount(payload) > ctx.MaxBytesOut
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "sys.tool_versions_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxPkgDetectManagerHandler : IToolHandler
+{
+    public ToolId Id => new("linux.pkg.detect_manager.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var managers = new[] { "apt", "dnf", "yum", "pacman", "zypper", "apk" };
+            foreach (var manager in managers)
+            {
+                var check = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?>
+                {
+                    ["command"] = manager
+                }, invocation.WorkOrderId), ctx);
+                if (check.Success && Convert.ToBoolean(check.Outputs["exists"]))
+                    return new ToolResult(Id, new Dictionary<string, object?> { ["manager"] = manager, ["detected"] = true }, true);
+            }
+
+            return new ToolResult(Id, new Dictionary<string, object?> { ["manager"] = "none", ["detected"] = false }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "pkg.detect_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxPkgUpdateIndexesHandler : IToolHandler
+{
+    public ToolId Id => new("linux.pkg.update_indexes.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        if (!ctx.AllowNetwork)
+            return ToolResultFactory.Error(Id, "tool.network_disabled", "Network access is disabled for tool execution context.");
+
+        var managerResult = new LinuxPkgDetectManagerHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.detect_manager.v1"), new Dictionary<string, object?>(), invocation.WorkOrderId), ctx);
+        if (!managerResult.Success)
+            return managerResult;
+
+        var manager = Convert.ToString(managerResult.Outputs["manager"]) ?? "none";
+        if (manager == "none")
+            return ToolResultFactory.Error(Id, "tool.not_available", "No supported package manager found.");
+
+        var args = manager switch
+        {
+            "apt" => new object?[] { "update" },
+            "dnf" => new object?[] { "makecache" },
+            "yum" => new object?[] { "makecache" },
+            "pacman" => new object?[] { "-Sy" },
+            "zypper" => new object?[] { "refresh" },
+            "apk" => new object?[] { "update" },
+            _ => Array.Empty<object?>()
+        };
+
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = manager,
+            ["args"] = args,
+            ["timeout_ms"] = Math.Min(ctx.MaxTimeoutMs, 60000)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!run.Success)
+            return ToolResultFactory.Error(Id, "pkg.update_failed", Convert.ToString(run.Outputs["error.message"]) ?? "package index update failed");
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["manager"] = manager,
+            ["updated"] = Convert.ToInt32(run.Outputs["exit_code"]) == 0,
+            ["exitCode"] = Convert.ToInt32(run.Outputs["exit_code"])
+        }, true);
+    }
+}
+
+public sealed class LinuxPkgInstallHandler : IToolHandler
+{
+    public ToolId Id => new("linux.pkg.install.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        if (!ctx.AllowNetwork)
+            return ToolResultFactory.Error(Id, "tool.network_disabled", "Network access is disabled for tool execution context.");
+
+        try
+        {
+            var packages = invocation.Bindings.TryGetValue("packages", out var listObj) && listObj is IEnumerable<object?> list
+                ? list.Select(static x => Convert.ToString(x) ?? string.Empty)
+                    .Where(static x => x.Length > 0)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(static x => x, StringComparer.Ordinal)
+                    .ToArray()
+                : Array.Empty<string>();
+
+            if (packages.Length == 0)
+                return ToolResultFactory.Error(Id, "pkg.invalid_package", "At least one package is required.");
+
+            foreach (var pkg in packages)
+            {
+                if (pkg.Any(char.IsWhiteSpace) || pkg.Any(char.IsControl))
+                    return ToolResultFactory.Error(Id, "pkg.invalid_package", $"Invalid package token: {pkg}");
+            }
+
+            var managerResult = new LinuxPkgDetectManagerHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.detect_manager.v1"), new Dictionary<string, object?>(), invocation.WorkOrderId), ctx);
+            if (!managerResult.Success)
+                return managerResult;
+            var manager = Convert.ToString(managerResult.Outputs["manager"]) ?? "none";
+            if (manager == "none")
+                return ToolResultFactory.Error(Id, "tool.not_available", "No supported package manager found.");
+
+            var args = manager switch
+            {
+                "apt" => new object?[] { "install", "-y" }.Concat(packages.Cast<object?>()).ToArray(),
+                "dnf" => new object?[] { "install", "-y" }.Concat(packages.Cast<object?>()).ToArray(),
+                "yum" => new object?[] { "install", "-y" }.Concat(packages.Cast<object?>()).ToArray(),
+                "pacman" => new object?[] { "-S", "--noconfirm" }.Concat(packages.Cast<object?>()).ToArray(),
+                "zypper" => new object?[] { "install", "-y" }.Concat(packages.Cast<object?>()).ToArray(),
+                "apk" => new object?[] { "add" }.Concat(packages.Cast<object?>()).ToArray(),
+                _ => Array.Empty<object?>()
+            };
+
+            var proc = new LinuxProcExecHandler();
+            var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+            {
+                ["file"] = manager,
+                ["args"] = args,
+                ["timeout_ms"] = Math.Min(ctx.MaxTimeoutMs, 120000)
+            }, invocation.WorkOrderId), ctx);
+
+            var installed = Convert.ToInt32(run.Outputs["exit_code"]) == 0 ? packages : Array.Empty<string>();
+            var failed = Convert.ToInt32(run.Outputs["exit_code"]) == 0 ? Array.Empty<string>() : packages;
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["installed"] = string.Join("
+", installed),
+                ["alreadyPresent"] = string.Empty,
+                ["failed"] = string.Join("
+", failed),
+                ["exitCode"] = Convert.ToInt32(run.Outputs["exit_code"])
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "pkg.install_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxPkgQueryInstalledHandler : IToolHandler
+{
+    public ToolId Id => new("linux.pkg.query_installed.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var managerResult = new LinuxPkgDetectManagerHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.detect_manager.v1"), new Dictionary<string, object?>(), invocation.WorkOrderId), ctx);
+            if (!managerResult.Success)
+                return managerResult;
+            var manager = Convert.ToString(managerResult.Outputs["manager"]) ?? "none";
+            if (manager == "none")
+                return ToolResultFactory.Error(Id, "tool.not_available", "No supported package manager found.");
+
+            var prefix = Convert.ToString(invocation.Bindings.TryGetValue("prefix", out var p) ? p : string.Empty) ?? string.Empty;
+
+            var args = manager switch
+            {
+                "apt" => new object?[] { "list", "--installed" },
+                "dnf" => new object?[] { "list", "installed" },
+                "yum" => new object?[] { "list", "installed" },
+                "pacman" => new object?[] { "-Q" },
+                "zypper" => new object?[] { "search", "--installed-only" },
+                "apk" => new object?[] { "info", "-e" },
+                _ => Array.Empty<object?>()
+            };
+
+            var proc = new LinuxProcExecHandler();
+            var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+            {
+                ["file"] = manager,
+                ["args"] = args,
+                ["timeout_ms"] = Math.Min(ctx.MaxTimeoutMs, 15000),
+                ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 65536)
+            }, invocation.WorkOrderId), ctx);
+
+            if (!run.Success)
+                return ToolResultFactory.Error(Id, "pkg.query_failed", Convert.ToString(run.Outputs["error.message"]) ?? "package query failed");
+
+            var names = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty)
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(static line => line.Trim())
+                .Where(static line => line.Length > 0)
+                .Select(static line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty)
+                .Where(static line => line.Length > 0)
+                .Where(name => string.IsNullOrEmpty(prefix) || name.StartsWith(prefix, StringComparison.Ordinal))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(static x => x, StringComparer.Ordinal)
+                .ToArray();
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["manager"] = manager,
+                ["packages"] = string.Join("
+", names),
+                ["count"] = names.Length
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "pkg.query_failed", ex.Message);
+        }
+    }
+}
+
 public sealed class LinuxHashFileSha256Handler : IToolHandler
 {
     public ToolId Id => new("linux.hash.file_sha256.v1");
@@ -2243,7 +3054,7 @@ public sealed class LinuxHashDirManifestHandler : IToolHandler
                 using var sha = System.Security.Cryptography.SHA256.Create();
                 using var stream = File.OpenRead(file);
                 var hash = Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
-                lines.Add($"{hash}  {Path.GetRelativePath(root, file).Replace('\', '/')}");
+                lines.Add($"{hash}  {Path.GetRelativePath(root, file).Replace('\\', '/')}");
             }
             var joined = string.Join("\n", lines);
             return new ToolResult(Id, new Dictionary<string, object?>
