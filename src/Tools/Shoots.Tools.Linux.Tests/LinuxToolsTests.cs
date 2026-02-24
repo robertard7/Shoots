@@ -792,6 +792,225 @@ b.txt", changed.Outputs["files"]);
         }
     }
 
+
+    [Fact]
+    public void Batch7_patch_and_marker_tools_work()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+            File.WriteAllText(Path.Combine(root, "a.txt"), "hello\n", Encoding.UTF8);
+            var diff = "--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-hello\n+world\n";
+            var patched = new LinuxTextApplyUnifiedDiffHandler().Execute(new ToolInvocation(new ToolId("linux.text.apply_unified_diff.v1"), new Dictionary<string, object?>
+            {
+                ["base_dir_rel"] = ".",
+                ["diff_text"] = diff
+            }, wo), ctx);
+            Assert.True(patched.Success);
+            Assert.Equal("world\n", File.ReadAllText(Path.Combine(root, "a.txt"), Encoding.UTF8));
+
+            var escape = new LinuxTextApplyUnifiedDiffHandler().Execute(new ToolInvocation(new ToolId("linux.text.apply_unified_diff.v1"), new Dictionary<string, object?>
+            {
+                ["base_dir_rel"] = ".",
+                ["diff_text"] = "--- a/../../x\n+++ b/../../x\n@@ -0,0 +1 @@\n+x\n"
+            }, wo), ctx);
+            Assert.False(escape.Success);
+            Assert.Equal("text.patch_path_escape", escape.Outputs["error.code"]);
+
+            var invalid = new LinuxTextApplyUnifiedDiffHandler().Execute(new ToolInvocation(new ToolId("linux.text.apply_unified_diff.v1"), new Dictionary<string, object?> { ["base_dir_rel"] = ".", ["diff_text"] = "not a patch" }, wo), ctx);
+            Assert.False(invalid.Success);
+            Assert.Equal("text.patch_invalid", invalid.Outputs["error.code"]);
+
+            File.WriteAllText(Path.Combine(root, "m.txt"), "A<start>mid<end>Z", Encoding.UTF8);
+            var extract = new LinuxTextExtractBetweenMarkersHandler().Execute(new ToolInvocation(new ToolId("linux.text.extract_between_markers.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "m.txt", ["start_marker"] = "<start>", ["end_marker"] = "<end>"
+            }, wo), ctx);
+            Assert.True(extract.Success);
+            Assert.Equal("mid", extract.Outputs["text"]);
+            var missing = new LinuxTextExtractBetweenMarkersHandler().Execute(new ToolInvocation(new ToolId("linux.text.extract_between_markers.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "m.txt", ["start_marker"] = "<none>", ["end_marker"] = "<end>"
+            }, wo), ctx);
+            Assert.False(missing.Success);
+            Assert.Equal("text.marker_not_found", missing.Outputs["error.code"]);
+
+            File.WriteAllText(Path.Combine(root, "i.txt"), "XMARKY", Encoding.UTF8);
+            var ins1 = new LinuxTextInsertAfterMarkerHandler().Execute(new ToolInvocation(new ToolId("linux.text.insert_after_marker.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "i.txt", ["marker"] = "MARK", ["insert_text"] = "-I", ["once"] = true
+            }, wo), ctx);
+            var ins2 = new LinuxTextInsertAfterMarkerHandler().Execute(new ToolInvocation(new ToolId("linux.text.insert_after_marker.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "i.txt", ["marker"] = "MARK", ["insert_text"] = "-I", ["once"] = true
+            }, wo), ctx);
+            Assert.True(ins1.Success);
+            Assert.True(ins2.Success);
+            Assert.Equal(0, ins2.Outputs["count"]);
+
+            File.WriteAllText(Path.Combine(root, "eol.txt"), "a\r\nb\r\n", Encoding.UTF8);
+            var norm1 = new LinuxTextLineEndingNormalizeHandler().Execute(new ToolInvocation(new ToolId("linux.text.line_ending_normalize.v1"), new Dictionary<string, object?> { ["path_rel"] = "eol.txt", ["mode"] = "lf" }, wo), ctx);
+            var norm2 = new LinuxTextLineEndingNormalizeHandler().Execute(new ToolInvocation(new ToolId("linux.text.line_ending_normalize.v1"), new Dictionary<string, object?> { ["path_rel"] = "eol.txt", ["mode"] = "lf" }, wo), ctx);
+            Assert.True(norm1.Success);
+            Assert.True((bool)norm1.Outputs["changed"]);
+            Assert.False((bool)norm2.Outputs["changed"]);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void Batch8_9_10_new_tools_work_core_paths()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+            Assert.True(new LinuxFsTouchHandler().Execute(new ToolInvocation(new ToolId("linux.fs.touch.v1"), new Dictionary<string, object?> { ["path_rel"] = "t.txt" }, wo), ctx).Success);
+            var ensure1 = new LinuxFsEnsureFileHandler().Execute(new ToolInvocation(new ToolId("linux.fs.ensure_file.v1"), new Dictionary<string, object?> { ["path_rel"] = "e.txt", ["content"] = "one" }, wo), ctx);
+            var ensure2 = new LinuxFsEnsureFileHandler().Execute(new ToolInvocation(new ToolId("linux.fs.ensure_file.v1"), new Dictionary<string, object?> { ["path_rel"] = "e.txt" }, wo), ctx);
+            Assert.True(ensure1.Success);
+            Assert.False((bool)ensure2.Outputs["created"]);
+            var chmodInvalid = new LinuxFsChmodHandler().Execute(new ToolInvocation(new ToolId("linux.fs.chmod.v1"), new Dictionary<string, object?> { ["path_rel"] = "e.txt", ["mode_octal"] = "88" }, wo), ctx);
+            Assert.False(chmodInvalid.Success);
+            Assert.Equal("fs.chmod_failed", chmodInvalid.Outputs["error.code"]);
+            Assert.True(new LinuxFsSymlinkHandler().Execute(new ToolInvocation(new ToolId("linux.fs.symlink.v1"), new Dictionary<string, object?> { ["link_path_rel"] = "l.txt", ["target_rel"] = "e.txt" }, wo), ctx).Success);
+            var readLink = new LinuxFsReadlinkHandler().Execute(new ToolInvocation(new ToolId("linux.fs.readlink.v1"), new Dictionary<string, object?> { ["path_rel"] = "l.txt" }, wo), ctx);
+            Assert.True(readLink.Success);
+            Assert.Equal("e.txt", readLink.Outputs["target"]);
+            var real = new LinuxFsRealpathHandler().Execute(new ToolInvocation(new ToolId("linux.fs.realpath.v1"), new Dictionary<string, object?> { ["path_rel"] = "./e.txt" }, wo), ctx);
+            Assert.True(real.Success);
+            Assert.DoesNotContain("..", Convert.ToString(real.Outputs["real_rel"]));
+
+            var repo = Path.Combine(root, "repo"); Directory.CreateDirectory(repo); Run("git", $"init {repo}", root);
+            File.WriteAllText(Path.Combine(repo, "a.txt"), "a"); Run("git", $"-C {repo} add .", root); Run("git", $"-C {repo} -c user.email=a@b -c user.name=n commit -m init", root);
+            var amend = new LinuxGitCommitAmendHandler().Execute(new ToolInvocation(new ToolId("linux.git.commit_amend.v1"), new Dictionary<string, object?> { ["cwd"] = "repo", ["no_edit"] = true }, wo), ctx);
+            Assert.True(amend.Success);
+            Assert.True(new LinuxGitRemoteSetUrlHandler().Execute(new ToolInvocation(new ToolId("linux.git.remote_set_url.v1"), new Dictionary<string, object?> { ["cwd"] = "repo", ["name"] = "origin", ["url"] = repo }, wo), ctx).Success);
+            var sub = new LinuxGitSubmoduleUpdateHandler().Execute(new ToolInvocation(new ToolId("linux.git.submodule_update.v1"), new Dictionary<string, object?> { ["cwd"] = "repo" }, wo), ctx);
+            Assert.False(sub.Success);
+            var localSource = Path.Combine(root, "local-src");
+            Directory.CreateDirectory(localSource);
+            Run("git", $"init {localSource}", root);
+            File.WriteAllText(Path.Combine(localSource, "z.txt"), "z");
+            Run("git", $"-C {localSource} add .", root);
+            Run("git", $"-C {localSource} -c user.email=a@b -c user.name=n commit -m init", root);
+            var localClone = new LinuxGitCloneDepthHandler().Execute(new ToolInvocation(new ToolId("linux.git.clone_depth.v1"), new Dictionary<string, object?> { ["url"] = localSource, ["dest_rel"] = "local-clone" }, wo), ToolExecutionContext.Create(root, CancellationToken.None, allowNetwork: false));
+            Assert.True(localClone.Success);
+
+            var cloneBlocked = new LinuxGitCloneDepthHandler().Execute(new ToolInvocation(new ToolId("linux.git.clone_depth.v1"), new Dictionary<string, object?> { ["url"] = "https://example.com/x.git", ["dest_rel"] = "clone" }, wo), ToolExecutionContext.Create(root, CancellationToken.None, allowNetwork: false));
+            Assert.False(cloneBlocked.Success);
+            Assert.Equal("tool.network_disabled", cloneBlocked.Outputs["error.code"]);
+
+            Assert.True(new LinuxSysUnameHandler().Execute(new ToolInvocation(new ToolId("linux.sys.uname.v1"), new Dictionary<string, object?>(), wo), ctx).Success);
+            var disk = new LinuxSysDiskFreeHandler().Execute(new ToolInvocation(new ToolId("linux.sys.disk_free.v1"), new Dictionary<string, object?>(), wo), ctx);
+            Assert.True(disk.Success);
+            Assert.True(Convert.ToInt64(disk.Outputs["bytes_total"]) > 0);
+            Environment.SetEnvironmentVariable("SHOOTS_ENV_DUMP_TEST", "ok");
+            var env = new LinuxSysEnvDumpSafeHandler().Execute(new ToolInvocation(new ToolId("linux.sys.env_dump_safe.v1"), new Dictionary<string, object?> { ["allowlist"] = "HOME\nSHOOTS_ENV_DUMP_TEST" }, wo), ctx);
+            Assert.True(env.Success);
+            var envText = Convert.ToString(env.Outputs["env"]) ?? string.Empty;
+            Assert.Contains("SHOOTS_ENV_DUMP_TEST=ok", envText);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+
+    [Fact]
+    public void Batch23_sys_command_exists_and_tool_versions_shapes_are_stable()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            var exists = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?>
+            {
+                ["command"] = "bash"
+            }, wo), ctx);
+            Assert.True(exists.Success);
+            Assert.True(Convert.ToBoolean(exists.Outputs["exists"]));
+
+            var missing = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?>
+            {
+                ["command"] = "definitely-not-a-real-command-xyz"
+            }, wo), ctx);
+            Assert.True(missing.Success);
+            Assert.False(Convert.ToBoolean(missing.Outputs["exists"]));
+
+            var versions = new LinuxSysToolVersionsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.tool_versions.v1"), new Dictionary<string, object?>
+            {
+                ["tools"] = new object?[] { "bash", "git", "definitely-not-a-real-command-xyz" }
+            }, wo), ctx);
+
+            Assert.True(versions.Success);
+            Assert.Equal(3, versions.Outputs["count"]);
+            var payload = Convert.ToString(versions.Outputs["versions"]) ?? string.Empty;
+            var lines = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var sorted = lines.OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+            Assert.Equal(sorted, lines);
+            Assert.Contains(lines, static l => l.StartsWith("definitely-not-a-real-command-xyz=not_found", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+
+    [Fact]
+    public void Batch24_pkg_tools_network_gate_and_schema_are_stable()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var offline = ToolExecutionContext.Create(root, CancellationToken.None, allowNetwork: false);
+
+            var blockedUpdate = new LinuxPkgUpdateIndexesHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.update_indexes.v1"), new Dictionary<string, object?>(), wo), offline);
+            Assert.False(blockedUpdate.Success);
+            Assert.Equal("tool.network_disabled", blockedUpdate.Outputs["error.code"]);
+
+            var blockedInstall = new LinuxPkgInstallHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.install.v1"), new Dictionary<string, object?>
+            {
+                ["packages"] = new object?[] { "git" }
+            }, wo), offline);
+            Assert.False(blockedInstall.Success);
+            Assert.Equal("tool.network_disabled", blockedInstall.Outputs["error.code"]);
+
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+            var detect = new LinuxPkgDetectManagerHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.detect_manager.v1"), new Dictionary<string, object?>(), wo), ctx);
+            Assert.True(detect.Success);
+            Assert.True(detect.Outputs.ContainsKey("manager"));
+            Assert.True(detect.Outputs.ContainsKey("detected"));
+
+            var query = new LinuxPkgQueryInstalledHandler().Execute(new ToolInvocation(new ToolId("linux.pkg.query_installed.v1"), new Dictionary<string, object?>
+            {
+                ["prefix"] = "git"
+            }, wo), ctx);
+
+            if (query.Success)
+            {
+                Assert.True(query.Outputs.ContainsKey("packages"));
+                var list = (Convert.ToString(query.Outputs["packages"]) ?? string.Empty)
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                var sorted = list.OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+                Assert.Equal(sorted, list);
+            }
+            else
+            {
+                Assert.Equal("tool.not_available", query.Outputs["error.code"]);
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

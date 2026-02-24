@@ -43,3 +43,17 @@ Example catalog snippet:
 
 - Tool handlers are provider-agnostic: they execute through `IProviderClient` contracts and do not depend on Ollama.
 - Ollama (when configured) supplies selection decisions; execution contracts remain unchanged.
+
+## Patch tool example
+
+Example invocation payload for `linux.text.apply_unified_diff.v1`:
+
+```json
+{
+  "base_dir_rel": "src",
+  "diff_text": "--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old\n+new\n",
+  "max_files": 50
+}
+```
+
+The handler must reject path escapes and return deterministic error keys (`error.code`, `error.message`).
