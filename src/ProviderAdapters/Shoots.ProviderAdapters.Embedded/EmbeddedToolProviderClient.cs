@@ -55,6 +55,7 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
                 null));
         }
 
+        var invocationBindings = envelope.Args;
         if (_specs.TryGetValue(toolId.Value, out var spec))
         {
             var validation = ToolBindingValidator.Validate(spec, envelope.Args);
@@ -65,8 +66,8 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
                     ["tool_id"] = toolId.Value,
                     ["error.code"] = "tool.bindings_invalid",
                     ["error.message"] = "Tool bindings failed schema validation.",
-                    ["missing_inputs"] = validation.Missing,
-                    ["unknown_inputs"] = validation.Unknown,
+                    ["missing_inputs"] = string.Join("\n", validation.Missing),
+                    ["unknown_inputs"] = string.Join("\n", validation.Unknown),
                     ["type_error"] = validation.TypeError
                 }, false);
 
@@ -78,9 +79,11 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
                     null,
                     null));
             }
+
+            invocationBindings = validation.NormalizedBindings;
         }
 
-        var invocation = new ToolInvocation(toolId, envelope.Args, new WorkOrderId(envelope.RequestId));
+        var invocation = new ToolInvocation(toolId, invocationBindings, new WorkOrderId(envelope.RequestId));
         var context = _context with { CancellationToken = ct };
         var result = handler.Execute(invocation, context);
 

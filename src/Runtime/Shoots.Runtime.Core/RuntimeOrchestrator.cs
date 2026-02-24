@@ -88,6 +88,7 @@ public sealed class RuntimeOrchestrator
 
                 var timeoutState = result.State.WithStatus(RoutingStatus.Halted);
                 var timeoutTrace = AppendHostEvent(result.Trace, RoutingTraceEventKind.Route, "decision.gate.waiting");
+                timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Route, "decision.waits.exhausted");
                 timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Error, timeoutError.Code);
 
                 var timeoutResult = new ExecutionEnvelope(

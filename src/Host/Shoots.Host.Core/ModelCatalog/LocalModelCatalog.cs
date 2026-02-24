@@ -7,17 +7,31 @@ public sealed class LocalModelCatalog : IModelCatalog
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    private readonly string _catalogPath;
+    private readonly string? _catalogPath;
+    private readonly string _localOverridePath;
+    private readonly string _templatePath;
 
-    public LocalModelCatalog(string? catalogPath = null)
+    public LocalModelCatalog(string? catalogPath = null, string? localOverridePath = null, string? templatePath = null)
     {
-        _catalogPath = catalogPath ?? Path.GetFullPath(Path.Combine(".state", "models.catalog.json"));
+        _catalogPath = catalogPath;
+        _localOverridePath = localOverridePath ?? Path.GetFullPath(Path.Combine("etc", "models.catalog.local.json"));
+        _templatePath = templatePath ?? Path.GetFullPath(Path.Combine("etc", "models.catalog.template.json"));
     }
-
-    private string TemplatePath => Path.GetFullPath(Path.Combine("etc", "models.catalog.template.json"));
 
     public IReadOnlyList<ModelDescriptor> ListModels()
     {
+        if (_catalogPath is null)
+        {
+            var resolvedPath = ResolveCatalogPath();
+            if (resolvedPath is null)
+                return DefaultSeed();
+
+            var models = JsonSerializer.Deserialize<List<ModelDescriptor>>(File.ReadAllText(resolvedPath))
+                ?? new List<ModelDescriptor>();
+
+            return Sort(models);
+        }
+
         EnsureCatalogFile();
 
         try
@@ -31,11 +45,7 @@ public sealed class LocalModelCatalog : IModelCatalog
                 models = LoadModelsOrFallback();
             }
 
-            return models
-                .OrderBy(x => x.Priority)
-                .ThenBy(x => x.ProviderId, StringComparer.Ordinal)
-                .ThenBy(x => x.ModelId, StringComparer.Ordinal)
-                .ToList();
+            return Sort(models);
         }
         catch (JsonException)
         {
@@ -62,11 +72,14 @@ public sealed class LocalModelCatalog : IModelCatalog
 
     public void ResetCatalogToDefaults()
     {
+        if (_catalogPath is null)
+            return;
+
         Directory.CreateDirectory(Path.GetDirectoryName(_catalogPath)!);
 
-        if (File.Exists(TemplatePath))
+        if (File.Exists(_templatePath))
         {
-            var template = File.ReadAllText(TemplatePath);
+            var template = File.ReadAllText(_templatePath);
             _ = JsonSerializer.Deserialize<List<ModelDescriptor>>(template) ?? throw new JsonException("Template model catalog is invalid.");
             File.WriteAllText(_catalogPath, template);
             return;
@@ -77,6 +90,9 @@ public sealed class LocalModelCatalog : IModelCatalog
 
     private void EnsureCatalogFile()
     {
+        if (_catalogPath is null)
+            return;
+
         Directory.CreateDirectory(Path.GetDirectoryName(_catalogPath)!);
         if (File.Exists(_catalogPath))
             return;
@@ -85,7 +101,20 @@ public sealed class LocalModelCatalog : IModelCatalog
     }
 
     private List<ModelDescriptor> LoadModelsOrFallback()
-        => (JsonSerializer.Deserialize<List<ModelDescriptor>>(File.ReadAllText(_catalogPath)) ?? DefaultSeed())
+        => Sort(JsonSerializer.Deserialize<List<ModelDescriptor>>(File.ReadAllText(_catalogPath!)) ?? DefaultSeed());
+
+    private string? ResolveCatalogPath()
+    {
+        if (File.Exists(_localOverridePath))
+            return _localOverridePath;
+        if (File.Exists(_templatePath))
+            return _templatePath;
+
+        return null;
+    }
+
+    private static List<ModelDescriptor> Sort(IEnumerable<ModelDescriptor> models)
+        => models
             .OrderBy(x => x.Priority)
             .ThenBy(x => x.ProviderId, StringComparer.Ordinal)
             .ThenBy(x => x.ModelId, StringComparer.Ordinal)

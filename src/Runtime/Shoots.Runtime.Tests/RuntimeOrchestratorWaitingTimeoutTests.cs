@@ -24,6 +24,7 @@ public sealed class RuntimeOrchestratorWaitingTimeoutTests
 
         Assert.Equal(RoutingStatus.Halted, second.State.Status);
         Assert.Contains(second.Trace.Entries, e => e.Event == RoutingTraceEventKind.Route && e.Detail == "decision.gate.waiting");
+        Assert.Contains(second.Trace.Entries, e => e.Event == RoutingTraceEventKind.Route && e.Detail == "decision.waits.exhausted");
         Assert.Contains(second.Trace.Entries, e => e.Event == RoutingTraceEventKind.Error && e.Detail == "route.decision_timeout");
     }
 

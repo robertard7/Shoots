@@ -2,7 +2,7 @@ namespace Shoots.Runtime.Abstractions;
 
 public enum DecisionWaitMode
 {
-    Fail = 0,
+    Halt = 0,
     Fallback = 1
 }
 
@@ -11,6 +11,6 @@ public sealed record RuntimeRunOptions(
     string? InjectedDecisionDigest = null,
     bool DiscardWaiting = false,
     bool AllowPlanChangeOverride = false,
-    int MaxDecisionWaits = 0,
-    DecisionWaitMode DecisionWaitMode = DecisionWaitMode.Fail
+    int MaxDecisionWaits = 1,
+    DecisionWaitMode DecisionWaitMode = DecisionWaitMode.Halt
 );

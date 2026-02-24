@@ -68,6 +68,37 @@ public sealed class LocalModelCatalogTests
         Assert.Equal(catalog.ResolveDefaultModel().ModelId, fallback.ModelId);
     }
 
+
+
+    [Fact]
+    public void Resolver_prefers_local_override_over_template()
+    {
+        var root = CreateTempRoot();
+        var etcDir = Path.Combine(root, "etc");
+        Directory.CreateDirectory(etcDir);
+
+        var localPath = Path.Combine(etcDir, "models.catalog.local.json");
+        var templatePath = Path.Combine(etcDir, "models.catalog.template.json");
+
+        File.WriteAllText(localPath, """
+[
+  {"ModelId":"local.only","ProviderId":"provider.local","Priority":0,"IsRemote":false,"SupportsTools":true}
+]
+""");
+
+        File.WriteAllText(templatePath, """
+[
+  {"ModelId":"template.only","ProviderId":"provider.template","Priority":0,"IsRemote":false,"SupportsTools":true}
+]
+""");
+
+        var catalog = new LocalModelCatalog(catalogPath: null, localOverridePath: localPath, templatePath: templatePath);
+        var resolved = catalog.ListModels();
+
+        Assert.Single(resolved);
+        Assert.Equal("local.only", resolved[0].ModelId);
+    }
+
     private static string CreateTempRoot()
     {
         var path = Path.Combine(Path.GetTempPath(), "shoots-host-tests", Guid.NewGuid().ToString("n"));
