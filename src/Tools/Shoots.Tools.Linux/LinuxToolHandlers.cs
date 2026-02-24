@@ -136,6 +136,13 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxPkgUpdateIndexesHandler(),
             new LinuxPkgInstallHandler(),
             new LinuxPkgQueryInstalledHandler(),
+            new LinuxCppCompileGccHandler(),
+            new LinuxCppLinkGccHandler(),
+            new LinuxCppCompileClangHandler(),
+            new LinuxCppLinkClangHandler(),
+            new LinuxCppArCreateHandler(),
+            new LinuxCppStripHandler(),
+            new LinuxCppPkgConfigHandler(),
             new LinuxHashFileSha256Handler(),
             new LinuxHashDirManifestHandler()
         });
@@ -3008,8 +3015,7 @@ public sealed class LinuxPkgQueryInstalledHandler : IToolHandler
             return new ToolResult(Id, new Dictionary<string, object?>
             {
                 ["manager"] = manager,
-                ["packages"] = string.Join("
-", names),
+                ["packages"] = string.Join("\n", names),
                 ["count"] = names.Length
             }, true);
         }
@@ -3017,6 +3023,210 @@ public sealed class LinuxPkgQueryInstalledHandler : IToolHandler
         {
             return ToolResultFactory.Error(Id, "pkg.query_failed", ex.Message);
         }
+    }
+}
+
+public sealed class LinuxCppCompileGccHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cpp.compile_gcc.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+        => LinuxCppToolRunner.RunCompileLike(Id, "gcc", invocation, ctx, defaultOutputExt: ".o");
+}
+
+public sealed class LinuxCppLinkGccHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cpp.link_gcc.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+        => LinuxCppToolRunner.RunLinkLike(Id, "gcc", invocation, ctx);
+}
+
+public sealed class LinuxCppCompileClangHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cpp.compile_clang.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+        => LinuxCppToolRunner.RunCompileLike(Id, "clang", invocation, ctx, defaultOutputExt: ".o");
+}
+
+public sealed class LinuxCppLinkClangHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cpp.link_clang.v1");
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+        => LinuxCppToolRunner.RunLinkLike(Id, "clang", invocation, ctx);
+}
+
+public sealed class LinuxCppArCreateHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cpp.ar_create.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var available = LinuxCppToolRunner.IsCommandAvailable("ar", invocation, ctx);
+        if (!available.available)
+            return ToolResultFactory.Error(Id, "tool.not_available", "ar is not available in PATH.");
+
+        var outputRel = Convert.ToString(invocation.Bindings["output_rel"]) ?? string.Empty;
+        var output = ToolPath.ResolveWithinRoot(ctx, outputRel);
+        var inputs = LinuxCppToolRunner.ReadPathArray(invocation, "inputs_rel");
+        var resolved = inputs.Select(i => ToolPath.ResolveWithinRoot(ctx, i)).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+        Directory.CreateDirectory(Path.GetDirectoryName(output) ?? ctx.RepoRoot);
+
+        var args = new List<object?> { "rcs", output };
+        args.AddRange(resolved.Cast<object?>());
+        return LinuxCppToolRunner.RunProcess(Id, "ar", args.ToArray(), invocation, ctx, outputRel);
+    }
+}
+
+public sealed class LinuxCppStripHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cpp.strip.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var available = LinuxCppToolRunner.IsCommandAvailable("strip", invocation, ctx);
+        if (!available.available)
+            return ToolResultFactory.Error(Id, "tool.not_available", "strip is not available in PATH.");
+
+        var pathRel = Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty;
+        var path = ToolPath.ResolveWithinRoot(ctx, pathRel);
+        return LinuxCppToolRunner.RunProcess(Id, "strip", new object?[] { path }, invocation, ctx, pathRel);
+    }
+}
+
+public sealed class LinuxCppPkgConfigHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cpp.pkg_config.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var available = LinuxCppToolRunner.IsCommandAvailable("pkg-config", invocation, ctx);
+        if (!available.available)
+            return ToolResultFactory.Error(Id, "tool.not_available", "pkg-config is not available in PATH.");
+
+        var package = Convert.ToString(invocation.Bindings["package"]) ?? string.Empty;
+        var mode = (Convert.ToString(invocation.Bindings.TryGetValue("mode", out var m) ? m : "both") ?? "both").ToLowerInvariant();
+        var args = new List<object?>();
+        if (mode is "cflags" or "both") args.Add("--cflags");
+        if (mode is "libs" or "both") args.Add("--libs");
+        args.Add(package);
+
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "pkg-config",
+            ["args"] = args.ToArray(),
+            ["timeout_ms"] = Math.Min(5000, ctx.MaxTimeoutMs),
+            ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 8192)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!run.Success || Convert.ToInt32(run.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(Id, "cpp.pkg_config_failed", Convert.ToString(run.Outputs["stderr"]) ?? "pkg-config failed");
+
+        var flags = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty)
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split(new[] { ' ', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+            .OrderBy(static x => x, StringComparer.Ordinal)
+            .ToArray();
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["flags"] = string.Join("\n", flags),
+            ["count"] = flags.Length
+        }, true);
+    }
+}
+
+internal static class LinuxCppToolRunner
+{
+    public static (bool available, string? path) IsCommandAvailable(string command, ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var check = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?>
+        {
+            ["command"] = command
+        }, invocation.WorkOrderId), ctx);
+
+        return check.Success && Convert.ToBoolean(check.Outputs["exists"])
+            ? (true, Convert.ToString(check.Outputs["path"]))
+            : (false, null);
+    }
+
+    public static string[] ReadPathArray(ToolInvocation invocation, string key)
+        => invocation.Bindings.TryGetValue(key, out var listObj) && listObj is IEnumerable<object?> list
+            ? list.Select(static x => Convert.ToString(x) ?? string.Empty).Where(static x => x.Length > 0).ToArray()
+            : Array.Empty<string>();
+
+    public static ToolResult RunCompileLike(ToolId id, string compiler, ToolInvocation invocation, ToolExecutionContext ctx, string defaultOutputExt)
+    {
+        try
+        {
+            var available = IsCommandAvailable(compiler, invocation, ctx);
+            if (!available.available)
+                return ToolResultFactory.Error(id, "tool.not_available", $"{compiler} is not available in PATH.");
+
+            var sourceRel = Convert.ToString(invocation.Bindings["source_rel"]) ?? string.Empty;
+            var source = ToolPath.ResolveWithinRoot(ctx, sourceRel);
+            var outputRel = Convert.ToString(invocation.Bindings.TryGetValue("output_rel", out var outObj) ? outObj : Path.ChangeExtension(sourceRel, defaultOutputExt)) ?? string.Empty;
+            var output = ToolPath.ResolveWithinRoot(ctx, outputRel);
+            var extraFlags = invocation.Bindings.TryGetValue("flags", out var flagsObj) && flagsObj is IEnumerable<object?> flags
+                ? flags.Select(static x => Convert.ToString(x) ?? string.Empty).Where(static x => x.Length > 0).OrderBy(static x => x, StringComparer.Ordinal).Cast<object?>().ToArray()
+                : Array.Empty<object?>();
+            Directory.CreateDirectory(Path.GetDirectoryName(output) ?? ctx.RepoRoot);
+
+            var args = new List<object?> { "-c", source, "-o", output };
+            args.AddRange(extraFlags);
+            return RunProcess(id, compiler, args.ToArray(), invocation, ctx, outputRel);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(id, "cpp.exec_failed", ex.Message);
+        }
+    }
+
+    public static ToolResult RunLinkLike(ToolId id, string compiler, ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var available = IsCommandAvailable(compiler, invocation, ctx);
+            if (!available.available)
+                return ToolResultFactory.Error(id, "tool.not_available", $"{compiler} is not available in PATH.");
+
+            var outputRel = Convert.ToString(invocation.Bindings["output_rel"]) ?? string.Empty;
+            var output = ToolPath.ResolveWithinRoot(ctx, outputRel);
+            var inputs = ReadPathArray(invocation, "inputs_rel");
+            var resolved = inputs.Select(i => ToolPath.ResolveWithinRoot(ctx, i)).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
+            var extraFlags = invocation.Bindings.TryGetValue("flags", out var flagsObj) && flagsObj is IEnumerable<object?> flags
+                ? flags.Select(static x => Convert.ToString(x) ?? string.Empty).Where(static x => x.Length > 0).OrderBy(static x => x, StringComparer.Ordinal).Cast<object?>().ToArray()
+                : Array.Empty<object?>();
+            Directory.CreateDirectory(Path.GetDirectoryName(output) ?? ctx.RepoRoot);
+
+            var args = new List<object?>(resolved.Cast<object?>()) { "-o", output };
+            args.AddRange(extraFlags);
+            return RunProcess(id, compiler, args.ToArray(), invocation, ctx, outputRel);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(id, "cpp.exec_failed", ex.Message);
+        }
+    }
+
+    public static ToolResult RunProcess(ToolId id, string file, object?[] args, ToolInvocation invocation, ToolExecutionContext ctx, string outputRel)
+    {
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = file,
+            ["args"] = args,
+            ["timeout_ms"] = Math.Min(ctx.MaxTimeoutMs, 30000),
+            ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 8192)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!run.Success || Convert.ToInt32(run.Outputs["exit_code"]) != 0)
+            return ToolResultFactory.Error(id, "cpp.exec_failed", Convert.ToString(run.Outputs["stderr"]) ?? $"{file} failed");
+
+        return new ToolResult(id, new Dictionary<string, object?>
+        {
+            ["ok"] = true,
+            ["output_rel"] = outputRel.Replace('\\', '/')
+        }, true);
     }
 }
 

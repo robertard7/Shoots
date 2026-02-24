@@ -832,6 +832,304 @@
       ]
     },
     {
+      "id": "linux.cpp.ar_create.v1",
+      "description": "Create static library with ar.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": true,
+          "description": "Output archive path."
+        },
+        {
+          "name": "inputs_rel",
+          "type": "array",
+          "required": true,
+          "description": "Input object paths."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.compile_clang.v1",
+      "description": "Compile C/C++ source with clang.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "source_rel",
+          "type": "string",
+          "required": true,
+          "description": "Source file path."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": false,
+          "description": "Output object path."
+        },
+        {
+          "name": "flags",
+          "type": "array",
+          "required": false,
+          "description": "Additional compiler flags."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.compile_gcc.v1",
+      "description": "Compile C/C++ source with gcc.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "source_rel",
+          "type": "string",
+          "required": true,
+          "description": "Source file path."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": false,
+          "description": "Output object path."
+        },
+        {
+          "name": "flags",
+          "type": "array",
+          "required": false,
+          "description": "Additional compiler flags."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.link_clang.v1",
+      "description": "Link objects with clang.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "inputs_rel",
+          "type": "array",
+          "required": true,
+          "description": "Input object/library paths."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": true,
+          "description": "Output binary/library path."
+        },
+        {
+          "name": "flags",
+          "type": "array",
+          "required": false,
+          "description": "Additional linker flags."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.link_gcc.v1",
+      "description": "Link objects with gcc.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "inputs_rel",
+          "type": "array",
+          "required": true,
+          "description": "Input object/library paths."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": true,
+          "description": "Output binary/library path."
+        },
+        {
+          "name": "flags",
+          "type": "array",
+          "required": false,
+          "description": "Additional linker flags."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.pkg_config.v1",
+      "description": "Query pkg-config flags.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "package",
+          "type": "string",
+          "required": true,
+          "description": "Package name."
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": false,
+          "description": "cflags|libs|both"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "flags",
+          "type": "string",
+          "description": "Sorted newline-delimited flags."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Flag count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.strip.v1",
+      "description": "Strip symbols from binary/library.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target file path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
       "id": "linux.env.get.v1",
       "description": "Get environment variable from local overlay or process env.",
       "requiredAuthority": {

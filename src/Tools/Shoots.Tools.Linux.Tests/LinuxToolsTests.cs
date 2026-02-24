@@ -1011,6 +1011,75 @@ b.txt", changed.Outputs["files"]);
         }
     }
 
+
+    [Fact]
+    public void Batch25_cpp_tools_report_not_available_or_build_with_root_confinement()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            var cmd = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?> { ["command"] = "gcc" }, wo), ctx);
+            var gccAvailable = cmd.Success && Convert.ToBoolean(cmd.Outputs["exists"]);
+
+            File.WriteAllText(Path.Combine(root, "hello.c"), "int main(){return 0;}
+", Encoding.UTF8);
+
+            var compile = new LinuxCppCompileGccHandler().Execute(new ToolInvocation(new ToolId("linux.cpp.compile_gcc.v1"), new Dictionary<string, object?>
+            {
+                ["source_rel"] = "hello.c",
+                ["output_rel"] = "obj/hello.o"
+            }, wo), ctx);
+
+            if (!gccAvailable)
+            {
+                Assert.False(compile.Success);
+                Assert.Equal("tool.not_available", compile.Outputs["error.code"]);
+            }
+            else
+            {
+                Assert.True(compile.Success);
+                Assert.True(File.Exists(Path.Combine(root, "obj", "hello.o")));
+
+                var link = new LinuxCppLinkGccHandler().Execute(new ToolInvocation(new ToolId("linux.cpp.link_gcc.v1"), new Dictionary<string, object?>
+                {
+                    ["inputs_rel"] = new object?[] { "obj/hello.o" },
+                    ["output_rel"] = "bin/hello"
+                }, wo), ctx);
+                Assert.True(link.Success);
+
+                var escape = new LinuxCppLinkGccHandler().Execute(new ToolInvocation(new ToolId("linux.cpp.link_gcc.v1"), new Dictionary<string, object?>
+                {
+                    ["inputs_rel"] = new object?[] { "obj/hello.o" },
+                    ["output_rel"] = "../escape-bin"
+                }, wo), ctx);
+                Assert.False(escape.Success);
+            }
+
+            var pkgConfigAvailable = new LinuxSysCommandExistsHandler().Execute(new ToolInvocation(new ToolId("linux.sys.command_exists.v1"), new Dictionary<string, object?> { ["command"] = "pkg-config" }, wo), ctx);
+            var pkg = new LinuxCppPkgConfigHandler().Execute(new ToolInvocation(new ToolId("linux.cpp.pkg_config.v1"), new Dictionary<string, object?>
+            {
+                ["package"] = "definitely-not-real-pkg"
+            }, wo), ctx);
+
+            if (!Convert.ToBoolean(pkgConfigAvailable.Outputs["exists"]))
+            {
+                Assert.False(pkg.Success);
+                Assert.Equal("tool.not_available", pkg.Outputs["error.code"]);
+            }
+            else
+            {
+                Assert.False(pkg.Success);
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
