@@ -18,5 +18,6 @@ Write-Host ".state models catalog: $modelsPath"
 Write-Host "Trace pattern: $tracePattern"
 Write-Host "Artifacts pattern: $artifactsPattern"
 Write-Host "Smoke output root: $smokeOutputRoot"
+Write-Host "Tools mode: embedded deterministic execution"
 
 dotnet run --project $project -c Release -- ChatIntakeSmoke | Tee-Object -FilePath (Join-Path $smokeOutputRoot 'smoke.log')

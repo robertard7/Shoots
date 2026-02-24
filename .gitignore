@@ -19,3 +19,4 @@ Thumbs.db
 
 # Local deterministic state cache
 .state/
+etc/models.catalog.local.json

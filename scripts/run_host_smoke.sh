@@ -19,5 +19,6 @@ echo ".state models catalog: $models_path"
 echo "Trace pattern: $trace_pattern"
 echo "Artifacts pattern: $artifacts_pattern"
 echo "Smoke output root: $smoke_output_root"
+echo "Tools mode: embedded deterministic execution"
 
 dotnet run --project "$repo_root/src/Host/Shoots.Host.Smoke/Shoots.Host.Smoke.csproj" -c Release -- ChatIntakeSmoke | tee "$smoke_output_root/smoke.log"

@@ -76,6 +76,38 @@ public sealed class RuntimeOrchestrator
 
         var result = loop.Run();
 
+        if (result.State.Status == RoutingStatus.Waiting && result.Waiting is not null)
+        {
+            var waitCount = (runState?.AttemptCounter ?? 0) + 1;
+            if (resolvedOptions.MaxDecisionWaits > 0 && waitCount > resolvedOptions.MaxDecisionWaits)
+            {
+                var timeoutError = new RuntimeError(
+                    "route.decision_timeout",
+                    "Decision wait budget exceeded.",
+                    $"step_id={result.Waiting.CurrentNodeId}|intent={result.Waiting.IntentTokenHash}");
+
+                var timeoutState = result.State.WithStatus(RoutingStatus.Halted);
+                var timeoutTrace = AppendHostEvent(result.Trace, RoutingTraceEventKind.Route, "decision.gate.waiting");
+                timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Route, "decision.waits.exhausted");
+                timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Error, timeoutError.Code);
+
+                var timeoutResult = new ExecutionEnvelope(
+                    plan,
+                    timeoutState,
+                    result.ToolResults,
+                    BuildArtifacts(plan, result.ToolResults),
+                    timeoutTrace,
+                    result.Telemetry,
+                    _registry.CatalogHash,
+                    ResolveFinalStatus(timeoutState),
+                    null);
+
+                _persistence?.Save(timeoutResult);
+                SaveRunState(timeoutResult, resolvedOptions, runState);
+                return timeoutResult;
+            }
+        }
+
         var artifacts = BuildArtifacts(plan, result.ToolResults);
         var finalStatus = ResolveFinalStatus(result.State);
 

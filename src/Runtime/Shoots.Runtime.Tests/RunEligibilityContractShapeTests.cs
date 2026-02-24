@@ -58,7 +58,9 @@ public sealed class RunEligibilityContractShapeTests
             "ResumeMode",
             "InjectedDecisionDigest",
             "DiscardWaiting",
-            "AllowPlanChangeOverride"
+            "AllowPlanChangeOverride",
+            "MaxDecisionWaits",
+            "DecisionWaitMode"
         };
 
         var actual = typeof(RuntimeRunOptions).GetProperties().Select(x => x.Name).ToArray();

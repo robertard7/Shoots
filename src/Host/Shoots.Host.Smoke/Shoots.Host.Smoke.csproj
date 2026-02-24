@@ -10,6 +10,7 @@
     <ProjectReference Include="../Shoots.Host.Core/Shoots.Host.Core.csproj" />
     <ProjectReference Include="../../Runtime/Shoots.Runtime.Core/Shoots.Runtime.Core.csproj" />
     <ProjectReference Include="../../ProviderAdapters/Shoots.ProviderAdapters.Abstractions/Shoots.ProviderAdapters.Abstractions.csproj" />
+    <ProjectReference Include="../../ProviderAdapters/Shoots.ProviderAdapters.Embedded/Shoots.ProviderAdapters.Embedded.csproj" />
     <ProjectReference Include="../../Runtime/Shoots.Runtime.Abstractions/Shoots.Runtime.Abstractions.csproj" />
     <ProjectReference Include="../../Contracts/Shoots.Contracts.Core/Shoots.Contracts.Core.csproj" />
   </ItemGroup>
