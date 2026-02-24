@@ -168,4 +168,26 @@ public sealed class EmbeddedToolProviderClientTests
 
         Assert.True(result.ToolResult!.Success);
     }
+
+    [Fact]
+    public async Task Missing_and_unknown_inputs_are_newline_joined_and_sorted()
+    {
+        var client = new EmbeddedToolProviderClient(Directory.GetCurrentDirectory());
+
+        var result = await client.ExecuteAsync(new ProviderExecutionEnvelope(
+            "req-9",
+            ProviderExecutionEnvelopeKind.Tool,
+            new ToolId("linux.text.replace.v1"),
+            new Dictionary<string, object?> { ["zzz"] = 1, ["aaa"] = 2 },
+            null,
+            null,
+            new Dictionary<string, object?>()),
+            CancellationToken.None);
+
+        Assert.False(result.ToolResult!.Success);
+        Assert.Equal("path\nreplace\nsearch", result.ToolResult.Outputs["missing_inputs"]);
+        Assert.Equal("aaa\nzzz", result.ToolResult.Outputs["unknown_inputs"]);
+        Assert.Equal(string.Empty, result.ToolResult.Outputs["type_error"]);
+    }
+
 }

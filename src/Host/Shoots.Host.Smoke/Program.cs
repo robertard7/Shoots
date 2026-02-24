@@ -4,6 +4,7 @@ using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Abstractions.Provider;
 using Shoots.Runtime.Core;
 using Shoots.ProviderAdapters.Abstractions;
+using Shoots.ProviderAdapters.Embedded;
 
 var command = args.FirstOrDefault() ?? "ChatIntakeSmoke";
 if (!string.Equals(command, "ChatIntakeSmoke", StringComparison.OrdinalIgnoreCase))
@@ -13,11 +14,12 @@ if (!string.Equals(command, "ChatIntakeSmoke", StringComparison.OrdinalIgnoreCas
 }
 
 var workOrderId = $"wo-smoke-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+var repoRoot = System.IO.Directory.GetCurrentDirectory();
 var orchestrator = new RuntimeOrchestrator(
     new SmokeToolRegistry(),
-    new WaitingThenDecisionProvider(new ToolId("tools.sample")),
+    new WaitingThenDecisionProvider(new ToolId("linux.fs.write_text.v1")),
     NullRuntimeNarrator.Instance,
-    new SuccessfulProviderClient(),
+    new EmbeddedToolProviderClient(repoRoot),
     new InMemoryRuntimePersistence());
 
 var plan = BuildPlan(workOrderId);
@@ -36,8 +38,8 @@ var payload = new
     NodeId = waiting.Waiting.CurrentNodeId,
     Policy = waiting.Waiting.Policy.ToString(),
     waiting.Waiting.AllowedNextNodes,
-    ToolId = waiting.Waiting.AllowedNextNodes[0],
-    Bindings = new { mode = "smoke" }
+    ToolId = "linux.fs.write_text.v1",
+    Bindings = new { path = "artifacts/smoke/local/tool-smoke.txt", text = "smoke" }
 };
 var canonicalPayload = JsonSerializer.Serialize(payload);
 var resume = orchestrator.Run(plan, new RuntimeRunOptions(ResumeMode.InjectDecision, canonicalPayload));
@@ -84,10 +86,14 @@ file sealed class SmokeToolRegistry : IToolRegistry
 {
     private static readonly ToolRegistryEntry Entry = new(
         new ToolSpec(
-            new ToolId("tools.sample"),
-            "Smoke tool",
+            new ToolId("linux.fs.write_text.v1"),
+            "Smoke write tool",
             new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.Execute),
-            Array.Empty<ToolInputSpec>(),
+            new[]
+            {
+                new ToolInputSpec("path", "string", true, "path"),
+                new ToolInputSpec("text", "string", true, "text")
+            },
             Array.Empty<ToolOutputSpec>(),
             Array.Empty<string>()));
 
@@ -113,16 +119,11 @@ file sealed class WaitingThenDecisionProvider : IAiDecisionProvider
         if (_calls == 1)
             return null;
 
-        return new ToolSelectionDecision(_toolId, new Dictionary<string, object?>());
+        return new ToolSelectionDecision(_toolId, new Dictionary<string, object?>
+        {
+            ["path"] = "artifacts/smoke/local/tool-smoke.txt",
+            ["text"] = "smoke"
+        });
     }
 }
 
-file sealed class SuccessfulProviderClient : IProviderClient
-{
-    public ValueTask<ProviderExecutionResult> ExecuteAsync(ProviderExecutionEnvelope envelope, CancellationToken ct)
-    {
-        var toolId = envelope.ToolId ?? new ToolId("tools.sample");
-        var toolResult = new ToolResult(toolId, new Dictionary<string, object?> { ["status"] = "ok" }, true);
-        return ValueTask.FromResult(new ProviderExecutionResult(envelope.RequestId, ProviderExecutionResultKind.ToolExecuted, toolResult, null, null, null));
-    }
-}
