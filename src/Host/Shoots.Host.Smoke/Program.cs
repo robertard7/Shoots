@@ -147,7 +147,8 @@ file sealed class WaitingThenDecisionProvider : IAiDecisionProvider
 
         return new ToolSelectionDecision(new ToolId("linux.fs.read_text.v1"), new Dictionary<string, object?>
         {
-            ["path"] = "artifacts/smoke/local/tool-smoke.txt"
+            ["path"] = "artifacts/smoke/local/tool-smoke.txt",
+            ["max_bytes"] = 128
         });
     }
 }
