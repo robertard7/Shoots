@@ -44,6 +44,9 @@ jobs:
       - name: Test Client (trx)
         run: dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release --logger "trx;LogFileName=client-linux.trx"
 
+      - name: Run tools smoke
+        run: bash scripts/run_tools_smoke.sh
+
       - name: Runtime hang probe (blame-hang)
         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
 
@@ -68,6 +71,7 @@ jobs:
             **/host-linux.trx
             **/client-linux.trx
             artifacts/smoke/${{ github.run_id }}/**
+            etc/tools.catalog.json
 
   full-windows:
     name: full-windows
@@ -171,6 +175,7 @@ jobs:
             **/host-windows.trx
             **/trx-ui-tests.trx
             artifacts/smoke/${{ github.run_id }}/**
+            etc/tools.catalog.json
 
 
   release-candidate-pack:
