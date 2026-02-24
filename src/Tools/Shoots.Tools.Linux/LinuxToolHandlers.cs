@@ -2528,7 +2528,22 @@ public sealed class LinuxFsReadlinkHandler : IToolHandler
             var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
             var fi = new FileInfo(path);
             var target = fi.ResolveLinkTarget(false);
-            return new ToolResult(Id, new Dictionary<string, object?> { ["target"] = target?.FullName ?? string.Empty }, true);
+            if (target is null)
+                return ToolResultFactory.Error(Id, "fs.read_failed", "Path is not a symbolic link.");
+
+            var targetPath = target.FullName;
+            if (!Path.IsPathRooted(targetPath))
+                targetPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path) ?? ctx.RepoRoot, targetPath));
+
+            var normalizedRoot = Path.GetFullPath(ctx.RepoRoot).TrimEnd(Path.DirectorySeparatorChar);
+            var rootWithSlash = normalizedRoot + Path.DirectorySeparatorChar;
+            if (!string.Equals(targetPath, normalizedRoot, StringComparison.Ordinal)
+                && !targetPath.StartsWith(rootWithSlash, StringComparison.Ordinal))
+            {
+                return ToolResultFactory.Error(Id, "fs.read_failed", "Symlink target escapes repo root.");
+            }
+
+            return new ToolResult(Id, new Dictionary<string, object?> { ["target"] = ToolPath.ToRepoRelative(ctx, targetPath) }, true);
         }
         catch (Exception ex) { return ToolResultFactory.Error(Id, "fs.read_failed", ex.Message); }
     }
@@ -2542,9 +2557,20 @@ public sealed class LinuxFsRealpathHandler : IToolHandler
         try
         {
             var path = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
-            var real = Path.GetFullPath(path);
-            var rel = ToolPath.ToRepoRelative(ctx, ToolPath.ResolveWithinRoot(ctx, Path.GetRelativePath(ctx.RepoRoot, real)));
-            return new ToolResult(Id, new Dictionary<string, object?> { ["real_rel"] = rel.Replace('\\', '/') }, true);
+            var proc = new LinuxProcExecHandler();
+            var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+            {
+                ["file"] = "realpath",
+                ["args"] = new object?[] { path },
+                ["timeout_ms"] = Math.Min(5000, ctx.MaxTimeoutMs)
+            }, invocation.WorkOrderId), ctx);
+
+            if (!run.Success || Convert.ToInt32(run.Outputs["exit_code"]) != 0)
+                return ToolResultFactory.Error(Id, "fs.read_failed", Convert.ToString(run.Outputs["stderr"]) ?? "realpath failed");
+
+            var resolved = (Convert.ToString(run.Outputs["stdout"]) ?? string.Empty).Trim();
+            var full = ToolPath.ResolveWithinRoot(ctx, resolved);
+            return new ToolResult(Id, new Dictionary<string, object?> { ["real_rel"] = ToolPath.ToRepoRelative(ctx, full) }, true);
         }
         catch (Exception ex) { return ToolResultFactory.Error(Id, "fs.read_failed", ex.Message); }
     }
@@ -2555,14 +2581,16 @@ public sealed class LinuxGitCloneDepthHandler : IToolHandler
     public ToolId Id => new("linux.git.clone_depth.v1");
     public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
     {
-        if (!ctx.AllowNetwork)
+        var url = Convert.ToString(invocation.Bindings["url"]) ?? string.Empty;
+        var isRemote = url.Contains("://", StringComparison.Ordinal) || url.StartsWith("git@", StringComparison.Ordinal);
+        if (isRemote && !ctx.AllowNetwork)
             return ToolResultFactory.Error(Id, "tool.network_disabled", "Network access is disabled for tool execution context.");
         var args = new List<string> { "clone" };
         var branch = invocation.Bindings.TryGetValue("branch", out var b) ? Convert.ToString(b) : null;
         var depth = invocation.Bindings.TryGetValue("depth", out var d) ? Convert.ToInt32(d) : 1;
         if (!string.IsNullOrWhiteSpace(branch)) { args.Add("--branch"); args.Add(branch!); }
         if (depth > 0) { args.Add("--depth"); args.Add(depth.ToString()); }
-        args.Add(Convert.ToString(invocation.Bindings["url"]) ?? string.Empty);
+        args.Add(url);
         args.Add(ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["dest_rel"]) ?? string.Empty));
         var proc = new LinuxProcExecHandler();
         var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?> { ["file"] = "git", ["args"] = args.Cast<object?>().ToArray() }, invocation.WorkOrderId), ctx);
