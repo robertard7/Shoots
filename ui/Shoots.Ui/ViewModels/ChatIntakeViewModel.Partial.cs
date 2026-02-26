@@ -850,8 +850,8 @@ public sealed partial class MainWindowViewModel
         foreach (var artifact in envelope.Artifacts)
             _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
 
-        TraceLogPath = ResolveTraceLogPath(envelope.State.WorkOrderId.Value);
-        ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.State.WorkOrderId.Value);
+        TraceLogPath = ResolveTraceLogPath(envelope.GetExecutionId());
+        ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.GetExecutionId());
         PersistTrace(TraceLogPath, _traceEntries);
         EnsureArtifactsDirectory(ArtifactsOutputPath);
         CopyTraceCommand.RaiseCanExecuteChanged();
@@ -870,8 +870,8 @@ public sealed partial class MainWindowViewModel
         foreach (var artifact in envelope.Artifacts)
             _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
 
-        TraceLogPath = ResolveTraceLogPath(envelope.State.WorkOrderId.Value);
-        ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.State.WorkOrderId.Value);
+        TraceLogPath = ResolveTraceLogPath(envelope.GetExecutionId());
+        ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.GetExecutionId());
         PersistTrace(TraceLogPath, _traceEntries);
         EnsureArtifactsDirectory(ArtifactsOutputPath);
         CopyTraceCommand.RaiseCanExecuteChanged();

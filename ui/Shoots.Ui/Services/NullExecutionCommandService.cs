@@ -26,14 +26,12 @@ public sealed class NullExecutionCommandService : IExecutionCommandService
     public Task CancelAsync(CancellationToken ct = default)
     {
         _ = ct;
-        _ = options;
         return Task.CompletedTask;
     }
 
     public Task<IRuntimeStatusSnapshot> RefreshStatusAsync(CancellationToken ct = default)
     {
         _ = ct;
-        _ = options;
 
         return Task.FromResult<IRuntimeStatusSnapshot>(
             new NullRuntimeStatusSnapshot(
