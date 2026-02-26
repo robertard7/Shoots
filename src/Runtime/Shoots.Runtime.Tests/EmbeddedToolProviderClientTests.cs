@@ -190,4 +190,48 @@ public sealed class EmbeddedToolProviderClientTests
         Assert.Equal(string.Empty, result.ToolResult.Outputs["type_error"]);
     }
 
+    [Fact]
+    public async Task Working_directory_escape_is_blocked()
+    {
+        var client = new EmbeddedToolProviderClient(Directory.GetCurrentDirectory());
+
+        var result = await client.ExecuteAsync(new ProviderExecutionEnvelope(
+            "req-10",
+            ProviderExecutionEnvelopeKind.Tool,
+            new ToolId("linux.proc.cwd.v1"),
+            new Dictionary<string, object?>(),
+            null,
+            null,
+            new Dictionary<string, object?>
+            {
+                ["working_directory"] = "../../"
+            }),
+            CancellationToken.None);
+
+        Assert.False(result.ToolResult!.Success);
+        Assert.Equal("fs.path_escape", result.ToolResult.Outputs["error.code"]);
+    }
+
+    [Fact]
+    public async Task Context_cannot_escalate_network_gate_when_disabled_by_host()
+    {
+        var client = new EmbeddedToolProviderClient(Directory.GetCurrentDirectory(), allowNetwork: false);
+
+        var result = await client.ExecuteAsync(new ProviderExecutionEnvelope(
+            "req-11",
+            ProviderExecutionEnvelopeKind.Tool,
+            new ToolId("linux.net.http_get_text.v1"),
+            new Dictionary<string, object?> { ["url"] = "https://example.com" },
+            null,
+            null,
+            new Dictionary<string, object?>
+            {
+                ["allow_network"] = true
+            }),
+            CancellationToken.None);
+
+        Assert.False(result.ToolResult!.Success);
+        Assert.Equal("tool.network_disabled", result.ToolResult.Outputs["error.code"]);
+    }
+
 }
