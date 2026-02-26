@@ -1262,6 +1262,71 @@ b.txt", changed.Outputs["files"]);
         }
     }
 
+
+    [Fact]
+    public void Batch33_cas_primitives_store_read_and_bound_output()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo-cas");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None, maxOutputBytes: 32);
+
+            var payload = Encoding.UTF8.GetBytes("hello-cas-content");
+            var putBytes = new LinuxCasPutBytesHandler().Execute(new ToolInvocation(new ToolId("linux.cas.put_bytes.v1"), new Dictionary<string, object?>
+            {
+                ["bytes_base64"] = Convert.ToBase64String(payload)
+            }, wo), ctx);
+            Assert.True(putBytes.Success);
+            var sha = Convert.ToString(putBytes.Outputs["sha256"]) ?? string.Empty;
+            Assert.Equal(64, sha.Length);
+
+            var existsTrue = new LinuxCasExistsHandler().Execute(new ToolInvocation(new ToolId("linux.cas.exists.v1"), new Dictionary<string, object?>
+            {
+                ["sha256"] = sha
+            }, wo), ctx);
+            Assert.True(existsTrue.Success);
+            Assert.Equal(true, existsTrue.Outputs["exists"]);
+
+            File.WriteAllText(Path.Combine(root, "from-file.txt"), "from-file", Encoding.UTF8);
+            var putFile = new LinuxCasPutFileHandler().Execute(new ToolInvocation(new ToolId("linux.cas.put_file.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "from-file.txt"
+            }, wo), ctx);
+            Assert.True(putFile.Success);
+            Assert.True((Convert.ToString(putFile.Outputs["path_rel"]) ?? string.Empty).StartsWith(".shoots/cas/", StringComparison.Ordinal));
+
+            var get = new LinuxCasGetHandler().Execute(new ToolInvocation(new ToolId("linux.cas.get.v1"), new Dictionary<string, object?>
+            {
+                ["sha256"] = sha,
+                ["max_bytes"] = 5
+            }, wo), ctx);
+            Assert.True(get.Success);
+            Assert.Equal(true, get.Outputs["truncated"]);
+            var got = Convert.FromBase64String(Convert.ToString(get.Outputs["bytes_base64"]) ?? string.Empty);
+            Assert.Equal(5, got.Length);
+            Assert.Equal(payload.Take(5).ToArray(), got);
+
+            var invalidSha = new LinuxCasExistsHandler().Execute(new ToolInvocation(new ToolId("linux.cas.exists.v1"), new Dictionary<string, object?>
+            {
+                ["sha256"] = "xyz"
+            }, wo), ctx);
+            Assert.False(invalidSha.Success);
+            Assert.Equal("cas.invalid_sha256", invalidSha.Outputs["error.code"]);
+
+            var missing = new LinuxCasGetHandler().Execute(new ToolInvocation(new ToolId("linux.cas.get.v1"), new Dictionary<string, object?>
+            {
+                ["sha256"] = new string('a', 64)
+            }, wo), ctx);
+            Assert.False(missing.Success);
+            Assert.Equal("cas.not_found", missing.Outputs["error.code"]);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

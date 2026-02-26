@@ -832,6 +832,197 @@
       ]
     },
     {
+      "id": "linux.cas.exists.v1",
+      "description": "Check whether a CAS object exists under .shoots/cas by sha256.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "required": true,
+          "description": "SHA-256 key."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "description": "Normalized SHA-256 key."
+        },
+        {
+          "name": "exists",
+          "type": "bool",
+          "description": "Whether the CAS object exists."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cas",
+        "hash"
+      ]
+    },
+    {
+      "id": "linux.cas.get.v1",
+      "description": "Read CAS object bytes by sha256 with bounded output.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "required": true,
+          "description": "SHA-256 key."
+        },
+        {
+          "name": "max_bytes",
+          "type": "int",
+          "required": false,
+          "description": "Optional maximum bytes to return."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "description": "Normalized SHA-256 key."
+        },
+        {
+          "name": "bytes_base64",
+          "type": "string",
+          "description": "Base64-encoded object bytes (possibly truncated)."
+        },
+        {
+          "name": "size_bytes",
+          "type": "int",
+          "description": "Original object size in bytes."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "True when returned bytes were truncated by limits."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cas",
+        "hash"
+      ]
+    },
+    {
+      "id": "linux.cas.put_bytes.v1",
+      "description": "Store provided bytes in .shoots/cas using sha256 content address.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "bytes_base64",
+          "type": "string",
+          "required": true,
+          "description": "Base64-encoded bytes to store."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "description": "Computed sha256 key."
+        },
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Repository-relative CAS path."
+        },
+        {
+          "name": "size_bytes",
+          "type": "int",
+          "description": "Stored byte size."
+        },
+        {
+          "name": "stored",
+          "type": "bool",
+          "description": "Whether store operation completed."
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "True when object file was newly created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cas",
+        "hash"
+      ]
+    },
+    {
+      "id": "linux.cas.put_file.v1",
+      "description": "Store file bytes in .shoots/cas using sha256 content address.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Repository-relative source file path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "description": "Computed sha256 key."
+        },
+        {
+          "name": "source_path_rel",
+          "type": "string",
+          "description": "Repository-relative source path."
+        },
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Repository-relative CAS path."
+        },
+        {
+          "name": "size_bytes",
+          "type": "int",
+          "description": "Stored byte size."
+        },
+        {
+          "name": "stored",
+          "type": "bool",
+          "description": "Whether store operation completed."
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "True when object file was newly created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cas",
+        "hash"
+      ]
+    },
+    {
       "id": "linux.cpp.ar_create.v1",
       "description": "Create static library with ar.",
       "requiredAuthority": {

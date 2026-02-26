@@ -157,6 +157,10 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxCppArCreateHandler(),
             new LinuxCppStripHandler(),
             new LinuxCppPkgConfigHandler(),
+            new LinuxCasPutBytesHandler(),
+            new LinuxCasPutFileHandler(),
+            new LinuxCasGetHandler(),
+            new LinuxCasExistsHandler(),
             new LinuxHashFileSha256Handler(),
             new LinuxHashDirManifestHandler()
         });
@@ -3641,6 +3645,162 @@ internal static class LinuxCppToolRunner
             ["ok"] = true,
             ["output_rel"] = outputRel.Replace('\\', '/')
         }, true);
+    }
+}
+
+internal static class LinuxCasPath
+{
+    public static string CasRoot(ToolExecutionContext ctx)
+        => ToolPath.ResolveWithinRoot(ctx, ".shoots/cas");
+
+    public static bool IsValidSha256(string value)
+        => value.Length == 64 && value.All(static c =>
+            (c >= '0' && c <= '9') ||
+            (c >= 'a' && c <= 'f') ||
+            (c >= 'A' && c <= 'F'));
+}
+
+public sealed class LinuxCasPutBytesHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cas.put_bytes.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var base64 = Convert.ToString(invocation.Bindings["bytes_base64"]) ?? string.Empty;
+            byte[] bytes;
+            try
+            {
+                bytes = Convert.FromBase64String(base64);
+            }
+            catch (FormatException)
+            {
+                return ToolResultFactory.Error(Id, "cas.invalid_base64", "bytes_base64 must be valid base64.");
+            }
+
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
+            var root = LinuxCasPath.CasRoot(ctx);
+            Directory.CreateDirectory(root);
+            var filePath = Path.Combine(root, hash);
+            var existed = File.Exists(filePath);
+            if (!existed)
+                File.WriteAllBytes(filePath, bytes);
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["sha256"] = hash,
+                ["path_rel"] = ToolPath.ToRepoRelative(ctx, filePath),
+                ["size_bytes"] = bytes.Length,
+                ["stored"] = true,
+                ["created"] = !existed
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "cas.put_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxCasPutFileHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cas.put_file.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var source = ToolPath.ResolveWithinRoot(ctx, Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty);
+            var bytes = File.ReadAllBytes(source);
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
+            var root = LinuxCasPath.CasRoot(ctx);
+            Directory.CreateDirectory(root);
+            var filePath = Path.Combine(root, hash);
+            var existed = File.Exists(filePath);
+            if (!existed)
+                File.WriteAllBytes(filePath, bytes);
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["sha256"] = hash,
+                ["source_path_rel"] = ToolPath.ToRepoRelative(ctx, source),
+                ["path_rel"] = ToolPath.ToRepoRelative(ctx, filePath),
+                ["size_bytes"] = bytes.Length,
+                ["stored"] = true,
+                ["created"] = !existed
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "cas.put_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxCasGetHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cas.get.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var sha = (Convert.ToString(invocation.Bindings["sha256"]) ?? string.Empty).ToLowerInvariant();
+            if (!LinuxCasPath.IsValidSha256(sha))
+                return ToolResultFactory.Error(Id, "cas.invalid_sha256", "sha256 must be a 64-character hexadecimal string.");
+
+            var root = LinuxCasPath.CasRoot(ctx);
+            var filePath = Path.Combine(root, sha);
+            if (!File.Exists(filePath))
+                return ToolResultFactory.Error(Id, "cas.not_found", "CAS entry not found.");
+
+            var allBytes = File.ReadAllBytes(filePath);
+            var requestedMax = invocation.Bindings.TryGetValue("max_bytes", out var m) ? Convert.ToInt32(m) : ctx.MaxBytesOut;
+            var maxBytes = Math.Max(0, Math.Min(ctx.MaxBytesOut, requestedMax));
+            var size = allBytes.Length;
+            var truncated = size > maxBytes;
+            var bytes = truncated ? allBytes.Take(maxBytes).ToArray() : allBytes;
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["sha256"] = sha,
+                ["bytes_base64"] = Convert.ToBase64String(bytes),
+                ["size_bytes"] = size,
+                ["truncated"] = truncated
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "cas.get_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxCasExistsHandler : IToolHandler
+{
+    public ToolId Id => new("linux.cas.exists.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var sha = (Convert.ToString(invocation.Bindings["sha256"]) ?? string.Empty).ToLowerInvariant();
+            if (!LinuxCasPath.IsValidSha256(sha))
+                return ToolResultFactory.Error(Id, "cas.invalid_sha256", "sha256 must be a 64-character hexadecimal string.");
+
+            var root = LinuxCasPath.CasRoot(ctx);
+            var filePath = Path.Combine(root, sha);
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["sha256"] = sha,
+                ["exists"] = File.Exists(filePath)
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "cas.exists_failed", ex.Message);
+        }
     }
 }
 
