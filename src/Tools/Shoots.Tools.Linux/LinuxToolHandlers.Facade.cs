@@ -20,8 +20,6 @@ public static class LinuxToolHandlers
 
 public static class LinuxToolText
 {
-    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
-
     public static string TruncateUtf8(string text, int maxBytesOut)
     {
         if (maxBytesOut <= 0 || string.IsNullOrEmpty(text))
@@ -31,19 +29,38 @@ public static class LinuxToolText
         if (bytes.Length <= maxBytesOut)
             return text;
 
-        var count = maxBytesOut;
-        while (count > 0)
-        {
-            try
-            {
-                return StrictUtf8.GetString(bytes, 0, count);
-            }
-            catch (DecoderFallbackException)
-            {
-                count--;
-            }
-        }
+        var end = maxBytesOut;
+        var runeStart = end - 1;
+        while (runeStart >= 0 && IsContinuationByte(bytes[runeStart]))
+            runeStart--;
 
-        return string.Empty;
+        if (runeStart < 0)
+            return string.Empty;
+
+        var sequenceLength = GetSequenceLength(bytes[runeStart]);
+        if (sequenceLength <= 0 || runeStart + sequenceLength > maxBytesOut)
+            end = runeStart;
+
+        return end <= 0 ? string.Empty : Encoding.UTF8.GetString(bytes, 0, end);
+    }
+
+    private static bool IsContinuationByte(byte value)
+        => (value & 0b1100_0000) == 0b1000_0000;
+
+    private static int GetSequenceLength(byte value)
+    {
+        if ((value & 0b1000_0000) == 0)
+            return 1;
+
+        if ((value & 0b1110_0000) == 0b1100_0000)
+            return 2;
+
+        if ((value & 0b1111_0000) == 0b1110_0000)
+            return 3;
+
+        if ((value & 0b1111_1000) == 0b1111_0000)
+            return 4;
+
+        return -1;
     }
 }

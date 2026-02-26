@@ -32,6 +32,8 @@ public sealed class LinuxToolHandlersFacadeTests
         var text = "a😀b";
 
         Assert.Equal("a", LinuxToolText.TruncateUtf8(text, 1));
+        Assert.Equal("a", LinuxToolText.TruncateUtf8(text, 2));
+        Assert.Equal("a", LinuxToolText.TruncateUtf8(text, 3));
         Assert.Equal("a", LinuxToolText.TruncateUtf8(text, 4));
         Assert.Equal("a😀", LinuxToolText.TruncateUtf8(text, 5));
         Assert.Equal(text, LinuxToolText.TruncateUtf8(text, 6));
