@@ -3,7 +3,6 @@ using Shoots.ProviderAdapters.Abstractions;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Abstractions.Provider;
 using Shoots.Runtime.Core;
-using Xunit;
 
 namespace Shoots.Runtime.Tests;
 
