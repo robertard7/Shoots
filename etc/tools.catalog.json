@@ -1994,6 +1994,96 @@
       ]
     },
     {
+      "id": "linux.fs.temp_dir_create.v1",
+      "description": "Create deterministic temp directory under .shoots/tmp.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "nonce",
+          "type": "string",
+          "required": false,
+          "description": "Optional deterministic nonce override."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Created temp dir path."
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "Whether directory was newly created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.temp_dir_delete.v1",
+      "description": "Delete temp directory under .shoots/tmp.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Temp dir path under .shoots/tmp."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "deleted",
+          "type": "bool",
+          "description": "Whether delete completed."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.temp_dir_list.v1",
+      "description": "List temp directories under .shoots/tmp.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "dirs",
+          "type": "string",
+          "description": "Newline-delimited temp dir paths."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Temp dir count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
       "id": "linux.fs.touch.v1",
       "description": "Create file or update timestamp.",
       "requiredAuthority": {

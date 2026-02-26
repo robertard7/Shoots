@@ -98,6 +98,9 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxFsCwdHandler(),
             new LinuxFsPathJoinHandler(),
             new LinuxFsTempDirHandler(),
+            new LinuxFsTempDirCreateHandler(),
+            new LinuxFsTempDirDeleteHandler(),
+            new LinuxFsTempDirListHandler(),
             new LinuxTextTrimHandler(),
             new LinuxTextToJsonHandler(),
             new LinuxTextFromJsonHandler(),
@@ -1924,6 +1927,91 @@ public sealed class LinuxFsTempDirHandler : IToolHandler
             {
                 ["path"] = ToolPath.ToRepoRelative(ctx, path),
                 ["created"] = true
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "fs.temp_dir_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxFsTempDirCreateHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.temp_dir_create.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var baseDir = ToolPath.ResolveWithinRoot(ctx, ".shoots/tmp");
+            Directory.CreateDirectory(baseDir);
+            var nonceInput = invocation.Bindings.TryGetValue("nonce", out var n) && !string.IsNullOrWhiteSpace(Convert.ToString(n))
+                ? Convert.ToString(n)!
+                : invocation.WorkOrderId.Value;
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(nonceInput))).ToLowerInvariant()[..12];
+            var dir = Path.Combine(baseDir, hash);
+            var existed = Directory.Exists(dir);
+            Directory.CreateDirectory(dir);
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["path_rel"] = ToolPath.ToRepoRelative(ctx, dir),
+                ["created"] = !existed
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "fs.temp_dir_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxFsTempDirDeleteHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.temp_dir_delete.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var rel = Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty;
+            if (!rel.StartsWith(".shoots/tmp/", StringComparison.Ordinal) && !string.Equals(rel, ".shoots/tmp", StringComparison.Ordinal))
+                return ToolResultFactory.Error(Id, "fs.path_escape", "Temp dir delete is restricted to .shoots/tmp/." );
+
+            var full = ToolPath.ResolveWithinRoot(ctx, rel);
+            if (Directory.Exists(full))
+                Directory.Delete(full, recursive: true);
+
+            return new ToolResult(Id, new Dictionary<string, object?> { ["deleted"] = true }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "fs.temp_dir_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxFsTempDirListHandler : IToolHandler
+{
+    public ToolId Id => new("linux.fs.temp_dir_list.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var baseDir = ToolPath.ResolveWithinRoot(ctx, ".shoots/tmp");
+            if (!Directory.Exists(baseDir))
+                return new ToolResult(Id, new Dictionary<string, object?> { ["dirs"] = string.Empty, ["count"] = 0 }, true);
+
+            var dirs = Directory.EnumerateDirectories(baseDir, "*", SearchOption.TopDirectoryOnly)
+                .OrderBy(static x => x, StringComparer.Ordinal)
+                .Select(path => ToolPath.ToRepoRelative(ctx, path))
+                .ToArray();
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["dirs"] = string.Join("\n", dirs),
+                ["count"] = dirs.Length
             }, true);
         }
         catch (Exception ex)

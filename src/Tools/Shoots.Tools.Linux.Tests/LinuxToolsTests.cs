@@ -1160,6 +1160,42 @@ b.txt", changed.Outputs["files"]);
         }
     }
 
+
+    [Fact]
+    public void Batch31_temp_dir_primitives_are_deterministic_and_confined()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo-temp");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            var create = new LinuxFsTempDirCreateHandler().Execute(new ToolInvocation(new ToolId("linux.fs.temp_dir_create.v1"), new Dictionary<string, object?>(), wo), ctx);
+            Assert.True(create.Success);
+            var pathRel = Convert.ToString(create.Outputs["path_rel"]) ?? string.Empty;
+            Assert.StartsWith(".shoots/tmp/", pathRel, StringComparison.Ordinal);
+
+            var list1 = new LinuxFsTempDirListHandler().Execute(new ToolInvocation(new ToolId("linux.fs.temp_dir_list.v1"), new Dictionary<string, object?>(), wo), ctx);
+            Assert.True(list1.Success);
+            Assert.Contains(pathRel, Convert.ToString(list1.Outputs["dirs"]) ?? string.Empty, StringComparison.Ordinal);
+
+            var escapeDelete = new LinuxFsTempDirDeleteHandler().Execute(new ToolInvocation(new ToolId("linux.fs.temp_dir_delete.v1"), new Dictionary<string, object?> { ["path_rel"] = "../bad" }, wo), ctx);
+            Assert.False(escapeDelete.Success);
+            Assert.Equal("fs.path_escape", escapeDelete.Outputs["error.code"]);
+
+            var del = new LinuxFsTempDirDeleteHandler().Execute(new ToolInvocation(new ToolId("linux.fs.temp_dir_delete.v1"), new Dictionary<string, object?> { ["path_rel"] = pathRel }, wo), ctx);
+            Assert.True(del.Success);
+
+            var list2 = new LinuxFsTempDirListHandler().Execute(new ToolInvocation(new ToolId("linux.fs.temp_dir_list.v1"), new Dictionary<string, object?>(), wo), ctx);
+            Assert.True(list2.Success);
+            Assert.DoesNotContain(pathRel, Convert.ToString(list2.Outputs["dirs"]) ?? string.Empty, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
