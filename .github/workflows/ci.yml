@@ -102,20 +102,20 @@ jobs:
         shell: pwsh
         run: ./scripts/verify_no_spin_timeouts.ps1
 
-      - name: Verify no-spin timeout guard
-        shell: pwsh
-        run: ./scripts/verify_no_spin_timeouts.ps1
-
       - name: Restore
+        shell: pwsh
         run: dotnet restore Shoots.sln
 
       - name: Build
+        shell: pwsh
         run: dotnet build Shoots.sln -c Release --no-restore
 
       - name: Test Host contracts/core on Windows (trx)
+        shell: pwsh
         run: dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -m:1 --blame-hang --blame-hang-timeout 2m --logger "trx;LogFileName=host-windows.trx"
 
       - name: Test Runtime on Windows (trx)
+        shell: pwsh
         run: dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --logger "trx;LogFileName=runtime-windows.trx"
 
       - name: Test UI (trx)
@@ -133,9 +133,11 @@ jobs:
           Receive-Job -Job $job
 
       - name: Test full solution (trx)
+        shell: pwsh
         run: dotnet test Shoots.sln -c Release --no-build --logger "trx;LogFileName=solution.trx"
 
       - name: Host smoke (ChatIntakeSmoke)
+        shell: pwsh
         run: dotnet run --project src/Host/Shoots.Host.Smoke/Shoots.Host.Smoke.csproj -c Release -- ChatIntakeSmoke
 
       - name: Collect smoke artifacts (windows)
@@ -241,15 +243,19 @@ jobs:
         run: ./scripts/verify_repo_topology_guard.ps1
 
       - name: Restore
+        shell: pwsh
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
       - name: Build
+        shell: pwsh
         run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore
 
       - name: Determinism pass 1 (trx)
+        shell: pwsh
         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-1.trx"
 
       - name: Determinism pass 2 (trx)
+        shell: pwsh
         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-2.trx"
 
       - name: Upload determinism artifacts
