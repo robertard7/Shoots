@@ -52,7 +52,7 @@ public sealed class EmbeddedToolGoldenFlowTests
         }
         finally
         {
-            Directory.Delete(root, true);
+            DeleteDirectoryWithRetry(root);
         }
     }
 
@@ -106,7 +106,7 @@ public sealed class EmbeddedToolGoldenFlowTests
         }
         finally
         {
-            Directory.Delete(root, true);
+            DeleteDirectoryWithRetry(root);
         }
     }
 
@@ -171,7 +171,7 @@ public sealed class EmbeddedToolGoldenFlowTests
         }
         finally
         {
-            Directory.Delete(root, true);
+            DeleteDirectoryWithRetry(root);
         }
     }
 
@@ -220,7 +220,7 @@ public sealed class EmbeddedToolGoldenFlowTests
         }
         finally
         {
-            Directory.Delete(root, true);
+            DeleteDirectoryWithRetry(root);
         }
     }
 
@@ -263,7 +263,28 @@ public sealed class EmbeddedToolGoldenFlowTests
         }
         finally
         {
-            Directory.Delete(root, true);
+            DeleteDirectoryWithRetry(root);
+        }
+    }
+
+    private static void DeleteDirectoryWithRetry(string path)
+    {
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                    Directory.Delete(path, true);
+                return;
+            }
+            catch (UnauthorizedAccessException) when (attempt < 4)
+            {
+                Thread.Sleep(50 * (attempt + 1));
+            }
+            catch (IOException) when (attempt < 4)
+            {
+                Thread.Sleep(50 * (attempt + 1));
+            }
         }
     }
 

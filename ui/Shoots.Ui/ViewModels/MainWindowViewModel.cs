@@ -57,7 +57,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private BuildPlan? _plan;
     private IEnvironmentProfile? _selectedProfile;
     private EnvironmentProfileResult? _lastEnvironmentResult;
-    private bool _restartRequired;
+    private bool _restartNeeded;
     private EnvironmentScript? _environmentScript;
     private string? _environmentErrorMessage;
     private string? _environmentInfoMessage;
@@ -775,16 +775,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    public bool RestartRequired
+    public bool RestartNeeded
     {
-        get => _restartRequired;
+        get => _restartNeeded;
         private set
         {
-            if (_restartRequired == value)
+            if (_restartNeeded == value)
                 return;
 
-            _restartRequired = value;
-            OnPropertyChanged(nameof(RestartRequired));
+            _restartNeeded = value;
+            OnPropertyChanged(nameof(RestartNeeded));
         }
     }
 
@@ -1229,7 +1229,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         EnvironmentAppliedCapabilities = DescribeCapabilities(result.DeclaredCapabilities);
         EnvironmentAppliedAtUtc = $"{result.AppliedAtUtc:yyyy-MM-dd HH:mm:ss} UTC";
         EnvironmentAppliedProfileName = result.ProfileName;
-        RestartRequired = previousCapabilities != result.DeclaredCapabilities;
+        RestartNeeded = previousCapabilities != result.DeclaredCapabilities;
         EnvironmentInfoMessage = "Environment applied successfully.";
 
         OnPropertyChanged(nameof(EnvironmentCreatedPaths));

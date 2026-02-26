@@ -58,7 +58,7 @@ public sealed class SystemBlueprintStore : ISystemBlueprintStore
     public void SaveForWorkspace(string workspaceRoot, IEnumerable<SystemBlueprint> blueprints)
     {
         if (string.IsNullOrWhiteSpace(workspaceRoot))
-            throw new ArgumentException("workspace root is required", nameof(workspaceRoot));
+            throw new ArgumentException("workspace root is needed", nameof(workspaceRoot));
         if (blueprints is null)
             throw new ArgumentNullException(nameof(blueprints));
 

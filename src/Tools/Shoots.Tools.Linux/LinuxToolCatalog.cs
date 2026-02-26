@@ -23,7 +23,7 @@ public static class LinuxToolCatalog
 
     private static ToolRegistryEntry ToEntry(ToolCatalogTool tool)
     {
-        var providerKind = Enum.Parse<ProviderKind>(tool.RequiredAuthority.ProviderKind, ignoreCase: true);
+        var providerKind = ParseProviderKind(tool.RequiredAuthority.ProviderKind);
         var capabilities = ProviderCapabilities.None;
         foreach (var value in tool.RequiredAuthority.Capabilities)
         {
@@ -40,6 +40,18 @@ public static class LinuxToolCatalog
             tool.Tags.ToArray());
 
         return new ToolRegistryEntry(spec);
+    }
+
+    private static ProviderKind ParseProviderKind(string? value)
+    {
+        return value?.Trim() switch
+        {
+            "Local" => ProviderKind.Local,
+            "Remote" => ProviderKind.Remote,
+            "Delegated" => ProviderKind.Delegated,
+            "Embedded" => ProviderKind.Local,
+            _ => ProviderKind.Local
+        };
     }
 
     private static JsonSerializerOptions JsonOptions()

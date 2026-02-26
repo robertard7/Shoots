@@ -11,6 +11,7 @@ using Shoots.Contracts.Core;
 using Shoots.Host.Abstractions;
 using Shoots.Host.Core.ModelCatalog;
 using Shoots.Runtime.Abstractions;
+using Shoots.UI.Interop;
 
 namespace Shoots.UI.ViewModels;
 
@@ -313,7 +314,7 @@ public sealed partial class MainWindowViewModel
                 return "No waiting gate is active.";
 
             if (LastWaitingInfo.Policy == DecisionPolicy.Bypass.ToString() && LastWaitingInfo.FallbackPresent)
-                return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting: bypass policy has fallback available but requires explicit host resume intent.";
+                return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting: bypass policy has fallback available but needs explicit host resume intent.";
 
             if (LastWaitingInfo.AllowedNextNodes.Count > 1)
                 return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting for explicit selection among multiple graph-derived candidates.";
@@ -760,19 +761,12 @@ public sealed partial class MainWindowViewModel
     private Task OpenStateFolderAsync()
     {
         var statePath = Path.GetFullPath(Path.Combine(".state"));
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows() && ShellExecuteHelper.OpenPath(statePath))
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "explorer.exe",
-                Arguments = statePath,
-                UseShellExecute = true
-            });
+            return Task.CompletedTask;
         }
-        else
-        {
-            LastTracePayload = statePath;
-        }
+
+        LastTracePayload = statePath;
 
         return Task.CompletedTask;
     }

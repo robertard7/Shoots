@@ -1,6 +1,6 @@
 # Shoots.Ui.Tests
 
-These tests target WPF/Desktop components and require Windows Desktop SDK targets.
+These tests target WPF/Desktop components and need Windows Desktop SDK targets.
 
 ## Why Windows-only
 `Shoots.Ui` depends on `Microsoft.NET.Sdk.WindowsDesktop`, which is unavailable on Linux CI images used for runtime/host jobs.

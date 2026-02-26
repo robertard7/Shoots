@@ -11,8 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Runtime\Shoots.Runtime.Ui.Abstractions\Shoots.Runtime.Ui.Abstractions.csproj" />
-    <ProjectReference Include="..\..\src\Host\Shoots.Host.Core\Shoots.Host.Core.csproj" />
+    <ProjectReference Include="..\..\src\Host\Shoots.Host.Abstractions\Shoots.Host.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

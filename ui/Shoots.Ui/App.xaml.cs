@@ -50,18 +50,18 @@ public partial class App : Application
 
         MainWindow = new MainWindow();
         MainWindow.Show();
-        AiSurfaceRegistry.Current.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
+        AiSurfaceRegistry.Current.AssertNeededSurfacesRegistered(UiSurfaceCatalog.NeededSurfaceIds);
 
         var surfaceRegistry = AiSurfaceRegistry.Current;
         Log($"AI surface registry: {surfaceRegistry.DescribeRegistrations()}");
 
 #if DEBUG
-        var missingRequired = surfaceRegistry.GetMissingSurfaceIds(UiSurfaceCatalog.RequiredSurfaceIds);
+        var missingNeeded = surfaceRegistry.GetMissingSurfaceIds(UiSurfaceCatalog.NeededSurfaceIds);
         var missingOptional = surfaceRegistry.GetMissingSurfaceIds(UiSurfaceCatalog.OptionalSurfaceIds);
         var missingOptionalPrefixes = surfaceRegistry.GetMissingSurfacePrefixes(UiSurfaceCatalog.OptionalSurfaceIdPrefixes);
-        Log($"AI surfaces missing (required): {FormatSurfaceList(missingRequired)}; missing (optional): {FormatSurfaceList(missingOptional)}; missing (optional prefixes): {FormatSurfaceList(missingOptionalPrefixes)}");
+        Log($"AI surfaces missing (needed): {FormatSurfaceList(missingNeeded)}; missing (optional): {FormatSurfaceList(missingOptional)}; missing (optional prefixes): {FormatSurfaceList(missingOptionalPrefixes)}");
 
-        surfaceRegistry.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
+        surfaceRegistry.AssertNeededSurfacesRegistered(UiSurfaceCatalog.NeededSurfaceIds);
 #endif
 
         base.OnStartup(e);

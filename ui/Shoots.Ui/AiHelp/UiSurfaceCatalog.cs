@@ -5,7 +5,7 @@ namespace Shoots.UI.AiHelp;
 
 public static class UiSurfaceCatalog
 {
-    public static IReadOnlyList<string> RequiredSurfaceIds { get; } = new[]
+    public static IReadOnlyList<string> NeededSurfaceIds { get; } = new[]
     {
         "workspace",
         "execution",

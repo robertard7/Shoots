@@ -82,14 +82,14 @@ public sealed class RuntimeOrchestrator
             if (resolvedOptions.MaxDecisionWaits > 0 && waitCount > resolvedOptions.MaxDecisionWaits)
             {
                 var timeoutError = new RuntimeError(
-                    "route.decision_timeout",
+                    "route_decision_required",
                     "Decision wait budget exceeded.",
                     $"step_id={result.Waiting.CurrentNodeId}|intent={result.Waiting.IntentTokenHash}");
 
                 var timeoutState = result.State.WithStatus(RoutingStatus.Halted);
                 var timeoutTrace = AppendHostEvent(result.Trace, RoutingTraceEventKind.Route, "decision.gate.waiting");
                 timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Route, "decision.waits.exhausted");
-                timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Error, timeoutError.Code);
+                timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Error, "route.decision_timeout");
 
                 var timeoutResult = new ExecutionEnvelope(
                     plan,
