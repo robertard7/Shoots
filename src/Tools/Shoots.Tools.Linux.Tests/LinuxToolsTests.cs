@@ -1327,6 +1327,56 @@ b.txt", changed.Outputs["files"]);
         }
     }
 
+
+
+    [Fact]
+    public void Batch34_artifacts_collect_and_manifest_are_deterministic()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo-artifacts");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            Directory.CreateDirectory(Path.Combine(root, "out"));
+            File.WriteAllText(Path.Combine(root, "out", "b.txt"), "bbb\n", Encoding.UTF8);
+            File.WriteAllText(Path.Combine(root, "out", "a.txt"), "aaa\n", Encoding.UTF8);
+
+            var collect = new LinuxArtifactsCollectHandler().Execute(new ToolInvocation(new ToolId("linux.artifacts.collect.v1"), new Dictionary<string, object?>
+            {
+                ["run_id"] = "run-001",
+                ["paths_rel"] = new object?[] { "out/b.txt", "out/a.txt" }
+            }, wo), ctx);
+            Assert.True(collect.Success);
+            Assert.Equal(2, collect.Outputs["count"]);
+            var copied = Convert.ToString(collect.Outputs["copied"]) ?? string.Empty;
+            Assert.Equal(string.Join("\n", copied.Split('\n', StringSplitOptions.RemoveEmptyEntries).OrderBy(static x => x, StringComparer.Ordinal)), copied);
+
+            var manifest = new LinuxArtifactsManifestHandler().Execute(new ToolInvocation(new ToolId("linux.artifacts.manifest.v1"), new Dictionary<string, object?>
+            {
+                ["run_id"] = "run-001"
+            }, wo), ctx);
+            Assert.True(manifest.Success);
+            var manifestRel = Convert.ToString(manifest.Outputs["manifest_path_rel"]) ?? string.Empty;
+            var manifestPath = Path.Combine(root, manifestRel.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(manifestPath));
+            var text = File.ReadAllText(manifestPath, Encoding.UTF8);
+            Assert.Contains("\"runId\":\"run-001\"", text, StringComparison.Ordinal);
+
+            var badRun = new LinuxArtifactsCollectHandler().Execute(new ToolInvocation(new ToolId("linux.artifacts.collect.v1"), new Dictionary<string, object?>
+            {
+                ["run_id"] = "../bad",
+                ["paths_rel"] = new object?[] { "out/a.txt" }
+            }, wo), ctx);
+            Assert.False(badRun.Success);
+            Assert.Equal("artifacts.invalid_run_id", badRun.Outputs["error.code"]);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

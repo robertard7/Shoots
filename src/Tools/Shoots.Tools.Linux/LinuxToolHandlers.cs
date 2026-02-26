@@ -88,6 +88,8 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxArchiveTarGzHandler(),
             new LinuxArchiveUntarGzHandler(),
             new LinuxArtifactsHashTreeHandler(),
+            new LinuxArtifactsCollectHandler(),
+            new LinuxArtifactsManifestHandler(),
             new LinuxGitFetchHandler(),
             new LinuxGitPullFfOnlyHandler(),
             new LinuxGitMergeAbortHandler(),
@@ -1784,6 +1786,111 @@ public sealed class LinuxArtifactsHashTreeHandler : IToolHandler
         }
     }
 }
+
+public sealed class LinuxArtifactsCollectHandler : IToolHandler
+{
+    public ToolId Id => new("linux.artifacts.collect.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var runId = Convert.ToString(invocation.Bindings["run_id"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(runId) || runId.Any(char.IsWhiteSpace) || runId.Contains("..", StringComparison.Ordinal))
+                return ToolResultFactory.Error(Id, "artifacts.invalid_run_id", "run_id must be a non-empty token without whitespace or traversal.");
+
+            var files = invocation.Bindings.TryGetValue("paths_rel", out var value) && value is IEnumerable<object?> list
+                ? list.Select(static p => Convert.ToString(p) ?? string.Empty)
+                    .Where(static p => !string.IsNullOrWhiteSpace(p))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(static p => p, StringComparer.Ordinal)
+                    .ToArray()
+                : Array.Empty<string>();
+
+            var destRoot = ToolPath.ResolveWithinRoot(ctx, Path.Combine(".shoots/artifacts", runId));
+            Directory.CreateDirectory(destRoot);
+
+            var copied = new List<string>(files.Length);
+            foreach (var rel in files)
+            {
+                var source = ToolPath.ResolveWithinRoot(ctx, rel);
+                if (!File.Exists(source))
+                    return ToolResultFactory.Error(Id, "artifacts.source_missing", $"Source file not found: {rel}");
+
+                var dest = ToolPath.ResolveWithinRoot(ctx, Path.Combine(".shoots/artifacts", runId, rel.Replace('/', Path.DirectorySeparatorChar)));
+                Directory.CreateDirectory(Path.GetDirectoryName(dest) ?? destRoot);
+                File.Copy(source, dest, overwrite: true);
+                copied.Add(ToolPath.ToRepoRelative(ctx, dest));
+            }
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["run_id"] = runId,
+                ["root_rel"] = ToolPath.ToRepoRelative(ctx, destRoot),
+                ["copied"] = string.Join("\n", copied),
+                ["count"] = copied.Count
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "artifacts.collect_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxArtifactsManifestHandler : IToolHandler
+{
+    public ToolId Id => new("linux.artifacts.manifest.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var runId = Convert.ToString(invocation.Bindings["run_id"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(runId) || runId.Any(char.IsWhiteSpace) || runId.Contains("..", StringComparison.Ordinal))
+                return ToolResultFactory.Error(Id, "artifacts.invalid_run_id", "run_id must be a non-empty token without whitespace or traversal.");
+
+            var root = ToolPath.ResolveWithinRoot(ctx, Path.Combine(".shoots/artifacts", runId));
+            if (!Directory.Exists(root))
+                return ToolResultFactory.Error(Id, "artifacts.not_found", "Artifact run directory does not exist.");
+
+            var entries = new List<Dictionary<string, object?>>();
+            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).OrderBy(static f => f, StringComparer.Ordinal))
+            {
+                var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
+                var bytes = File.ReadAllBytes(file);
+                var sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
+                entries.Add(new Dictionary<string, object?>
+                {
+                    ["path"] = rel,
+                    ["sha256"] = sha,
+                    ["size"] = bytes.LongLength
+                });
+            }
+
+            var manifest = new Dictionary<string, object?>
+            {
+                ["runId"] = runId,
+                ["files"] = entries
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(manifest);
+            var manifestPath = ToolPath.ResolveWithinRoot(ctx, Path.Combine(".shoots/artifacts", runId, "manifest.json"));
+            File.WriteAllText(manifestPath, json + "\n", Encoding.UTF8);
+
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["run_id"] = runId,
+                ["manifest_path_rel"] = ToolPath.ToRepoRelative(ctx, manifestPath),
+                ["count"] = entries.Count
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "artifacts.manifest_failed", ex.Message);
+        }
+    }
+}
+
 
 
 public sealed class LinuxGitFetchHandler : IToolHandler

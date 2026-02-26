@@ -255,6 +255,57 @@
       ]
     },
     {
+      "id": "linux.artifacts.collect.v1",
+      "description": "Copy declared files into .shoots/artifacts/<run_id> with deterministic ordering.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "run_id",
+          "type": "string",
+          "required": true,
+          "description": "Artifact run identifier token."
+        },
+        {
+          "name": "paths_rel",
+          "type": "array",
+          "required": true,
+          "description": "Repository-relative file paths to collect."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "run_id",
+          "type": "string",
+          "description": "Artifact run identifier."
+        },
+        {
+          "name": "root_rel",
+          "type": "string",
+          "description": "Repository-relative artifacts run root."
+        },
+        {
+          "name": "copied",
+          "type": "string",
+          "description": "Newline-delimited copied artifact paths."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Number of copied files."
+        }
+      ],
+      "tags": [
+        "linux",
+        "artifacts",
+        "fs"
+      ]
+    },
+    {
       "id": "linux.artifacts.hash_tree.v1",
       "description": "Compute deterministic hash list for directory tree.",
       "requiredAuthority": {
@@ -291,6 +342,46 @@
       "tags": [
         "linux",
         "artifacts"
+      ]
+    },
+    {
+      "id": "linux.artifacts.manifest.v1",
+      "description": "Write deterministic manifest.json for .shoots/artifacts/<run_id>.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "run_id",
+          "type": "string",
+          "required": true,
+          "description": "Artifact run identifier token."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "run_id",
+          "type": "string",
+          "description": "Artifact run identifier."
+        },
+        {
+          "name": "manifest_path_rel",
+          "type": "string",
+          "description": "Repository-relative manifest path."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Number of files described in manifest."
+        }
+      ],
+      "tags": [
+        "linux",
+        "artifacts",
+        "hash"
       ]
     },
     {
