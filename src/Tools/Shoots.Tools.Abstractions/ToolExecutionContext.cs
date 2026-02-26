@@ -16,6 +16,7 @@ public sealed record ToolExecutionContext(
     int MaxBytesOut,
     int MaxTimeoutMs,
     bool AllowNetwork,
+    bool AllowPrivileged,
     IDictionary<string, string?> EnvOverlay,
     CancellationToken CancellationToken,
     IDeterministicClock Clock)
@@ -25,13 +26,15 @@ public sealed record ToolExecutionContext(
         CancellationToken ct,
         int maxBytesOut = 16384,
         int maxTimeoutMs = 30000,
-        bool allowNetwork = false)
+        bool allowNetwork = false,
+        bool allowPrivileged = false)
         => new(
             repoRoot,
             repoRoot,
             maxBytesOut,
             maxTimeoutMs,
             allowNetwork,
+            allowPrivileged,
             new Dictionary<string, string?>(StringComparer.Ordinal),
             ct,
             new SystemDeterministicClock());

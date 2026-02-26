@@ -1123,6 +1123,43 @@ b.txt", changed.Outputs["files"]);
         }
     }
 
+
+    [Fact]
+    public void Batch41_privileged_gate_denies_system_service_tools_when_disabled()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None, allowPrivileged: false);
+
+            var status = new LinuxSysSystemctlStatusHandler().Execute(new ToolInvocation(new ToolId("linux.sys.systemctl_status.v1"), new Dictionary<string, object?>
+            {
+                ["unit"] = "sshd.service"
+            }, wo), ctx);
+            Assert.False(status.Success);
+            Assert.Equal("tool.privileged_disabled", status.Outputs["error.code"]);
+
+            var restart = new LinuxSysSystemctlRestartHandler().Execute(new ToolInvocation(new ToolId("linux.sys.systemctl_restart.v1"), new Dictionary<string, object?>
+            {
+                ["unit"] = "sshd.service"
+            }, wo), ctx);
+            Assert.False(restart.Success);
+            Assert.Equal("tool.privileged_disabled", restart.Outputs["error.code"]);
+
+            var journal = new LinuxSysJournalctlTailHandler().Execute(new ToolInvocation(new ToolId("linux.sys.journalctl_tail.v1"), new Dictionary<string, object?>
+            {
+                ["lines"] = 10
+            }, wo), ctx);
+            Assert.False(journal.Success);
+            Assert.Equal("tool.privileged_disabled", journal.Outputs["error.code"]);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

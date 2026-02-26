@@ -3893,6 +3893,41 @@
       ]
     },
     {
+      "id": "linux.sys.journalctl_tail.v1",
+      "description": "Read tail lines from journalctl (privileged gate).",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "lines",
+          "type": "int",
+          "required": false,
+          "description": "Line count to tail."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "type": "string",
+          "description": "Bounded journal tail text."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "journalctl exit code."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys",
+        "privileged"
+      ]
+    },
+    {
       "id": "linux.sys.meminfo.v1",
       "description": "Parse /proc/meminfo deterministically.",
       "requiredAuthority": {
@@ -3922,6 +3957,81 @@
       "tags": [
         "linux",
         "sys"
+      ]
+    },
+    {
+      "id": "linux.sys.systemctl_restart.v1",
+      "description": "Restart a systemd unit (privileged gate).",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "unit",
+          "type": "string",
+          "required": true,
+          "description": "Unit name."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether restart succeeded."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "systemctl exit code."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys",
+        "privileged"
+      ]
+    },
+    {
+      "id": "linux.sys.systemctl_status.v1",
+      "description": "Read status of a systemd unit (privileged gate).",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "unit",
+          "type": "string",
+          "required": true,
+          "description": "Unit name."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether status command succeeded."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "systemctl exit code."
+        },
+        {
+          "name": "stdout",
+          "type": "string",
+          "description": "Bounded status output."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys",
+        "privileged"
       ]
     },
     {

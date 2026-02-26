@@ -130,6 +130,9 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxBuildCMakeInstallHandler(),
             new LinuxSysDiskUsageHandler(),
             new LinuxSysMemInfoHandler(),
+            new LinuxSysSystemctlStatusHandler(),
+            new LinuxSysSystemctlRestartHandler(),
+            new LinuxSysJournalctlTailHandler(),
             new LinuxSysUnameHandler(),
             new LinuxSysCpuinfoHandler(),
             new LinuxSysDiskFreeHandler(),
@@ -2782,6 +2785,109 @@ public sealed class LinuxGitCommitAmendHandler : IToolHandler
         else { args.Add("-m"); args.Add(message!); }
         var run = GitRunner.RunGit(Id, invocation, ctx, args.ToArray());
         return run.Success ? new ToolResult(Id, new Dictionary<string, object?> { ["amended"] = true }, true) : run;
+    }
+}
+
+public sealed class LinuxSysSystemctlStatusHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.systemctl_status.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        if (!ctx.AllowPrivileged)
+            return ToolResultFactory.Error(Id, "tool.privileged_disabled", "Privileged operations are disabled for tool execution context.");
+
+        var available = LinuxCppToolRunner.IsCommandAvailable("systemctl", invocation, ctx);
+        if (!available.available)
+            return ToolResultFactory.Error(Id, "tool.not_available", "systemctl is not available in PATH.");
+
+        var unit = Convert.ToString(invocation.Bindings["unit"]) ?? string.Empty;
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "systemctl",
+            ["args"] = new object?[] { "status", "--no-pager", unit },
+            ["timeout_ms"] = Math.Min(ctx.MaxTimeoutMs, 10000),
+            ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 8192)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!run.Success)
+            return ToolResultFactory.Error(Id, "sys.systemctl_status_failed", Convert.ToString(run.Outputs["error.message"]) ?? "systemctl status failed");
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["ok"] = Convert.ToInt32(run.Outputs["exit_code"]) == 0,
+            ["exit_code"] = Convert.ToInt32(run.Outputs["exit_code"]),
+            ["stdout"] = ToolResultFactory.TruncateUtf8(Convert.ToString(run.Outputs["stdout"]) ?? string.Empty, ctx.MaxBytesOut)
+        }, true);
+    }
+}
+
+public sealed class LinuxSysSystemctlRestartHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.systemctl_restart.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        if (!ctx.AllowPrivileged)
+            return ToolResultFactory.Error(Id, "tool.privileged_disabled", "Privileged operations are disabled for tool execution context.");
+
+        var available = LinuxCppToolRunner.IsCommandAvailable("systemctl", invocation, ctx);
+        if (!available.available)
+            return ToolResultFactory.Error(Id, "tool.not_available", "systemctl is not available in PATH.");
+
+        var unit = Convert.ToString(invocation.Bindings["unit"]) ?? string.Empty;
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "systemctl",
+            ["args"] = new object?[] { "restart", unit },
+            ["timeout_ms"] = Math.Min(ctx.MaxTimeoutMs, 10000),
+            ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 4096)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!run.Success)
+            return ToolResultFactory.Error(Id, "sys.systemctl_restart_failed", Convert.ToString(run.Outputs["error.message"]) ?? "systemctl restart failed");
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["ok"] = Convert.ToInt32(run.Outputs["exit_code"]) == 0,
+            ["exit_code"] = Convert.ToInt32(run.Outputs["exit_code"])
+        }, true);
+    }
+}
+
+public sealed class LinuxSysJournalctlTailHandler : IToolHandler
+{
+    public ToolId Id => new("linux.sys.journalctl_tail.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        if (!ctx.AllowPrivileged)
+            return ToolResultFactory.Error(Id, "tool.privileged_disabled", "Privileged operations are disabled for tool execution context.");
+
+        var available = LinuxCppToolRunner.IsCommandAvailable("journalctl", invocation, ctx);
+        if (!available.available)
+            return ToolResultFactory.Error(Id, "tool.not_available", "journalctl is not available in PATH.");
+
+        var lines = invocation.Bindings.TryGetValue("lines", out var l) ? Math.Clamp(Convert.ToInt32(l), 1, 5000) : 200;
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "journalctl",
+            ["args"] = new object?[] { "-n", lines.ToString(), "--no-pager" },
+            ["timeout_ms"] = Math.Min(ctx.MaxTimeoutMs, 10000),
+            ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 8192)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!run.Success)
+            return ToolResultFactory.Error(Id, "sys.journalctl_tail_failed", Convert.ToString(run.Outputs["error.message"]) ?? "journalctl failed");
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["text"] = ToolResultFactory.TruncateUtf8(Convert.ToString(run.Outputs["stdout"]) ?? string.Empty, ctx.MaxBytesOut),
+            ["exit_code"] = Convert.ToInt32(run.Outputs["exit_code"])
+        }, true);
     }
 }
 
