@@ -251,6 +251,15 @@ internal static class ToolResultFactory
     }
 }
 
+internal static class LinuxHiddenPath
+{
+    public static bool IsHiddenFileName(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        return fileName.Length > 0 && fileName[0] == '.';
+    }
+}
+
 internal static class ToolPath
 {
     public static string ResolveWithinRoot(ToolExecutionContext ctx, string relativeOrRooted)
@@ -446,7 +455,7 @@ public sealed class LinuxFsLsHandler : IToolHandler
             var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
             var entries = Directory.EnumerateFileSystemEntries(path, "*", option)
                 .Select(p => ToolPath.ToRepoRelative(ctx, p))
-                .Where(rel => includeHidden || !Path.GetFileName(rel).StartsWith('.', StringComparison.Ordinal))
+                .Where(rel => includeHidden || !LinuxHiddenPath.IsHiddenFileName(rel))
                 .OrderBy(static p => p, StringComparer.Ordinal)
                 .Take(maxEntries)
                 .ToArray();
@@ -892,7 +901,7 @@ public sealed class LinuxArchiveZipHandler : IToolHandler
 
             var files = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories)
                 .OrderBy(static f => f, StringComparer.Ordinal)
-                .Where(file => includeHidden || !Path.GetFileName(file).StartsWith('.', StringComparison.Ordinal))
+                .Where(file => includeHidden || !LinuxHiddenPath.IsHiddenFileName(file))
                 .ToArray();
 
             using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
