@@ -53,7 +53,11 @@ public sealed record ToolCatalogTool(
     ToolCatalogAuthority RequiredAuthority,
     IReadOnlyList<ToolCatalogInput> Inputs,
     IReadOnlyList<ToolCatalogOutput> Outputs,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    int? MaxInputBytes = null,
+    int? MaxOutputBytesOverride = null,
+    int? MaxResults = null,
+    int? DefaultTimeoutMs = null);
 public sealed record ToolCatalogAuthority(string ProviderKind, IReadOnlyList<string> Capabilities);
 public sealed record ToolCatalogInput(string Name, string Type, bool Required, string Description);
 public sealed record ToolCatalogOutput(string Name, string Type, string Description);

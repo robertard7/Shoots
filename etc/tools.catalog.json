@@ -255,6 +255,58 @@
       ]
     },
     {
+      "id": "linux.artifacts.collect.v1",
+      "description": "Copy declared files into .shoots/artifacts/<run_id> with deterministic ordering.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "run_id",
+          "type": "string",
+          "required": true,
+          "description": "Artifact run identifier token."
+        },
+        {
+          "name": "paths_rel",
+          "type": "array",
+          "required": true,
+          "description": "Repository-relative file paths to collect."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "run_id",
+          "type": "string",
+          "description": "Artifact run identifier."
+        },
+        {
+          "name": "root_rel",
+          "type": "string",
+          "description": "Repository-relative artifacts run root."
+        },
+        {
+          "name": "copied",
+          "type": "string",
+          "description": "Newline-delimited copied artifact paths."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Number of copied files."
+        }
+      ],
+      "tags": [
+        "linux",
+        "artifacts",
+        "fs"
+      ],
+      "maxResults": 2048
+    },
+    {
       "id": "linux.artifacts.hash_tree.v1",
       "description": "Compute deterministic hash list for directory tree.",
       "requiredAuthority": {
@@ -291,6 +343,46 @@
       "tags": [
         "linux",
         "artifacts"
+      ]
+    },
+    {
+      "id": "linux.artifacts.manifest.v1",
+      "description": "Write deterministic manifest.json for .shoots/artifacts/<run_id>.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "run_id",
+          "type": "string",
+          "required": true,
+          "description": "Artifact run identifier token."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "run_id",
+          "type": "string",
+          "description": "Artifact run identifier."
+        },
+        {
+          "name": "manifest_path_rel",
+          "type": "string",
+          "description": "Repository-relative manifest path."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Number of files described in manifest."
+        }
+      ],
+      "tags": [
+        "linux",
+        "artifacts",
+        "hash"
       ]
     },
     {
@@ -832,6 +924,497 @@
       ]
     },
     {
+      "id": "linux.cas.exists.v1",
+      "description": "Check whether a CAS object exists under .shoots/cas by sha256.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "required": true,
+          "description": "SHA-256 key."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "description": "Normalized SHA-256 key."
+        },
+        {
+          "name": "exists",
+          "type": "bool",
+          "description": "Whether the CAS object exists."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cas",
+        "hash"
+      ]
+    },
+    {
+      "id": "linux.cas.get.v1",
+      "description": "Read CAS object bytes by sha256 with bounded output.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "required": true,
+          "description": "SHA-256 key."
+        },
+        {
+          "name": "max_bytes",
+          "type": "int",
+          "required": false,
+          "description": "Optional maximum bytes to return."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "description": "Normalized SHA-256 key."
+        },
+        {
+          "name": "bytes_base64",
+          "type": "string",
+          "description": "Base64-encoded object bytes (possibly truncated)."
+        },
+        {
+          "name": "size_bytes",
+          "type": "int",
+          "description": "Original object size in bytes."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "True when returned bytes were truncated by limits."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cas",
+        "hash"
+      ],
+      "maxOutputBytesOverride": 262144
+    },
+    {
+      "id": "linux.cas.put_bytes.v1",
+      "description": "Store provided bytes in .shoots/cas using sha256 content address.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "bytes_base64",
+          "type": "string",
+          "required": true,
+          "description": "Base64-encoded bytes to store."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "description": "Computed sha256 key."
+        },
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Repository-relative CAS path."
+        },
+        {
+          "name": "size_bytes",
+          "type": "int",
+          "description": "Stored byte size."
+        },
+        {
+          "name": "stored",
+          "type": "bool",
+          "description": "Whether store operation completed."
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "True when object file was newly created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cas",
+        "hash"
+      ],
+      "maxInputBytes": 1048576
+    },
+    {
+      "id": "linux.cas.put_file.v1",
+      "description": "Store file bytes in .shoots/cas using sha256 content address.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Repository-relative source file path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sha256",
+          "type": "string",
+          "description": "Computed sha256 key."
+        },
+        {
+          "name": "source_path_rel",
+          "type": "string",
+          "description": "Repository-relative source path."
+        },
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Repository-relative CAS path."
+        },
+        {
+          "name": "size_bytes",
+          "type": "int",
+          "description": "Stored byte size."
+        },
+        {
+          "name": "stored",
+          "type": "bool",
+          "description": "Whether store operation completed."
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "True when object file was newly created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cas",
+        "hash"
+      ]
+    },
+    {
+      "id": "linux.cpp.ar_create.v1",
+      "description": "Create static library with ar.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": true,
+          "description": "Output archive path."
+        },
+        {
+          "name": "inputs_rel",
+          "type": "array",
+          "required": true,
+          "description": "Input object paths."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.compile_clang.v1",
+      "description": "Compile C/C++ source with clang.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "source_rel",
+          "type": "string",
+          "required": true,
+          "description": "Source file path."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": false,
+          "description": "Output object path."
+        },
+        {
+          "name": "flags",
+          "type": "array",
+          "required": false,
+          "description": "Additional compiler flags."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.compile_gcc.v1",
+      "description": "Compile C/C++ source with gcc.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "source_rel",
+          "type": "string",
+          "required": true,
+          "description": "Source file path."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": false,
+          "description": "Output object path."
+        },
+        {
+          "name": "flags",
+          "type": "array",
+          "required": false,
+          "description": "Additional compiler flags."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.link_clang.v1",
+      "description": "Link objects with clang.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "inputs_rel",
+          "type": "array",
+          "required": true,
+          "description": "Input object/library paths."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": true,
+          "description": "Output binary/library path."
+        },
+        {
+          "name": "flags",
+          "type": "array",
+          "required": false,
+          "description": "Additional linker flags."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.link_gcc.v1",
+      "description": "Link objects with gcc.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "inputs_rel",
+          "type": "array",
+          "required": true,
+          "description": "Input object/library paths."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "required": true,
+          "description": "Output binary/library path."
+        },
+        {
+          "name": "flags",
+          "type": "array",
+          "required": false,
+          "description": "Additional linker flags."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.pkg_config.v1",
+      "description": "Query pkg-config flags.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "package",
+          "type": "string",
+          "required": true,
+          "description": "Package name."
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": false,
+          "description": "cflags|libs|both"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "flags",
+          "type": "string",
+          "description": "Sorted newline-delimited flags."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Flag count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
+      "id": "linux.cpp.strip.v1",
+      "description": "Strip symbols from binary/library.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target file path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether command succeeded."
+        },
+        {
+          "name": "output_rel",
+          "type": "string",
+          "description": "Output relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "cpp"
+      ]
+    },
+    {
       "id": "linux.env.get.v1",
       "description": "Get environment variable from local overlay or process env.",
       "requiredAuthority": {
@@ -952,6 +1535,47 @@
       ]
     },
     {
+      "id": "linux.fs.chmod.v1",
+      "description": "Change file mode bits.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Path."
+        },
+        {
+          "name": "mode_octal",
+          "type": "string",
+          "required": true,
+          "description": "Octal mode."
+        },
+        {
+          "name": "recursive",
+          "type": "bool",
+          "required": false,
+          "description": "Recurse directories."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "changed",
+          "type": "bool",
+          "description": "Whether chmod succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
       "id": "linux.fs.copy.v1",
       "description": "Copy file or directory within repository root.",
       "requiredAuthority": {
@@ -1041,6 +1665,46 @@
           "name": "created",
           "type": "bool",
           "description": "Whether directory was newly created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.ensure_file.v1",
+      "description": "Ensure file exists.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Path."
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": false,
+          "description": "Optional content."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "Whether file was created."
+        },
+        {
+          "name": "exists",
+          "type": "bool",
+          "description": "Whether file exists."
         }
       ],
       "tags": [
@@ -1392,6 +2056,64 @@
       ]
     },
     {
+      "id": "linux.fs.readlink.v1",
+      "description": "Read symbolic link target.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Symlink path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "target",
+          "type": "string",
+          "description": "Symlink target."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.realpath.v1",
+      "description": "Resolve canonical path.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "real_rel",
+          "type": "string",
+          "description": "Resolved repo-relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
       "id": "linux.fs.rm.v1",
       "description": "Remove file or directory from repository root.",
       "requiredAuthority": {
@@ -1482,6 +2204,41 @@
       ]
     },
     {
+      "id": "linux.fs.symlink.v1",
+      "description": "Create symbolic link.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "link_path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Link path."
+        },
+        {
+          "name": "target_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "linked",
+          "type": "bool",
+          "description": "Whether link was created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
       "id": "linux.fs.temp_dir.v1",
       "description": "Create deterministic temp subdirectory by seed.",
       "requiredAuthority": {
@@ -1514,6 +2271,125 @@
           "name": "created",
           "type": "bool",
           "description": "Whether directory exists."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.temp_dir_create.v1",
+      "description": "Create deterministic temp directory under .shoots/tmp.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "nonce",
+          "type": "string",
+          "required": false,
+          "description": "Optional deterministic nonce override."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Created temp dir path."
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "Whether directory was newly created."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.temp_dir_delete.v1",
+      "description": "Delete temp directory under .shoots/tmp.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Temp dir path under .shoots/tmp."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "deleted",
+          "type": "bool",
+          "description": "Whether delete completed."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.temp_dir_list.v1",
+      "description": "List temp directories under .shoots/tmp.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "dirs",
+          "type": "string",
+          "description": "Newline-delimited temp dir paths."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Temp dir count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.fs.touch.v1",
+      "description": "Create file or update timestamp.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "touched",
+          "type": "bool",
+          "description": "Touch success."
         }
       ],
       "tags": [
@@ -1887,6 +2763,54 @@
       ]
     },
     {
+      "id": "linux.git.clone_depth.v1",
+      "description": "Clone git repository with depth.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "url",
+          "type": "string",
+          "required": true,
+          "description": "Repository URL."
+        },
+        {
+          "name": "dest_rel",
+          "type": "string",
+          "required": true,
+          "description": "Destination path."
+        },
+        {
+          "name": "branch",
+          "type": "string",
+          "required": false,
+          "description": "Branch name."
+        },
+        {
+          "name": "depth",
+          "type": "int",
+          "required": false,
+          "description": "Clone depth."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cloned",
+          "type": "bool",
+          "description": "Whether clone succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git",
+        "net"
+      ]
+    },
+    {
       "id": "linux.git.commit.v1",
       "description": "Run non-interactive git commit.",
       "requiredAuthority": {
@@ -1914,6 +2838,47 @@
           "name": "committed",
           "type": "bool",
           "description": "Whether commit succeeded."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.commit_amend.v1",
+      "description": "Amend latest git commit.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "message",
+          "type": "string",
+          "required": false,
+          "description": "Optional message."
+        },
+        {
+          "name": "no_edit",
+          "type": "bool",
+          "required": false,
+          "description": "Keep message."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amended",
+          "type": "bool",
+          "description": "Whether amend succeeded."
         }
       ],
       "tags": [
@@ -2440,6 +3405,47 @@
       ]
     },
     {
+      "id": "linux.git.remote_set_url.v1",
+      "description": "Set git remote URL.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Remote name."
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "required": true,
+          "description": "Remote URL."
+        },
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "set",
+          "type": "bool",
+          "description": "Whether remote URL was set."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
       "id": "linux.git.reset_hard.v1",
       "description": "Run git reset --hard.",
       "requiredAuthority": {
@@ -2570,6 +3576,47 @@
           "name": "clean",
           "type": "bool",
           "description": "Whether clean."
+        }
+      ],
+      "tags": [
+        "linux",
+        "git"
+      ]
+    },
+    {
+      "id": "linux.git.submodule_update.v1",
+      "description": "Update git submodules.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "cwd",
+          "type": "string",
+          "required": false,
+          "description": "Working directory."
+        },
+        {
+          "name": "init",
+          "type": "bool",
+          "required": false,
+          "description": "Initialize submodules."
+        },
+        {
+          "name": "recursive",
+          "type": "bool",
+          "required": false,
+          "description": "Recurse submodules."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "updated",
+          "type": "bool",
+          "description": "Whether update succeeded."
         }
       ],
       "tags": [
@@ -2779,6 +3826,150 @@
       ]
     },
     {
+      "id": "linux.pkg.detect_manager.v1",
+      "description": "Detect available package manager.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "manager",
+          "type": "string",
+          "description": "Detected manager or none."
+        },
+        {
+          "name": "detected",
+          "type": "bool",
+          "description": "Whether manager detected."
+        }
+      ],
+      "tags": [
+        "linux",
+        "pkg"
+      ]
+    },
+    {
+      "id": "linux.pkg.install.v1",
+      "description": "Install packages using detected manager.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "packages",
+          "type": "array",
+          "required": true,
+          "description": "Packages list."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "installed",
+          "type": "string",
+          "description": "Installed package names newline list."
+        },
+        {
+          "name": "alreadyPresent",
+          "type": "string",
+          "description": "Already installed package names newline list."
+        },
+        {
+          "name": "failed",
+          "type": "string",
+          "description": "Failed package names newline list."
+        },
+        {
+          "name": "exitCode",
+          "type": "int",
+          "description": "Command exit code."
+        }
+      ],
+      "tags": [
+        "linux",
+        "pkg",
+        "net"
+      ]
+    },
+    {
+      "id": "linux.pkg.query_installed.v1",
+      "description": "Query installed packages with optional prefix.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "required": false,
+          "description": "Optional package name prefix."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "manager",
+          "type": "string",
+          "description": "Detected package manager."
+        },
+        {
+          "name": "packages",
+          "type": "string",
+          "description": "Installed package names newline list."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Matched package count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "pkg"
+      ]
+    },
+    {
+      "id": "linux.pkg.update_indexes.v1",
+      "description": "Update package indexes using detected manager.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "manager",
+          "type": "string",
+          "description": "Detected package manager."
+        },
+        {
+          "name": "updated",
+          "type": "bool",
+          "description": "Whether update command succeeded."
+        },
+        {
+          "name": "exitCode",
+          "type": "int",
+          "description": "Command exit code."
+        }
+      ],
+      "tags": [
+        "linux",
+        "pkg",
+        "net"
+      ]
+    },
+    {
       "id": "linux.proc.exec.v1",
       "description": "Execute a Linux process without shell expansion.",
       "requiredAuthority": {
@@ -2844,7 +4035,8 @@
       "tags": [
         "linux",
         "proc"
-      ]
+      ],
+      "defaultTimeoutMs": 30000
     },
     {
       "id": "linux.proc.ps.v1",
@@ -2903,6 +4095,243 @@
       ]
     },
     {
+      "id": "linux.repo.ensure_dir.v1",
+      "description": "Ensure a repository-relative directory exists.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Directory path relative to repository root."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ensured",
+          "type": "bool",
+          "description": "Whether ensure operation completed."
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "True when directory was created by this call."
+        },
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Normalized repository-relative directory path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "repo",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.repo.path_join.v1",
+      "description": "Join path segments and return repository-relative normalized path.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "parts",
+          "type": "array",
+          "required": true,
+          "description": "Path segments to join."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Joined normalized repository-relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "repo",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.repo.path_rel.v1",
+      "description": "Convert absolute path to repository-relative path with confinement checks.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "absolute_path",
+          "type": "string",
+          "required": true,
+          "description": "Absolute path under repository root."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Repository-relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "repo",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.repo.root_info.v1",
+      "description": "Return repository root and workdir identity information.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "repoRootRel",
+          "type": "string",
+          "description": "Repository root as relative path marker."
+        },
+        {
+          "name": "repoRootAbs",
+          "type": "string",
+          "description": "Absolute repository root path."
+        },
+        {
+          "name": "workdirAbs",
+          "type": "string",
+          "description": "Absolute current working directory path."
+        },
+        {
+          "name": "repoId",
+          "type": "string",
+          "description": "Deterministic identifier derived from repository root."
+        }
+      ],
+      "tags": [
+        "linux",
+        "repo"
+      ]
+    },
+    {
+      "id": "linux.sys.command_exists.v1",
+      "description": "Check whether command exists in PATH.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "command",
+          "type": "string",
+          "required": true,
+          "description": "Command name."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "exists",
+          "type": "bool",
+          "description": "Whether command exists."
+        },
+        {
+          "name": "path",
+          "type": "string",
+          "description": "Resolved path if found."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
+      "id": "linux.sys.cpuinfo.v1",
+      "description": "Read and summarize /proc/cpuinfo.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "cpuinfo",
+          "type": "string",
+          "description": "cpuinfo text."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "CPU count."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "Whether output was truncated."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
+      "id": "linux.sys.disk_free.v1",
+      "description": "Get free/total disk bytes.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": false,
+          "description": "Path on target drive."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "bytes_free",
+          "type": "long",
+          "description": "Free bytes."
+        },
+        {
+          "name": "bytes_total",
+          "type": "long",
+          "description": "Total bytes."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
       "id": "linux.sys.disk_usage.v1",
       "description": "Deterministic disk usage listing.",
       "requiredAuthority": {
@@ -2948,6 +4377,70 @@
       ]
     },
     {
+      "id": "linux.sys.env_dump_safe.v1",
+      "description": "Dump allowlisted environment variables.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "allowlist",
+          "type": "string",
+          "required": false,
+          "description": "Allowlist newline list."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "env",
+          "type": "string",
+          "description": "Sorted KEY=VALUE lines."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
+      "id": "linux.sys.journalctl_tail.v1",
+      "description": "Read tail lines from journalctl (privileged gate).",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "lines",
+          "type": "int",
+          "required": false,
+          "description": "Line count to tail."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "type": "string",
+          "description": "Bounded journal tail text."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "journalctl exit code."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys",
+        "privileged"
+      ]
+    },
+    {
       "id": "linux.sys.meminfo.v1",
       "description": "Parse /proc/meminfo deterministically.",
       "requiredAuthority": {
@@ -2980,6 +4473,387 @@
       ]
     },
     {
+      "id": "linux.sys.systemctl_restart.v1",
+      "description": "Restart a systemd unit (privileged gate).",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "unit",
+          "type": "string",
+          "required": true,
+          "description": "Unit name."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether restart succeeded."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "systemctl exit code."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys",
+        "privileged"
+      ]
+    },
+    {
+      "id": "linux.sys.systemctl_status.v1",
+      "description": "Read status of a systemd unit (privileged gate).",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "unit",
+          "type": "string",
+          "required": true,
+          "description": "Unit name."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ok",
+          "type": "bool",
+          "description": "Whether status command succeeded."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "systemctl exit code."
+        },
+        {
+          "name": "stdout",
+          "type": "string",
+          "description": "Bounded status output."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys",
+        "privileged"
+      ]
+    },
+    {
+      "id": "linux.sys.tool_versions.v1",
+      "description": "Get tool versions for a requested tool list.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "tools",
+          "type": "array",
+          "required": true,
+          "description": "Tool names list."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "versions",
+          "type": "string",
+          "description": "Newline list tool=version."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Number of tools checked."
+        },
+        {
+          "name": "truncated",
+          "type": "bool",
+          "description": "Whether output was truncated."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
+      "id": "linux.sys.uname.v1",
+      "description": "Run uname command.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "args",
+          "type": "string",
+          "required": false,
+          "description": "uname args."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "uname",
+          "type": "string",
+          "description": "uname output."
+        }
+      ],
+      "tags": [
+        "linux",
+        "sys"
+      ]
+    },
+    {
+      "id": "linux.text.apply_unified_diff.v1",
+      "description": "Apply unified diff to files.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "base_dir_rel",
+          "type": "string",
+          "required": true,
+          "description": "Base directory."
+        },
+        {
+          "name": "diff_text",
+          "type": "string",
+          "required": true,
+          "description": "Unified diff text."
+        },
+        {
+          "name": "strip",
+          "type": "int",
+          "required": false,
+          "description": "Path strip components."
+        },
+        {
+          "name": "max_files",
+          "type": "int",
+          "required": false,
+          "description": "Maximum files to patch."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "applied",
+          "type": "bool",
+          "description": "Whether patch applied."
+        },
+        {
+          "name": "files_changed",
+          "type": "int",
+          "description": "Changed file count."
+        },
+        {
+          "name": "files",
+          "type": "string",
+          "description": "Changed files newline list."
+        },
+        {
+          "name": "rejected",
+          "type": "bool",
+          "description": "Whether patch was rejected."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.clang_format_verify.v1",
+      "description": "Verify clang-format formatting without writing changes.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target source path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "verified",
+          "type": "bool",
+          "description": "Whether formatting is clean."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "clang-format exit code."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.clang_tidy_verify.v1",
+      "description": "Run clang-tidy verification.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target source path."
+        },
+        {
+          "name": "build_dir_rel",
+          "type": "string",
+          "required": false,
+          "description": "Build directory containing compile_commands.json."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "verified",
+          "type": "bool",
+          "description": "Whether clang-tidy checks passed."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "clang-tidy exit code."
+        },
+        {
+          "name": "stdout",
+          "type": "string",
+          "description": "Bounded clang-tidy output."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.editorconfig_check.v1",
+      "description": "Check basic editorconfig-style line ending and trailing whitespace rules.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target text file path."
+        },
+        {
+          "name": "line_ending",
+          "type": "string",
+          "required": false,
+          "description": "Expected line ending, default lf."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "verified",
+          "type": "bool",
+          "description": "Whether checks passed."
+        },
+        {
+          "name": "line_endings_ok",
+          "type": "bool",
+          "description": "Whether line endings match expectation."
+        },
+        {
+          "name": "trailing_whitespace",
+          "type": "bool",
+          "description": "Whether trailing whitespace is present."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.extract_between_markers.v1",
+      "description": "Extract text between markers.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "File path."
+        },
+        {
+          "name": "start_marker",
+          "type": "string",
+          "required": true,
+          "description": "Start marker."
+        },
+        {
+          "name": "end_marker",
+          "type": "string",
+          "required": true,
+          "description": "End marker."
+        },
+        {
+          "name": "include_markers",
+          "type": "bool",
+          "required": false,
+          "description": "Include marker text."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "type": "string",
+          "description": "Extracted text."
+        },
+        {
+          "name": "found",
+          "type": "bool",
+          "description": "Whether marker range was found."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
       "id": "linux.text.from_json.v1",
       "description": "Parse JSON and return top-level keys.",
       "requiredAuthority": {
@@ -3006,6 +4880,132 @@
           "name": "count",
           "type": "int",
           "description": "Key count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.insert_after_marker.v1",
+      "description": "Insert text after marker.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "File path."
+        },
+        {
+          "name": "marker",
+          "type": "string",
+          "required": true,
+          "description": "Marker text."
+        },
+        {
+          "name": "insert_text",
+          "type": "string",
+          "required": true,
+          "description": "Inserted text."
+        },
+        {
+          "name": "once",
+          "type": "bool",
+          "required": false,
+          "description": "Insert once only."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "written",
+          "type": "bool",
+          "description": "Whether file changed."
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "description": "Insert count."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.line_ending_normalize.v1",
+      "description": "Normalize line endings in a file.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "File path."
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": false,
+          "description": "lf or crlf."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "normalized",
+          "type": "bool",
+          "description": "Normalization completed."
+        },
+        {
+          "name": "changed",
+          "type": "bool",
+          "description": "Whether content changed."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.prettier_verify.v1",
+      "description": "Run prettier --check verification.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "verified",
+          "type": "bool",
+          "description": "Whether prettier check passed."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "prettier exit code."
         }
       ],
       "tags": [
