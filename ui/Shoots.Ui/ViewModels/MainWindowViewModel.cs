@@ -2198,26 +2198,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             .ToList();
     }
 
-    private void UpdateSelectedChatSession(string status)
-    {
-        if (SelectedChatSession is null)
-            return;
-
-        var updated = SelectedChatSession with
-        {
-            LastStatus = status,
-            LastUpdatedUtc = DateTimeOffset.UtcNow,
-            LastWaitingInfo = LastWaitingInfo
-        };
-
-        var idx = _chatSessions.IndexOf(SelectedChatSession);
-        if (idx >= 0)
-            _chatSessions[idx] = updated;
-
-        SelectedChatSession = updated;
-        SavePersistedSessions();
-    }
-
     private IReadOnlyList<ToolExecutionRecordViewModel> BuildToolExecutionRecords(
         BuildPlan plan,
         IReadOnlyList<ToolResult> results)
@@ -2247,26 +2227,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                     DateTimeOffset.UtcNow);
             })
             .ToList();
-    }
-
-    private void UpdateSelectedChatSession(string status)
-    {
-        if (SelectedChatSession is null)
-            return;
-
-        var updated = SelectedChatSession with
-        {
-            LastStatus = status,
-            LastUpdatedUtc = DateTimeOffset.UtcNow,
-            LastWaitingInfo = LastWaitingInfo
-        };
-
-        var idx = _chatSessions.IndexOf(SelectedChatSession);
-        if (idx >= 0)
-            _chatSessions[idx] = updated;
-
-        SelectedChatSession = updated;
-        SavePersistedSessions();
     }
 
     private IReadOnlyList<ToolExecutionRecordViewModel> BuildToolExecutionRecords(
