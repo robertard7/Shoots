@@ -25,7 +25,7 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
             ? repoRoot
             : Path.GetFullPath(workingDirectory, repoRoot);
 
-        if (!LinuxToolHandlers.IsPathWithin(repoRoot, resolvedWorkingDirectory))
+        if (!Shoots.Tools.Linux.LinuxToolHandlers.IsPathWithin(repoRoot, resolvedWorkingDirectory))
             throw new ArgumentOutOfRangeException(nameof(workingDirectory), "Working directory must stay within repository root.");
 
         _baseContext = ToolExecutionContext.Create(repoRoot, CancellationToken.None, maxBytesOut, maxTimeoutMs, allowNetwork, allowPrivileged) with
@@ -132,7 +132,7 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
     {
         var workingDirectory = ResolveContextString(envelopeContext, "working_directory") ?? _baseContext.WorkingDirectory;
         var fullWorkingDirectory = Path.GetFullPath(workingDirectory, _baseContext.RepoRoot);
-        if (!LinuxToolHandlers.IsPathWithin(_baseContext.RepoRoot, fullWorkingDirectory))
+        if (!Shoots.Tools.Linux.LinuxToolHandlers.IsPathWithin(_baseContext.RepoRoot, fullWorkingDirectory))
         {
             context = null;
             errorResult = new ToolResult(toolId, new Dictionary<string, object?>
@@ -172,7 +172,7 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
             if (value is string text)
             {
                 var normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal);
-                var truncated = Shoots.Tools.Linux.ToolResultFactory.TruncateUtf8(normalized, maxBytesOut);
+                var truncated = Shoots.Tools.Linux.LinuxToolText.TruncateUtf8(normalized, maxBytesOut);
                 changed |= !string.Equals(text, truncated, StringComparison.Ordinal);
                 outputs[pair.Key] = truncated;
             }
