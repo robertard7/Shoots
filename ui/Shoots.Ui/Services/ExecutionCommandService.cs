@@ -7,20 +7,7 @@ using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
 
-namespace Shoots.Ui.Services;
-
-/// <summary>
-/// UI-facing execution command surface.
-/// Passive. Delegates all authority to RuntimeFacade.
-/// </summary>
-public interface IExecutionCommandService
-{
-    Task<RuntimeResult> StartAsync(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default);
-
-    Task CancelAsync(CancellationToken ct = default);
-
-    Task<IRuntimeStatusSnapshot> RefreshStatusAsync(CancellationToken ct = default);
-}
+namespace Shoots.UI.Services;
 
 public sealed class ExecutionCommandService : IExecutionCommandService
 {

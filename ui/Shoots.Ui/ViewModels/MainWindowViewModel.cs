@@ -65,7 +65,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string _scriptSearchPath = string.Empty;
     private string? _scriptUnsupportedCapabilitiesMessage;
     private DatabaseIntentOption? _selectedDatabaseIntent;
-    private ToolpackTier _lastNonSystemTier = ToolpackTier.Public;
+    private UiToolpackTier _lastNonSystemTier = UiToolpackTier.Public;
     private RoleDescriptor? _selectedRole;
     private string _newBlueprintName = string.Empty;
     private string _newBlueprintDescription = string.Empty;
@@ -919,10 +919,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    public IReadOnlyList<ToolpackTier> ToolpackTierOptions { get; } =
-        new[] { ToolpackTier.Public, ToolpackTier.Developer };
+    public IReadOnlyList<UiToolpackTier> ToolpackTierOptions { get; } =
+        new[] { UiToolpackTier.Public, UiToolpackTier.Developer };
 
-    public ToolpackTier SelectedToolpackTier
+    public UiToolpackTier SelectedToolpackTier
     {
         get => IsSystemTierEnabled ? _lastNonSystemTier : ActiveToolpackTier;
         set => UpdateToolpackTier(value);
@@ -932,15 +932,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     public string ActiveToolpackTierTooltip => ActiveToolpackTier switch
     {
-        ToolpackTier.Public => "Public tools only.",
-        ToolpackTier.Developer => "Public and developer toolpacks.",
-        ToolpackTier.System => "All tiers, including system toolpacks.",
+        UiToolpackTier.Public => "Public tools only.",
+        UiToolpackTier.Developer => "Public and developer toolpacks.",
+        UiToolpackTier.System => "All tiers, including system toolpacks.",
         _ => "Tier status."
     };
 
-    public ToolpackTier ActiveToolpackTier => _activeWorkspace?.AllowedTier ?? ToolpackTier.Public;
+    public UiToolpackTier ActiveToolpackTier => _activeWorkspace?.AllowedTier ?? UiToolpackTier.Public;
 
-    public bool IsSystemTierEnabled => ActiveToolpackTier == ToolpackTier.System;
+    public bool IsSystemTierEnabled => ActiveToolpackTier == UiToolpackTier.System;
 
     public string SystemTierActionLabel => IsSystemTierEnabled
         ? "Disable System Tier"
@@ -1418,7 +1418,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         if (!_toolTierPrompt.ConfirmSystemTier(ActiveToolpackTier))
             return Task.CompletedTask;
 
-        UpdateToolpackTier(ToolpackTier.System);
+        UpdateToolpackTier(UiToolpackTier.System);
         return Task.CompletedTask;
     }
 
@@ -1620,8 +1620,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         var snapshot = new AiWorkspaceSnapshot(
             workspace?.Name,
             workspace?.RootPath,
-            ActiveToolpackTier,
-            allowedCapabilities);
+            ToRuntimeToolpackTier(ActiveToolpackTier),
+            allowedCapabilities.Select(ToRuntimeToolpackCapability).ToArray());
 
         return new AiHelpRequest(
             scope,
@@ -1926,12 +1926,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             .ToList();
     }
 
-    private void UpdateToolpackTier(ToolpackTier tier)
+    private void UpdateToolpackTier(UiToolpackTier tier)
     {
         if (_activeWorkspace is null)
             return;
 
-        if (tier != ToolpackTier.System)
+        if (tier != UiToolpackTier.System)
             _lastNonSystemTier = tier;
 
         if (_activeWorkspace.AllowedTier == tier && _activeWorkspace.AllowedCapabilities is not null)
@@ -1950,8 +1950,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private void OnToolpackTierChanged()
     {
         if (_activeWorkspace is null)
-            _lastNonSystemTier = ToolpackTier.Public;
-        else if (_activeWorkspace.AllowedTier != ToolpackTier.System)
+            _lastNonSystemTier = UiToolpackTier.Public;
+        else if (_activeWorkspace.AllowedTier != UiToolpackTier.System)
             _lastNonSystemTier = _activeWorkspace.AllowedTier;
 
         OnPropertyChanged(nameof(ActiveToolpackTier));
@@ -2716,6 +2716,27 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             StartupEntryPath.ContinueExistingProject => "Continue an existing project",
             StartupEntryPath.ExploreIdea => "Just explore an idea",
             _ => entryPath.ToString()
+        };
+
+    private static ToolpackTier ToRuntimeToolpackTier(UiToolpackTier tier)
+        => tier switch
+        {
+            UiToolpackTier.Public => ToolpackTier.Public,
+            UiToolpackTier.Developer => ToolpackTier.Developer,
+            UiToolpackTier.System => ToolpackTier.System,
+            _ => ToolpackTier.Public
+        };
+
+    private static ToolpackCapability ToRuntimeToolpackCapability(UiToolpackCapability capability)
+        => capability switch
+        {
+            UiToolpackCapability.FileSystem => ToolpackCapability.FileSystem,
+            UiToolpackCapability.Process => ToolpackCapability.Process,
+            UiToolpackCapability.Network => ToolpackCapability.Network,
+            UiToolpackCapability.Kernel => ToolpackCapability.Kernel,
+            UiToolpackCapability.Build => ToolpackCapability.Build,
+            UiToolpackCapability.Deploy => ToolpackCapability.Deploy,
+            _ => ToolpackCapability.FileSystem
         };
 
     public ISourceControlIntent? SourceControlIntent => null;

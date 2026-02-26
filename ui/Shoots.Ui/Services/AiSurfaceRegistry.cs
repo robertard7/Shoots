@@ -90,12 +90,12 @@ public sealed class AiSurfaceRegistry : IAiSurfaceRegistry
             Register(surface);
     }
 
-    public void AssertNeededSurfacesRegistered(IEnumerable<string> neededSurfaceIds)
+    public void AssertRequiredSurfacesRegistered(IEnumerable<string> requiredSurfaceIds)
     {
-        if (neededSurfaceIds is null)
-            throw new ArgumentNullException(nameof(neededSurfaceIds));
+        if (requiredSurfaceIds is null)
+            throw new ArgumentNullException(nameof(requiredSurfaceIds));
 
-        var missing = neededSurfaceIds
+        var missing = requiredSurfaceIds
             .Where(id => !_registrations.ContainsKey(id))
             .ToList();
 
@@ -112,21 +112,21 @@ public sealed class AiSurfaceRegistry : IAiSurfaceRegistry
             throw new ArgumentNullException(nameof(registration));
 
         if (string.IsNullOrWhiteSpace(registration.SurfaceId))
-            throw new InvalidOperationException("AI surface registration needs a SurfaceId.");
+            throw new InvalidOperationException("AI surface registration requires a SurfaceId.");
 
         if (string.IsNullOrWhiteSpace(registration.SurfaceKind))
-            throw new InvalidOperationException("AI surface registration needs a SurfaceKind.");
+            throw new InvalidOperationException("AI surface registration requires a SurfaceKind.");
 
         if (string.IsNullOrWhiteSpace(registration.DisplayName))
-            throw new InvalidOperationException("AI surface registration needs a DisplayName.");
+            throw new InvalidOperationException("AI surface registration requires a DisplayName.");
 
         if (registration.DeclaredIntents is null || registration.DeclaredIntents.Count == 0)
-            throw new InvalidOperationException("AI surface registration needs declared intents.");
+            throw new InvalidOperationException("AI surface registration requires declared intents.");
 
         if (registration.NarrationHooks is null || registration.NarrationHooks.Count == 0)
-            throw new InvalidOperationException("AI surface registration needs narration hooks.");
+            throw new InvalidOperationException("AI surface registration requires narration hooks.");
 
         if (string.IsNullOrWhiteSpace(registration.SnapshotProvider))
-            throw new InvalidOperationException("AI surface registration needs a snapshot provider.");
+            throw new InvalidOperationException("AI surface registration requires a snapshot provider.");
     }
 }
