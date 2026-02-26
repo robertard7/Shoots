@@ -55,7 +55,7 @@ public sealed class MermaidGraphParserTests
 
         var result = validator.Validate(graph);
 
-        var diagnostic = Assert.Single(result.Diagnostics.Where(d => d.Code == "graph.unknown_node_ref"));
+        var diagnostic = Assert.Single(result.Diagnostics, d => d.Code == "graph.unknown_node_ref");
         Assert.Equal("Edge target 'b' is not declared.", diagnostic.Message);
     }
 
@@ -74,7 +74,7 @@ public sealed class MermaidGraphParserTests
 
         var result = validator.Validate(graph);
 
-        var diagnostic = Assert.Single(result.Diagnostics.Where(d => d.Code == "graph.cycle_detected"));
+        var diagnostic = Assert.Single(result.Diagnostics, d => d.Code == "graph.cycle_detected");
         Assert.Equal("Graph contains at least one cycle.", diagnostic.Message);
     }
 

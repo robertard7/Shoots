@@ -2133,7 +2133,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         {
             var records = BuildToolExecutionRecords(Plan, envelope.ToolResults);
             var session = ToolExecutionSessionViewModel.CreateRun(Plan, DateTimeOffset.UtcNow, records);
-            LastWaitingInfo = envelope.Waiting is null ? null : ToWaitingInfoViewModel(envelope.Waiting);
+            LastWaitingInfo = null;
             CaptureExecutionSnapshot(envelope);
             UpdateSelectedChatSession(envelope.FinalStatus.ToString());
             _toolExecutionSessions.Insert(0, session);

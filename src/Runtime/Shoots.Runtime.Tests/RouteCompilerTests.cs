@@ -42,7 +42,7 @@ public sealed class RouteCompilerTests
             """);
 
         var route = compiler.Compile(graph);
-        var branchStep = Assert.Single(route.Steps.Where(step => step.NodeId == "branch"));
+        var branchStep = Assert.Single(route.Steps, step => step.NodeId == "branch");
 
         Assert.Equal(new[] { "alpha", "zeta" }, branchStep.OutgoingEdges.Select(edge => edge.TargetNodeId).ToArray());
     }

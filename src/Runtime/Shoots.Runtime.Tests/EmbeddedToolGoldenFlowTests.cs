@@ -13,7 +13,7 @@ public sealed class EmbeddedToolGoldenFlowTests
         var root = Directory.CreateTempSubdirectory("runtime-tools-").FullName;
         try
         {
-            var workOrder = new WorkOrder(new WorkOrderId("wo-tools"), "goal", WorkOrderState.Pending, DateTimeOffset.UtcNow);
+            var workOrder = new WorkOrder(new WorkOrderId("wo-tools"), "request", "goal", Array.Empty<string>(), Array.Empty<string>());
             var request = new BuildRequest(
                 workOrder,
                 "core.route",
@@ -35,7 +35,7 @@ public sealed class EmbeddedToolGoldenFlowTests
                 new SingleToolRegistry(new ToolSpec(
                     new ToolId("linux.fs.mkdir.v1"),
                     "mkdir",
-                    new ToolAuthorityScope(ProviderKind.Embedded, ProviderCapabilities.ToolExecution),
+                    new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.Execute),
                     new[] { new ToolInputSpec("path", "string", true, "") },
                     new[] { new ToolOutputSpec("path", "string", "") },
                     Array.Empty<string>())),
@@ -64,7 +64,7 @@ public sealed class EmbeddedToolGoldenFlowTests
         var root = Directory.CreateTempSubdirectory("runtime-tools-").FullName;
         try
         {
-            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-2"), "goal", WorkOrderState.Pending, DateTimeOffset.UtcNow);
+            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-2"), "request", "goal", Array.Empty<string>(), Array.Empty<string>());
             var request = new BuildRequest(
                 workOrder,
                 "core.route",
@@ -72,8 +72,8 @@ public sealed class EmbeddedToolGoldenFlowTests
                 new[]
                 {
                     new RouteRule("write", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "replace" }),
-                    new RouteRule("replace", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "read" }),
-                    new RouteRule("read", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "done" }),
+                    new RouteRule("replace", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Tool, new[] { "read" }),
+                    new RouteRule("read", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Tool, new[] { "done" }),
                     new RouteRule("done", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
                 });
 
@@ -117,7 +117,7 @@ public sealed class EmbeddedToolGoldenFlowTests
         var root = Directory.CreateTempSubdirectory("runtime-tools-").FullName;
         try
         {
-            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-3"), "goal", WorkOrderState.Pending, DateTimeOffset.UtcNow);
+            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-3"), "request", "goal", Array.Empty<string>(), Array.Empty<string>());
             var request = new BuildRequest(
                 workOrder,
                 "core.route",
@@ -125,10 +125,10 @@ public sealed class EmbeddedToolGoldenFlowTests
                 new[]
                 {
                     new RouteRule("write", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "init" }),
-                    new RouteRule("init", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "add" }),
-                    new RouteRule("add", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "commit" }),
-                    new RouteRule("commit", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "log" }),
-                    new RouteRule("log", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "done" }),
+                    new RouteRule("init", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Tool, new[] { "add" }),
+                    new RouteRule("add", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Tool, new[] { "commit" }),
+                    new RouteRule("commit", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Tool, new[] { "log" }),
+                    new RouteRule("log", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Tool, new[] { "done" }),
                     new RouteRule("done", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
                 });
 
@@ -182,7 +182,7 @@ public sealed class EmbeddedToolGoldenFlowTests
         var root = Directory.CreateTempSubdirectory("runtime-tools-").FullName;
         try
         {
-            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-4"), "goal", WorkOrderState.Pending, DateTimeOffset.UtcNow);
+            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-4"), "request", "goal", Array.Empty<string>(), Array.Empty<string>());
             var request = new BuildRequest(
                 workOrder,
                 "core.route",
@@ -190,7 +190,7 @@ public sealed class EmbeddedToolGoldenFlowTests
                 new[]
                 {
                     new RouteRule("ensure", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "exists" }),
-                    new RouteRule("exists", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Action, new[] { "done" }),
+                    new RouteRule("exists", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Tool, new[] { "done" }),
                     new RouteRule("done", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
                 });
 
@@ -231,7 +231,7 @@ public sealed class EmbeddedToolGoldenFlowTests
         var root = Directory.CreateTempSubdirectory("runtime-tools-").FullName;
         try
         {
-            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-8"), "goal", WorkOrderState.Pending, DateTimeOffset.UtcNow);
+            var workOrder = new WorkOrder(new WorkOrderId("wo-tools-8"), "request", "goal", Array.Empty<string>(), Array.Empty<string>());
             var request = new BuildRequest(
                 workOrder,
                 "core.route",
@@ -270,7 +270,7 @@ public sealed class EmbeddedToolGoldenFlowTests
     private static ToolSpec CreateToolSpec(string id, params string[] requiredInputs) => new(
         new ToolId(id),
         id,
-        new ToolAuthorityScope(ProviderKind.Embedded, ProviderCapabilities.ToolExecution),
+        new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.Execute),
         requiredInputs.Select(name => new ToolInputSpec(name, "string", true, string.Empty)).ToArray(),
         new[] { new ToolOutputSpec("ok", "bool", string.Empty) },
         Array.Empty<string>());
