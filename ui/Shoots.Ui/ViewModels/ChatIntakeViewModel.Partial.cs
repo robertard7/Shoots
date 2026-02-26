@@ -49,11 +49,8 @@ public sealed partial class MainWindowViewModel
     private string _lastSmokeRunId = string.Empty;
 
     public ReadOnlyObservableCollection<ChatSessionViewModel> ChatSessions { get; private set; } = null!;
-
     public ReadOnlyObservableCollection<string> ChatMessages { get; private set; } = null!;
-
     public ReadOnlyObservableCollection<TraceEntryViewModel> TraceEntries { get; private set; } = null!;
-
     public ReadOnlyObservableCollection<ArtifactViewModel> Artifacts { get; private set; } = null!;
 
     public ChatSessionViewModel? SelectedChatSession
@@ -131,8 +128,11 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-
-    public IReadOnlyList<string> AvailableModels => _modelCatalog.ListModels().Select(x => x.ModelId).OrderBy(x => x, StringComparer.Ordinal).ToList();
+    public IReadOnlyList<string> AvailableModels =>
+        _modelCatalog.ListModels()
+            .Select(x => x.ModelId)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToList();
 
     public string DefaultModelId => _defaultModelId;
 
@@ -151,7 +151,6 @@ public sealed partial class MainWindowViewModel
     }
 
     public bool HasModelCatalogError => !string.IsNullOrWhiteSpace(ModelCatalogError);
-
 
     public string CatalogHash => _catalogHash;
 
@@ -182,7 +181,14 @@ public sealed partial class MainWindowViewModel
 
             _selectedModelId = value;
             OnPropertyChanged(nameof(SelectedModelId));
-            JobSpecDigest = JobSpecDigestBuilder.Compute(new JobSpecDigestInput(IntakeIntent, IntakeTarget, ParseList(IntakeAttachments), IntakeStack, Array.Empty<string>(), SelectedModelId));
+
+            JobSpecDigest = JobSpecDigestBuilder.Compute(new JobSpecDigestInput(
+                IntakeIntent,
+                IntakeTarget,
+                ParseList(IntakeAttachments),
+                IntakeStack,
+                Array.Empty<string>(),
+                SelectedModelId));
         }
     }
 
@@ -243,7 +249,6 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-
     public string DecisionToolId
     {
         get => _decisionToolId;
@@ -288,7 +293,6 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-
     public ResumeMode SelectedRunMode
     {
         get => _selectedRunMode;
@@ -322,7 +326,6 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-
     public string TraceFilterText
     {
         get => _traceFilterText;
@@ -330,6 +333,7 @@ public sealed partial class MainWindowViewModel
         {
             if (_traceFilterText == value)
                 return;
+
             _traceFilterText = value;
             OnPropertyChanged(nameof(TraceFilterText));
             OnPropertyChanged(nameof(FilteredTraceEntries));
@@ -343,6 +347,7 @@ public sealed partial class MainWindowViewModel
         {
             if (_traceEventFilter == value)
                 return;
+
             _traceEventFilter = value;
             OnPropertyChanged(nameof(TraceEventFilter));
             OnPropertyChanged(nameof(FilteredTraceEntries));
@@ -353,13 +358,13 @@ public sealed partial class MainWindowViewModel
 
     public IReadOnlyList<TraceEntryViewModel> FilteredTraceEntries => TraceEntries
         .Where(entry => (TraceEventFilter == "All"
-            || (TraceEventFilter == "Host" && entry.Event.StartsWith("Host", StringComparison.Ordinal))
-            || (TraceEventFilter == "DecisionGate" && entry.Event.Contains("DecisionGate", StringComparison.Ordinal))
-            || (TraceEventFilter == "Tool" && entry.Event.Contains("Tool", StringComparison.Ordinal))
-            || (TraceEventFilter == "Error" && (entry.Event.Contains("Error", StringComparison.Ordinal) || entry.Event.Contains("Halted", StringComparison.Ordinal))))
-            && (string.IsNullOrWhiteSpace(TraceFilterText)
-                || entry.Event.Contains(TraceFilterText, StringComparison.OrdinalIgnoreCase)
-                || (entry.Detail?.Contains(TraceFilterText, StringComparison.OrdinalIgnoreCase) ?? false)))
+                         || (TraceEventFilter == "Host" && entry.Event.StartsWith("Host", StringComparison.Ordinal))
+                         || (TraceEventFilter == "DecisionGate" && entry.Event.Contains("DecisionGate", StringComparison.Ordinal))
+                         || (TraceEventFilter == "Tool" && entry.Event.Contains("Tool", StringComparison.Ordinal))
+                         || (TraceEventFilter == "Error" && (entry.Event.Contains("Error", StringComparison.Ordinal) || entry.Event.Contains("Halted", StringComparison.Ordinal))))
+                        && (string.IsNullOrWhiteSpace(TraceFilterText)
+                            || entry.Event.Contains(TraceFilterText, StringComparison.OrdinalIgnoreCase)
+                            || (entry.Detail?.Contains(TraceFilterText, StringComparison.OrdinalIgnoreCase) ?? false)))
         .ToList();
 
     public string LastResumePayload
@@ -374,7 +379,6 @@ public sealed partial class MainWindowViewModel
             OnPropertyChanged(nameof(LastResumePayload));
         }
     }
-
 
     public string LastTracePayload
     {
@@ -441,8 +445,8 @@ public sealed partial class MainWindowViewModel
 
     public bool HasWaitingInfo => LastWaitingInfo is not null;
 
-    public bool CanResumeInjectDecision => HasWaitingInfo && IsWorkOrderLocked && Plan is not null && !string.IsNullOrWhiteSpace(InjectedDecisionDigest);
-
+    public bool CanResumeInjectDecision =>
+        HasWaitingInfo && IsWorkOrderLocked && Plan is not null && !string.IsNullOrWhiteSpace(InjectedDecisionDigest);
 
     public IReadOnlyList<ToolCatalogItemViewModel> ToolCatalogEntries
     {
@@ -471,31 +475,18 @@ public sealed partial class MainWindowViewModel
     public bool CanLockWorkOrder => !IsWorkOrderLocked && !string.IsNullOrWhiteSpace(IntakeIntent);
 
     public AsyncRelayCommand LockWorkOrderCommand { get; private set; } = null!;
-
     public AsyncRelayCommand UnlockWorkOrderCommand { get; private set; } = null!;
-
     public AsyncRelayCommand GeneratePlanCommand { get; private set; } = null!;
-
     public AsyncRelayCommand RunIntakePlanCommand { get; private set; } = null!;
-
     public AsyncRelayCommand QuickStartCommand { get; private set; } = null!;
-
     public AsyncRelayCommand ResumeInjectDecisionCommand { get; private set; } = null!;
-
     public AsyncRelayCommand UseFallbackToolCommand { get; private set; } = null!;
-
     public AsyncRelayCommand CopyResumePayloadCommand { get; private set; } = null!;
-
     public AsyncRelayCommand CopyTraceCommand { get; private set; } = null!;
-
     public AsyncRelayCommand CopyTracePathCommand { get; private set; } = null!;
-
     public AsyncRelayCommand CopyArtifactsPathCommand { get; private set; } = null!;
-
     public AsyncRelayCommand RefreshModelCatalogCommand { get; private set; } = null!;
-
     public AsyncRelayCommand ResetModelCatalogCommand { get; private set; } = null!;
-
     public AsyncRelayCommand OpenStateFolderCommand { get; private set; } = null!;
 
     private void InitializeChatIntake()
@@ -637,10 +628,18 @@ public sealed partial class MainWindowViewModel
 
         if (SelectedChatSession is not null)
         {
-            var updated = SelectedChatSession with { PlanId = plan.PlanId, PlanHash = planHash, LastStatus = "PlanReady", LastUpdatedUtc = DateTimeOffset.UtcNow };
+            var updated = SelectedChatSession with
+            {
+                PlanId = plan.PlanId,
+                PlanHash = planHash,
+                LastStatus = "PlanReady",
+                LastUpdatedUtc = DateTimeOffset.UtcNow
+            };
+
             var idx = _chatSessions.IndexOf(SelectedChatSession);
             if (idx >= 0)
                 _chatSessions[idx] = updated;
+
             SelectedChatSession = updated;
         }
 
@@ -698,8 +697,6 @@ public sealed partial class MainWindowViewModel
         return Task.CompletedTask;
     }
 
-
-
     private Task CopyTraceAsync()
     {
         LastTracePayload = JsonSerializer.Serialize(FilteredTraceEntries);
@@ -737,11 +734,19 @@ public sealed partial class MainWindowViewModel
         {
             var models = _modelCatalog.ListModels();
             _defaultModelId = _modelCatalog.ResolveDefaultModel().ModelId;
+
             if (!models.Any(m => string.Equals(m.ModelId, _selectedModelId, StringComparison.Ordinal)))
                 _selectedModelId = _defaultModelId;
 
             ModelCatalogError = string.Empty;
-            _catalogHash = JobSpecDigestBuilder.HashCanonical(models.Select(m => new { m.ModelId, m.ProviderId, m.Priority, m.IsRemote, m.SupportsTools }).ToArray());
+            _catalogHash = JobSpecDigestBuilder.HashCanonical(models.Select(m => new
+            {
+                m.ModelId,
+                m.ProviderId,
+                m.Priority,
+                m.IsRemote,
+                m.SupportsTools
+            }).ToArray());
         }
         catch (Exception ex)
         {
@@ -757,6 +762,7 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(SelectedModelId));
         ResetModelCatalogCommand.RaiseCanExecuteChanged();
     }
+
     private Task OpenStateFolderAsync()
     {
         var statePath = Path.GetFullPath(Path.Combine(".state"));
@@ -827,7 +833,9 @@ public sealed partial class MainWindowViewModel
         if (!File.Exists(path))
             return;
 
-        var persisted = JsonSerializer.Deserialize<List<ChatSessionViewModel>>(File.ReadAllText(path)) ?? new List<ChatSessionViewModel>();
+        var persisted = JsonSerializer.Deserialize<List<ChatSessionViewModel>>(File.ReadAllText(path))
+                        ?? new List<ChatSessionViewModel>();
+
         foreach (var session in persisted.OrderByDescending(x => x.LastUpdatedUtc))
             _chatSessions.Add(session);
     }
@@ -836,50 +844,62 @@ public sealed partial class MainWindowViewModel
     {
         var path = SessionStatePath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var ordered = _chatSessions.OrderByDescending(x => x.LastUpdatedUtc).ThenBy(x => x.WorkOrderId, StringComparer.Ordinal).ToList();
+
+        var ordered = _chatSessions
+            .OrderByDescending(x => x.LastUpdatedUtc)
+            .ThenBy(x => x.WorkOrderId, StringComparer.Ordinal)
+            .ToList();
+
         File.WriteAllText(path, JsonSerializer.Serialize(ordered));
     }
 
     public void CaptureExecutionSnapshot(ExecutionEnvelope envelope)
     {
-        _traceEntries.Clear();
-        foreach (var entry in envelope.Trace.Entries)
-            _traceEntries.Add(new TraceEntryViewModel(entry.Tick, entry.Event.ToString(), entry.Detail));
-
-        _artifacts.Clear();
-        foreach (var artifact in envelope.Artifacts)
-            _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
-
-        TraceLogPath = ResolveTraceLogPath(envelope.GetExecutionId());
-        ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.GetExecutionId());
-        PersistTrace(TraceLogPath, _traceEntries);
-        EnsureArtifactsDirectory(ArtifactsOutputPath);
-        CopyTraceCommand.RaiseCanExecuteChanged();
-        CopyTracePathCommand.RaiseCanExecuteChanged();
-        CopyArtifactsPathCommand.RaiseCanExecuteChanged();
-        OnPropertyChanged(nameof(FilteredTraceEntries));
+        var executionId = ResolveExecutionId(envelope);
+        CaptureExecutionSnapshotCore(envelope.Trace.Entries.Select(e => (e.Tick, e.Event.ToString(), e.Detail)),
+            envelope.Artifacts.Select(a => (a.Id, a.Description, a.Id)),
+            executionId);
     }
 
     public void CaptureExecutionSnapshot(ExecutionEnvelopeDto envelope)
     {
+        var executionId = envelope.GetExecutionId();
+        CaptureExecutionSnapshotCore(envelope.Trace.Entries.Select(e => (e.Tick, e.Event.ToString(), e.Detail)),
+            envelope.Artifacts.Select(a => (a.Id, a.Description, a.Id)),
+            executionId);
+    }
+
+    private void CaptureExecutionSnapshotCore(
+        IEnumerable<(int Tick, string Event, string? Detail)> traceEntries,
+        IEnumerable<(string Id, string Description, string Path)> artifacts,
+        string executionId)
+    {
         _traceEntries.Clear();
-        foreach (var entry in envelope.Trace.Entries)
-            _traceEntries.Add(new TraceEntryViewModel(entry.Tick, entry.Event.ToString(), entry.Detail));
+        foreach (var entry in traceEntries)
+            _traceEntries.Add(new TraceEntryViewModel(entry.Tick, entry.Event, entry.Detail));
 
         _artifacts.Clear();
-        foreach (var artifact in envelope.Artifacts)
-            _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
+        foreach (var artifact in artifacts)
+            _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Path));
 
-        TraceLogPath = ResolveTraceLogPath(envelope.GetExecutionId());
-        ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.GetExecutionId());
+        TraceLogPath = ResolveTraceLogPath(executionId);
+        ArtifactsOutputPath = ResolveArtifactsOutputPath(executionId);
+
         PersistTrace(TraceLogPath, _traceEntries);
         EnsureArtifactsDirectory(ArtifactsOutputPath);
+
         CopyTraceCommand.RaiseCanExecuteChanged();
         CopyTracePathCommand.RaiseCanExecuteChanged();
         CopyArtifactsPathCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(FilteredTraceEntries));
     }
 
+    private static string ResolveExecutionId(ExecutionEnvelope envelope)
+    {
+        // Canonical run/session id: WorkOrderId.
+        // Envelope does not carry an ExecutionId field.
+        return envelope.Plan.Request.WorkOrder.Id.Value;
+    }
 
     private static string ResolveTraceLogPath(string workOrderId)
         => Path.GetFullPath(Path.Combine(".state", "trace", $"{workOrderId}.trace.json"));
@@ -922,7 +942,13 @@ public sealed partial class MainWindowViewModel
             waiting.DecisionOwner.ToString());
 }
 
-public sealed record ChatSessionViewModel(string WorkOrderId, string PlanId, string PlanHash, string LastStatus, DateTimeOffset LastUpdatedUtc, DecisionGateWaitingInfoViewModel? LastWaitingInfo);
+public sealed record ChatSessionViewModel(
+    string WorkOrderId,
+    string PlanId,
+    string PlanHash,
+    string LastStatus,
+    DateTimeOffset LastUpdatedUtc,
+    DecisionGateWaitingInfoViewModel? LastWaitingInfo);
 
 public sealed record TraceEntryViewModel(int Tick, string Event, string? Detail);
 
@@ -974,7 +1000,6 @@ public static class JobSpecDigestBuilder
     }
 }
 
-
 public static class CanonicalJson
 {
     public static string Normalize(string json)
@@ -989,8 +1014,13 @@ public static class CanonicalJson
     private static string NormalizeElement(JsonElement element)
         => element.ValueKind switch
         {
-            JsonValueKind.Object => "{" + string.Join(",", element.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal).Select(p => JsonSerializer.Serialize(p.Name) + ":" + NormalizeElement(p.Value))) + "}",
-            JsonValueKind.Array => "[" + string.Join(",", element.EnumerateArray().Select(NormalizeElement)) + "]",
+            JsonValueKind.Object =>
+                "{" + string.Join(",",
+                    element.EnumerateObject()
+                        .OrderBy(p => p.Name, StringComparer.Ordinal)
+                        .Select(p => JsonSerializer.Serialize(p.Name) + ":" + NormalizeElement(p.Value))) + "}",
+            JsonValueKind.Array =>
+                "[" + string.Join(",", element.EnumerateArray().Select(NormalizeElement)) + "]",
             JsonValueKind.String => JsonSerializer.Serialize(element.GetString()),
             JsonValueKind.Number => element.GetRawText(),
             JsonValueKind.True => "true",

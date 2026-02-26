@@ -7,6 +7,10 @@ internal static class MermaidPlanGraph
 {
     internal const string GraphArgKey = "plan.graph";
 
+    private sealed record NodeRegistration(
+        MermaidNodeKind Kind,
+        bool KindExplicit);
+
     public static string Normalize(string graphText)
     {
         if (graphText is null)
@@ -23,7 +27,7 @@ internal static class MermaidPlanGraph
         if (string.IsNullOrWhiteSpace(graphText))
             throw new ArgumentException("graph is required", nameof(graphText));
 
-        var nodes = new Dictionary<string, MermaidNodeKind>(StringComparer.Ordinal);
+        var nodes = new Dictionary<string, NodeRegistration>(StringComparer.Ordinal);
         var edges = new List<(string From, string To)>();
 
         foreach (var segment in SplitSegments(graphText))
@@ -49,8 +53,10 @@ internal static class MermaidPlanGraph
                 {
                     var from = ParseNodeToken(chain[i]);
                     var to = ParseNodeToken(chain[i + 1]);
+
                     RegisterNode(nodes, from);
                     RegisterNode(nodes, to);
+
                     edges.Add((from.Id, to.Id));
                 }
 
@@ -66,7 +72,7 @@ internal static class MermaidPlanGraph
 
         var nodeDefinitions = nodes
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .Select(pair => new NodeDefinition(pair.Key, pair.Value))
+            .Select(pair => new NodeDefinition(pair.Key, pair.Value.Kind))
             .ToArray();
 
         var adjacency = BuildAdjacency(nodes.Keys, edges);
@@ -198,15 +204,20 @@ internal static class MermaidPlanGraph
         if (trimmed.Length == 0)
             throw new InvalidOperationException("graph contains an empty node token");
 
-        var kind = MermaidNodeKind.Route;
         var parts = trimmed.Split(new[] { ":::" }, StringSplitOptions.RemoveEmptyEntries);
         var core = parts[0].Trim();
 
+        var kind = MermaidNodeKind.Route;
+        var kindExplicit = false;
+
         if (parts.Length > 1)
+        {
             kind = ParseNodeKind(parts[^1].Trim());
+            kindExplicit = true;
+        }
 
         var id = ExtractNodeId(core);
-        return new NodeDefinition(id, kind);
+        return new NodeDefinition(id, kind, kindExplicit);
     }
 
     private static MermaidNodeKind ParseNodeKind(string value)
@@ -235,21 +246,23 @@ internal static class MermaidPlanGraph
     }
 
     private static void RegisterNode(
-        IDictionary<string, MermaidNodeKind> nodes,
+        IDictionary<string, NodeRegistration> nodes,
         NodeDefinition node)
     {
-        if (nodes.TryGetValue(node.Id, out var existingKind))
+        if (nodes.TryGetValue(node.Id, out var existing))
         {
-            if (existingKind != node.Kind)
+            // Key rule: only explicit kind declarations can conflict.
+            // Unannotated mentions must never override or conflict.
+            if (node.KindExplicit && existing.Kind != node.Kind)
             {
                 throw new InvalidOperationException(
-                    $"duplicate node '{node.Id}' detected in Mermaid graph with conflicting kind '{existingKind}' vs '{node.Kind}'.");
+                    $"duplicate node '{node.Id}' detected in Mermaid graph with conflicting kind '{existing.Kind}' vs '{node.Kind}'.");
             }
 
             return;
         }
 
-        nodes[node.Id] = node.Kind;
+        nodes[node.Id] = new NodeRegistration(node.Kind, node.KindExplicit);
     }
 
     private static GraphHashes ComputeHashes(
@@ -282,7 +295,8 @@ internal static class MermaidPlanGraph
 
     internal sealed record NodeDefinition(
         string Id,
-        MermaidNodeKind Kind);
+        MermaidNodeKind Kind,
+        bool KindExplicit = false);
 
     internal sealed record GraphHashes(
         string GraphStructureHash,

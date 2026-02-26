@@ -21,8 +21,9 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
-
     public event EventHandler? CanExecuteChanged;
+
+    public bool IsExecuting => _isExecuting;
 
     public bool CanExecute(object? parameter)
     {
@@ -32,7 +33,12 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
         return _canExecute?.Invoke() ?? true;
     }
 
-    public async void Execute(object? parameter)
+    public void Execute(object? parameter)
+    {
+        _ = ExecuteAsync(parameter);
+    }
+
+    public async Task ExecuteAsync(object? parameter = null)
     {
         if (!CanExecute(parameter))
             return;
@@ -51,8 +57,6 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
             RaiseCanExecuteChanged();
         }
     }
-
-    public bool IsExecuting => _isExecuting;
 
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 
