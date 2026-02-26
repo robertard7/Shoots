@@ -238,8 +238,16 @@ internal static class MermaidPlanGraph
         IDictionary<string, MermaidNodeKind> nodes,
         NodeDefinition node)
     {
-        if (nodes.TryGetValue(node.Id, out _))
-            throw new InvalidOperationException($"duplicate node '{node.Id}' detected in Mermaid graph.");
+        if (nodes.TryGetValue(node.Id, out var existingKind))
+        {
+            if (existingKind != node.Kind)
+            {
+                throw new InvalidOperationException(
+                    $"duplicate node '{node.Id}' detected in Mermaid graph with conflicting kind '{existingKind}' vs '{node.Kind}'.");
+            }
+
+            return;
+        }
 
         nodes[node.Id] = node.Kind;
     }
