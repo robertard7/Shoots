@@ -21,9 +21,16 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
         string? workingDirectory = null)
     {
         _registry = LinuxToolHandlerRegistry.CreateDefault();
+        var resolvedWorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory)
+            ? repoRoot
+            : Path.GetFullPath(workingDirectory, repoRoot);
+
+        if (!LinuxToolHandlers.IsPathWithin(repoRoot, resolvedWorkingDirectory))
+            throw new ArgumentOutOfRangeException(nameof(workingDirectory), "Working directory must stay within repository root.");
+
         _baseContext = ToolExecutionContext.Create(repoRoot, CancellationToken.None, maxBytesOut, maxTimeoutMs, allowNetwork, allowPrivileged) with
         {
-            WorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory) ? repoRoot : Path.GetFullPath(workingDirectory, repoRoot)
+            WorkingDirectory = resolvedWorkingDirectory
         };
         var catalogPath = Path.Combine(repoRoot, "etc", "tools.catalog.json");
         _specs = File.Exists(catalogPath)
