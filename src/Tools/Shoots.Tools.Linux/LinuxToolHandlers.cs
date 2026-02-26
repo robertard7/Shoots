@@ -2945,11 +2945,9 @@ public sealed class LinuxPkgInstallHandler : IToolHandler
 
             return new ToolResult(Id, new Dictionary<string, object?>
             {
-                ["installed"] = string.Join("
-", installed),
+                ["installed"] = string.Join("\n", installed),
                 ["alreadyPresent"] = string.Empty,
-                ["failed"] = string.Join("
-", failed),
+                ["failed"] = string.Join("\n", failed),
                 ["exitCode"] = Convert.ToInt32(run.Outputs["exit_code"])
             }, true);
         }
