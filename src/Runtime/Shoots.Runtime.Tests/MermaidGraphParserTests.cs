@@ -98,4 +98,15 @@ public sealed class MermaidGraphParserTests
             new[] { "a->b", "c->a" },
             graph.Edges.Select(edge => $"{edge.FromNodeId}->{edge.ToNodeId}").ToArray());
     }
+
+    [Fact]
+    public void Parses_segments_with_whitespace_and_semicolons()
+    {
+        var parser = new MermaidGraphParser();
+
+        var graph = parser.Parse(" flowchart TD\n  start[Start] --> mid[Middle] ; mid --> end((Done)) ; ");
+
+        Assert.Equal(new[] { "end", "mid", "start" }, graph.Nodes.Select(node => node.Id).ToArray());
+        Assert.Equal(new[] { "mid->end", "start->mid" }, graph.Edges.Select(edge => $"{edge.FromNodeId}->{edge.ToNodeId}").ToArray());
+    }
 }

@@ -138,7 +138,7 @@ public sealed class MermaidGraphParser
             return (value, true);
         }
 
-        if (token.StartsWith('[', StringComparison.Ordinal))
+        if (token.StartsWith("[", StringComparison.Ordinal))
         {
             if (!token.EndsWith("]", StringComparison.Ordinal))
                 throw new MermaidGraphParseException("graph.invalid_node", $"Node token '{token}' has unmatched delimiters.");
@@ -146,7 +146,7 @@ public sealed class MermaidGraphParser
             return (token[1..^1].Trim(), false);
         }
 
-        if (token.StartsWith('(', StringComparison.Ordinal))
+        if (token.StartsWith("(", StringComparison.Ordinal))
         {
             if (!token.EndsWith(")", StringComparison.Ordinal))
                 throw new MermaidGraphParseException("graph.invalid_node", $"Node token '{token}' has unmatched delimiters.");
