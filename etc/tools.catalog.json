@@ -4055,6 +4055,130 @@
       ]
     },
     {
+      "id": "linux.text.clang_format_verify.v1",
+      "description": "Verify clang-format formatting without writing changes.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target source path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "verified",
+          "type": "bool",
+          "description": "Whether formatting is clean."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "clang-format exit code."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.clang_tidy_verify.v1",
+      "description": "Run clang-tidy verification.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target source path."
+        },
+        {
+          "name": "build_dir_rel",
+          "type": "string",
+          "required": false,
+          "description": "Build directory containing compile_commands.json."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "verified",
+          "type": "bool",
+          "description": "Whether clang-tidy checks passed."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "clang-tidy exit code."
+        },
+        {
+          "name": "stdout",
+          "type": "string",
+          "description": "Bounded clang-tidy output."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.editorconfig_check.v1",
+      "description": "Check basic editorconfig-style line ending and trailing whitespace rules.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target text file path."
+        },
+        {
+          "name": "line_ending",
+          "type": "string",
+          "required": false,
+          "description": "Expected line ending, default lf."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "verified",
+          "type": "bool",
+          "description": "Whether checks passed."
+        },
+        {
+          "name": "line_endings_ok",
+          "type": "bool",
+          "description": "Whether line endings match expectation."
+        },
+        {
+          "name": "trailing_whitespace",
+          "type": "bool",
+          "description": "Whether trailing whitespace is present."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
       "id": "linux.text.extract_between_markers.v1",
       "description": "Extract text between markers.",
       "requiredAuthority": {
@@ -4225,6 +4349,40 @@
           "name": "changed",
           "type": "bool",
           "description": "Whether content changed."
+        }
+      ],
+      "tags": [
+        "linux",
+        "text"
+      ]
+    },
+    {
+      "id": "linux.text.prettier_verify.v1",
+      "description": "Run prettier --check verification.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Target path."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "verified",
+          "type": "bool",
+          "description": "Whether prettier check passed."
+        },
+        {
+          "name": "exit_code",
+          "type": "int",
+          "description": "prettier exit code."
         }
       ],
       "tags": [

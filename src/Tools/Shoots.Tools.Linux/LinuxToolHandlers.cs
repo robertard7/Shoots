@@ -101,6 +101,10 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxTextTrimHandler(),
             new LinuxTextToJsonHandler(),
             new LinuxTextFromJsonHandler(),
+            new LinuxTextClangFormatVerifyHandler(),
+            new LinuxTextClangTidyVerifyHandler(),
+            new LinuxTextEditorconfigCheckHandler(),
+            new LinuxTextPrettierVerifyHandler(),
             new LinuxBuildDotnetSlnListProjectsHandler(),
             new LinuxBuildDotnetListPackagesHandler(),
             new LinuxProcPsHandler(),
@@ -1992,6 +1996,134 @@ public sealed class LinuxTextFromJsonHandler : IToolHandler
     }
 }
 
+public sealed class LinuxTextClangFormatVerifyHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.clang_format_verify.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var available = LinuxCppToolRunner.IsCommandAvailable("clang-format", invocation, ctx);
+        if (!available.available)
+            return ToolResultFactory.Error(Id, "tool.not_available", "clang-format is not available in PATH.");
+
+        var pathRel = Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty;
+        var path = ToolPath.ResolveWithinRoot(ctx, pathRel);
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "clang-format",
+            ["args"] = new object?[] { "--dry-run", "--Werror", path },
+            ["timeout_ms"] = Math.Min(10000, ctx.MaxTimeoutMs)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!run.Success)
+            return ToolResultFactory.Error(Id, "text.clang_format_verify_failed", Convert.ToString(run.Outputs["error.message"]) ?? "clang-format failed");
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["verified"] = Convert.ToInt32(run.Outputs["exit_code"]) == 0,
+            ["exit_code"] = Convert.ToInt32(run.Outputs["exit_code"])
+        }, true);
+    }
+}
+
+public sealed class LinuxTextClangTidyVerifyHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.clang_tidy_verify.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var available = LinuxCppToolRunner.IsCommandAvailable("clang-tidy", invocation, ctx);
+        if (!available.available)
+            return ToolResultFactory.Error(Id, "tool.not_available", "clang-tidy is not available in PATH.");
+
+        var pathRel = Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty;
+        var path = ToolPath.ResolveWithinRoot(ctx, pathRel);
+        var buildDir = Convert.ToString(invocation.Bindings.TryGetValue("build_dir_rel", out var b) ? b : ".") ?? ".";
+        var buildPath = ToolPath.ResolveWithinRoot(ctx, buildDir);
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "clang-tidy",
+            ["args"] = new object?[] { path, "-p", buildPath },
+            ["timeout_ms"] = Math.Min(15000, ctx.MaxTimeoutMs),
+            ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 8192)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!run.Success)
+            return ToolResultFactory.Error(Id, "text.clang_tidy_verify_failed", Convert.ToString(run.Outputs["error.message"]) ?? "clang-tidy failed");
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["verified"] = Convert.ToInt32(run.Outputs["exit_code"]) == 0,
+            ["exit_code"] = Convert.ToInt32(run.Outputs["exit_code"]),
+            ["stdout"] = ToolResultFactory.TruncateUtf8(Convert.ToString(run.Outputs["stdout"]) ?? string.Empty, ctx.MaxBytesOut)
+        }, true);
+    }
+}
+
+public sealed class LinuxTextEditorconfigCheckHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.editorconfig_check.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var pathRel = Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty;
+            var path = ToolPath.ResolveWithinRoot(ctx, pathRel);
+            var mode = (Convert.ToString(invocation.Bindings.TryGetValue("line_ending", out var le) ? le : "lf") ?? "lf").ToLowerInvariant();
+            var text = File.ReadAllText(path, Encoding.UTF8);
+            var hasCr = text.Contains("\r", StringComparison.Ordinal);
+            var hasTrailingWs = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n').Any(static l => l.EndsWith(' ') || l.EndsWith('\t'));
+            var okLineEnding = mode == "lf" ? !hasCr : true;
+            var ok = okLineEnding && !hasTrailingWs;
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["verified"] = ok,
+                ["line_endings_ok"] = okLineEnding,
+                ["trailing_whitespace"] = hasTrailingWs
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "text.editorconfig_check_failed", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxTextPrettierVerifyHandler : IToolHandler
+{
+    public ToolId Id => new("linux.text.prettier_verify.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var available = LinuxCppToolRunner.IsCommandAvailable("prettier", invocation, ctx);
+        if (!available.available)
+            return ToolResultFactory.Error(Id, "tool.not_available", "prettier is not available in PATH.");
+
+        var pathRel = Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty;
+        var path = ToolPath.ResolveWithinRoot(ctx, pathRel);
+        var proc = new LinuxProcExecHandler();
+        var run = proc.Execute(new ToolInvocation(proc.Id, new Dictionary<string, object?>
+        {
+            ["file"] = "prettier",
+            ["args"] = new object?[] { "--check", path },
+            ["timeout_ms"] = Math.Min(15000, ctx.MaxTimeoutMs),
+            ["max_output_bytes"] = Math.Min(ctx.MaxBytesOut, 8192)
+        }, invocation.WorkOrderId), ctx);
+
+        if (!run.Success)
+            return ToolResultFactory.Error(Id, "text.prettier_verify_failed", Convert.ToString(run.Outputs["error.message"]) ?? "prettier failed");
+
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["verified"] = Convert.ToInt32(run.Outputs["exit_code"]) == 0,
+            ["exit_code"] = Convert.ToInt32(run.Outputs["exit_code"])
+        }, true);
+    }
+}
+
 public sealed class LinuxBuildDotnetSlnListProjectsHandler : IToolHandler
 {
     public ToolId Id => new("linux.build.dotnet_sln_list_projects.v1");
@@ -2344,7 +2476,7 @@ public sealed class LinuxBuildDotnetFormatVerifyHandler : IToolHandler
         if (!result.Success)
             return result;
         if (Convert.ToInt32(result.Outputs["exit_code"]) == 127 || Convert.ToInt32(result.Outputs["exit_code"]) == 1 && (Convert.ToString(result.Outputs["stderr"]) ?? string.Empty).Contains("could not execute", StringComparison.OrdinalIgnoreCase))
-            return ToolResultFactory.Error(Id, "tool.unavailable", "dotnet format is unavailable");
+            return ToolResultFactory.Error(Id, "tool.not_available", "dotnet format is unavailable");
         if (Convert.ToInt32(result.Outputs["exit_code"]) != 0)
             return ToolResultFactory.Error(Id, "build.dotnet_format_verify_failed", Convert.ToString(result.Outputs["stderr"]) ?? "dotnet format verify failed");
         return new ToolResult(Id, new Dictionary<string, object?> { ["verified"] = true }, true);

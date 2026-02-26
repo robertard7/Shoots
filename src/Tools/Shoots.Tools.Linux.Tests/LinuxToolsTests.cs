@@ -1080,6 +1080,49 @@ b.txt", changed.Outputs["files"]);
         }
     }
 
+
+    [Fact]
+    public void Batch26_text_verify_tools_return_not_available_or_stable_shape()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+            File.WriteAllText(Path.Combine(root, "a.cpp"), "int main(){return 0;}\n", Encoding.UTF8);
+            File.WriteAllText(Path.Combine(root, "bad.txt"), "line with space \n", Encoding.UTF8);
+
+            var clangFormat = new LinuxTextClangFormatVerifyHandler().Execute(new ToolInvocation(new ToolId("linux.text.clang_format_verify.v1"), new Dictionary<string, object?> { ["path_rel"] = "a.cpp" }, wo), ctx);
+            if (!clangFormat.Success)
+                Assert.Equal("tool.not_available", clangFormat.Outputs["error.code"]);
+
+            var clangTidy = new LinuxTextClangTidyVerifyHandler().Execute(new ToolInvocation(new ToolId("linux.text.clang_tidy_verify.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "a.cpp",
+                ["build_dir_rel"] = "."
+            }, wo), ctx);
+            if (!clangTidy.Success)
+                Assert.Equal("tool.not_available", clangTidy.Outputs["error.code"]);
+
+            var prettier = new LinuxTextPrettierVerifyHandler().Execute(new ToolInvocation(new ToolId("linux.text.prettier_verify.v1"), new Dictionary<string, object?> { ["path_rel"] = "a.cpp" }, wo), ctx);
+            if (!prettier.Success)
+                Assert.Equal("tool.not_available", prettier.Outputs["error.code"]);
+
+            var editor = new LinuxTextEditorconfigCheckHandler().Execute(new ToolInvocation(new ToolId("linux.text.editorconfig_check.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "bad.txt",
+                ["line_ending"] = "lf"
+            }, wo), ctx);
+            Assert.True(editor.Success);
+            Assert.Equal(true, editor.Outputs["trailing_whitespace"]);
+            Assert.Equal(false, editor.Outputs["verified"]);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
