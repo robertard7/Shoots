@@ -3809,6 +3809,143 @@
       ]
     },
     {
+      "id": "linux.repo.ensure_dir.v1",
+      "description": "Ensure a repository-relative directory exists.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "required": true,
+          "description": "Directory path relative to repository root."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ensured",
+          "type": "bool",
+          "description": "Whether ensure operation completed."
+        },
+        {
+          "name": "created",
+          "type": "bool",
+          "description": "True when directory was created by this call."
+        },
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Normalized repository-relative directory path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "repo",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.repo.path_join.v1",
+      "description": "Join path segments and return repository-relative normalized path.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "parts",
+          "type": "array",
+          "required": true,
+          "description": "Path segments to join."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Joined normalized repository-relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "repo",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.repo.path_rel.v1",
+      "description": "Convert absolute path to repository-relative path with confinement checks.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "absolute_path",
+          "type": "string",
+          "required": true,
+          "description": "Absolute path under repository root."
+        }
+      ],
+      "outputs": [
+        {
+          "name": "path_rel",
+          "type": "string",
+          "description": "Repository-relative path."
+        }
+      ],
+      "tags": [
+        "linux",
+        "repo",
+        "fs"
+      ]
+    },
+    {
+      "id": "linux.repo.root_info.v1",
+      "description": "Return repository root and workdir identity information.",
+      "requiredAuthority": {
+        "providerKind": "Embedded",
+        "capabilities": [
+          "ToolExecution"
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "repoRootRel",
+          "type": "string",
+          "description": "Repository root as relative path marker."
+        },
+        {
+          "name": "repoRootAbs",
+          "type": "string",
+          "description": "Absolute repository root path."
+        },
+        {
+          "name": "workdirAbs",
+          "type": "string",
+          "description": "Absolute current working directory path."
+        },
+        {
+          "name": "repoId",
+          "type": "string",
+          "description": "Deterministic identifier derived from repository root."
+        }
+      ],
+      "tags": [
+        "linux",
+        "repo"
+      ]
+    },
+    {
       "id": "linux.sys.command_exists.v1",
       "description": "Check whether command exists in PATH.",
       "requiredAuthority": {

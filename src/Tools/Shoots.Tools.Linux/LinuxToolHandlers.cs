@@ -97,6 +97,10 @@ public sealed class LinuxToolHandlerRegistry
             new LinuxGitRemoteListHandler(),
             new LinuxFsCwdHandler(),
             new LinuxFsPathJoinHandler(),
+            new LinuxRepoRootInfoHandler(),
+            new LinuxRepoPathJoinHandler(),
+            new LinuxRepoPathRelHandler(),
+            new LinuxRepoEnsureDirHandler(),
             new LinuxFsTempDirHandler(),
             new LinuxFsTempDirCreateHandler(),
             new LinuxFsTempDirDeleteHandler(),
@@ -1902,6 +1906,92 @@ public sealed class LinuxFsPathJoinHandler : IToolHandler
         {
             ["path"] = joined.Replace('\\', '/')
         }, true);
+    }
+}
+
+public sealed class LinuxRepoRootInfoHandler : IToolHandler
+{
+    public ToolId Id => new("linux.repo.root_info.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        var normalizedRoot = Path.GetFullPath(ctx.RepoRoot).TrimEnd(Path.DirectorySeparatorChar);
+        var workdir = Path.GetFullPath(ctx.WorkingDirectory);
+        var repoId = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(normalizedRoot.ToLowerInvariant()))).ToLowerInvariant();
+        return new ToolResult(Id, new Dictionary<string, object?>
+        {
+            ["repoRootRel"] = ".",
+            ["repoRootAbs"] = normalizedRoot,
+            ["workdirAbs"] = workdir,
+            ["repoId"] = repoId
+        }, true);
+    }
+}
+
+public sealed class LinuxRepoPathJoinHandler : IToolHandler
+{
+    public ToolId Id => new("linux.repo.path_join.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var parts = invocation.Bindings.TryGetValue("parts", out var value) && value is IEnumerable<object?> list
+                ? list.Select(static p => Convert.ToString(p) ?? string.Empty).ToArray()
+                : Array.Empty<string>();
+            var joined = parts.Length == 0 ? string.Empty : Path.Combine(parts);
+            var full = ToolPath.ResolveWithinRoot(ctx, joined);
+            return new ToolResult(Id, new Dictionary<string, object?> { ["path_rel"] = ToolPath.ToRepoRelative(ctx, full) }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "fs.path_escape", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxRepoPathRelHandler : IToolHandler
+{
+    public ToolId Id => new("linux.repo.path_rel.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var abs = Convert.ToString(invocation.Bindings["absolute_path"]) ?? string.Empty;
+            var full = ToolPath.ResolveWithinRoot(ctx, abs);
+            return new ToolResult(Id, new Dictionary<string, object?> { ["path_rel"] = ToolPath.ToRepoRelative(ctx, full) }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "fs.path_escape", ex.Message);
+        }
+    }
+}
+
+public sealed class LinuxRepoEnsureDirHandler : IToolHandler
+{
+    public ToolId Id => new("linux.repo.ensure_dir.v1");
+
+    public ToolResult Execute(ToolInvocation invocation, ToolExecutionContext ctx)
+    {
+        try
+        {
+            var rel = Convert.ToString(invocation.Bindings["path_rel"]) ?? string.Empty;
+            var full = ToolPath.ResolveWithinRoot(ctx, rel);
+            var existed = Directory.Exists(full);
+            Directory.CreateDirectory(full);
+            return new ToolResult(Id, new Dictionary<string, object?>
+            {
+                ["ensured"] = true,
+                ["created"] = !existed,
+                ["path_rel"] = ToolPath.ToRepoRelative(ctx, full)
+            }, true);
+        }
+        catch (Exception ex)
+        {
+            return ToolResultFactory.Error(Id, "fs.ensure_dir_failed", ex.Message);
+        }
     }
 }
 

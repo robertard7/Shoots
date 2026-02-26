@@ -1196,6 +1196,72 @@ b.txt", changed.Outputs["files"]);
         }
     }
 
+
+    [Fact]
+    public void Batch32_repo_primitives_are_confined_and_deterministic()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            var wo = new WorkOrderId("wo-repo");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None);
+
+            var rootInfo = new LinuxRepoRootInfoHandler().Execute(new ToolInvocation(new ToolId("linux.repo.root_info.v1"), new Dictionary<string, object?>(), wo), ctx);
+            Assert.True(rootInfo.Success);
+            Assert.Equal(".", rootInfo.Outputs["repoRootRel"]);
+            Assert.Equal(Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar), rootInfo.Outputs["repoRootAbs"]);
+            Assert.True(rootInfo.Outputs.ContainsKey("workdirAbs"));
+            Assert.Equal(64, (Convert.ToString(rootInfo.Outputs["repoId"]) ?? string.Empty).Length);
+
+            var join = new LinuxRepoPathJoinHandler().Execute(new ToolInvocation(new ToolId("linux.repo.path_join.v1"), new Dictionary<string, object?>
+            {
+                ["parts"] = new object?[] { "a", "b", "..", "c.txt" }
+            }, wo), ctx);
+            Assert.True(join.Success);
+            Assert.Equal("a/c.txt", Convert.ToString(join.Outputs["path_rel"]));
+
+            var joinEscape = new LinuxRepoPathJoinHandler().Execute(new ToolInvocation(new ToolId("linux.repo.path_join.v1"), new Dictionary<string, object?>
+            {
+                ["parts"] = new object?[] { "..", "escape.txt" }
+            }, wo), ctx);
+            Assert.False(joinEscape.Success);
+            Assert.Equal("fs.path_escape", joinEscape.Outputs["error.code"]);
+
+            var ensure1 = new LinuxRepoEnsureDirHandler().Execute(new ToolInvocation(new ToolId("linux.repo.ensure_dir.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "out/data"
+            }, wo), ctx);
+            Assert.True(ensure1.Success);
+            Assert.Equal(true, ensure1.Outputs["created"]);
+            Assert.True(Directory.Exists(Path.Combine(root, "out", "data")));
+
+            var ensure2 = new LinuxRepoEnsureDirHandler().Execute(new ToolInvocation(new ToolId("linux.repo.ensure_dir.v1"), new Dictionary<string, object?>
+            {
+                ["path_rel"] = "out/data"
+            }, wo), ctx);
+            Assert.True(ensure2.Success);
+            Assert.Equal(false, ensure2.Outputs["created"]);
+
+            var rel = new LinuxRepoPathRelHandler().Execute(new ToolInvocation(new ToolId("linux.repo.path_rel.v1"), new Dictionary<string, object?>
+            {
+                ["absolute_path"] = Path.Combine(root, "out", "data")
+            }, wo), ctx);
+            Assert.True(rel.Success);
+            Assert.Equal("out/data", Convert.ToString(rel.Outputs["path_rel"]));
+
+            var relEscape = new LinuxRepoPathRelHandler().Execute(new ToolInvocation(new ToolId("linux.repo.path_rel.v1"), new Dictionary<string, object?>
+            {
+                ["absolute_path"] = Path.GetPathRoot(root) ?? "/"
+            }, wo), ctx);
+            Assert.False(relEscape.Success);
+            Assert.Equal("fs.path_escape", relEscape.Outputs["error.code"]);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
