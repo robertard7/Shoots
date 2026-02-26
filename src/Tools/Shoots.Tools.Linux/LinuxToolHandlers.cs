@@ -181,6 +181,57 @@ internal static class LinuxTextPatchUtil
     }
 }
 
+
+internal sealed record ToolCatalogCaps(int? MaxInputBytes, int? MaxOutputBytesOverride, int? MaxResults, int? DefaultTimeoutMs);
+
+internal static class ToolCatalogCapsPolicy
+{
+    private static readonly Dictionary<string, IReadOnlyDictionary<string, ToolCatalogCaps>> Cache = new(StringComparer.Ordinal);
+
+    public static ToolCatalogCaps Get(ToolExecutionContext ctx, ToolId id)
+    {
+        var root = Path.GetFullPath(ctx.RepoRoot).TrimEnd(Path.DirectorySeparatorChar);
+        if (!Cache.TryGetValue(root, out var map))
+        {
+            map = Load(Path.Combine(root, "etc", "tools.catalog.json"));
+            Cache[root] = map;
+        }
+
+        return map.TryGetValue(id.Value, out var caps)
+            ? caps
+            : new ToolCatalogCaps(null, null, null, null);
+    }
+
+    private static IReadOnlyDictionary<string, ToolCatalogCaps> Load(string path)
+    {
+        if (!File.Exists(path))
+            return new Dictionary<string, ToolCatalogCaps>(StringComparer.Ordinal);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+        var tools = doc.RootElement.GetProperty("tools");
+        var dict = new Dictionary<string, ToolCatalogCaps>(StringComparer.Ordinal);
+        foreach (var tool in tools.EnumerateArray())
+        {
+            var id = tool.GetProperty("id").GetString() ?? string.Empty;
+            int? maxInput = tool.TryGetProperty("maxInputBytes", out var maxInputEl) && maxInputEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                ? maxInputEl.GetInt32()
+                : null;
+            int? maxOut = tool.TryGetProperty("maxOutputBytesOverride", out var maxOutEl) && maxOutEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                ? maxOutEl.GetInt32()
+                : null;
+            int? maxResults = tool.TryGetProperty("maxResults", out var maxResultsEl) && maxResultsEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                ? maxResultsEl.GetInt32()
+                : null;
+            int? defaultTimeout = tool.TryGetProperty("defaultTimeoutMs", out var timeoutEl) && timeoutEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                ? timeoutEl.GetInt32()
+                : null;
+            dict[id] = new ToolCatalogCaps(maxInput, maxOut, maxResults, defaultTimeout);
+        }
+
+        return dict;
+    }
+}
+
 internal static class ToolResultFactory
 {
     public static ToolResult Error(ToolId toolId, string code, string message)
@@ -1806,6 +1857,10 @@ public sealed class LinuxArtifactsCollectHandler : IToolHandler
                     .OrderBy(static p => p, StringComparer.Ordinal)
                     .ToArray()
                 : Array.Empty<string>();
+
+            var caps = ToolCatalogCapsPolicy.Get(ctx, Id);
+            if (caps.MaxResults is int maxResults && files.Length > maxResults)
+                return ToolResultFactory.Error(Id, "tool.limit_exceeded", $"maxResults exceeded ({maxResults}).");
 
             var destRoot = ToolPath.ResolveWithinRoot(ctx, Path.Combine(".shoots/artifacts", runId));
             Directory.CreateDirectory(destRoot);
@@ -3786,6 +3841,10 @@ public sealed class LinuxCasPutBytesHandler : IToolHandler
                 return ToolResultFactory.Error(Id, "cas.invalid_base64", "bytes_base64 must be valid base64.");
             }
 
+            var caps = ToolCatalogCapsPolicy.Get(ctx, Id);
+            if (caps.MaxInputBytes is int maxInputBytes && bytes.Length > maxInputBytes)
+                return ToolResultFactory.Error(Id, "tool.limit_exceeded", $"maxInputBytes exceeded ({maxInputBytes}).");
+
             var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
             var root = LinuxCasPath.CasRoot(ctx);
             Directory.CreateDirectory(root);
@@ -3864,7 +3923,9 @@ public sealed class LinuxCasGetHandler : IToolHandler
 
             var allBytes = File.ReadAllBytes(filePath);
             var requestedMax = invocation.Bindings.TryGetValue("max_bytes", out var m) ? Convert.ToInt32(m) : ctx.MaxBytesOut;
-            var maxBytes = Math.Max(0, Math.Min(ctx.MaxBytesOut, requestedMax));
+            var caps = ToolCatalogCapsPolicy.Get(ctx, Id);
+            var capMaxOut = caps.MaxOutputBytesOverride is int c ? Math.Max(0, c) : ctx.MaxBytesOut;
+            var maxBytes = Math.Max(0, Math.Min(Math.Min(ctx.MaxBytesOut, capMaxOut), requestedMax));
             var size = allBytes.Length;
             var truncated = size > maxBytes;
             var bytes = truncated ? allBytes.Take(maxBytes).ToArray() : allBytes;

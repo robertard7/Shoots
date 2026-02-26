@@ -303,7 +303,8 @@
         "linux",
         "artifacts",
         "fs"
-      ]
+      ],
+      "maxResults": 2048
     },
     {
       "id": "linux.artifacts.hash_tree.v1",
@@ -1006,7 +1007,8 @@
         "linux",
         "cas",
         "hash"
-      ]
+      ],
+      "maxOutputBytesOverride": 262144
     },
     {
       "id": "linux.cas.put_bytes.v1",
@@ -1056,7 +1058,8 @@
         "linux",
         "cas",
         "hash"
-      ]
+      ],
+      "maxInputBytes": 1048576
     },
     {
       "id": "linux.cas.put_file.v1",
@@ -4032,7 +4035,8 @@
       "tags": [
         "linux",
         "proc"
-      ]
+      ],
+      "defaultTimeoutMs": 30000
     },
     {
       "id": "linux.proc.ps.v1",

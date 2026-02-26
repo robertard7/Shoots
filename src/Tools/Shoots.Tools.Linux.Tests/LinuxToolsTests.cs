@@ -1377,6 +1377,121 @@ b.txt", changed.Outputs["files"]);
         }
     }
 
+
+
+    [Fact]
+    public void Batch39_42_catalog_caps_are_enforced_for_representative_tools()
+    {
+        var root = Directory.CreateTempSubdirectory("tools-linux-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "etc"));
+            var catalog = new
+            {
+                tools = new object[]
+                {
+                    new
+                    {
+                        id = "linux.cas.put_bytes.v1",
+                        description = "x",
+                        requiredAuthority = new { providerKind = "Embedded", capabilities = new[] { "ToolExecution" } },
+                        inputs = Array.Empty<object>(),
+                        outputs = new[] { new { name = "ok", type = "bool", description = "ok" } },
+                        tags = new[] { "linux" },
+                        maxInputBytes = 3
+                    },
+                    new
+                    {
+                        id = "linux.cas.get.v1",
+                        description = "x",
+                        requiredAuthority = new { providerKind = "Embedded", capabilities = new[] { "ToolExecution" } },
+                        inputs = Array.Empty<object>(),
+                        outputs = new[] { new { name = "ok", type = "bool", description = "ok" } },
+                        tags = new[] { "linux" },
+                        maxOutputBytesOverride = 4
+                    },
+                    new
+                    {
+                        id = "linux.artifacts.collect.v1",
+                        description = "x",
+                        requiredAuthority = new { providerKind = "Embedded", capabilities = new[] { "ToolExecution" } },
+                        inputs = Array.Empty<object>(),
+                        outputs = new[] { new { name = "ok", type = "bool", description = "ok" } },
+                        tags = new[] { "linux" },
+                        maxResults = 1
+                    }
+                }
+            };
+            File.WriteAllText(Path.Combine(root, "etc", "tools.catalog.json"), JsonSerializer.Serialize(catalog), Encoding.UTF8);
+
+            var wo = new WorkOrderId("wo-caps");
+            var ctx = ToolExecutionContext.Create(root, CancellationToken.None, maxOutputBytes: 128);
+
+            var putLimited = new LinuxCasPutBytesHandler().Execute(new ToolInvocation(new ToolId("linux.cas.put_bytes.v1"), new Dictionary<string, object?>
+            {
+                ["bytes_base64"] = Convert.ToBase64String(Encoding.UTF8.GetBytes("four"))
+            }, wo), ctx);
+            Assert.False(putLimited.Success);
+            Assert.Equal("tool.limit_exceeded", putLimited.Outputs["error.code"]);
+
+            var payload = Encoding.UTF8.GetBytes("abcdefghij");
+            var sha = Convert.ToHexStringLower(SHA256.HashData(payload));
+            var casRoot = Path.Combine(root, ".shoots", "cas");
+            Directory.CreateDirectory(casRoot);
+            File.WriteAllBytes(Path.Combine(casRoot, sha), payload);
+
+            var getLimited = new LinuxCasGetHandler().Execute(new ToolInvocation(new ToolId("linux.cas.get.v1"), new Dictionary<string, object?>
+            {
+                ["sha256"] = sha
+            }, wo), ctx);
+            Assert.True(getLimited.Success);
+            Assert.Equal(true, getLimited.Outputs["truncated"]);
+            Assert.Equal(4, Convert.FromBase64String(Convert.ToString(getLimited.Outputs["bytes_base64"]) ?? string.Empty).Length);
+
+            Directory.CreateDirectory(Path.Combine(root, "src"));
+            File.WriteAllText(Path.Combine(root, "src", "a.txt"), "a", Encoding.UTF8);
+            File.WriteAllText(Path.Combine(root, "src", "b.txt"), "b", Encoding.UTF8);
+            var collectLimited = new LinuxArtifactsCollectHandler().Execute(new ToolInvocation(new ToolId("linux.artifacts.collect.v1"), new Dictionary<string, object?>
+            {
+                ["run_id"] = "r1",
+                ["paths_rel"] = new object?[] { "src/a.txt", "src/b.txt" }
+            }, wo), ctx);
+            Assert.False(collectLimited.Success);
+            Assert.Equal("tool.limit_exceeded", collectLimited.Outputs["error.code"]);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void Batch40_required_tool_domains_are_present_in_catalog_and_registry()
+    {
+        var entries = LinuxToolCatalog.LoadEntries(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "etc", "tools.catalog.json"));
+        var ids = entries.Select(e => e.Spec.ToolId.Value).ToHashSet(StringComparer.Ordinal);
+        var registry = LinuxToolHandlerRegistry.CreateDefault();
+
+        Assert.Contains(ids, id => id.StartsWith("linux.fs.", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id.StartsWith("linux.text.", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id.StartsWith("linux.proc.", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id.StartsWith("linux.git.", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id.StartsWith("linux.pkg.", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id.StartsWith("linux.sys.", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id.StartsWith("linux.hash.", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id.StartsWith("linux.archive.", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id.StartsWith("linux.cpp.", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id.StartsWith("linux.build.dotnet", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id.StartsWith("linux.build.cmake", StringComparison.Ordinal));
+
+        var handlersField = typeof(LinuxToolHandlerRegistry).GetField("_handlers", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(handlersField);
+        var handlers = Assert.IsType<Dictionary<string, IToolHandler>>(handlersField!.GetValue(registry));
+
+        Assert.All(new[] { "linux.fs.", "linux.text.", "linux.proc.", "linux.git.", "linux.pkg.", "linux.sys.", "linux.hash.", "linux.archive.", "linux.cpp." },
+            prefix => Assert.Contains(handlers.Keys, id => id.StartsWith(prefix, StringComparison.Ordinal)));
+    }
+
     private static void Run(string file, string args, string cwd)
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
