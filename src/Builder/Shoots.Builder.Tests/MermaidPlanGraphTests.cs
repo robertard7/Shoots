@@ -15,10 +15,10 @@ public sealed class MermaidPlanGraphTests
     {
         var planner = CreatePlanner();
         var request = CreateRequest(
-            "graph TD; select:::start --> validate --> review --> terminate:::terminal; select --> validate");
+            "graph TD; select:::route --> validate --> review --> terminate:::terminal; select --> validate");
 
         var plan = planner.Plan(request);
-        var validateRule = Assert.Single(plan.Request.RouteRules.Where(rule => rule.NodeId == "validate"));
+        var validateRule = Assert.Single(plan.Request.RouteRules, rule => rule.NodeId == "validate");
 
         Assert.Equal(MermaidNodeKind.Route, validateRule.NodeKind);
         Assert.Equal(new[] { "select", "validate", "review", "terminate" }, plan.Steps.Select(step => step.Id).ToArray());

@@ -45,7 +45,11 @@ public sealed class DeterministicPlannerTests
     [Fact]
     public void Planner_hash_matches_authority_fields()
     {
-        var services = new StubRuntimeServices();
+        var services = new StubRuntimeServices(
+            new RuntimeCommandSpec(
+                "core.ping",
+                "Health check.",
+                Array.Empty<RuntimeArgSpec>()));
         var policy = new StubDelegationPolicy();
         var planner = new DeterministicBuildPlanner(services, policy);
         var request = CreateRequest(
