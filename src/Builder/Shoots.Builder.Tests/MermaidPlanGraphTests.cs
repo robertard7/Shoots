@@ -21,6 +21,7 @@ public sealed class MermaidPlanGraphTests
         var validateRule = Assert.Single(plan.Request.RouteRules.Where(rule => rule.NodeId == "validate"));
 
         Assert.Equal(MermaidNodeKind.Route, validateRule.NodeKind);
+        Assert.Equal(new[] { "select", "validate", "review", "terminate" }, plan.Steps.Select(step => step.Id).ToArray());
         Assert.Equal(new[] { "validate" }, plan.Request.RouteRules.Single(rule => rule.NodeId == "select").AllowedNextNodes);
     }
 
