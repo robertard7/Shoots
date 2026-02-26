@@ -25,9 +25,11 @@ public static class LinuxToolText
         if (maxBytesOut <= 0 || string.IsNullOrEmpty(text))
             return string.Empty;
 
-        var bytes = Encoding.UTF8.GetBytes(text);
-        if (bytes.Length <= maxBytesOut)
+        var utf8ByteCount = Encoding.UTF8.GetByteCount(text);
+        if (utf8ByteCount <= maxBytesOut)
             return text;
+
+        var bytes = Encoding.UTF8.GetBytes(text);
 
         var end = maxBytesOut;
         var runeStart = end - 1;
