@@ -36,7 +36,7 @@ public sealed class EnvironmentProfileService : IEnvironmentProfileService
     public EnvironmentProfileResult ApplyProfile(string sandboxRoot, IEnvironmentProfile profile)
     {
         if (string.IsNullOrWhiteSpace(sandboxRoot))
-            throw new ArgumentException("sandbox root is required", nameof(sandboxRoot));
+            throw new ArgumentException("sandbox root is needed", nameof(sandboxRoot));
         if (profile is null)
             throw new ArgumentNullException(nameof(profile));
         if (!Directory.Exists(sandboxRoot))
@@ -70,7 +70,7 @@ public sealed class EnvironmentProfileService : IEnvironmentProfileService
     private static string? ApplyStep(string sandboxRoot, SandboxPreparationStep step)
     {
         if (string.IsNullOrWhiteSpace(step.RelativePath))
-            throw new ArgumentException("sandbox step path is required", nameof(step));
+            throw new ArgumentException("sandbox step path is needed", nameof(step));
         if (Path.IsPathRooted(step.RelativePath))
             throw new InvalidOperationException($"Sandbox step path must be relative: {step.RelativePath}");
 
@@ -96,8 +96,8 @@ public sealed class EnvironmentProfileService : IEnvironmentProfileService
     private static void ValidateProfile(IEnvironmentProfile profile)
     {
         if (string.IsNullOrWhiteSpace(profile.Name))
-            throw new InvalidOperationException("Profile name is required.");
+            throw new InvalidOperationException("Profile name is needed.");
         if (profile.SandboxPreparationSteps is null)
-            throw new InvalidOperationException("Profile steps are required.");
+            throw new InvalidOperationException("Profile steps are needed.");
     }
 }

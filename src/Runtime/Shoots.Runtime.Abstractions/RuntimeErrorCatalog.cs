@@ -15,7 +15,6 @@ public static class RuntimeErrorCatalog
         "invalid_arguments",
         "missing_authority",
         "route_decision_required",
-        "route.decision_timeout",
         "route_decision_unexpected",
         "route_intent_mismatch",
         "route_owner_invalid",

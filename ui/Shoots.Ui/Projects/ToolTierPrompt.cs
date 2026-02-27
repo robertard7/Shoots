@@ -1,17 +1,16 @@
 using System.Windows;
-using Shoots.Runtime.Ui.Abstractions;
 
 namespace Shoots.UI.Projects;
 
 // UI-only. Declarative. Non-executable. Not runtime-affecting.
 public interface IToolTierPrompt
 {
-    bool ConfirmSystemTier(ToolpackTier currentTier);
+    bool ConfirmSystemTier(UiToolpackTier currentTier);
 }
 
 public sealed class ToolTierPrompt : IToolTierPrompt
 {
-    public bool ConfirmSystemTier(ToolpackTier currentTier)
+    public bool ConfirmSystemTier(UiToolpackTier currentTier)
     {
         var message = "System tier surfaces OS-level tool stubs. Enable System tier?";
         var title = $"Enable System Tier (current: {currentTier})";
@@ -27,7 +26,7 @@ public sealed class ToolTierPrompt : IToolTierPrompt
 
 public sealed class NoOpToolTierPrompt : IToolTierPrompt
 {
-    public bool ConfirmSystemTier(ToolpackTier currentTier)
+    public bool ConfirmSystemTier(UiToolpackTier currentTier)
     {
         _ = currentTier;
         return true;

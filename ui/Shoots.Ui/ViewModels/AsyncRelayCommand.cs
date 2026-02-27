@@ -34,6 +34,14 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
 
     public async void Execute(object? parameter)
     {
+        await ExecuteAsync(parameter).ConfigureAwait(true);
+    }
+
+    public Task ExecuteAsync()
+        => ExecuteAsync(null);
+
+    public async Task ExecuteAsync(object? parameter)
+    {
         if (!CanExecute(parameter))
             return;
 

@@ -39,6 +39,7 @@ public sealed class RuntimeOrchestrator
         if (plan is null)
             throw new ArgumentNullException(nameof(plan));
 
+        var hasExplicitOptions = options is not null;
         var resolvedOptions = options ?? new RuntimeRunOptions();
         var currentPlanHash = ResolvePlanHash(plan);
         var seed = _persistence?.Load(currentPlanHash);
@@ -55,6 +56,45 @@ public sealed class RuntimeOrchestrator
                 seed = null;
             if (runState is not null)
                 runState = null;
+        }
+
+        if (hasExplicitOptions &&
+            resolvedOptions.ResumeMode == ResumeMode.None &&
+            !resolvedOptions.AllowPlanChangeOverride &&
+            !resolvedOptions.DiscardWaiting &&
+            string.IsNullOrWhiteSpace(resolvedOptions.InjectedDecisionDigest) &&
+            seed?.State.Status == RoutingStatus.Waiting &&
+            seed.Waiting is not null &&
+            runState?.LastOutcomeKind == RunOutcomeKind.Waiting)
+        {
+            var waitCount = (runState.AttemptCounter) + 1;
+            if (resolvedOptions.MaxDecisionWaits > 0 && waitCount > resolvedOptions.MaxDecisionWaits)
+            {
+                var timeoutError = new RuntimeError(
+                    "route_decision_required",
+                    "Decision wait budget exceeded.",
+                    $"step_id={seed.Waiting.CurrentNodeId}|intent={seed.Waiting.IntentTokenHash}");
+
+                var timeoutState = seed.State.WithStatus(RoutingStatus.Halted);
+                var timeoutTrace = AppendHostEvent(seed.Trace, RoutingTraceEventKind.Route, "decision.gate.waiting");
+                timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Route, "decision.waits.exhausted");
+                timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Error, "route.decision_timeout");
+
+                var timeoutResult = new ExecutionEnvelope(
+                    plan,
+                    timeoutState,
+                    seed.ToolResults,
+                    BuildArtifacts(plan, seed.ToolResults),
+                    timeoutTrace,
+                    seed.Telemetry,
+                    _registry.CatalogHash,
+                    ResolveFinalStatus(timeoutState),
+                    null);
+
+                _persistence?.Save(timeoutResult);
+                SaveRunState(timeoutResult, resolvedOptions, runState);
+                return timeoutResult;
+            }
         }
 
         var blocked = TryBuildBlockedWaitingEnvelope(plan, seed, runState, resolvedOptions);
@@ -82,14 +122,14 @@ public sealed class RuntimeOrchestrator
             if (resolvedOptions.MaxDecisionWaits > 0 && waitCount > resolvedOptions.MaxDecisionWaits)
             {
                 var timeoutError = new RuntimeError(
-                    "route.decision_timeout",
+                    "route_decision_required",
                     "Decision wait budget exceeded.",
                     $"step_id={result.Waiting.CurrentNodeId}|intent={result.Waiting.IntentTokenHash}");
 
                 var timeoutState = result.State.WithStatus(RoutingStatus.Halted);
                 var timeoutTrace = AppendHostEvent(result.Trace, RoutingTraceEventKind.Route, "decision.gate.waiting");
                 timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Route, "decision.waits.exhausted");
-                timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Error, timeoutError.Code);
+                timeoutTrace = AppendHostEvent(timeoutTrace, RoutingTraceEventKind.Error, "route.decision_timeout");
 
                 var timeoutResult = new ExecutionEnvelope(
                     plan,

@@ -1,37 +1,36 @@
 using System.Collections.Generic;
-using Shoots.Runtime.Ui.Abstractions;
 
 namespace Shoots.UI.Projects;
 
 // UI-only. Declarative. Non-executable. Not runtime-affecting.
 public static class ToolpackPolicyDefaults
 {
-    public static IReadOnlyList<ToolpackCapability> GetAllowedCapabilities(ToolpackTier tier)
+    public static IReadOnlyList<UiToolpackCapability> GetAllowedCapabilities(UiToolpackTier tier)
     {
         return tier switch
         {
-            ToolpackTier.Public => new[]
+            UiToolpackTier.Public => new[]
             {
-                ToolpackCapability.FileSystem
+                UiToolpackCapability.FileSystem
             },
-            ToolpackTier.Developer => new[]
+            UiToolpackTier.Developer => new[]
             {
-                ToolpackCapability.FileSystem,
-                ToolpackCapability.Build,
-                ToolpackCapability.Process
+                UiToolpackCapability.FileSystem,
+                UiToolpackCapability.Build,
+                UiToolpackCapability.Process
             },
-            ToolpackTier.System => new[]
+            UiToolpackTier.System => new[]
             {
-                ToolpackCapability.FileSystem,
-                ToolpackCapability.Build,
-                ToolpackCapability.Process,
-                ToolpackCapability.Network,
-                ToolpackCapability.Kernel,
-                ToolpackCapability.Deploy
+                UiToolpackCapability.FileSystem,
+                UiToolpackCapability.Build,
+                UiToolpackCapability.Process,
+                UiToolpackCapability.Network,
+                UiToolpackCapability.Kernel,
+                UiToolpackCapability.Deploy
             },
             _ => new[]
             {
-                ToolpackCapability.FileSystem
+                UiToolpackCapability.FileSystem
             }
         };
     }

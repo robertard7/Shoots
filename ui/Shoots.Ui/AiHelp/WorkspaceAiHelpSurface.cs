@@ -8,9 +8,9 @@ namespace Shoots.UI.AiHelp;
 public sealed class WorkspaceAiHelpSurface : IAiHelpSurface
 {
     private readonly ProjectWorkspace? _workspace;
-    private readonly ToolpackTier _tier;
+    private readonly UiToolpackTier _tier;
 
-    public WorkspaceAiHelpSurface(ProjectWorkspace? workspace, ToolpackTier tier)
+    public WorkspaceAiHelpSurface(ProjectWorkspace? workspace, UiToolpackTier tier)
     {
         _workspace = workspace;
         _tier = tier;
@@ -45,7 +45,7 @@ public sealed class WorkspaceAiHelpSurface : IAiHelpSurface
     public string DescribeConstraints()
         => "Workspace context is read-only in this UI.";
 
-    private static string DescribeCapabilities(IReadOnlyList<ToolpackCapability> capabilities)
+    private static string DescribeCapabilities(IReadOnlyList<UiToolpackCapability> capabilities)
     {
         if (capabilities.Count == 0)
             return "no additional capabilities";

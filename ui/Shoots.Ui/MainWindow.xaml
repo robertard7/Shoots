@@ -1014,7 +1014,7 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
               <TextBlock Margin="0,8,0,0" Text="Restart recommended to pick up capability changes."
-                         Visibility="{Binding RestartRequired, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                         Visibility="{Binding RestartNeeded, Converter={StaticResource BooleanToVisibilityConverter}}" />
             </StackPanel>
           </GroupBox>
           <StackPanel Grid.Row="4" Margin="0,12,0,0">

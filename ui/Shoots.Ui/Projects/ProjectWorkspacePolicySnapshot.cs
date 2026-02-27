@@ -1,12 +1,11 @@
 using System;
-using Shoots.Runtime.Ui.Abstractions;
 
 namespace Shoots.UI.Projects;
 
 // UI-only. Declarative. Non-executable. Not runtime-affecting.
 public sealed record ProjectWorkspacePolicySnapshot(
-    ToolpackTier AllowedTier,
-    IReadOnlyList<ToolpackCapability> AllowedCapabilities) : IToolpackPolicySnapshot
+    UiToolpackTier AllowedTier,
+    IReadOnlyList<UiToolpackCapability> AllowedCapabilities) : IUiToolpackPolicySnapshot
 {
     public static ProjectWorkspacePolicySnapshot FromWorkspace(ProjectWorkspace workspace)
     {

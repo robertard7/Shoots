@@ -65,9 +65,7 @@ public sealed class ToolpackLoader
             if (tool.Authority is null)
                 throw new ArgumentException($"tool authority is required in {manifest.SourcePath}");
 
-            var providerKind = Enum.Parse<ProviderKind>(
-                tool.Authority.ProviderKind,
-                ignoreCase: true);
+            var providerKind = ParseProviderKind(tool.Authority.ProviderKind);
 
             var capabilities = ProviderCapabilities.None;
             if (tool.Authority.Capabilities is not null)
@@ -162,4 +160,14 @@ public sealed class ToolpackLoader
             .ToHexString(SHA256.HashData(bytes))
             .ToLowerInvariant();
     }
+
+    private static ProviderKind ParseProviderKind(string? providerKind)
+        => providerKind?.Trim() switch
+        {
+            "Local" => ProviderKind.Local,
+            "Remote" => ProviderKind.Remote,
+            "Delegated" => ProviderKind.Delegated,
+            "Embedded" => ProviderKind.Local,
+            _ => ProviderKind.Local
+        };
 }

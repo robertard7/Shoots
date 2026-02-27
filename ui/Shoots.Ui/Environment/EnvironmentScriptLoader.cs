@@ -18,7 +18,7 @@ public sealed class EnvironmentScriptLoader
 
         if (string.IsNullOrWhiteSpace(directory))
         {
-            error = "Directory is required.";
+            error = "Directory is needed.";
             return false;
         }
 
@@ -143,7 +143,7 @@ public sealed class EnvironmentScriptLoader
 
         if (string.IsNullOrWhiteSpace(relativePath))
         {
-            error = "Script step path is required.";
+            error = "Script step path is needed.";
             return false;
         }
 
@@ -157,10 +157,13 @@ public sealed class EnvironmentScriptLoader
             Path.DirectorySeparatorChar,
             Path.AltDirectorySeparatorChar);
 
-        if (segments.Any(s => string.Equals(s, "..", StringComparison.Ordinal)))
+        foreach (var segment in segments)
         {
-            error = $"Script step path cannot contain traversal segments: {relativePath}.";
-            return false;
+            if (string.Equals(segment, "..", StringComparison.Ordinal))
+            {
+                error = $"Script step path cannot contain traversal segments: {relativePath}.";
+                return false;
+            }
         }
 
         return true;

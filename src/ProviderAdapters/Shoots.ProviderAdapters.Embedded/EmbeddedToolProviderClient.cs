@@ -11,6 +11,12 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
     private readonly LinuxToolHandlerRegistry _registry;
     private readonly ToolExecutionContext _baseContext;
     private readonly IReadOnlyDictionary<string, ToolSpec> _specs;
+    private static readonly IReadOnlySet<string> PrivilegedToolIds = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "linux.sys.systemctl_status.v1",
+        "linux.sys.systemctl_restart.v1",
+        "linux.sys.journalctl_tail.v1"
+    };
 
     public EmbeddedToolProviderClient(
         string repoRoot,
@@ -21,18 +27,19 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
         string? workingDirectory = null)
     {
         _registry = LinuxToolHandlerRegistry.CreateDefault();
+        var effectiveRepoRoot = ResolveRepositoryRoot(repoRoot);
         var resolvedWorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory)
-            ? repoRoot
-            : Path.GetFullPath(workingDirectory, repoRoot);
+            ? effectiveRepoRoot
+            : Path.GetFullPath(workingDirectory, effectiveRepoRoot);
 
-        if (!Shoots.Tools.Linux.LinuxToolHandlers.IsPathWithin(repoRoot, resolvedWorkingDirectory))
+        if (!Shoots.Tools.Linux.LinuxToolHandlers.IsPathWithin(effectiveRepoRoot, resolvedWorkingDirectory))
             throw new ArgumentOutOfRangeException(nameof(workingDirectory), "Working directory must stay within repository root.");
 
-        _baseContext = ToolExecutionContext.Create(repoRoot, CancellationToken.None, maxBytesOut, maxTimeoutMs, allowNetwork, allowPrivileged) with
+        _baseContext = ToolExecutionContext.Create(effectiveRepoRoot, CancellationToken.None, maxBytesOut, maxTimeoutMs, allowNetwork, allowPrivileged) with
         {
             WorkingDirectory = resolvedWorkingDirectory
         };
-        var catalogPath = Path.Combine(repoRoot, "etc", "tools.catalog.json");
+        var catalogPath = Path.Combine(effectiveRepoRoot, "etc", "tools.catalog.json");
         _specs = File.Exists(catalogPath)
             ? LinuxToolCatalog.LoadSpecs(catalogPath).ToDictionary(spec => spec.ToolId.Value, StringComparer.Ordinal)
             : new Dictionary<string, ToolSpec>(StringComparer.Ordinal);
@@ -52,6 +59,29 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
         }
 
         var toolId = envelope.ToolId ?? new ToolId("unknown");
+        if (!TryCreateExecutionContext(envelope.Context, ct, toolId, out var context, out var contextErrorResult))
+        {
+            return ValueTask.FromResult(new ProviderExecutionResult(
+                envelope.RequestId,
+                ProviderExecutionResultKind.ToolExecuted,
+                contextErrorResult,
+                null,
+                null,
+                null));
+        }
+
+        var gateError = ResolveAuthorityGateError(toolId, context!);
+        if (gateError is not null)
+        {
+            return ValueTask.FromResult(new ProviderExecutionResult(
+                envelope.RequestId,
+                ProviderExecutionResultKind.ToolExecuted,
+                gateError,
+                null,
+                null,
+                null));
+        }
+
         var handler = _registry.Resolve(toolId);
         if (handler is null)
         {
@@ -100,17 +130,6 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
         }
 
         var invocation = new ToolInvocation(toolId, invocationBindings, new WorkOrderId(envelope.RequestId));
-        if (!TryCreateExecutionContext(envelope.Context, ct, toolId, out var context, out var contextErrorResult))
-        {
-            return ValueTask.FromResult(new ProviderExecutionResult(
-                envelope.RequestId,
-                ProviderExecutionResultKind.ToolExecuted,
-                contextErrorResult,
-                null,
-                null,
-                null));
-        }
-
         var result = handler.Execute(invocation, context!);
         result = ShapeResult(result, context!.MaxBytesOut);
 
@@ -121,6 +140,31 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
             null,
             null,
             null));
+    }
+
+    private static ToolResult? ResolveAuthorityGateError(ToolId toolId, ToolExecutionContext context)
+    {
+        if (toolId.Value.StartsWith("linux.net.", StringComparison.Ordinal) && !context.AllowNetwork)
+        {
+            return new ToolResult(toolId, new Dictionary<string, object?>
+            {
+                ["tool_id"] = toolId.Value,
+                ["error.code"] = "tool.network_disabled",
+                ["error.message"] = "Network access is disabled for tool execution context."
+            }, false);
+        }
+
+        if (PrivilegedToolIds.Contains(toolId.Value) && !context.AllowPrivileged)
+        {
+            return new ToolResult(toolId, new Dictionary<string, object?>
+            {
+                ["tool_id"] = toolId.Value,
+                ["error.code"] = "tool.privileged_disabled",
+                ["error.message"] = "Privileged operations are disabled for tool execution context."
+            }, false);
+        }
+
+        return null;
     }
 
     private bool TryCreateExecutionContext(
@@ -207,6 +251,22 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
             return null;
 
         return Convert.ToString(value);
+    }
+
+    private static string ResolveRepositoryRoot(string repoRoot)
+    {
+        var basePath = Path.GetFullPath(repoRoot);
+        var current = new DirectoryInfo(basePath);
+
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "etc", "tools.catalog.json")))
+                return current.FullName;
+
+            current = current.Parent;
+        }
+
+        return basePath;
     }
 
 }

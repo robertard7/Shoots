@@ -49,13 +49,40 @@ public sealed class MermaidGraphParser
             if (trimmed.Length == 0)
                 continue;
 
-            foreach (var segment in trimmed.Split(';'))
+            foreach (var segment in SplitLineSegments(trimmed))
+                yield return segment;
+        }
+    }
+
+    private static IEnumerable<string> SplitLineSegments(string line)
+    {
+        var segmentStart = 0;
+        var squareDepth = 0;
+        var roundDepth = 0;
+        var braceDepth = 0;
+
+        for (var index = 0; index < line.Length; index++)
+        {
+            switch (line[index])
             {
-                var token = segment.Trim();
-                if (token.Length > 0)
-                    yield return token;
+                case '[': squareDepth++; break;
+                case ']': squareDepth = Math.Max(0, squareDepth - 1); break;
+                case '(': roundDepth++; break;
+                case ')': roundDepth = Math.Max(0, roundDepth - 1); break;
+                case '{': braceDepth++; break;
+                case '}': braceDepth = Math.Max(0, braceDepth - 1); break;
+                case ';' when squareDepth == 0 && roundDepth == 0 && braceDepth == 0:
+                    var segment = line[segmentStart..index].Trim();
+                    if (segment.Length > 0)
+                        yield return segment;
+                    segmentStart = index + 1;
+                    break;
             }
         }
+
+        var tail = line[segmentStart..].Trim();
+        if (tail.Length > 0)
+            yield return tail;
     }
 
     private static void ParseEdgeSegment(
@@ -107,7 +134,7 @@ public sealed class MermaidGraphParser
         if (trimmed.Length == 0)
             throw new MermaidGraphParseException("graph.invalid_node", "Node token is empty.");
 
-        var firstBracket = trimmed.IndexOfAny(['[', '(']);
+        var firstBracket = trimmed.IndexOfAny(['[', '(', '{']);
         if (firstBracket < 0)
             return new ParsedNodeToken(NormalizeId(trimmed, options), trimmed, false, false);
 
@@ -149,6 +176,14 @@ public sealed class MermaidGraphParser
         if (token.StartsWith("(", StringComparison.Ordinal))
         {
             if (!token.EndsWith(")", StringComparison.Ordinal))
+                throw new MermaidGraphParseException("graph.invalid_node", $"Node token '{token}' has unmatched delimiters.");
+
+            return (token[1..^1].Trim(), false);
+        }
+
+        if (token.StartsWith("{", StringComparison.Ordinal))
+        {
+            if (!token.EndsWith("}", StringComparison.Ordinal))
                 throw new MermaidGraphParseException("graph.invalid_node", $"Node token '{token}' has unmatched delimiters.");
 
             return (token[1..^1].Trim(), false);
