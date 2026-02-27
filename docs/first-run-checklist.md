@@ -38,5 +38,6 @@ Linux parity
 
 Notes
 - `ui/Shoots.Ui.Tests` is Windows-only by design (`net8.0-windows`).
+- Optional CI failure capture: `bash scripts/collect_ci_first_failure.sh <branch>`
 - Keep `IsTestProject` guarded on non-Windows: `<IsTestProject Condition="'$(OS)' != 'Windows_NT'">false</IsTestProject>`.
 
