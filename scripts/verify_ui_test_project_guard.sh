@@ -1,37 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-python3 - <<'PY'
-import sys
-import xml.etree.ElementTree as ET
-from pathlib import Path
+project="ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj"
 
-project = Path('ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj')
-if not project.exists():
-    sys.stderr.write(f"error: missing {project}\n")
-    sys.exit(1)
+if [[ ! -f "$project" ]]; then
+  echo "error: missing $project" >&2
+  exit 1
+fi
 
-root = ET.parse(project).getroot()
-found_expected = False
-for elem in root.iter():
-    if elem.tag.split('}')[-1] != 'IsTestProject':
-        continue
-    condition = (elem.attrib.get('Condition') or '').strip()
-    value = (elem.text or '').strip().lower()
-    if condition == "'$(OS)' != 'Windows_NT'" and value == 'false':
-        found_expected = True
-    else:
-        sys.stderr.write(
-            "error: invalid IsTestProject guard in ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj "
-            f"(Condition={condition!r}, Value={value!r})\n"
-        )
-        sys.exit(1)
+count=$(rg -n "<IsTestProject\\b" "$project" | wc -l | tr -d ' ')
+if [[ "$count" != "1" ]]; then
+  echo "error: expected exactly one IsTestProject entry in $project, found $count" >&2
+  rg -n "<IsTestProject\\b" "$project" >&2 || true
+  exit 1
+fi
 
-if not found_expected:
-    sys.stderr.write(
-        "error: expected IsTestProject guard with Condition \"'$(OS)' != 'Windows_NT'\" and value false\n"
-    )
-    sys.exit(1)
+if ! rg -n "<IsTestProject\s+Condition=\"'\\$\\(OS\\)' != 'Windows_NT'\">\s*false\s*</IsTestProject>" "$project" >/dev/null; then
+  echo "error: expected IsTestProject guard with Condition \"'\$(OS)' != 'Windows_NT'\" and value false" >&2
+  exit 1
+fi
 
-print('ui test project guard passed')
-PY
+echo "ui test project guard passed"

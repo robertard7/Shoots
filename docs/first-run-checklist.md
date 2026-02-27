@@ -20,3 +20,23 @@ Sign-Off
 --------
 - [ ] Completed by: ______________________
 - [ ] Date: ______________________________
+
+Green Build Recipe
+------------------
+Windows (self-hosted runner parity)
+- `dotnet restore Shoots.sln`
+- `dotnet build -c Release Shoots.sln -p:ContinuousIntegrationBuild=true`
+- `dotnet test -c Release Shoots.sln -p:ContinuousIntegrationBuild=true`
+- UI-only verification: `dotnet test -c Release ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -p:ContinuousIntegrationBuild=true`
+
+Linux parity
+- `dotnet restore src/Runtime/Shoots.Runtime.sln`
+- `dotnet build src/Runtime/Shoots.Runtime.sln -c Release -p:ContinuousIntegrationBuild=true`
+- `dotnet test src/Runtime/Shoots.Runtime.sln -c Release -p:ContinuousIntegrationBuild=true`
+- `dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true`
+- `dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true`
+
+Notes
+- `ui/Shoots.Ui.Tests` is Windows-only by design (`net8.0-windows`).
+- Keep `IsTestProject` guarded on non-Windows: `<IsTestProject Condition="'$(OS)' != 'Windows_NT'">false</IsTestProject>`.
+
