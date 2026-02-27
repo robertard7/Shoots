@@ -19,6 +19,9 @@ jobs:
       - name: Verify provider adapter naming
         run: bash scripts/verify_provideradapter_naming.sh
 
+      - name: Verify UI test project guard
+        run: bash scripts/verify_ui_test_project_guard.sh
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -100,6 +103,9 @@ jobs:
 
       - name: Verify provider adapter naming
         run: ./scripts/verify_provideradapter_naming.ps1
+
+      - name: Verify UI test project guard
+        run: ./scripts/verify_ui_test_project_guard.ps1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -224,6 +230,9 @@ jobs:
 
       - name: Verify provider adapter naming
         run: ./scripts/verify_provideradapter_naming.ps1
+
+      - name: Verify UI test project guard
+        run: ./scripts/verify_ui_test_project_guard.ps1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
