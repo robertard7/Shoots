@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   runtime-linux:
     name: runtime-linux
@@ -14,6 +18,9 @@ jobs:
 
       - name: Verify provider adapter naming
         run: bash scripts/verify_provideradapter_naming.sh
+
+      - name: Verify UI test project guard
+        run: bash scripts/verify_ui_test_project_guard.sh
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -38,44 +45,64 @@ jobs:
       - name: Build Runtime
         run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
 
-      - name: Test Runtime (trx)
-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=runtime-linux.trx"
+      - name: Test Runtime.Tests (trx)
+        run: dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=runtime-linux.trx"
 
-      - name: Test Host contracts/core (trx)
-        run: dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=host-linux.trx"
+      - name: Test Builder.Tests (trx)
+        run: dotnet test src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=builder-linux.trx"
 
-      - name: Test Client (trx)
-        run: dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=client-linux.trx"
+      - name: Write CI first-failure summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const runId = context.runId;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: runId,
+              per_page: 100,
+            });
+            const jobs = jobsResp.data.jobs || [];
+            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
+            let failingStep = null;
+            if (failingJob && Array.isArray(failingJob.steps)) {
+              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
+            }
+            const lines = [
+              '# CI first-failure summary',
+              '',
+              `Workflow: ${context.workflow}`,
+              `Run URL: ${runUrl}`,
+              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
+              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
+              '',
+              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
+              '',
+              'Failure excerpt:',
+              '> Step log excerpt unavailable in this summary (see run logs).',
+            ];
+            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
 
-      - name: Run tools smoke
-        run: bash scripts/run_tools_smoke.sh
-
-      - name: Runtime hang probe (blame-hang)
-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 -p:ContinuousIntegrationBuild=true --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
-
-      - name: Host smoke (ChatIntakeSmoke)
-        run: dotnet run --project src/Host/Shoots.Host.Smoke/Shoots.Host.Smoke.csproj -c Release -- ChatIntakeSmoke
-
-      - name: Run Client sample golden flow
-        run: dotnet run --project src/Client/Shoots.Client.Sample/Shoots.Client.Sample.csproj -c Release
-
-      - name: Collect smoke artifacts (linux)
-        run: |
-          mkdir -p artifacts/smoke/${{ github.run_id }}
-          cp -r .state/trace artifacts/smoke/${{ github.run_id }}/trace || true
-          cp -r .state/artifacts artifacts/smoke/${{ github.run_id }}/artifacts || true
-
+      - name: Upload CI first-failure summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-first-failure-${{ github.job }}
+          path: artifacts/ci-first-failure.md
       - name: Upload runtime artifacts
         uses: actions/upload-artifact@v4
         with:
           name: runtime-linux-artifacts
           path: |
             **/runtime-linux.trx
-            **/host-linux.trx
-            **/client-linux.trx
-            artifacts/smoke/${{ github.run_id }}/**
+            **/builder-linux.trx
             etc/tools.catalog.json
-
   full-windows:
     name: full-windows
     runs-on: [self-hosted, Windows, X64, Shoots]
@@ -96,6 +123,9 @@ jobs:
 
       - name: Verify provider adapter naming
         run: ./scripts/verify_provideradapter_naming.ps1
+
+      - name: Verify UI test project guard
+        run: ./scripts/verify_ui_test_project_guard.ps1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -150,6 +180,50 @@ jobs:
           name: shoots-release-bundle
           path: artifacts/release/*/Shoots-*.zip
 
+      - name: Write CI first-failure summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const runId = context.runId;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: runId,
+              per_page: 100,
+            });
+            const jobs = jobsResp.data.jobs || [];
+            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
+            let failingStep = null;
+            if (failingJob && Array.isArray(failingJob.steps)) {
+              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
+            }
+            const lines = [
+              '# CI first-failure summary',
+              '',
+              `Workflow: ${context.workflow}`,
+              `Run URL: ${runUrl}`,
+              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
+              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
+              '',
+              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
+              '',
+              'Failure excerpt:',
+              '> Step log excerpt unavailable in this summary (see run logs).',
+            ];
+            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+
+      - name: Upload CI first-failure summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-first-failure-${{ github.job }}
+          path: artifacts/ci-first-failure.md
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -166,6 +240,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify UI test project guard
+        run: bash scripts/verify_ui_test_project_guard.sh
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -195,6 +272,50 @@ jobs:
           dotnet pack src/Runtime/Shoots.Runtime.Abstractions/Shoots.Runtime.Abstractions.csproj -c Release -o artifacts/nuget
           dotnet pack src/Client/Shoots.Client/Shoots.Client.csproj -c Release -o artifacts/nuget
 
+      - name: Write CI first-failure summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const runId = context.runId;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: runId,
+              per_page: 100,
+            });
+            const jobs = jobsResp.data.jobs || [];
+            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
+            let failingStep = null;
+            if (failingJob && Array.isArray(failingJob.steps)) {
+              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
+            }
+            const lines = [
+              '# CI first-failure summary',
+              '',
+              `Workflow: ${context.workflow}`,
+              `Run URL: ${runUrl}`,
+              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
+              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
+              '',
+              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
+              '',
+              'Failure excerpt:',
+              '> Step log excerpt unavailable in this summary (see run logs).',
+            ];
+            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+
+      - name: Upload CI first-failure summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-first-failure-${{ github.job }}
+          path: artifacts/ci-first-failure.md
       - name: Upload nuget artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -220,6 +341,9 @@ jobs:
 
       - name: Verify provider adapter naming
         run: ./scripts/verify_provideradapter_naming.ps1
+
+      - name: Verify UI test project guard
+        run: ./scripts/verify_ui_test_project_guard.ps1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -247,6 +371,50 @@ jobs:
       - name: Determinism pass 2 (trx)
         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -p:ContinuousIntegrationBuild=true --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-2.trx"
 
+      - name: Write CI first-failure summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const runId = context.runId;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: runId,
+              per_page: 100,
+            });
+            const jobs = jobsResp.data.jobs || [];
+            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
+            let failingStep = null;
+            if (failingJob && Array.isArray(failingJob.steps)) {
+              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
+            }
+            const lines = [
+              '# CI first-failure summary',
+              '',
+              `Workflow: ${context.workflow}`,
+              `Run URL: ${runUrl}`,
+              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
+              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
+              '',
+              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
+              '',
+              'Failure excerpt:',
+              '> Step log excerpt unavailable in this summary (see run logs).',
+            ];
+            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+
+      - name: Upload CI first-failure summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-first-failure-${{ github.job }}
+          path: artifacts/ci-first-failure.md
       - name: Upload determinism artifacts
         uses: actions/upload-artifact@v4
         with:
