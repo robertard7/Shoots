@@ -177,6 +177,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify UI test project guard
+        run: bash scripts/verify_ui_test_project_guard.sh
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
