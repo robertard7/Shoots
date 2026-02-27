@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Xml.Linq;
 using Xunit;
 
 namespace Shoots.Runtime.Tests;
@@ -11,9 +13,13 @@ public sealed class UiTestProjectGuardTests
     {
         var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../"));
         var uiTestProjectPath = Path.Combine(repoRoot, "ui", "Shoots.Ui.Tests", "Shoots.Ui.Tests.csproj");
-        var projectXml = File.ReadAllText(uiTestProjectPath);
 
-        Assert.Contains("Condition=\"'$(OS)' != 'Windows_NT'\"", projectXml);
-        Assert.Contains("<IsTestProject Condition=\"'$(OS)' != 'Windows_NT'\">false</IsTestProject>", projectXml);
+        var projectDocument = XDocument.Load(uiTestProjectPath);
+        var isTestProjectElement = projectDocument
+            .Descendants("IsTestProject")
+            .SingleOrDefault(element => (string?)element.Attribute("Condition") == "'$(OS)' != 'Windows_NT'");
+
+        Assert.NotNull(isTestProjectElement);
+        Assert.Equal("false", isTestProjectElement!.Value.Trim());
     }
 }
