@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Host\Shoots.Host.Abstractions\Shoots.Host.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Runtime\Shoots.Runtime.Ui.Abstractions\Shoots.Runtime.Ui.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>
