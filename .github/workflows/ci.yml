@@ -54,6 +54,9 @@ jobs:
       - name: Test Client (trx)
         run: dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=client-linux.trx"
 
+      - name: Test Builder (trx)
+        run: dotnet test src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=builder-linux.trx"
+
       - name: Run tools smoke
         run: bash scripts/run_tools_smoke.sh
 
@@ -80,6 +83,7 @@ jobs:
             **/runtime-linux.trx
             **/host-linux.trx
             **/client-linux.trx
+            **/builder-linux.trx
             artifacts/smoke/${{ github.run_id }}/**
             etc/tools.catalog.json
 

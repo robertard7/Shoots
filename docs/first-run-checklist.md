@@ -33,8 +33,8 @@ Linux parity
 - `dotnet restore src/Runtime/Shoots.Runtime.sln`
 - `dotnet build src/Runtime/Shoots.Runtime.sln -c Release -p:ContinuousIntegrationBuild=true`
 - `dotnet test src/Runtime/Shoots.Runtime.sln -c Release -p:ContinuousIntegrationBuild=true`
-- `dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true`
-- `dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true`
+- `dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true`
+- `dotnet test src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true`
 
 Notes
 - `ui/Shoots.Ui.Tests` is Windows-only by design (`net8.0-windows`).
