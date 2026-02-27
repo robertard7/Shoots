@@ -2,63 +2,63 @@
 set -euo pipefail
 
 workflow="ci"
-branch="${1:-}"
+strict=0
+branch=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --strict)
+      strict=1
+      shift
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: collect_ci_first_failure.sh [--strict] [branch]
+
+Collect latest CI run URL plus first failing job/step.
+- default: missing gh prints message and exits 0
+- --strict: missing gh exits 2
+EOF
+      exit 0
+      ;;
+    *)
+      branch="$1"
+      shift
+      ;;
+  esac
+done
 
 if ! command -v gh >/dev/null 2>&1; then
-  echo "error: gh CLI is required" >&2
-  exit 1
+  echo "gh not found; install gh or run this inside GitHub Actions"
+  if [[ "$strict" -eq 1 ]]; then
+    exit 2
+  fi
+  exit 0
 fi
 
 if [[ -n "$branch" ]]; then
-  run_json=$(gh run list --workflow "$workflow" --branch "$branch" --limit 1 --json databaseId,url,headBranch,status,conclusion 2>/dev/null)
+  run_id=$(gh run list --workflow "$workflow" --branch "$branch" --limit 1 --json databaseId --jq '.[0].databaseId // ""')
+  run_url=$(gh run list --workflow "$workflow" --branch "$branch" --limit 1 --json url --jq '.[0].url // ""')
 else
-  run_json=$(gh run list --workflow "$workflow" --limit 1 --json databaseId,url,headBranch,status,conclusion 2>/dev/null)
+  run_id=$(gh run list --workflow "$workflow" --limit 1 --json databaseId --jq '.[0].databaseId // ""')
+  run_url=$(gh run list --workflow "$workflow" --limit 1 --json url --jq '.[0].url // ""')
 fi
-
-run_id=$(python3 - <<'PY' "$run_json"
-import json,sys
-runs=json.loads(sys.argv[1])
-print(runs[0]["databaseId"] if runs else "")
-PY
-)
 
 if [[ -z "$run_id" ]]; then
   echo "error: no ci runs found" >&2
   exit 1
 fi
 
-run_url=$(python3 - <<'PY' "$run_json"
-import json,sys
-runs=json.loads(sys.argv[1])
-print(runs[0]["url"])
-PY
-)
+first_job=$(gh run view "$run_id" --json jobs --jq '.jobs[] | select(.conclusion != null and .conclusion != "success" and .conclusion != "skipped") | .name' | head -n1)
+first_step=$(gh run view "$run_id" --json jobs --jq '.jobs[] | select(.conclusion != null and .conclusion != "success" and .conclusion != "skipped") | .steps[] | select(.conclusion != null and .conclusion != "success" and .conclusion != "skipped") | .name' | head -n1)
 
-jobs_json=$(gh run view "$run_id" --json jobs 2>/dev/null)
+if [[ -z "$first_job" ]]; then
+  first_job="<none>"
+fi
+if [[ -z "$first_step" ]]; then
+  first_step="<none>"
+fi
 
-python3 - <<'PY' "$run_url" "$jobs_json"
-import json,sys
-run_url=sys.argv[1]
-jobs=json.loads(sys.argv[2]).get("jobs", [])
-failed_job=None
-failed_step=None
-for job in jobs:
-    if job.get("conclusion") not in (None, "success", "skipped"):
-        failed_job=job
-        break
-if failed_job:
-    for step in failed_job.get("steps", []):
-        if step.get("conclusion") not in (None, "success", "skipped"):
-            failed_step=step
-            break
-print(f"Run URL: {run_url}")
-if failed_job is None:
-    print("First failing job: <none>")
-    print("First failing step: <none>")
-else:
-    print(f"First failing job: {failed_job.get('name')}")
-    if failed_step is None:
-      print("First failing step: <none>")
-    else:
-      print(f"First failing step: {failed_step.get('name')}")
-PY
+echo "Run URL: $run_url"
+echo "First failing job: $first_job"
+echo "First failing step: $first_step"

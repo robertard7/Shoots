@@ -51,6 +51,50 @@ jobs:
       - name: Test Builder.Tests (trx)
         run: dotnet test src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=builder-linux.trx"
 
+      - name: Write CI first-failure summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const runId = context.runId;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: runId,
+              per_page: 100,
+            });
+            const jobs = jobsResp.data.jobs || [];
+            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
+            let failingStep = null;
+            if (failingJob && Array.isArray(failingJob.steps)) {
+              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
+            }
+            const lines = [
+              '# CI first-failure summary',
+              '',
+              `Workflow: ${context.workflow}`,
+              `Run URL: ${runUrl}`,
+              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
+              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
+              '',
+              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
+              '',
+              'Failure excerpt:',
+              '> Step log excerpt unavailable in this summary (see run logs).',
+            ];
+            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+
+      - name: Upload CI first-failure summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-first-failure-${{ github.job }}
+          path: artifacts/ci-first-failure.md
       - name: Upload runtime artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -136,6 +180,50 @@ jobs:
           name: shoots-release-bundle
           path: artifacts/release/*/Shoots-*.zip
 
+      - name: Write CI first-failure summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const runId = context.runId;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: runId,
+              per_page: 100,
+            });
+            const jobs = jobsResp.data.jobs || [];
+            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
+            let failingStep = null;
+            if (failingJob && Array.isArray(failingJob.steps)) {
+              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
+            }
+            const lines = [
+              '# CI first-failure summary',
+              '',
+              `Workflow: ${context.workflow}`,
+              `Run URL: ${runUrl}`,
+              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
+              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
+              '',
+              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
+              '',
+              'Failure excerpt:',
+              '> Step log excerpt unavailable in this summary (see run logs).',
+            ];
+            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+
+      - name: Upload CI first-failure summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-first-failure-${{ github.job }}
+          path: artifacts/ci-first-failure.md
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -184,6 +272,50 @@ jobs:
           dotnet pack src/Runtime/Shoots.Runtime.Abstractions/Shoots.Runtime.Abstractions.csproj -c Release -o artifacts/nuget
           dotnet pack src/Client/Shoots.Client/Shoots.Client.csproj -c Release -o artifacts/nuget
 
+      - name: Write CI first-failure summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const runId = context.runId;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: runId,
+              per_page: 100,
+            });
+            const jobs = jobsResp.data.jobs || [];
+            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
+            let failingStep = null;
+            if (failingJob && Array.isArray(failingJob.steps)) {
+              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
+            }
+            const lines = [
+              '# CI first-failure summary',
+              '',
+              `Workflow: ${context.workflow}`,
+              `Run URL: ${runUrl}`,
+              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
+              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
+              '',
+              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
+              '',
+              'Failure excerpt:',
+              '> Step log excerpt unavailable in this summary (see run logs).',
+            ];
+            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+
+      - name: Upload CI first-failure summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-first-failure-${{ github.job }}
+          path: artifacts/ci-first-failure.md
       - name: Upload nuget artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -239,6 +371,50 @@ jobs:
       - name: Determinism pass 2 (trx)
         run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -p:ContinuousIntegrationBuild=true --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-2.trx"
 
+      - name: Write CI first-failure summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const runId = context.runId;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: runId,
+              per_page: 100,
+            });
+            const jobs = jobsResp.data.jobs || [];
+            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
+            let failingStep = null;
+            if (failingJob && Array.isArray(failingJob.steps)) {
+              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
+            }
+            const lines = [
+              '# CI first-failure summary',
+              '',
+              `Workflow: ${context.workflow}`,
+              `Run URL: ${runUrl}`,
+              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
+              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
+              '',
+              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
+              '',
+              'Failure excerpt:',
+              '> Step log excerpt unavailable in this summary (see run logs).',
+            ];
+            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
+            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+
+      - name: Upload CI first-failure summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-first-failure-${{ github.job }}
+          path: artifacts/ci-first-failure.md
       - name: Upload determinism artifacts
         uses: actions/upload-artifact@v4
         with:
