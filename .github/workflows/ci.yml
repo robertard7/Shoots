@@ -33,16 +33,16 @@ jobs:
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
       - name: Build Runtime
-        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore
+        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
 
       - name: Test Runtime (trx)
-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --logger "trx;LogFileName=runtime-linux.trx"
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=runtime-linux.trx"
 
       - name: Test Host contracts/core (trx)
-        run: dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release --logger "trx;LogFileName=host-linux.trx"
+        run: dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=host-linux.trx"
 
       - name: Test Client (trx)
-        run: dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release --logger "trx;LogFileName=client-linux.trx"
+        run: dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=client-linux.trx"
 
       - name: Run tools smoke
         run: bash scripts/run_tools_smoke.sh
@@ -115,10 +115,10 @@ jobs:
         run: dotnet restore Shoots.sln
 
       - name: Build
-        run: dotnet build Shoots.sln -c Release --no-restore
+        run: dotnet build Shoots.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
 
       - name: Test
-        run: dotnet test Shoots.sln -c Release -v minimal --no-build
+        run: dotnet test Shoots.sln -c Release -v minimal --no-build -p:ContinuousIntegrationBuild=true
 
       - name: Host smoke
         run: pwsh -NoLogo -NoProfile -File .\scripts\run_host_smoke.ps1
@@ -173,13 +173,13 @@ jobs:
         run: bash scripts/verify_versions.sh
 
       - name: Build host/runtime/smoke
-        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release
+        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release -p:ContinuousIntegrationBuild=true
 
       - name: Test runtime + host
         run: |
-          dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release -m:1
-          dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -m:1
-          dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -m:1
+          dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true
+          dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true
+          dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true
 
       - name: Pack release candidate
         run: |
@@ -233,13 +233,13 @@ jobs:
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
       - name: Build
-        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore
+        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
 
       - name: Determinism pass 1 (trx)
-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-1.trx"
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -p:ContinuousIntegrationBuild=true --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-1.trx"
 
       - name: Determinism pass 2 (trx)
-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-2.trx"
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -p:ContinuousIntegrationBuild=true --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-2.trx"
 
       - name: Upload determinism artifacts
         uses: actions/upload-artifact@v4
