@@ -27,18 +27,19 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
         string? workingDirectory = null)
     {
         _registry = LinuxToolHandlerRegistry.CreateDefault();
+        var effectiveRepoRoot = ResolveRepositoryRoot(repoRoot);
         var resolvedWorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory)
-            ? repoRoot
-            : Path.GetFullPath(workingDirectory, repoRoot);
+            ? effectiveRepoRoot
+            : Path.GetFullPath(workingDirectory, effectiveRepoRoot);
 
-        if (!Shoots.Tools.Linux.LinuxToolHandlers.IsPathWithin(repoRoot, resolvedWorkingDirectory))
+        if (!Shoots.Tools.Linux.LinuxToolHandlers.IsPathWithin(effectiveRepoRoot, resolvedWorkingDirectory))
             throw new ArgumentOutOfRangeException(nameof(workingDirectory), "Working directory must stay within repository root.");
 
-        _baseContext = ToolExecutionContext.Create(repoRoot, CancellationToken.None, maxBytesOut, maxTimeoutMs, allowNetwork, allowPrivileged) with
+        _baseContext = ToolExecutionContext.Create(effectiveRepoRoot, CancellationToken.None, maxBytesOut, maxTimeoutMs, allowNetwork, allowPrivileged) with
         {
             WorkingDirectory = resolvedWorkingDirectory
         };
-        var catalogPath = Path.Combine(repoRoot, "etc", "tools.catalog.json");
+        var catalogPath = Path.Combine(effectiveRepoRoot, "etc", "tools.catalog.json");
         _specs = File.Exists(catalogPath)
             ? LinuxToolCatalog.LoadSpecs(catalogPath).ToDictionary(spec => spec.ToolId.Value, StringComparer.Ordinal)
             : new Dictionary<string, ToolSpec>(StringComparer.Ordinal);
@@ -250,6 +251,22 @@ public sealed class EmbeddedToolProviderClient : IProviderClient
             return null;
 
         return Convert.ToString(value);
+    }
+
+    private static string ResolveRepositoryRoot(string repoRoot)
+    {
+        var basePath = Path.GetFullPath(repoRoot);
+        var current = new DirectoryInfo(basePath);
+
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "etc", "tools.catalog.json")))
+                return current.FullName;
+
+            current = current.Parent;
+        }
+
+        return basePath;
     }
 
 }

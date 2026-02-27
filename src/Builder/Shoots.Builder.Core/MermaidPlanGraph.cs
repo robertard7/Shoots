@@ -23,7 +23,7 @@ internal static class MermaidPlanGraph
         if (string.IsNullOrWhiteSpace(graphText))
             throw new ArgumentException("graph is required", nameof(graphText));
 
-        var nodes = new Dictionary<string, MermaidNodeKind>(StringComparer.Ordinal);
+        var nodes = new Dictionary<string, NodeMetadata>(StringComparer.Ordinal);
         var edges = new List<(string From, string To)>();
 
         foreach (var segment in SplitSegments(graphText))
@@ -66,7 +66,7 @@ internal static class MermaidPlanGraph
 
         var nodeDefinitions = nodes
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .Select(pair => new NodeDefinition(pair.Key, pair.Value))
+            .Select(pair => new NodeDefinition(pair.Key, pair.Value.Kind))
             .ToArray();
 
         var adjacency = BuildAdjacency(nodes.Keys, edges);
@@ -202,11 +202,12 @@ internal static class MermaidPlanGraph
         var parts = trimmed.Split(new[] { ":::" }, StringSplitOptions.RemoveEmptyEntries);
         var core = parts[0].Trim();
 
-        if (parts.Length > 1)
+        var explicitKind = parts.Length > 1;
+        if (explicitKind)
             kind = ParseNodeKind(parts[^1].Trim());
 
         var id = ExtractNodeId(core);
-        return new NodeDefinition(id, kind);
+        return new NodeDefinition(id, kind, explicitKind);
     }
 
     private static MermaidNodeKind ParseNodeKind(string value)
@@ -235,21 +236,32 @@ internal static class MermaidPlanGraph
     }
 
     private static void RegisterNode(
-        IDictionary<string, MermaidNodeKind> nodes,
+        IDictionary<string, NodeMetadata> nodes,
         NodeDefinition node)
     {
-        if (nodes.TryGetValue(node.Id, out var existingKind))
+        if (nodes.TryGetValue(node.Id, out var existing))
         {
-            if (existingKind != node.Kind)
+            if (existing.Kind == node.Kind)
             {
-                throw new InvalidOperationException(
-                    $"duplicate node '{node.Id}' detected in Mermaid graph with conflicting kind '{existingKind}' vs '{node.Kind}'.");
+                if (!existing.ExplicitKind && node.ExplicitKind)
+                    nodes[node.Id] = new NodeMetadata(node.Kind, true);
+                return;
             }
 
-            return;
+            if (!node.ExplicitKind && node.Kind == MermaidNodeKind.Route)
+                return;
+
+            if (!existing.ExplicitKind && existing.Kind == MermaidNodeKind.Route && node.ExplicitKind)
+            {
+                nodes[node.Id] = new NodeMetadata(node.Kind, true);
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"duplicate node '{node.Id}' detected in Mermaid graph with conflicting kind '{existing.Kind}' vs '{node.Kind}'.");
         }
 
-        nodes[node.Id] = node.Kind;
+        nodes[node.Id] = new NodeMetadata(node.Kind, node.ExplicitKind);
     }
 
     private static GraphHashes ComputeHashes(
@@ -282,7 +294,12 @@ internal static class MermaidPlanGraph
 
     internal sealed record NodeDefinition(
         string Id,
-        MermaidNodeKind Kind);
+        MermaidNodeKind Kind,
+        bool ExplicitKind = false);
+
+    internal sealed record NodeMetadata(
+        MermaidNodeKind Kind,
+        bool ExplicitKind);
 
     internal sealed record GraphHashes(
         string GraphStructureHash,

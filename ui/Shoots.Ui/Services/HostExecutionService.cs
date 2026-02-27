@@ -1,6 +1,5 @@
 using Shoots.Contracts.Core;
 using Shoots.Host.Abstractions;
-using Shoots.Host.Core;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
 
@@ -32,7 +31,37 @@ public sealed class HostExecutionService : IHostExecutionService
 
     public Task<RuntimeResult> ResumeAsync(BuildPlan plan, DecisionInjectionRequest request, HostResumeIntent intent, CancellationToken ct = default)
     {
-        var options = HostRunCoordinator.CreateResumeOptions(request, intent);
+        var options = intent.Mode switch
+        {
+            HostResumeIntentMode.InjectDecision => new RuntimeRunOptions(
+                ResumeMode.InjectDecision,
+                InjectedDecisionDigest: request.BindingsJsonCanonical,
+                DiscardWaiting: false,
+                AllowPlanChangeOverride: false,
+                MaxDecisionWaits: 1,
+                DecisionWaitMode.Halt),
+            HostResumeIntentMode.OverridePlanChange => new RuntimeRunOptions(
+                ResumeMode.OverridePlanChange,
+                InjectedDecisionDigest: null,
+                DiscardWaiting: false,
+                AllowPlanChangeOverride: true,
+                MaxDecisionWaits: 1,
+                DecisionWaitMode.Halt),
+            HostResumeIntentMode.DiscardWaitingStartOver => new RuntimeRunOptions(
+                ResumeMode.DiscardWaitingStartOver,
+                InjectedDecisionDigest: null,
+                DiscardWaiting: true,
+                AllowPlanChangeOverride: false,
+                MaxDecisionWaits: 1,
+                DecisionWaitMode.Halt),
+            _ => new RuntimeRunOptions(
+                ResumeMode.None,
+                InjectedDecisionDigest: null,
+                DiscardWaiting: false,
+                AllowPlanChangeOverride: false,
+                MaxDecisionWaits: 1,
+                DecisionWaitMode.Halt)
+        };
         return _execution.StartAsync(plan, options, ct);
     }
 
