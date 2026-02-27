@@ -20,6 +20,9 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Dotnet info
+        run: dotnet --info
+
       - name: Verify version consistency
         run: bash scripts/verify_versions.sh
 
@@ -48,7 +51,7 @@ jobs:
         run: bash scripts/run_tools_smoke.sh
 
       - name: Runtime hang probe (blame-hang)
-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
+        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -m:1 -p:ContinuousIntegrationBuild=true --blame-hang --blame-hang-timeout 2m --filter "FullyQualifiedName~RoutingLoopTests|FullyQualifiedName~RouteGateTests"
 
       - name: Host smoke (ChatIntakeSmoke)
         run: dotnet run --project src/Host/Shoots.Host.Smoke/Shoots.Host.Smoke.csproj -c Release -- ChatIntakeSmoke
@@ -168,6 +171,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: Dotnet info
+        run: dotnet --info
 
       - name: Verify version consistency
         run: bash scripts/verify_versions.sh
