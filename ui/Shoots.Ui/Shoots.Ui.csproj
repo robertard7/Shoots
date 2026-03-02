@@ -5,15 +5,29 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <UseWPF>true</UseWPF>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+
     <AssemblyName>Shoots.UI</AssemblyName>
     <RootNamespace>Shoots.UI</RootNamespace>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- Determinism / reproducibility -->
+    <Deterministic>true</Deterministic>
+
+    <!-- Keep CI/local behavior aligned -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);SYSLIB0050</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
     <ProjectReference Include="..\..\src\Host\Shoots.Host.Abstractions\Shoots.Host.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Runtime\Shoots.Runtime.Ui.Abstractions\Shoots.Runtime.Ui.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
   </ItemGroup>
 
 </Project>

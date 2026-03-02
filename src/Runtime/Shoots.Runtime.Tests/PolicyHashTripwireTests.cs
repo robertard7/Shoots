@@ -1,3 +1,5 @@
+#nullable enable
+
 using System.Threading;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core;
@@ -17,7 +19,7 @@ public sealed class PolicyHashTripwireTests
             new StubRuntimeHost(),
             new StubPolicyResolver());
 
-        var status = await facade.QueryStatus();
+        var status = await facade.QueryStatusAsync(CancellationToken.None);
 
         var expected = $"{AiVisibilityMode.AdminOnly}|{true}|{false}|{true}";
         var expectedHash = HashTools.ComputeSha256Hash(expected);

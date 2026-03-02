@@ -248,7 +248,18 @@ public sealed class EmbeddedToolGoldenFlowTests
                 new RouteStep("done", "Done", "done", RouteIntent.Terminate, DecisionOwner.Rule, workOrder.Id)
             });
 
-            var registry = new SnapshotToolRegistry(CreateToolSpec("linux.sys.meminfo.v1"));
+            var registry = new SnapshotToolRegistry(new ToolSpec(
+				new ToolId("linux.sys.meminfo.v1"),
+				"linux.sys.meminfo.v1",
+				new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.Execute),
+				Array.Empty<ToolInputSpec>(),
+				new[]
+				{
+					new ToolOutputSpec("total", "number", ""),
+					new ToolOutputSpec("free", "number", ""),
+					new ToolOutputSpec("available", "number", "")
+				},
+				Array.Empty<string>()));
             var decisions = new Queue<ToolSelectionDecision>(new[]
             {
                 new ToolSelectionDecision(new ToolId("linux.sys.meminfo.v1"), new Dictionary<string, object?>())
@@ -267,26 +278,34 @@ public sealed class EmbeddedToolGoldenFlowTests
         }
     }
 
-    private static void DeleteDirectoryWithRetry(string path)
-    {
-        for (var attempt = 0; attempt < 5; attempt++)
-        {
-            try
-            {
-                if (Directory.Exists(path))
-                    Directory.Delete(path, true);
-                return;
-            }
-            catch (UnauthorizedAccessException) when (attempt < 4)
-            {
-                Thread.Sleep(50 * (attempt + 1));
-            }
-            catch (IOException) when (attempt < 4)
-            {
-                Thread.Sleep(50 * (attempt + 1));
-            }
-        }
-    }
+	private static void DeleteDirectoryWithRetry(string path)
+	{
+		const int maxAttempts = 10;
+
+		for (var attempt = 0; attempt < maxAttempts; attempt++)
+		{
+			try
+			{
+				if (!Directory.Exists(path))
+					return;
+
+				// Clear read-only flags recursively
+				foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+					File.SetAttributes(file, FileAttributes.Normal);
+
+				Directory.Delete(path, true);
+				return;
+			}
+			catch (UnauthorizedAccessException) when (attempt < maxAttempts - 1)
+			{
+				Thread.Sleep(100 * (attempt + 1));
+			}
+			catch (IOException) when (attempt < maxAttempts - 1)
+			{
+				Thread.Sleep(100 * (attempt + 1));
+			}
+		}
+	}
 
     private static ToolSpec CreateToolSpec(string id, params string[] requiredInputs) => new(
         new ToolId(id),

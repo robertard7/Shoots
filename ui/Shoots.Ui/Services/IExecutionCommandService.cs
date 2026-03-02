@@ -3,16 +3,21 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core;
-using Shoots.Runtime.Abstractions;
-using Shoots.Runtime.Ui.Abstractions;
 
 namespace Shoots.UI.Services;
 
+/// <summary>
+/// UI-facing execution command surface.
+/// Must NOT depend on Shoots.Runtime.* assemblies.
+/// </summary>
 public interface IExecutionCommandService
 {
-    Task<RuntimeResult> StartAsync(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default);
+    Task<ExecutionStartResult> StartAsync(
+        BuildPlan plan,
+        HostRunOptions? options = null,
+        CancellationToken ct = default);
 
     Task CancelAsync(CancellationToken ct = default);
 
-    Task<IRuntimeStatusSnapshot> RefreshStatusAsync(CancellationToken ct = default);
+    Task<ExecutionStatusSnapshot> RefreshStatusAsync(CancellationToken ct = default);
 }
