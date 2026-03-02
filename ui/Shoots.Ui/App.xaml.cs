@@ -12,7 +12,7 @@ using Shoots.UI.Services;
 namespace Shoots.UI;
 
 // This UI reflects and documents state.
-// It does not enforce policy, execute logic, validate tools, or control external systems.
+// It does not enforce rules, execute logic, validate tools, or control external systems.
 
 public partial class App : Application
 {

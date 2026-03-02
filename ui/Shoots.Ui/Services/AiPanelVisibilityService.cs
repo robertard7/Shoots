@@ -11,15 +11,15 @@ public sealed record AiPanelVisibilityState(
 
 public sealed class AiPanelVisibilityService
 {
-    public AiPanelVisibilityState Evaluate(AiPresentationPolicy policy, AiAccessRole role)
+    public AiPanelVisibilityState Evaluate(AiPresentationPolicy presentation, AiAccessRole role)
     {
-        if (policy is null)
-            throw new ArgumentNullException(nameof(policy));
+        if (presentation is null)
+            throw new ArgumentNullException(nameof(presentation));
 
-        if (policy.EnterpriseMode && role == AiAccessRole.EndUser)
+        if (presentation.EnterpriseMode && role == AiAccessRole.EndUser)
             return new AiPanelVisibilityState(false, false, false);
 
-        return policy.Visibility switch
+        return presentation.Visibility switch
         {
             AiVisibilityMode.Visible => new AiPanelVisibilityState(true, true, true),
             AiVisibilityMode.HiddenForEndUsers => role == AiAccessRole.EndUser

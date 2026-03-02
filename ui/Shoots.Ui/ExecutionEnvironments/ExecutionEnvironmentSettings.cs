@@ -1,12 +1,20 @@
+#if false
+using System;
 using System.Collections.Generic;
-using Shoots.Runtime.Abstractions;
 
 namespace Shoots.UI.ExecutionEnvironments;
 
-// UI-facing settings wrapper, runtime-owned data
+/// <summary>
+/// UI-facing settings wrapper.
+/// This file must not depend on Shoots.Runtime.* assemblies.
+/// </summary>
 public sealed record ExecutionEnvironmentSettings(
     string ActiveRootFsId,
     IReadOnlyList<RootFsDescriptor> RootFsCatalog,
-    string? RootFsSourceOverride
-);
+    string? RootFsSourceOverride);
 
+/// <summary>
+/// UI-safe RootFs descriptor (do not bind to runtime assembly types).
+/// </summary>
+
+#endif

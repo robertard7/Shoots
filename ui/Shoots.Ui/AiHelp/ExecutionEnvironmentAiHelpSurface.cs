@@ -6,12 +6,12 @@ namespace Shoots.UI.AiHelp;
 
 public sealed class ExecutionEnvironmentAiHelpSurface : IAiHelpSurface
 {
-    private readonly RootFsDescriptor? _rootFs;
+    private readonly UiRootFsDescriptor? _rootFs;
     private readonly string? _sourceOverride;
     private readonly string _fallbackNotice;
 
     public ExecutionEnvironmentAiHelpSurface(
-        RootFsDescriptor? rootFs,
+        UiRootFsDescriptor? rootFs,
         string? sourceOverride,
         string fallbackNotice)
     {

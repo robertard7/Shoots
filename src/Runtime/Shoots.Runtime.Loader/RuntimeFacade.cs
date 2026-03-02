@@ -1,11 +1,13 @@
-using System.Diagnostics;
+using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using Shoots.Contracts.Core;
 using Shoots.Contracts.Core.AI;
 using Shoots.ProviderAdapters.Bridge;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
-using System.Linq;
 
 namespace Shoots.Runtime.Loader;
 
@@ -26,43 +28,64 @@ public sealed class RuntimeFacade : IRuntimeFacade
         _policyResolver = policyResolver ?? new DefaultAiPolicyResolver();
         _policy = _policyResolver.Resolve(AiAccessRole.Developer);
         _policyHash = ComputePolicyHash(_policy);
+
         EnforceEmbeddedProvider();
     }
 
-    public Task<RuntimeResult> StartExecution(BuildPlan plan, RuntimeRunOptions? options = null, CancellationToken ct = default)
+    public Task<RuntimeExecutionResult> StartExecutionAsync(
+        BuildPlan plan,
+        HostRunOptions? options = null,
+        CancellationToken ct = default)
     {
         _ = plan;
         _ = options;
         _ = ct;
 
-        return Task.FromResult(RuntimeResult.Fail(
-            RuntimeError.Internal("Runtime facade execution is not configured.")
+        // Loader layer is UI-facing. It should not leak runtime internals.
+        // Until execution wiring is implemented, return a UI-safe failure.
+        return Task.FromResult(new RuntimeExecutionResult(
+            RuntimeExecutionOutcome.Failed,
+            WorkOrderId: null,
+            PlanId: null,
+            PlanHash: null,
+            Message: "Runtime facade execution is not configured."
         ));
     }
 
-    public Task<IRuntimeStatusSnapshot> QueryStatus(CancellationToken ct = default)
-        => Task.FromResult<IRuntimeStatusSnapshot>(
-            new RuntimeStatusSnapshot(_host.Version, _policyHash));
+    public Task<RuntimeStatusSnapshot> QueryStatusAsync(CancellationToken ct = default)
+    {
+        _ = ct;
 
-	public IAsyncEnumerable<RoutingTraceEntry> SubscribeTrace(
-		CancellationToken ct = default)
-	{
-		return EmptyTrace(ct);
-	}
+        var v = _host.Version;
+        var versionInfo = new RuntimeVersionInfo(
+            Major: v.Major,
+            Minor: v.Minor,
+            Patch: v.Patch,
+            Label: v.ToString());
 
-	private static async IAsyncEnumerable<RoutingTraceEntry> EmptyTrace(
-		[EnumeratorCancellation] CancellationToken ct)
-	{
-		await Task.CompletedTask;
-		yield break;
-	}
+        return Task.FromResult(new RuntimeStatusSnapshot(
+            Version: versionInfo,
+            PolicyHash: _policyHash,
+            StateLabel: null));
+    }
 
-    public Task CancelExecution(CancellationToken ct = default)
-        => Task.CompletedTask;
+    public IAsyncEnumerable<Shoots.Runtime.Ui.Abstractions.RoutingTraceEntry> SubscribeTraceAsync(
+        CancellationToken ct = default)
+        => EmptyTrace(ct);
 
-    private sealed record RuntimeStatusSnapshot(
-        RuntimeVersion Version,
-        string PolicyHash) : IRuntimeStatusSnapshot;
+    public Task CancelExecutionAsync(CancellationToken ct = default)
+    {
+        _ = ct;
+        return Task.CompletedTask;
+    }
+
+    private static async IAsyncEnumerable<Shoots.Runtime.Ui.Abstractions.RoutingTraceEntry> EmptyTrace(
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        _ = ct;
+        await Task.CompletedTask;
+        yield break;
+    }
 
     private static void EnforceEmbeddedProvider()
     {

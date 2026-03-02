@@ -4,19 +4,23 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core;
+using Shoots.Contracts.Core.AI;
 using Shoots.Runtime.Abstractions;
 using Shoots.Runtime.Ui.Abstractions;
-using RuntimeSnapshot = Shoots.Runtime.Abstractions.ToolCatalogSnapshot;
+
+using ContractsToolCatalogSnapshot = Shoots.Contracts.Core.ToolCatalogSnapshot;
 
 namespace Shoots.Runtime.Loader;
 
 public sealed class AiHelpFacade : IAiHelpFacade
 {
     private static readonly ConcurrentQueue<AiHelpIntentUsage> IntentLog = new();
+
     private readonly IRuntimeFacade _runtimeFacade;
     private readonly IRuntimeNarratorSummary _narratorSummary;
     private readonly IReadOnlyList<IAiHelpSurface> _registeredSurfaces;
@@ -45,13 +49,13 @@ public sealed class AiHelpFacade : IAiHelpFacade
 
         LogIntentUsage(request, surfaces[0]);
 
-        var status = await _runtimeFacade.QueryStatus(ct).ConfigureAwait(false);
+        var status = await _runtimeFacade.QueryStatusAsync(ct).ConfigureAwait(false);
 
         var builder = new StringBuilder();
         builder.AppendLine("Explanatory assistance only.");
         builder.AppendLine($"Intent: {DescribeIntent(request.Intent)}.");
         builder.AppendLine($"Scope: {DescribeScope(request.Scope)}.");
-        builder.AppendLine(_narratorSummary.DescribeRuntime(status.Version));
+        builder.AppendLine(_narratorSummary.DescribeRuntime(ToRuntimeVersion(status.Version)));
         builder.AppendLine(DescribeWorkspace(request.Workspace));
         builder.AppendLine(DescribePlan(request.Plan));
         builder.AppendLine(DescribeCatalog(request.ToolCatalog, request.Role));
@@ -72,13 +76,13 @@ public sealed class AiHelpFacade : IAiHelpFacade
 
         LogIntentUsage(request, surfaces[0]);
 
-        var status = await _runtimeFacade.QueryStatus(ct).ConfigureAwait(false);
+        var status = await _runtimeFacade.QueryStatusAsync(ct).ConfigureAwait(false);
 
         var builder = new StringBuilder();
         builder.AppendLine("State summary:");
         builder.AppendLine($"Intent: {DescribeIntent(request.Intent)}.");
         builder.AppendLine($"Scope: {DescribeScope(request.Scope)}.");
-        builder.AppendLine(_narratorSummary.DescribeRuntime(status.Version));
+        builder.AppendLine(_narratorSummary.DescribeRuntime(ToRuntimeVersion(status.Version)));
 
         if (!string.IsNullOrWhiteSpace(request.ExecutionState))
             builder.AppendLine($"Execution state: {request.ExecutionState}.");
@@ -90,7 +94,7 @@ public sealed class AiHelpFacade : IAiHelpFacade
             builder.AppendLine($"Last applied: {request.LastAppliedProfile}.");
 
         builder.AppendLine($"Tool tier: {request.Workspace.Tier}.");
-        builder.AppendLine($"Allowed capabilities: {DescribeCapabilities(request.Workspace.AllowedCapabilities)}.");
+        builder.AppendLine($"Allowed capabilities: {DescribeStrings(request.Workspace.AllowedCapabilities)}.");
         builder.AppendLine(DescribeSurfaceConstraints(surfaces));
 
         return builder.ToString().Trim();
@@ -129,27 +133,96 @@ public sealed class AiHelpFacade : IAiHelpFacade
         if (string.IsNullOrWhiteSpace(request.Scope.SurfaceId))
             return Array.Empty<IAiHelpSurface>();
 
-        var surfaces = new List<IAiHelpSurface>();
-        surfaces.AddRange(_registeredSurfaces);
-
-        if (request.Surfaces is not null)
-            surfaces.AddRange(request.Surfaces);
-
         var normalized = NormalizeSurfaceId(request.Scope.SurfaceId);
 
-        return surfaces
+        return _registeredSurfaces
             .Where(surface => NormalizeSurfaceId(surface.SurfaceId) == normalized)
             .Distinct()
             .ToList();
     }
 
-    private static string DescribeIntent(AiIntentDescriptor intent)
-    {
-        if (string.IsNullOrWhiteSpace(intent.TargetId))
-            return $"{intent.Type} for {intent.Scope}";
+    private static string NormalizeSurfaceId(string value)
+        => value.Trim().ToLowerInvariant();
 
-        return $"{intent.Type} for {intent.Scope} ({intent.TargetId})";
+    // ---- Intent handling (enum-first, drift-safe fallback) ----
+
+    private static string DescribeIntent(AiIntentSnapshot intent)
+    {
+        var (type, scope, targetId) = ReadIntent(intent);
+
+        if (string.IsNullOrWhiteSpace(targetId))
+            return $"{type} for {scope}";
+
+        return $"{type} for {scope} ({targetId})";
     }
+
+    private static (AiIntentType Type, AiIntentScope Scope, string TargetId) ReadIntent(AiIntentSnapshot snapshot)
+    {
+        // IMPORTANT: Do NOT assume enums include "Unknown".
+        // Use default(T) as the fallback sentinel.
+        var typeFallback = default(AiIntentType);
+        var scopeFallback = default(AiIntentScope);
+
+        var type =
+            TryReadEnumProp(snapshot, "Type", typeFallback)
+            ?? TryParseEnumFromStringProp<AiIntentType>(snapshot, "Type")
+            ?? TryParseEnumFromStringProp<AiIntentType>(snapshot, "IntentType")
+            ?? TryParseEnumFromStringProp<AiIntentType>(snapshot, "Kind")
+            ?? typeFallback;
+
+        var scope =
+            TryReadEnumProp(snapshot, "Scope", scopeFallback)
+            ?? TryParseEnumFromStringProp<AiIntentScope>(snapshot, "Scope")
+            ?? TryParseEnumFromStringProp<AiIntentScope>(snapshot, "IntentScope")
+            ?? scopeFallback;
+
+        var target =
+            ReadStringProp(snapshot, "TargetId") ??
+            ReadStringProp(snapshot, "Target") ??
+            ReadStringProp(snapshot, "Id") ??
+            string.Empty;
+
+        return (type, scope, target.Trim());
+    }
+
+    private static AiIntentDescriptor ToIntentDescriptor(AiIntentSnapshot snapshot)
+    {
+        var (type, scope, targetId) = ReadIntent(snapshot);
+        return new AiIntentDescriptor(type, scope, targetId);
+    }
+
+    private static bool SupportsIntent(IReadOnlyList<IAiHelpSurface> surfaces, AiIntentSnapshot intentSnapshot)
+    {
+        var (type, scope, _) = ReadIntent(intentSnapshot);
+
+        var typeFallback = default(AiIntentType);
+        var scopeFallback = default(AiIntentScope);
+
+        return surfaces.Any(surface =>
+        {
+            foreach (var registered in surface.SupportedIntents)
+            {
+                if (registered is null) continue;
+
+                var regType =
+                    TryReadEnumProp(registered, "Type", typeFallback)
+                    ?? TryParseEnumFromStringProp<AiIntentType>(registered, "Type")
+                    ?? typeFallback;
+
+                var regScope =
+                    TryReadEnumProp(registered, "Scope", scopeFallback)
+                    ?? TryParseEnumFromStringProp<AiIntentScope>(registered, "Scope")
+                    ?? scopeFallback;
+
+                if (regType.Equals(type) && regScope.Equals(scope))
+                    return true;
+            }
+
+            return false;
+        });
+    }
+
+    // ---- Scope text ----
 
     private static string DescribeScope(AiHelpScope scope)
     {
@@ -163,15 +236,6 @@ public sealed class AiHelpFacade : IAiHelpFacade
         return $"{scope.SurfaceId} ({detail})";
     }
 
-    private static string NormalizeSurfaceId(string value)
-        => value.Trim().ToLowerInvariant();
-
-    private static bool SupportsIntent(IReadOnlyList<IAiHelpSurface> surfaces, AiIntentDescriptor intent)
-        => surfaces.Any(surface =>
-            surface.SupportedIntents.Any(registered =>
-                registered.Type == intent.Type &&
-                registered.Scope == intent.Scope));
-
     private string DescribeMissingSurface(AiHelpRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Scope.SurfaceId))
@@ -182,10 +246,12 @@ public sealed class AiHelpFacade : IAiHelpFacade
 
     private void LogIntentUsage(AiHelpRequest request, IAiHelpSurface surface)
     {
+        var intentDesc = ToIntentDescriptor(request.Intent);
+
         var usage = new AiHelpIntentUsage(
             DateTimeOffset.UtcNow,
             surface.SurfaceId,
-            request.Intent,
+            intentDesc,
             request.Scope.Summary,
             request.Scope.Data ?? new Dictionary<string, string>());
 
@@ -197,6 +263,8 @@ public sealed class AiHelpFacade : IAiHelpFacade
 
         _intentLogger.Record(usage);
     }
+
+    // ---- Surface descriptions ----
 
     private static string DescribeSurfaceContexts(IEnumerable<IAiHelpSurface> surfaces)
     {
@@ -222,6 +290,8 @@ public sealed class AiHelpFacade : IAiHelpFacade
             yield return $"Review {surface.SurfaceKind} capabilities: {surface.DescribeCapabilities()}.";
     }
 
+    // ---- Workspace/plan/catalog/role ----
+
     private static string DescribeWorkspace(AiWorkspaceSnapshot workspace)
     {
         if (string.IsNullOrWhiteSpace(workspace.Name))
@@ -241,56 +311,49 @@ public sealed class AiHelpFacade : IAiHelpFacade
         return $"Plan: {plan.PlanId} with {plan.Steps.Count} steps and {plan.Artifacts.Count} artifacts.";
     }
 
-    private static string DescribeCatalog(RuntimeSnapshot? catalog, RoleDescriptor? role)
+    private static string DescribeCatalog(ContractsToolCatalogSnapshot? catalog, AiRoleSnapshot? role)
     {
         if (catalog is null)
             return "Tool catalog: unavailable.";
 
-        if (role is null || role.PreferredCapabilities.Count == 0)
-            return $"Tool catalog: {catalog.Entries.Count} tools (hash {catalog.Hash}).";
+        var (hash, toolIds, tagsByToolId) = TryExtractToolCatalog(catalog);
+        var preferredTags = ReadPreferredTags(role);
 
-        var preferred = GetPreferredTools(catalog, role)
+        if (preferredTags.Count == 0)
+            return $"Tool catalog: {toolIds.Count} tools (hash {hash}).";
+
+        var preferred = toolIds
+            .OrderByDescending(id => ScoreTool(tagsByToolId.TryGetValue(id, out var t) ? t : Array.Empty<string>(), preferredTags))
+            .ThenBy(id => id, StringComparer.Ordinal)
             .Take(3)
             .ToList();
 
         if (preferred.Count == 0)
-            return $"Tool catalog: {catalog.Entries.Count} tools (hash {catalog.Hash}).";
+            return $"Tool catalog: {toolIds.Count} tools (hash {hash}).";
 
-        return $"Tool catalog: {catalog.Entries.Count} tools (hash {catalog.Hash}). Preferred: {string.Join(", ", preferred)}.";
+        return $"Tool catalog: {toolIds.Count} tools (hash {hash}). Preferred: {string.Join(", ", preferred)}.";
     }
 
-    private static string DescribeRole(RoleDescriptor? role)
+    private static string DescribeRole(AiRoleSnapshot? role)
     {
         if (role is null)
             return "Role: none selected.";
 
-        if (role.PreferredCapabilities.Count == 0)
-            return $"Role: {role.Name}.";
+        var name = (ReadStringProp(role, "Name") ?? "unknown-role").Trim();
+        var preferred = ReadPreferredTags(role);
 
-        var capabilities = DescribeCapabilities(role.PreferredCapabilities);
-        return $"Role: {role.Name} (prefers {capabilities}).";
+        if (preferred.Count == 0)
+            return $"Role: {name}.";
+
+        return $"Role: {name} (prefers {string.Join(", ", preferred)}).";
     }
 
-    private static string DescribeCapabilities(IReadOnlyList<ToolpackCapability> capabilities)
+    private static string DescribeStrings(IReadOnlyList<string> values)
     {
-        if (capabilities.Count == 0)
+        if (values.Count == 0)
             return "none";
 
-        return string.Join(", ", capabilities);
-    }
-
-    private static IEnumerable<string> GetPreferredTools(RuntimeSnapshot catalog, RoleDescriptor role)
-    {
-        var preferredTags = role.PreferredCapabilities
-            .Select(capability => capability.ToString())
-            .Select(name => name.ToLowerInvariant())
-            .ToList();
-
-        return catalog.Entries
-            .Select(entry => entry.Spec)
-            .OrderByDescending(spec => ScoreTool(spec.Tags, preferredTags))
-            .ThenBy(spec => spec.ToolId.Value, StringComparer.Ordinal)
-            .Select(spec => spec.ToolId.Value);
+        return string.Join(", ", values);
     }
 
     private static int ScoreTool(IReadOnlyList<string> tags, IReadOnlyList<string> preferredTags)
@@ -299,11 +362,206 @@ public sealed class AiHelpFacade : IAiHelpFacade
 
         foreach (var tag in tags)
         {
-            var normalized = tag.ToLowerInvariant();
+            var normalized = (tag ?? string.Empty).Trim().ToLowerInvariant();
+            if (normalized.Length == 0)
+                continue;
+
             if (preferredTags.Contains(normalized))
                 score++;
         }
 
         return score;
+    }
+
+    // ---- Preferred tags: drift shims (reflection) ----
+
+    private static IReadOnlyList<string> ReadPreferredTags(AiRoleSnapshot? role)
+    {
+        if (role is null)
+            return Array.Empty<string>();
+
+        var raw =
+            ReadStringListProp(role, "PreferredCapabilities") ??
+            ReadStringListProp(role, "PreferredTags") ??
+            ReadStringListProp(role, "PreferredToolTags") ??
+            ReadStringListProp(role, "Capabilities") ??
+            new List<string>();
+
+        return raw
+            .Select(v => (v ?? string.Empty).Trim().ToLowerInvariant())
+            .Where(v => v.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    // ---- Runtime version mapping (drift-safe) ----
+
+    private static RuntimeVersion ToRuntimeVersion(RuntimeVersionInfo info)
+    {
+        var version = Activator.CreateInstance<RuntimeVersion>();
+
+        TrySetIntProp(version, "Major", ReadIntProp(info, "Major"));
+        TrySetIntProp(version, "Minor", ReadIntProp(info, "Minor"));
+        TrySetIntProp(version, "Patch", ReadIntProp(info, "Patch"));
+
+        var label = ReadStringProp(info, "Label") ?? ReadStringProp(info, "Suffix") ?? string.Empty;
+        TrySetStringProp(version, "Label", label);
+
+        return version;
+    }
+
+    // ---- Tool catalog extraction (reflection) ----
+
+    private static (string Hash, IReadOnlyList<string> ToolIds, IReadOnlyDictionary<string, IReadOnlyList<string>> TagsByToolId)
+        TryExtractToolCatalog(ContractsToolCatalogSnapshot catalog)
+    {
+        var hash =
+            ReadStringProp(catalog, "Hash") ??
+            ReadStringProp(catalog, "Id") ??
+            ReadStringProp(catalog, "Digest") ??
+            "unknown-hash";
+
+        var toolsObj =
+            (object?)GetProp(catalog, "Tools") ??
+            (object?)GetProp(catalog, "Entries");
+
+        var toolIds = new List<string>();
+        var tagsById = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
+        if (toolsObj is System.Collections.IEnumerable enumerable)
+        {
+            foreach (var item in enumerable)
+            {
+                if (item is null) continue;
+
+                var specObj = (object?)GetProp(item, "Spec") ?? item;
+
+                var toolId = TryGetToolId(specObj);
+                if (string.IsNullOrWhiteSpace(toolId))
+                    continue;
+
+                toolIds.Add(toolId);
+
+                var tags = TryGetTags(specObj);
+                tagsById[toolId] = tags;
+            }
+        }
+
+        return (hash, toolIds, tagsById);
+    }
+
+    private static string? TryGetToolId(object specObj)
+    {
+        var toolIdObj = GetProp(specObj, "ToolId");
+        if (toolIdObj is null)
+            return null;
+
+        if (toolIdObj is string s)
+            return s;
+
+        var value = GetProp(toolIdObj, "Value");
+        return value as string;
+    }
+
+    private static IReadOnlyList<string> TryGetTags(object specObj)
+    {
+        var tagsObj = GetProp(specObj, "Tags");
+        if (tagsObj is IReadOnlyList<string> tagsList)
+            return tagsList;
+
+        if (tagsObj is IEnumerable<string> tagsEnum)
+            return tagsEnum.ToList();
+
+        if (tagsObj is System.Collections.IEnumerable e)
+        {
+            var list = new List<string>();
+            foreach (var item in e)
+            {
+                if (item is string s && !string.IsNullOrWhiteSpace(s))
+                    list.Add(s);
+            }
+            return list;
+        }
+
+        return Array.Empty<string>();
+    }
+
+    // ---- Reflection helpers ----
+
+    private static object? GetProp(object obj, string name)
+        => obj.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance)?.GetValue(obj);
+
+    private static string? ReadStringProp(object obj, string name)
+        => obj.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance)?.GetValue(obj) as string;
+
+    private static int ReadIntProp(object obj, string name)
+    {
+        var v = obj.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance)?.GetValue(obj);
+        return v is int i ? i : 0;
+    }
+
+    private static List<string>? ReadStringListProp(object obj, string name)
+    {
+        var v = obj.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance)?.GetValue(obj);
+        if (v is null)
+            return null;
+
+        if (v is IReadOnlyList<string> ro)
+            return ro.ToList();
+
+        if (v is IEnumerable<string> e)
+            return e.ToList();
+
+        if (v is System.Collections.IEnumerable any)
+        {
+            var list = new List<string>();
+            foreach (var item in any)
+            {
+                if (item is string s)
+                    list.Add(s);
+            }
+            return list;
+        }
+
+        return null;
+    }
+
+    private static void TrySetIntProp(object obj, string name, int value)
+    {
+        var p = obj.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+        if (p is null || !p.CanWrite)
+            return;
+
+        if (p.PropertyType == typeof(int))
+            p.SetValue(obj, value);
+    }
+
+    private static void TrySetStringProp(object obj, string name, string value)
+    {
+        var p = obj.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+        if (p is null || !p.CanWrite)
+            return;
+
+        if (p.PropertyType == typeof(string))
+            p.SetValue(obj, value);
+    }
+
+    private static TEnum? TryReadEnumProp<TEnum>(object obj, string name, TEnum _)
+        where TEnum : struct, Enum
+    {
+        var p = obj.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+        if (p is null) return null;
+
+        var v = p.GetValue(obj);
+        return v is TEnum e ? e : null;
+    }
+
+    private static TEnum? TryParseEnumFromStringProp<TEnum>(object obj, string name)
+        where TEnum : struct, Enum
+    {
+        var s = ReadStringProp(obj, name);
+        if (string.IsNullOrWhiteSpace(s)) return null;
+
+        return Enum.TryParse<TEnum>(s.Trim(), ignoreCase: true, out var t) ? t : null;
     }
 }

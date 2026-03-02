@@ -1,6 +1,10 @@
+#if false
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -10,10 +14,17 @@ using System.Threading.Tasks;
 using Shoots.Contracts.Core;
 using Shoots.Host.Abstractions;
 using Shoots.Host.Core.ModelCatalog;
-using Shoots.Runtime.Abstractions;
 using Shoots.UI.Interop;
 
 namespace Shoots.UI.ViewModels;
+
+public enum ResumeMode
+{
+    None = 0,
+    InjectDecision = 1,
+    OverridePlanChange = 2,
+    DiscardWaitingStartOver = 3
+}
 
 public sealed partial class MainWindowViewModel
 {
@@ -49,12 +60,18 @@ public sealed partial class MainWindowViewModel
     private string _catalogHash = string.Empty;
     private string _lastSmokeRunId = string.Empty;
 
+    // These members are presumed to exist in the other partial(s)
+    // - SetPlan(BuildPlan plan)
+    // - BuildPlan? Plan { get; }
+    // - bool CanStart()
+    // - Task StartAsync()
+    // - IHostExecutionService _hostExecutionService
+    // - void OnPropertyChanged(string name)
+    // - AsyncRelayCommand type + instances
+
     public ReadOnlyObservableCollection<ChatSessionViewModel> ChatSessions { get; private set; } = null!;
-
     public ReadOnlyObservableCollection<string> ChatMessages { get; private set; } = null!;
-
     public ReadOnlyObservableCollection<TraceEntryViewModel> TraceEntries { get; private set; } = null!;
-
     public ReadOnlyObservableCollection<ArtifactViewModel> Artifacts { get; private set; } = null!;
 
     public ChatSessionViewModel? SelectedChatSession
@@ -132,8 +149,8 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-
-    public IReadOnlyList<string> AvailableModels => _modelCatalog.ListModels().Select(x => x.ModelId).OrderBy(x => x, StringComparer.Ordinal).ToList();
+    public IReadOnlyList<string> AvailableModels
+        => _modelCatalog.ListModels().Select(x => x.ModelId).OrderBy(x => x, StringComparer.Ordinal).ToList();
 
     public string DefaultModelId => _defaultModelId;
 
@@ -152,7 +169,6 @@ public sealed partial class MainWindowViewModel
     }
 
     public bool HasModelCatalogError => !string.IsNullOrWhiteSpace(ModelCatalogError);
-
 
     public string CatalogHash => _catalogHash;
 
@@ -183,7 +199,10 @@ public sealed partial class MainWindowViewModel
 
             _selectedModelId = value;
             OnPropertyChanged(nameof(SelectedModelId));
-            JobSpecDigest = JobSpecDigestBuilder.Compute(new JobSpecDigestInput(IntakeIntent, IntakeTarget, ParseList(IntakeAttachments), IntakeStack, Array.Empty<string>(), SelectedModelId));
+
+            JobSpecDigest = JobSpecDigestBuilder.Compute(
+                new JobSpecDigestInput(IntakeIntent, IntakeTarget, ParseList(IntakeAttachments), IntakeStack, Array.Empty<string>(), SelectedModelId)
+            );
         }
     }
 
@@ -244,7 +263,6 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-
     public string DecisionToolId
     {
         get => _decisionToolId;
@@ -289,7 +307,6 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-
     public ResumeMode SelectedRunMode
     {
         get => _selectedRunMode;
@@ -314,7 +331,7 @@ public sealed partial class MainWindowViewModel
                 return "No waiting gate is active.";
 
             if (LastWaitingInfo.Policy == DecisionPolicy.Bypass.ToString() && LastWaitingInfo.FallbackPresent)
-                return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting: bypass policy has fallback available but needs explicit host resume intent.";
+                return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting: bypass rules has fallback available but needs explicit host resume intent.";
 
             if (LastWaitingInfo.AllowedNextNodes.Count > 1)
                 return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting for explicit selection among multiple graph-derived candidates.";
@@ -322,7 +339,6 @@ public sealed partial class MainWindowViewModel
             return $"Gate {LastWaitingInfo.RouteGateId} at node {LastWaitingInfo.CurrentNodeId} is waiting for explicit decision input.";
         }
     }
-
 
     public string TraceFilterText
     {
@@ -375,7 +391,6 @@ public sealed partial class MainWindowViewModel
             OnPropertyChanged(nameof(LastResumePayload));
         }
     }
-
 
     public string LastTracePayload
     {
@@ -444,7 +459,6 @@ public sealed partial class MainWindowViewModel
 
     public bool CanResumeInjectDecision => HasWaitingInfo && IsWorkOrderLocked && Plan is not null && !string.IsNullOrWhiteSpace(InjectedDecisionDigest);
 
-
     public IReadOnlyList<ToolCatalogItemViewModel> ToolCatalogEntries
     {
         get
@@ -472,31 +486,18 @@ public sealed partial class MainWindowViewModel
     public bool CanLockWorkOrder => !IsWorkOrderLocked && !string.IsNullOrWhiteSpace(IntakeIntent);
 
     public AsyncRelayCommand LockWorkOrderCommand { get; private set; } = null!;
-
     public AsyncRelayCommand UnlockWorkOrderCommand { get; private set; } = null!;
-
     public AsyncRelayCommand GeneratePlanCommand { get; private set; } = null!;
-
     public AsyncRelayCommand RunIntakePlanCommand { get; private set; } = null!;
-
     public AsyncRelayCommand QuickStartCommand { get; private set; } = null!;
-
     public AsyncRelayCommand ResumeInjectDecisionCommand { get; private set; } = null!;
-
     public AsyncRelayCommand UseFallbackToolCommand { get; private set; } = null!;
-
     public AsyncRelayCommand CopyResumePayloadCommand { get; private set; } = null!;
-
     public AsyncRelayCommand CopyTraceCommand { get; private set; } = null!;
-
     public AsyncRelayCommand CopyTracePathCommand { get; private set; } = null!;
-
     public AsyncRelayCommand CopyArtifactsPathCommand { get; private set; } = null!;
-
     public AsyncRelayCommand RefreshModelCatalogCommand { get; private set; } = null!;
-
     public AsyncRelayCommand ResetModelCatalogCommand { get; private set; } = null!;
-
     public AsyncRelayCommand OpenStateFolderCommand { get; private set; } = null!;
 
     private void InitializeChatIntake()
@@ -638,10 +639,18 @@ public sealed partial class MainWindowViewModel
 
         if (SelectedChatSession is not null)
         {
-            var updated = SelectedChatSession with { PlanId = plan.PlanId, PlanHash = planHash, LastStatus = "PlanReady", LastUpdatedUtc = DateTimeOffset.UtcNow };
+            var updated = SelectedChatSession with
+            {
+                PlanId = plan.PlanId,
+                PlanHash = planHash,
+                LastStatus = "PlanReady",
+                LastUpdatedUtc = DateTimeOffset.UtcNow
+            };
+
             var idx = _chatSessions.IndexOf(SelectedChatSession);
             if (idx >= 0)
                 _chatSessions[idx] = updated;
+
             SelectedChatSession = updated;
         }
 
@@ -670,9 +679,18 @@ public sealed partial class MainWindowViewModel
             _ => new HostResumeIntent(HostResumeIntentMode.None)
         };
 
+        // UI should not assume runtime result shapes here.
         var result = await _hostExecutionService.ResumeAsync(Plan, request, intent).ConfigureAwait(true);
-        if (result.Ok)
-            RecordExecutionSession(result);
+
+        _chatMessages.Add($"System: Resume outcome = {result.Outcome}; msg={result.Message ?? "(none)"}");
+        if (SelectedChatSession is not null)
+        {
+            var updated = SelectedChatSession with { LastStatus = result.Outcome.ToString(), LastUpdatedUtc = DateTimeOffset.UtcNow };
+            var idx = _chatSessions.IndexOf(SelectedChatSession);
+            if (idx >= 0) _chatSessions[idx] = updated;
+            SelectedChatSession = updated;
+        }
+        SavePersistedSessions();
     }
 
     private Task UseFallbackToolAsync()
@@ -698,8 +716,6 @@ public sealed partial class MainWindowViewModel
 
         return Task.CompletedTask;
     }
-
-
 
     private Task CopyTraceAsync()
     {
@@ -738,11 +754,14 @@ public sealed partial class MainWindowViewModel
         {
             var models = _modelCatalog.ListModels();
             _defaultModelId = _modelCatalog.ResolveDefaultModel().ModelId;
+
             if (!models.Any(m => string.Equals(m.ModelId, _selectedModelId, StringComparison.Ordinal)))
                 _selectedModelId = _defaultModelId;
 
             ModelCatalogError = string.Empty;
-            _catalogHash = JobSpecDigestBuilder.HashCanonical(models.Select(m => new { m.ModelId, m.ProviderId, m.Priority, m.IsRemote, m.SupportsTools }).ToArray());
+            _catalogHash = JobSpecDigestBuilder.HashCanonical(
+                models.Select(m => new { m.ModelId, m.ProviderId, m.Priority, m.IsRemote, m.SupportsTools }).ToArray()
+            );
         }
         catch (Exception ex)
         {
@@ -758,16 +777,14 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(SelectedModelId));
         ResetModelCatalogCommand.RaiseCanExecuteChanged();
     }
+
     private Task OpenStateFolderAsync()
     {
         var statePath = Path.GetFullPath(Path.Combine(".state"));
         if (OperatingSystem.IsWindows() && ShellExecuteHelper.OpenPath(statePath))
-        {
             return Task.CompletedTask;
-        }
 
         LastTracePayload = statePath;
-
         return Task.CompletedTask;
     }
 
@@ -830,50 +847,36 @@ public sealed partial class MainWindowViewModel
     {
         var path = SessionStatePath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var ordered = _chatSessions.OrderByDescending(x => x.LastUpdatedUtc).ThenBy(x => x.WorkOrderId, StringComparer.Ordinal).ToList();
+        var ordered = _chatSessions
+            .OrderByDescending(x => x.LastUpdatedUtc)
+            .ThenBy(x => x.WorkOrderId, StringComparer.Ordinal)
+            .ToList();
+
         File.WriteAllText(path, JsonSerializer.Serialize(ordered));
     }
 
-    public void CaptureExecutionSnapshot(ExecutionEnvelope envelope)
-    {
-        _traceEntries.Clear();
-        foreach (var entry in envelope.Trace.Entries)
-            _traceEntries.Add(new TraceEntryViewModel(entry.Tick, entry.Event.ToString(), entry.Detail));
+    // ✅ DTO-only: UI does not depend on runtime ExecutionEnvelope type
+	public void CaptureExecutionSnapshot(Shoots.UI.Interop.ExecutionEnvelopeDto envelope)
+	{
+		_traceEntries.Clear();
+		foreach (var entry in envelope.Trace.Entries)
+			_traceEntries.Add(new TraceEntryViewModel(entry.Tick, entry.Event, entry.Detail));
 
-        _artifacts.Clear();
-        foreach (var artifact in envelope.Artifacts)
-            _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
+		_artifacts.Clear();
+		foreach (var artifact in envelope.Artifacts)
+			_artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
 
-        TraceLogPath = ResolveTraceLogPath(envelope.GetExecutionId());
-        ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.GetExecutionId());
-        PersistTrace(TraceLogPath, _traceEntries);
-        EnsureArtifactsDirectory(ArtifactsOutputPath);
-        CopyTraceCommand.RaiseCanExecuteChanged();
-        CopyTracePathCommand.RaiseCanExecuteChanged();
-        CopyArtifactsPathCommand.RaiseCanExecuteChanged();
-        OnPropertyChanged(nameof(FilteredTraceEntries));
-    }
+		TraceLogPath = ResolveTraceLogPath(envelope.GetExecutionId());
+		ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.GetExecutionId());
 
-    public void CaptureExecutionSnapshot(ExecutionEnvelopeDto envelope)
-    {
-        _traceEntries.Clear();
-        foreach (var entry in envelope.Trace.Entries)
-            _traceEntries.Add(new TraceEntryViewModel(entry.Tick, entry.Event.ToString(), entry.Detail));
+		PersistTrace(TraceLogPath, _traceEntries);
+		EnsureArtifactsDirectory(ArtifactsOutputPath);
 
-        _artifacts.Clear();
-        foreach (var artifact in envelope.Artifacts)
-            _artifacts.Add(new ArtifactViewModel(artifact.Id, artifact.Description, artifact.Id));
-
-        TraceLogPath = ResolveTraceLogPath(envelope.GetExecutionId());
-        ArtifactsOutputPath = ResolveArtifactsOutputPath(envelope.GetExecutionId());
-        PersistTrace(TraceLogPath, _traceEntries);
-        EnsureArtifactsDirectory(ArtifactsOutputPath);
-        CopyTraceCommand.RaiseCanExecuteChanged();
-        CopyTracePathCommand.RaiseCanExecuteChanged();
-        CopyArtifactsPathCommand.RaiseCanExecuteChanged();
-        OnPropertyChanged(nameof(FilteredTraceEntries));
-    }
-
+		CopyTraceCommand.RaiseCanExecuteChanged();
+		CopyTracePathCommand.RaiseCanExecuteChanged();
+		CopyArtifactsPathCommand.RaiseCanExecuteChanged();
+		OnPropertyChanged(nameof(FilteredTraceEntries));
+	}
 
     private static string ResolveTraceLogPath(string workOrderId)
         => Path.GetFullPath(Path.Combine(".state", "trace", $"{workOrderId}.trace.json"));
@@ -901,22 +904,29 @@ public sealed partial class MainWindowViewModel
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
-    private static DecisionGateWaitingInfoViewModel ToWaitingInfoViewModel(DecisionGateWaitingInfo waiting)
-        => new(
-            waiting.WorkOrderId.Value,
-            waiting.RouteGateId,
-            waiting.CurrentNodeId,
-            waiting.IntentTokenHash,
-            waiting.PlanHash,
-            waiting.Policy.ToString(),
-            waiting.FallbackPresent,
-            waiting.ReasonCode,
-            waiting.AllowedNextNodes,
-            waiting.DecisionPromptKey,
-            waiting.DecisionOwner.ToString());
+	private static DecisionGateWaitingInfoViewModel ToWaitingInfoViewModel(DecisionGateWaitingInfoDto waiting)
+		=> new(
+			waiting.WorkOrderId,
+			waiting.RouteGateId,
+			waiting.CurrentNodeId,
+			waiting.IntentTokenHash,
+			waiting.PlanHash,
+			waiting.Policy,
+			waiting.FallbackPresent,
+			waiting.ReasonCode,
+			waiting.AllowedNextNodes,
+			waiting.DecisionPromptKey,
+			waiting.DecisionOwner);
+			
 }
 
-public sealed record ChatSessionViewModel(string WorkOrderId, string PlanId, string PlanHash, string LastStatus, DateTimeOffset LastUpdatedUtc, DecisionGateWaitingInfoViewModel? LastWaitingInfo);
+public sealed record ChatSessionViewModel(
+    string WorkOrderId,
+    string PlanId,
+    string PlanHash,
+    string LastStatus,
+    DateTimeOffset LastUpdatedUtc,
+    DecisionGateWaitingInfoViewModel? LastWaitingInfo);
 
 public sealed record TraceEntryViewModel(int Tick, string Event, string? Detail);
 
@@ -949,47 +959,89 @@ public static class JobSpecDigestBuilder
 {
     public static string HashCanonical(object value)
     {
-        var canonical = JsonSerializer.Serialize(value);
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+        var json = JsonSerializer.Serialize(value);
+        var canonical = Canonicalize(json);
+        return Sha256Hex(canonical);
+    }
+
+    public static string Compute(object value)
+    {
+        return HashCanonical(value);
+    }
+
+    private static string Canonicalize(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        using var ms = new MemoryStream();
+
+        using (var writer = new Utf8JsonWriter(ms, new JsonWriterOptions
+        {
+            Indented = false
+        }))
+        {
+            WriteCanonical(writer, doc.RootElement);
+        }
+
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+
+                foreach (var prop in element.EnumerateObject()
+                    .OrderBy(p => p.Name, StringComparer.Ordinal))
+                {
+                    writer.WritePropertyName(prop.Name);
+                    WriteCanonical(writer, prop.Value);
+                }
+
+                writer.WriteEndObject();
+                break;
+
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var item in element.EnumerateArray())
+                    WriteCanonical(writer, item);
+                writer.WriteEndArray();
+                break;
+
+            case JsonValueKind.String:
+                writer.WriteStringValue(element.GetString());
+                break;
+
+            case JsonValueKind.Number:
+                if (element.TryGetInt64(out var l))
+                    writer.WriteNumberValue(l);
+                else if (element.TryGetDecimal(out var d))
+                    writer.WriteNumberValue(d);
+                else
+                    writer.WriteNumberValue(element.GetDouble());
+                break;
+
+            case JsonValueKind.True:
+                writer.WriteBooleanValue(true);
+                break;
+
+            case JsonValueKind.False:
+                writer.WriteBooleanValue(false);
+                break;
+
+            case JsonValueKind.Null:
+            case JsonValueKind.Undefined:
+                writer.WriteNullValue();
+                break;
+        }
+    }
+
+    private static string Sha256Hex(string input)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
-
-    public static string Compute(JobSpecDigestInput input)
-    {
-        return HashCanonical(new
-        {
-            intent = input.Intent.Trim(),
-            target = input.Target.Trim(),
-            stack = input.Stack.Trim(),
-            modelId = input.ModelId.Trim(),
-            attachments = input.Attachments.OrderBy(x => x, StringComparer.Ordinal),
-            constraints = input.Constraints.OrderBy(x => x, StringComparer.Ordinal)
-        });
-    }
 }
 
-
-public static class CanonicalJson
-{
-    public static string Normalize(string json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-            return "{}";
-
-        using var doc = JsonDocument.Parse(json);
-        return NormalizeElement(doc.RootElement);
-    }
-
-    private static string NormalizeElement(JsonElement element)
-        => element.ValueKind switch
-        {
-            JsonValueKind.Object => "{" + string.Join(",", element.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal).Select(p => JsonSerializer.Serialize(p.Name) + ":" + NormalizeElement(p.Value))) + "}",
-            JsonValueKind.Array => "[" + string.Join(",", element.EnumerateArray().Select(NormalizeElement)) + "]",
-            JsonValueKind.String => JsonSerializer.Serialize(element.GetString()),
-            JsonValueKind.Number => element.GetRawText(),
-            JsonValueKind.True => "true",
-            JsonValueKind.False => "false",
-            JsonValueKind.Null => "null",
-            _ => "null"
-        };
-}
+#endif

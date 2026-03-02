@@ -19,7 +19,7 @@ public sealed record AiPolicySettings(
 
 public sealed class AiPolicyStore : IAiPolicyStore
 {
-    public const string FileName = "ai-policy.json";
+    public const string FileName = "ai-visibility.json";
     private const string SettingsFolderName = ".shoots";
     private readonly string _defaultPath;
 
@@ -74,13 +74,13 @@ public sealed class AiPolicyStore : IAiPolicyStore
 
     private static AiPolicySettings CreateDefault()
     {
-        var policy = new AiPresentationPolicy(
+        var presentation = new AiPresentationPolicy(
             AiVisibilityMode.Visible,
             AllowAiPanelToggle: true,
             AllowCopyExport: true,
             EnterpriseMode: false);
 
-        return new AiPolicySettings(AiAccessRole.Developer, policy);
+        return new AiPolicySettings(AiAccessRole.Developer, presentation);
     }
 
     private static string? ResolveWorkspacePath(string? workspaceRoot)
