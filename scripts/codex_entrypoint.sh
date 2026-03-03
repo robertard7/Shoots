@@ -47,6 +47,11 @@ run_builder() {
   bash scripts/builder_loop.sh
 }
 
+run_retrieval() {
+  RUN_TESTS=1 bash scripts/maintenance.sh --tests
+  dotnet test src/Contracts/Shoots.Contracts.Core.Tests/Shoots.Contracts.Core.Tests.csproj -c Release
+}
+
 run_stubs() {
   bash scripts/find_stubs.sh
   bash scripts/triage_stubs.sh
@@ -77,10 +82,17 @@ if [[ "$mode" == "--stubs" ]]; then
   exit 0
 fi
 
+if [[ "$mode" == "--retrieval" ]]; then
+  run_retrieval || { print_diagnostics; exit 1; }
+  echo "codex entrypoint retrieval mode completed"
+  exit 0
+fi
+
 if [[ "$mode" == "--all" ]]; then
   run_stubs || { print_diagnostics; exit 1; }
   RUN_TESTS=1 bash scripts/maintenance.sh --tests || { print_diagnostics; exit 1; }
   run_builder || { print_diagnostics; exit 1; }
+  run_retrieval || { print_diagnostics; exit 1; }
   run_ui || { print_diagnostics; exit 1; }
   echo "codex entrypoint all mode completed"
   exit 0

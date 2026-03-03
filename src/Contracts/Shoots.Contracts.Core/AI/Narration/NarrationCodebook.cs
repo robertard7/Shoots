@@ -22,6 +22,7 @@ public static class NarrationCodebook
         "tool",
         "finalize",
         "replay",
+        "retrieval",
         "ui"
     };
 

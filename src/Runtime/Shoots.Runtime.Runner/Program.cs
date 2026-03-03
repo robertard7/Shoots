@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Shoots.Contracts.Core;
 using Shoots.Contracts.Core.AI.Narration;
+using Shoots.Runtime.Language;
 using Shoots.Runtime.Loader;
 using Shoots.Runtime.Runner;
 
@@ -235,6 +236,7 @@ static async Task<int> RunScenarioAsync(string[] args)
         var planNetworkDisabled = planDoc.RootElement.TryGetProperty("tool.network_disabled", out var nd) && nd.ValueKind == JsonValueKind.True;
         var stepEvents = new List<object>();
         var stepSummaries = new List<Dictionary<string, string>>();
+        var retrievalHash = string.Empty;
         var planSteps = ResolveSteps(planDoc.RootElement, planHash);
 
         if (!ValidateResolvedSteps(planDoc.RootElement, envDescriptorDoc.RootElement, planSteps, out var validationErrorCode, out var validationSummary, out var validationDetails))
@@ -288,6 +290,78 @@ static async Task<int> RunScenarioAsync(string[] args)
                 Emit(narrator, "tool", "tool.complete", "Tool execution completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["toolId"] = step.ToolId, ["outputHash"] = outputHash }));
             }
 
+            if (step.Kind == "retrieve_context.v1")
+            {
+                Emit(narrator, "retrieval", "retrieval.start", "Starting retrieval step", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId }));
+                Emit(narrator, "retrieval", "retrieval.slice.start", "Building retrieval slice", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId }));
+
+                var retrievalRoot = Path.Combine(runDir, "retrieval");
+                Directory.CreateDirectory(retrievalRoot);
+
+                var request = new RetrievalQueryRequest
+                {
+                    Root = project,
+                    QueryText = GetArgString(step.Args, "queryText", "build plan context"),
+                    SliceRequest = new RepoSliceRequest
+                    {
+                        Root = project,
+                        IncludeGlobs = GetArgStringList(step.Args, "includeGlobs", new[] { "src/**/*.cs", "docs/*.md" }),
+                        ExcludeGlobs = GetArgStringList(step.Args, "excludeGlobs", new[] { "**/bin/**", "**/obj/**" }),
+                        MaxFiles = Math.Max(GetArgInt(step.Args, "maxFiles", 8), 1),
+                        MaxTotalBytes = Math.Max(GetArgInt(step.Args, "maxTotalBytes", 120000), 2048),
+                        MaxBytesPerFile = Math.Max(GetArgInt(step.Args, "maxFileBytes", 12000), 1024),
+                        LineCap = 400,
+                        NormalizeEol = true,
+                        AllowBinary = false
+                    },
+                    MaxFiles = Math.Max(GetArgInt(step.Args, "maxFiles", 8), 1),
+                    MaxTotalBytes = Math.Max(GetArgInt(step.Args, "maxTotalBytes", 120000), 2048),
+                    MaxFileBytes = Math.Max(GetArgInt(step.Args, "maxFileBytes", 12000), 1024),
+                    Scoring = RetrievalScoring.LexicalTfidfV1
+                };
+
+                var retrievalService = new RetrievalService();
+                var retrieval = retrievalService.Retrieve(request).Normalize();
+                if (!string.IsNullOrWhiteSpace(retrieval.ErrorCode))
+                {
+                    EmitFailure(narrator, "retrieval", "retrieval.error", "Retrieval step failed", runId, planHash, providerHash, envHash, refs, step.StepId, details: retrieval.ErrorCode + ";" + retrieval.ErrorMessage);
+                    return ExitCodes.ToolExecFailed;
+                }
+
+                var requestPath = Path.Combine(retrievalRoot, "request.json");
+                var resultPath = Path.Combine(retrievalRoot, "result.json");
+                var hitsPath = Path.Combine(retrievalRoot, "hits.ndjson");
+                var packPath = Path.Combine(retrievalRoot, "context_pack.txt");
+                var hashPath = Path.Combine(retrievalRoot, "hashes.json");
+
+                var contextPack = RetrievalService.BuildContextPack(runId, planHash, retrieval, request.MaxTotalBytes);
+                await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(request.Normalize(), RepoSliceJson.Options)).ConfigureAwait(false);
+                await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(retrieval, RepoSliceJson.Options)).ConfigureAwait(false);
+                await File.WriteAllLinesAsync(hitsPath, retrieval.Hits.Select(h => JsonSerializer.Serialize(h, RepoSliceJson.Options))).ConfigureAwait(false);
+                await File.WriteAllTextAsync(packPath, contextPack).ConfigureAwait(false);
+
+                retrievalHash = RetrievalService.ComputeRetrievalHash(retrieval);
+                var retrievalHashes = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["queryHash"] = retrieval.QueryHash,
+                    ["sliceHash"] = retrieval.SliceHash,
+                    ["requestHash"] = ComputeHashHex(await File.ReadAllTextAsync(requestPath).ConfigureAwait(false)),
+                    ["retrievalHash"] = retrievalHash,
+                    ["contextHash"] = ComputeHashHex(contextPack)
+                };
+                await File.WriteAllTextAsync(hashPath, JsonSerializer.Serialize(retrievalHashes, JsonOptions())).ConfigureAwait(false);
+
+                Emit(narrator, "retrieval", "retrieval.slice.done", "Retrieval slice built", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["sliceHash"] = retrieval.SliceHash }));
+                Emit(narrator, "retrieval", "retrieval.rank.start", "Ranking retrieval hits", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["queryHash"] = retrieval.QueryHash }));
+                Emit(narrator, "retrieval", "retrieval.rank.done", "Ranked retrieval hits", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["hits"] = retrieval.Hits.Count.ToString() }));
+                foreach (var hit in retrieval.Hits.Take(10))
+                {
+                    Emit(narrator, "retrieval", "retrieval.pack.start", "Retrieval hit summary", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["path"] = hit.Path, ["score"] = hit.Score.ToString(), ["reasonCodes"] = string.Join(',', hit.ReasonCodes) }));
+                }
+
+                Emit(narrator, "retrieval", "retrieval.pack.done", "Built retrieval context pack", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["retrievalHash"] = retrievalHash }));
+            }
+
             Emit(narrator, "execute", "execute.step.end", "Step completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["stepKind"] = step.Kind }));
             stepEvents.Add(new { step.StepId, kind = step.Kind, toolId = step.ToolId, status = "completed" });
             stepSummaries.Add(new Dictionary<string, string>(StringComparer.Ordinal)
@@ -297,7 +371,7 @@ static async Task<int> RunScenarioAsync(string[] args)
                 ["expects"] = "status=completed",
                 ["inputs"] = "plan/provider/env",
                 ["kind"] = step.Kind,
-                ["outputs"] = $"tool/{step.StepId}",
+                ["outputs"] = string.Equals(step.Kind, "retrieve_context.v1", StringComparison.Ordinal) ? "retrieval" : $"tool/{step.StepId}",
                 ["status"] = "completed",
                 ["stepId"] = step.StepId,
                 ["toolId"] = step.ToolId
@@ -339,10 +413,18 @@ static async Task<int> RunScenarioAsync(string[] args)
         await File.WriteAllLinesAsync(tracePath, traceEvents.Select(e => JsonSerializer.Serialize(e))).ConfigureAwait(false);
 
         var traceHash = ComputeHashHex(await File.ReadAllTextAsync(tracePath).ConfigureAwait(false));
-        var outputManifest = new[] { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" };
+        var outputManifest = new List<string> { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" };
+        if (!string.IsNullOrWhiteSpace(retrievalHash))
+        {
+            outputManifest.Add("retrieval/request.json");
+            outputManifest.Add("retrieval/result.json");
+            outputManifest.Add("retrieval/hits.ndjson");
+            outputManifest.Add("retrieval/context_pack.txt");
+            outputManifest.Add("retrieval/hashes.json");
+        }
         var outputManifestHash = ComputeHashHex(string.Join("\n", outputManifest));
 
-        var hashes = new { runId, planHash, providerHash, envHash, traceHash, outputManifestHash };
+        var hashes = new { runId, planHash, providerHash, envHash, traceHash, retrievalHash, outputManifestHash };
         await File.WriteAllTextAsync(Path.Combine(runDir, "hashes.json"), JsonSerializer.Serialize(hashes, JsonOptions())).ConfigureAwait(false);
 
         var result = new { status = "completed", outputs = outputManifest, steps = stepEvents };
@@ -425,7 +507,19 @@ static async Task<int> ReplayAsync(string[] args)
 
     var expectedRunId = ComputeHashHex($"{planHash}|{providerHash}|{envHash}|builder_smoke.v2")[..16];
     var expectedTraceHash = ComputeHashHex(await File.ReadAllTextAsync(tracePath).ConfigureAwait(false));
-    var expectedManifestHash = ComputeHashHex(string.Join("\n", new[] { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" }));
+
+    var resultJsonPath = Path.Combine(resolved, "result.json");
+    var expectedManifest = new List<string> { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" };
+    if (File.Exists(resultJsonPath))
+    {
+        var resultDoc = JsonDocument.Parse(await File.ReadAllTextAsync(resultJsonPath).ConfigureAwait(false));
+        if (resultDoc.RootElement.TryGetProperty("outputs", out var outputsEl) && outputsEl.ValueKind == JsonValueKind.Array)
+        {
+            expectedManifest = outputsEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+        }
+    }
+
+    var expectedManifestHash = ComputeHashHex(string.Join("\n", expectedManifest));
 
     var actualTraceHash = hashesDoc.RootElement.GetProperty("traceHash").GetString() ?? string.Empty;
     var actualManifestHash = hashesDoc.RootElement.GetProperty("outputManifestHash").GetString() ?? string.Empty;
@@ -531,7 +625,7 @@ static void EmitFailure(INarrator narrator, string phase, string errorCode, stri
 
 static string RelativePath(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');
 
-static string BaseArtifactRefs() => "json:run.json,json:hashes.json,json:result.json,ndjson:trace/events.ndjson,ndjson:narration/events.ndjson";
+static string BaseArtifactRefs() => "json:run.json,json:hashes.json,json:result.json,ndjson:trace/events.ndjson,ndjson:narration/events.ndjson,json:retrieval/result.json,txt:retrieval/context_pack.txt";
 
 static Dictionary<string, string> IdentityData(string runId, string planHash, string providerHash, string envHash, string artifactRefs) => new(StringComparer.Ordinal)
 {
@@ -550,6 +644,49 @@ static Dictionary<string, string> Merge(Dictionary<string, string> left, Diction
     }
 
     return left;
+}
+
+
+static string GetArgString(Dictionary<string, object?> args, string key, string fallback)
+{
+    if (args.TryGetValue(key, out var value) && value is string s && !string.IsNullOrWhiteSpace(s))
+    {
+        return s;
+    }
+
+    return fallback;
+}
+
+static int GetArgInt(Dictionary<string, object?> args, string key, int fallback)
+{
+    if (args.TryGetValue(key, out var value))
+    {
+        if (value is double d)
+        {
+            return Convert.ToInt32(d);
+        }
+
+        if (value is string s && int.TryParse(s, out var parsed))
+        {
+            return parsed;
+        }
+    }
+
+    return fallback;
+}
+
+static string[] GetArgStringList(Dictionary<string, object?> args, string key, string[] fallback)
+{
+    if (args.TryGetValue(key, out var value) && value is string s && !string.IsNullOrWhiteSpace(s))
+    {
+        var parts = s.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length > 0)
+        {
+            return parts.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        }
+    }
+
+    return fallback.OrderBy(x => x, StringComparer.Ordinal).ToArray();
 }
 
 static IReadOnlyList<(string StepId, string Kind, string ToolId, bool RequiresNetwork, Dictionary<string, object?> Args)> ResolveSteps(JsonElement plan, string planHash)
@@ -743,7 +880,8 @@ static class StepKinds
         ["SelectTool"] = new[] { "tool.select" },
         ["RunTool"] = new[] { "process" },
         ["Verify"] = new[] { "verify" },
-        ["EmitArtifact"] = new[] { "filesystem" }
+        ["EmitArtifact"] = new[] { "filesystem" },
+        ["retrieve_context.v1"] = new[] { "retrieval.lexical" }
     };
 
     public static bool IsSupportedInEnvironment(string kind, HashSet<string> capabilities)

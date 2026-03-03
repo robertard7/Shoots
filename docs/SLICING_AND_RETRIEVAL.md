@@ -51,3 +51,28 @@ Retrieval model selection (future integration):
 
 - `SHOOTS_EMBED_MODEL` (default planned: `nomic-embed-text`)
 
+
+## Retrieval Contracts
+
+Deterministic retrieval contracts in `Shoots.Contracts.Core`:
+
+- `RetrievalQueryRequest`
+- `RetrievalHit`
+- `RetrievalResult`
+- `RetrievalStats`
+
+Stable retrieval error codes:
+
+- `retrieval.root.missing`
+- `retrieval.query.empty`
+- `retrieval.slice.failed:<sliceErrorCode>`
+- `retrieval.rank.failed`
+- `retrieval.budget.exceeded`
+
+Artifacts produced by retrieval runner step:
+
+- `retrieval/request.json`
+- `retrieval/result.json`
+- `retrieval/hits.ndjson`
+- `retrieval/context_pack.txt`
+- `retrieval/hashes.json`

@@ -138,6 +138,11 @@ for key in ['runId','planHash','providerHash','envHash']:
         raise SystemExit(f'mismatch for {key}: {actual.get(key)} != {expected.get(key)}')
 PYCHK
 
+      - name: Codex entrypoint retrieval
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/codex_entrypoint.sh --retrieval
+
       - name: Codex entrypoint all
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
@@ -180,6 +185,7 @@ PYCHK
             artifacts/stubs/**
             artifacts/builder_loop/**
             artifacts/golden/**
+            artifacts/retrieval/**
             .state/runs/**
             etc/tools.catalog.json
           if-no-files-found: warn
@@ -307,6 +313,7 @@ PYCHK
             artifacts/stubs/**
             artifacts/builder_loop/**
             artifacts/golden/**
+            artifacts/retrieval/**
             .state/runs/**
             etc/tools.catalog.json
           if-no-files-found: warn

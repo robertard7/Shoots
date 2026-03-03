@@ -21,4 +21,12 @@
 | `replay.inputs` | replay | info | Loaded replay inputs | run folder | verify hashes and run id |
 | `replay.hash.compare` | replay | info | Compared replay hashes | run folder + diagnostics | inspect mismatch keys |
 | `replay.result` | replay | info | Replay completed | run folder + replay json | inspect replay pass/fail |
-| `error` | startup/plan/provider/env/execute/tool/finalize/replay | error | Failure | run folder + failing artifact refs | open `failure-fingerprint.json` then narration tail |
+| `retrieval.start` | retrieval | info | Starting retrieval step | run folder + retrieval | inspect retrieval request |
+| `retrieval.slice.start` | retrieval | info | Building retrieval slice | run folder + slice refs | verify include/exclude globs |
+| `retrieval.slice.done` | retrieval | info | Retrieval slice built | run folder + retrieval result | verify slice hash |
+| `retrieval.rank.start` | retrieval | info | Ranking retrieval hits | run folder + retrieval query | verify query text/hash |
+| `retrieval.rank.done` | retrieval | info | Ranked retrieval hits | run folder + hits ndjson | inspect hit ordering |
+| `retrieval.pack.start` | retrieval | info | Retrieval hit summary | run folder + context pack | inspect path/score/reasons |
+| `retrieval.pack.done` | retrieval | info | Built retrieval context pack | run folder + context pack | inspect truncation markers |
+| `retrieval.error` | retrieval | error | Retrieval failed | run folder + retrieval artifacts | inspect retrieval error code and message |
+| `error` | startup/plan/provider/env/execute/tool/finalize/replay/retrieval | error | Failure | run folder + failing artifact refs | open `failure-fingerprint.json` then narration tail |
