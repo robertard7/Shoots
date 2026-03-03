@@ -452,6 +452,10 @@ public static class Program
                     var retrievalRoot = Path.Combine(runDir, "retrieval");
                     Directory.CreateDirectory(retrievalRoot);
 
+                    var maxFiles = Math.Max(GetArgInt(step.Args, "maxFiles", 8), 1);
+                    var maxTotalBytes = Math.Max(GetArgInt(step.Args, "maxTotalBytes", 120000), 2048);
+                    var maxFileBytes = Math.Max(GetArgInt(step.Args, "maxFileBytes", 12000), 1024);
+                    var maxLines = Math.Max(GetArgInt(step.Args, "maxLines", 2000), 100);
                     var request = new RetrievalQueryRequest
                     {
                         Root = project,
@@ -461,16 +465,25 @@ public static class Program
                             Root = project,
                             IncludeGlobs = GetArgStringList(step.Args, "includeGlobs", new[] { "src/**/*.cs", "docs/*.md" }),
                             ExcludeGlobs = GetArgStringList(step.Args, "excludeGlobs", new[] { "**/bin/**", "**/obj/**" }),
-                            MaxFiles = Math.Max(GetArgInt(step.Args, "maxFiles", 8), 1),
-                            MaxTotalBytes = Math.Max(GetArgInt(step.Args, "maxTotalBytes", 120000), 2048),
-                            MaxBytesPerFile = Math.Max(GetArgInt(step.Args, "maxFileBytes", 12000), 1024),
+                            MaxFiles = maxFiles,
+                            MaxTotalBytes = maxTotalBytes,
+                            MaxBytesPerFile = maxFileBytes,
                             LineCap = 400,
                             NormalizeEol = true,
                             AllowBinary = false
                         },
-                        MaxFiles = Math.Max(GetArgInt(step.Args, "maxFiles", 8), 1),
-                        MaxTotalBytes = Math.Max(GetArgInt(step.Args, "maxTotalBytes", 120000), 2048),
-                        MaxFileBytes = Math.Max(GetArgInt(step.Args, "maxFileBytes", 12000), 1024),
+                        MaxFiles = maxFiles,
+                        MaxTotalBytes = maxTotalBytes,
+                        MaxFileBytes = maxFileBytes,
+                        MaxLinesPerFile = Math.Max(GetArgInt(step.Args, "maxLinesPerFile", 400), 1),
+                        MaxContextBytes = maxTotalBytes,
+                        Budget = new ContextBudget
+                        {
+                            MaxBytes = maxTotalBytes,
+                            MaxLines = maxLines,
+                            MaxFiles = maxFiles,
+                            MaxTokensEstimate = GetArgInt(step.Args, "maxTokensEstimate", 0) > 0 ? GetArgInt(step.Args, "maxTokensEstimate", 0) : null
+                        },
                         Scoring = RetrievalScoring.LexicalTfidfV1
                     };
 
@@ -485,14 +498,21 @@ public static class Program
 
                     var requestPath = Path.Combine(retrievalRoot, "request.json");
                     var resultPath = Path.Combine(retrievalRoot, "result.json");
+                    var statsPath = Path.Combine(retrievalRoot, "stats.json");
                     var hitsPath = Path.Combine(retrievalRoot, "hits.ndjson");
+                    var scoringPath = Path.Combine(retrievalRoot, "scoring.ndjson");
+                    var decisionsPath = Path.Combine(runDir, "slice", "decisions.ndjson");
+                    Directory.CreateDirectory(Path.GetDirectoryName(decisionsPath)!);
                     var packPath = Path.Combine(retrievalRoot, "context_pack.txt");
                     var hashPath = Path.Combine(retrievalRoot, "hashes.json");
 
-                    var contextPack = RetrievalService.BuildContextPack(runId, planHash, retrieval, request.MaxTotalBytes);
+                    var contextPack = RetrievalService.BuildContextPack(runId, planHash, retrieval, request.Budget);
                     await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(request.Normalize(), RepoSliceJson.Options)).ConfigureAwait(false);
                     await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(retrieval, RepoSliceJson.Options)).ConfigureAwait(false);
+                    await File.WriteAllTextAsync(statsPath, JsonSerializer.Serialize(retrieval.Stats, RepoSliceJson.Options)).ConfigureAwait(false);
                     await File.WriteAllLinesAsync(hitsPath, retrieval.Hits.Select(h => JsonSerializer.Serialize(h, RepoSliceJson.Options))).ConfigureAwait(false);
+                    await File.WriteAllLinesAsync(scoringPath, retrieval.ScoringTrace.Select(h => JsonSerializer.Serialize(h, RepoSliceJson.Options))).ConfigureAwait(false);
+                    await File.WriteAllLinesAsync(decisionsPath, retrieval.SliceDecisionTrace.Select(d => JsonSerializer.Serialize(d, RepoSliceJson.Options))).ConfigureAwait(false);
                     await File.WriteAllTextAsync(packPath, contextPack).ConfigureAwait(false);
 
                     retrievalHash = RetrievalService.ComputeRetrievalHash(retrieval);
@@ -502,7 +522,9 @@ public static class Program
                         ["sliceHash"] = retrieval.SliceHash,
                         ["requestHash"] = ComputeHashHex(await File.ReadAllTextAsync(requestPath).ConfigureAwait(false)),
                         ["retrievalHash"] = retrievalHash,
-                        ["contextHash"] = ComputeHashHex(contextPack)
+                        ["contextHash"] = ComputeHashHex(contextPack),
+                        ["scoringHash"] = ComputeHashHex(await File.ReadAllTextAsync(scoringPath).ConfigureAwait(false)),
+                        ["sliceDecisionHash"] = ComputeHashHex(await File.ReadAllTextAsync(decisionsPath).ConfigureAwait(false))
                     };
                     await File.WriteAllTextAsync(hashPath, JsonSerializer.Serialize(retrievalHashes, JsonOptions())).ConfigureAwait(false);
 
@@ -514,6 +536,7 @@ public static class Program
                         Emit(narrator, "retrieval", "retrieval.pack.start", "Retrieval hit summary", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["path"] = hit.Path, ["score"] = hit.Score.ToString(), ["reasonCodes"] = string.Join(',', hit.ReasonCodes) }));
                     }
 
+                    Emit(narrator, "builder", "builder.decision.context_budget", "Applied context budgets", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["maxBytes"] = request.Budget.MaxBytes.ToString(), ["maxLines"] = request.Budget.MaxLines.ToString(), ["maxFiles"] = request.Budget.MaxFiles.ToString(), ["truncated"] = string.Join(',', retrieval.Stats.TruncatedFlags) }));
                     Emit(narrator, "retrieval", "retrieval.pack.done", "Built retrieval context pack", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["retrievalHash"] = retrievalHash }));
                 }
 
@@ -551,16 +574,23 @@ public static class Program
 
                     await File.WriteAllTextAsync(Path.Combine(synthRoot, "request.json"), JsonSerializer.Serialize(request.Normalize(), RepoSliceJson.Options)).ConfigureAwait(false);
                     await File.WriteAllTextAsync(Path.Combine(synthRoot, "result.json"), JsonSerializer.Serialize(synthesis, RepoSliceJson.Options)).ConfigureAwait(false);
+                    await File.WriteAllLinesAsync(Path.Combine(synthRoot, "evidence.ndjson"), synthesis.Evidence.OrderBy(x => x.StepId, StringComparer.Ordinal).ThenBy(x => x.HitId, StringComparer.Ordinal).Select(x => JsonSerializer.Serialize(x, RepoSliceJson.Options))).ConfigureAwait(false);
                     await File.WriteAllTextAsync(Path.Combine(planRoot, "plan.json"), synthesis.PlanJson).ConfigureAwait(false);
+                    var evidenceText = await File.ReadAllTextAsync(Path.Combine(synthRoot, "evidence.ndjson")).ConfigureAwait(false);
                     var planHashes = new Dictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["requestHash"] = synthesis.RequestHash,
                         ["retrievalHash"] = retrievalHash,
+                        ["evidenceHash"] = synthesis.EvidenceHash,
                         ["planHash"] = synthesis.PlanHash
                     };
                     await File.WriteAllTextAsync(Path.Combine(planRoot, "hashes.json"), JsonSerializer.Serialize(planHashes, JsonOptions())).ConfigureAwait(false);
 
-                    Emit(narrator, "builder", "builder.synthesis.end", "Plan synthesis completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["synthPlanHash"] = synthesis.PlanHash }));
+                    var selectedSteps = string.Join(',', synthesis.Evidence.Select(x => x.StepId).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
+                    var skippedSteps = string.Join(',', retrievalResult.Hits.Select(x => x.HitId).Except(synthesis.Evidence.Select(x => x.HitId), StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
+                    Emit(narrator, "builder", "builder.decision.selected_steps", "Selected executable steps", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["steps"] = selectedSteps, ["reason"] = "top_ranked_hits" }));
+                    Emit(narrator, "builder", "builder.decision.skipped_steps", "Skipped retrieval hits", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["steps"] = skippedSteps, ["reasonCode"] = "outside_top3" }));
+                    Emit(narrator, "builder", "builder.synthesis.end", "Plan synthesis completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["synthPlanHash"] = synthesis.PlanHash, ["evidenceHash"] = synthesis.EvidenceHash, ["evidenceBytes"] = Encoding.UTF8.GetByteCount(evidenceText).ToString() }));
                 }
 
                 Emit(narrator, "execute", "execute.step.end", "Step completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["stepKind"] = step.Kind }));
@@ -623,14 +653,41 @@ public static class Program
                 outputManifest.Add("retrieval/hits.ndjson");
                 outputManifest.Add("retrieval/context_pack.txt");
                 outputManifest.Add("retrieval/hashes.json");
+                outputManifest.Add("retrieval/scoring.ndjson");
+                outputManifest.Add("retrieval/stats.json");
+                outputManifest.Add("slice/decisions.ndjson");
                 outputManifest.Add("plan_synthesis/request.json");
                 outputManifest.Add("plan_synthesis/result.json");
+                outputManifest.Add("plan_synthesis/evidence.ndjson");
                 outputManifest.Add("plan/plan.json");
                 outputManifest.Add("plan/hashes.json");
             }
             var outputManifestHash = ComputeHashHex(string.Join("\n", outputManifest));
-
-            var hashes = new { runId, planHash, providerHash, envHash, traceHash, retrievalHash, outputManifestHash };
+            var retrievalScoringPath = Path.Combine(runDir, "retrieval", "scoring.ndjson");
+            var sliceDecisionsPath = Path.Combine(runDir, "slice", "decisions.ndjson");
+            var evidencePath = Path.Combine(runDir, "plan_synthesis", "evidence.ndjson");
+            var hashes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["runId"] = runId,
+                ["planHash"] = planHash,
+                ["providerHash"] = providerHash,
+                ["envHash"] = envHash,
+                ["traceHash"] = traceHash,
+                ["retrievalHash"] = retrievalHash,
+                ["outputManifestHash"] = outputManifestHash
+            };
+            if (File.Exists(retrievalScoringPath))
+            {
+                hashes["scoringHash"] = ComputeHashHex(await File.ReadAllTextAsync(retrievalScoringPath).ConfigureAwait(false));
+            }
+            if (File.Exists(sliceDecisionsPath))
+            {
+                hashes["sliceDecisionHash"] = ComputeHashHex(await File.ReadAllTextAsync(sliceDecisionsPath).ConfigureAwait(false));
+            }
+            if (File.Exists(evidencePath))
+            {
+                hashes["evidenceHash"] = ComputeHashHex(await File.ReadAllTextAsync(evidencePath).ConfigureAwait(false));
+            }
             await File.WriteAllTextAsync(Path.Combine(runDir, "hashes.json"), JsonSerializer.Serialize(hashes, JsonOptions())).ConfigureAwait(false);
 
             var result = new { status = "completed", outputs = outputManifest, steps = stepEvents };
@@ -832,7 +889,7 @@ public static class Program
 
     static string RelativePath(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');
 
-    static string BaseArtifactRefs() => "json:run.json,json:hashes.json,json:result.json,ndjson:trace/events.ndjson,ndjson:narration/events.ndjson,json:retrieval/result.json,txt:retrieval/context_pack.txt,json:plan_synthesis/result.json,json:plan/plan.json";
+    static string BaseArtifactRefs() => "json:run.json,json:hashes.json,json:result.json,ndjson:trace/events.ndjson,ndjson:narration/events.ndjson,json:retrieval/result.json,json:retrieval/stats.json,ndjson:retrieval/scoring.ndjson,ndjson:slice/decisions.ndjson,txt:retrieval/context_pack.txt,json:plan_synthesis/result.json,ndjson:plan_synthesis/evidence.ndjson,json:plan/plan.json";
 
     static Dictionary<string, string> IdentityData(string runId, string planHash, string providerHash, string envHash, string artifactRefs) => new(StringComparer.Ordinal)
     {
@@ -1129,17 +1186,42 @@ public static class Program
     {
         var normalized = request.Normalize();
         var requestHash = normalized.ComputeRequestHash();
-        var selected = hits.OrderByDescending(h => h.Score).ThenBy(h => h.Path, StringComparer.Ordinal).Take(3).ToArray();
+        var selected = hits.OrderByDescending(h => h.Score).ThenByDescending(h => h.TokensMatched).ThenBy(h => h.Path, StringComparer.Ordinal).ThenBy(h => h.FirstMatchOffset).Take(3).ToArray();
 
-        var steps = selected.Select((hit, idx) => new Dictionary<string, object?>
+        var evidence = new List<PlanStepEvidence>();
+        var steps = selected.Select((hit, idx) =>
         {
-            ["stepId"] = ComputeHashHex($"{requestHash}|{idx}|{hit.Path}")[..12],
-            ["kind"] = "RunTool",
-            ["toolId"] = "linux.noop.v1",
-            ["args"] = new Dictionary<string, object?> { ["targetPath"] = hit.Path, ["requiresNetwork"] = false },
-            ["inputs"] = new[] { $"retrieval/hits/{idx}" },
-            ["outputs"] = new[] { $"tool/{idx}/result.json" },
-            ["expects"] = new[] { "exitCode==0" }
+            var stepId = ComputeHashHex($"{requestHash}|{idx}|{hit.Path}")[..12];
+            var stepEvidence = new PlanStepEvidence
+            {
+                StepId = stepId,
+                HitId = hit.HitId,
+                Path = hit.Path,
+                SnippetHash = ComputeHashHex(hit.Excerpt),
+                Range = "1-*"
+            };
+            evidence.Add(stepEvidence);
+
+            return new Dictionary<string, object?>
+            {
+                ["stepId"] = stepId,
+                ["kind"] = "RunTool",
+                ["toolId"] = "linux.noop.v1",
+                ["args"] = new Dictionary<string, object?> { ["targetPath"] = hit.Path, ["requiresNetwork"] = false },
+                ["evidence"] = new[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["hitId"] = stepEvidence.HitId,
+                        ["path"] = stepEvidence.Path,
+                        ["snippetHash"] = stepEvidence.SnippetHash,
+                        ["range"] = stepEvidence.Range
+                    }
+                },
+                ["inputs"] = new[] { $"retrieval/hits/{idx}" },
+                ["outputs"] = new[] { $"tool/{idx}/result.json" },
+                ["expects"] = new[] { "exitCode==0" }
+            };
         }).OrderBy(x => x["stepId"]?.ToString(), StringComparer.Ordinal).ToArray();
 
         var basePlanObj = new Dictionary<string, object?>
@@ -1160,9 +1242,12 @@ public static class Program
 
         var semanticJson = JsonSerializer.Serialize(basePlanObj, RepoSliceJson.Options);
         var synthesizedPlanHash = ComputeHashHex(semanticJson);
+        var evidencePayload = JsonSerializer.Serialize(evidence.OrderBy(x => x.StepId, StringComparer.Ordinal).ThenBy(x => x.HitId, StringComparer.Ordinal).ToArray(), RepoSliceJson.Options);
+        var evidenceHash = ComputeHashHex(evidencePayload);
 
         var planEnvelope = new Dictionary<string, object?>(basePlanObj)
         {
+            ["evidenceHash"] = evidenceHash,
             ["planHash"] = synthesizedPlanHash
         };
 
@@ -1173,6 +1258,8 @@ public static class Program
             PlanJson = planJson,
             PlanHash = synthesizedPlanHash,
             RequestHash = requestHash,
+            EvidenceHash = evidenceHash,
+            Evidence = evidence.OrderBy(x => x.StepId, StringComparer.Ordinal).ThenBy(x => x.HitId, StringComparer.Ordinal).ToArray(),
             Stats = new PlanSynthesisStats
             {
                 RetrievedHitCount = hits.Count,

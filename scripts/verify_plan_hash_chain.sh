@@ -44,20 +44,25 @@ run_hashes="$run_dir/hashes.json"
 plan_hashes="$run_dir/plan/hashes.json"
 retrieval_hashes="$run_dir/retrieval/hashes.json"
 synthesis_result="$run_dir/plan_synthesis/result.json"
+synthesis_request="$run_dir/plan_synthesis/request.json"
 
 [[ -f "$run_hashes" ]] || fail "verify.plan_hash_chain.hashes_missing" "missing $run_hashes"
 [[ -f "$plan_hashes" ]] || fail "verify.plan_hash_chain.plan_missing" "missing $plan_hashes"
 [[ -f "$retrieval_hashes" ]] || fail "verify.plan_hash_chain.retrieval_missing" "missing $retrieval_hashes"
 
-run_plan_hash="$(read_json_field "$run_hashes" planHash)"
 run_retrieval_hash="$(read_json_field "$run_hashes" retrievalHash)"
+run_scoring_hash="$(read_json_field "$run_hashes" scoringHash)"
+run_slice_hash="$(read_json_field "$run_hashes" sliceDecisionHash)"
+run_evidence_hash="$(read_json_field "$run_hashes" evidenceHash)"
 plan_plan_hash="$(read_json_field "$plan_hashes" planHash)"
 plan_request_hash="$(read_json_field "$plan_hashes" requestHash)"
 plan_retrieval_hash="$(read_json_field "$plan_hashes" retrievalHash)"
+plan_evidence_hash="$(read_json_field "$plan_hashes" evidenceHash)"
 retrieval_request_hash="$(read_json_field "$retrieval_hashes" requestHash)"
 retrieval_hash="$(read_json_field "$retrieval_hashes" retrievalHash)"
+retrieval_scoring_hash="$(read_json_field "$retrieval_hashes" scoringHash)"
+retrieval_slice_hash="$(read_json_field "$retrieval_hashes" sliceDecisionHash)"
 
-[[ -n "$run_plan_hash" ]] || fail "verify.plan_hash_chain.run_plan_hash_missing" "planHash missing in $run_hashes"
 [[ -n "$run_retrieval_hash" ]] || fail "verify.plan_hash_chain.run_retrieval_hash_missing" "retrievalHash missing in $run_hashes"
 [[ -n "$plan_plan_hash" ]] || fail "verify.plan_hash_chain.plan_plan_hash_missing" "planHash missing in $plan_hashes"
 [[ -n "$plan_request_hash" ]] || fail "verify.plan_hash_chain.plan_request_hash_missing" "requestHash missing in $plan_hashes"
@@ -73,9 +78,25 @@ if [[ "$run_retrieval_hash" != "$retrieval_hash" ]]; then
   fail "verify.plan_hash_chain.run_retrieval_mismatch" "run retrievalHash != retrieval hash"
 fi
 
+if [[ -n "$retrieval_scoring_hash" && -n "$run_scoring_hash" && "$retrieval_scoring_hash" != "$run_scoring_hash" ]]; then
+  fail "verify.plan_hash_chain.scoring_mismatch" "run scoringHash != retrieval scoringHash"
+fi
+
+if [[ -n "$retrieval_slice_hash" && -n "$run_slice_hash" && "$retrieval_slice_hash" != "$run_slice_hash" ]]; then
+  fail "verify.plan_hash_chain.slice_decision_mismatch" "run sliceDecisionHash != retrieval sliceDecisionHash"
+fi
+
+if [[ -f "$synthesis_request" ]]; then
+  synthesis_request_retrieval_hash="$(read_json_field "$synthesis_request" retrievalHash)"
+  if [[ -n "$synthesis_request_retrieval_hash" && "$synthesis_request_retrieval_hash" != "$retrieval_hash" ]]; then
+    fail "verify.plan_hash_chain.synthesis_request_retrieval_mismatch" "synthesis request retrievalHash != retrieval hash"
+  fi
+fi
+
 if [[ -f "$synthesis_result" ]]; then
   synthesis_plan_hash="$(read_json_field "$synthesis_result" planHash)"
   synthesis_request_hash="$(read_json_field "$synthesis_result" requestHash)"
+  synthesis_evidence_hash="$(read_json_field "$synthesis_result" evidenceHash)"
 
   [[ -n "$synthesis_plan_hash" ]] || fail "verify.plan_hash_chain.synthesis_plan_hash_missing" "planHash missing in $synthesis_result"
   [[ -n "$synthesis_request_hash" ]] || fail "verify.plan_hash_chain.synthesis_request_hash_missing" "requestHash missing in $synthesis_result"
@@ -86,6 +107,14 @@ if [[ -f "$synthesis_result" ]]; then
 
   if [[ "$synthesis_request_hash" != "$plan_request_hash" ]]; then
     fail "verify.plan_hash_chain.synthesis_request_mismatch" "synthesis requestHash != plan/hashes requestHash"
+  fi
+
+  if [[ -n "$plan_evidence_hash" && -n "$synthesis_evidence_hash" && "$synthesis_evidence_hash" != "$plan_evidence_hash" ]]; then
+    fail "verify.plan_hash_chain.evidence_mismatch" "synthesis evidenceHash != plan/hashes evidenceHash"
+  fi
+
+  if [[ -z "$run_evidence_hash" && -n "$synthesis_evidence_hash" ]]; then
+    fail "verify.plan_hash_chain.run_evidence_missing" "run evidenceHash missing while synthesis evidenceHash is present"
   fi
 fi
 

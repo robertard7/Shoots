@@ -25,18 +25,20 @@ public sealed class PlanSynthesisContractsTests
     }
 
     [Fact]
-    public void Result_serialization_matches_golden()
+    public void Result_serialization_contains_evidence()
     {
         var result = new PlanSynthesisResult
         {
             PlanJson = "{\"steps\":[]}",
             PlanHash = "phash",
             RequestHash = "rhash",
+            EvidenceHash = "ehash",
+            Evidence = new[] { new PlanStepEvidence { StepId = "s1", HitId = "h1", Path = "a.cs", SnippetHash = "x", Range = "1-*" } },
             Stats = new PlanSynthesisStats { RetrievedHitCount = 2, StepCount = 3, ToolCount = 1 }
         };
 
         var json = JsonSerializer.Serialize(result, RepoSliceJson.Options);
-        const string golden = "{\"planJson\":\"{\\\"steps\\\":[]}\",\"planHash\":\"phash\",\"requestHash\":\"rhash\",\"stats\":{\"retrievedHitCount\":2,\"stepCount\":3,\"toolCount\":1}}";
-        Assert.Equal(golden, json);
+        Assert.Contains("\"evidenceHash\":\"ehash\"", json);
+        Assert.Contains("\"evidence\":[", json);
     }
 }

@@ -42,49 +42,96 @@ public sealed class RetrievalService
 
         var truncationFlags = new SortedSet<string>(slice.TruncationFlags, StringComparer.Ordinal);
         var selected = new List<RetrievalHit>();
+        var scoringTrace = new List<RetrievalScoringTrace>();
         var bytes = 0;
+        var lines = 0;
+        var tokensEstimate = 0;
+
         foreach (var hit in hits)
         {
-            if (selected.Count >= normalized.MaxFiles)
+            if (selected.Count >= normalized.Budget.MaxFiles)
             {
-                truncationFlags.Add("retrieval.cap.max_files");
+                truncationFlags.Add("retrieval.budget.exceeded.max_files");
                 break;
             }
 
             var excerpt = hit.Excerpt;
+            var excerptLines = excerpt.Length == 0 ? 0 : excerpt.Count(c => c == '\n') + 1;
+            if (excerptLines > normalized.MaxLinesPerFile)
+            {
+                excerpt = string.Join("\n", excerpt.Split('\n').Take(normalized.MaxLinesPerFile));
+                excerptLines = normalized.MaxLinesPerFile;
+                truncationFlags.Add("retrieval.budget.exceeded.max_lines_per_file");
+            }
+
             if (Encoding.UTF8.GetByteCount(excerpt) > normalized.MaxFileBytes)
             {
                 excerpt = Truncate(excerpt, normalized.MaxFileBytes) + "\n[TRUNCATED_BYTES]";
-                truncationFlags.Add("retrieval.cap.max_file_bytes");
+                excerptLines = excerpt.Count(c => c == '\n') + 1;
+                truncationFlags.Add("retrieval.budget.exceeded.max_file_bytes");
             }
 
             var excerptBytes = Encoding.UTF8.GetByteCount(excerpt);
-            if (bytes + excerptBytes > normalized.MaxTotalBytes)
+            if (bytes + excerptBytes > normalized.Budget.MaxBytes)
             {
-                truncationFlags.Add("retrieval.budget.exceeded");
+                truncationFlags.Add("retrieval.budget.exceeded.max_bytes");
+                break;
+            }
+
+            if (lines + excerptLines > normalized.Budget.MaxLines)
+            {
+                truncationFlags.Add("retrieval.budget.exceeded.max_lines");
+                break;
+            }
+
+            var tokenEstimate = Math.Max(1, excerpt.Length / 4);
+            if (normalized.Budget.MaxTokensEstimate is int maxTokens && tokensEstimate + tokenEstimate > maxTokens)
+            {
+                truncationFlags.Add("retrieval.budget.exceeded.max_tokens_estimate");
                 break;
             }
 
             bytes += excerptBytes;
+            lines += excerptLines;
+            tokensEstimate += tokenEstimate;
+
             selected.Add(hit with { Excerpt = excerpt });
+            scoringTrace.Add(new RetrievalScoringTrace
+            {
+                HitId = hit.HitId,
+                Path = hit.Path,
+                TokensMatched = hit.TokensMatched,
+                Score = hit.Score,
+                PathHash = hit.PathHash,
+                FirstMatchOffset = hit.FirstMatchOffset
+            });
         }
+
+        var hasBudgetExceeded = truncationFlags.Any(x => x.StartsWith("retrieval.budget.exceeded", StringComparison.Ordinal));
 
         return new RetrievalResult
         {
             QueryHash = normalized.ComputeQueryHash(),
             SliceHash = slice.SliceId,
             Hits = selected,
+            SliceDecisionTrace = slice.DecisionTrace,
+            ScoringTrace = scoringTrace,
             Stats = new RetrievalStats
             {
                 CandidateFiles = slice.Files.Count,
                 ReturnedFiles = selected.Count,
                 ReturnedBytes = bytes,
-                TruncationFlags = truncationFlags.ToArray()
-            }
+                BytesOut = bytes,
+                LinesOut = lines,
+                FilesOut = selected.Count,
+                TruncatedFlags = truncationFlags.ToArray()
+            },
+            ErrorCode = hasBudgetExceeded && selected.Count == 0 ? "retrieval.budget.exceeded" : null,
+            ErrorMessage = hasBudgetExceeded && selected.Count == 0 ? string.Join(",", truncationFlags.Where(x => x.StartsWith("retrieval.budget.exceeded", StringComparison.Ordinal))) : null
         }.Normalize();
     }
 
-    public static string BuildContextPack(string runId, string planHash, RetrievalResult retrieval, int maxTotalBytes)
+    public static string BuildContextPack(string runId, string planHash, RetrievalResult retrieval, ContextBudget budget)
     {
         var lines = new List<string>
         {
@@ -92,16 +139,33 @@ public sealed class RetrievalService
             $"runId: {runId}",
             $"planHash: {planHash}",
             $"retrievalHash: {ComputeRetrievalHash(retrieval)}",
-            $"budget.maxTotalBytes: {maxTotalBytes}",
+            $"budget.maxBytes: {budget.MaxBytes}",
+            $"budget.maxLines: {budget.MaxLines}",
+            $"budget.maxFiles: {budget.MaxFiles}",
+            $"budget.maxTokensEstimate: {(budget.MaxTokensEstimate?.ToString() ?? "none")}",
             string.Empty
         };
 
         foreach (var hit in retrieval.Hits)
         {
-            lines.Add($"### file: {hit.Path}");
+            lines.Add($"--- file: {hit.Path}");
             lines.Add($"score: {hit.Score}");
+            lines.Add($"tokensMatched: {hit.TokensMatched}");
+            lines.Add($"tieBreak: pathHash={hit.PathHash};offset={hit.FirstMatchOffset}");
             lines.Add($"reason: {string.Join(',', hit.ReasonCodes.OrderBy(x => x, StringComparer.Ordinal))}");
-            lines.Add(hit.Excerpt);
+            var i = 1;
+            foreach (var line in hit.Excerpt.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+            {
+                lines.Add($"{i:00000}: {line}");
+                i++;
+            }
+
+            if (hit.Excerpt.Contains("[TRUNCATED_BYTES]", StringComparison.Ordinal))
+            {
+                lines.Add("TRUNCATED: max_file_bytes");
+            }
+
+            lines.Add("--- endfile");
             lines.Add(string.Empty);
         }
 
@@ -143,6 +207,8 @@ public sealed class RetrievalService
             ErrorCode = code,
             ErrorMessage = message,
             Hits = Array.Empty<RetrievalHit>(),
+            SliceDecisionTrace = Array.Empty<RepoSliceDecision>(),
+            ScoringTrace = Array.Empty<RetrievalScoringTrace>(),
             Stats = new RetrievalStats()
         };
 }

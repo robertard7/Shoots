@@ -41,6 +41,9 @@ max_narration_bytes="${MAX_NARRATION_BYTES:-262144}"
 max_plan_synthesis_bytes="${MAX_PLAN_SYNTHESIS_BYTES:-262144}"
 max_plan_bytes="${MAX_PLAN_BYTES:-262144}"
 max_retrieval_hits_bytes="${MAX_RETRIEVAL_HITS_BYTES:-262144}"
+max_scoring_bytes="${MAX_SCORING_BYTES:-262144}"
+max_slice_decisions_bytes="${MAX_SLICE_DECISIONS_BYTES:-262144}"
+max_plan_evidence_bytes="${MAX_PLAN_EVIDENCE_BYTES:-262144}"
 
 context_pack="$run_dir/retrieval/context_pack.txt"
 if [[ -f "$context_pack" ]]; then
@@ -71,6 +74,31 @@ if [[ -f "$plan_json" ]]; then
   plan_size="$(wc -c < "$plan_json")"
   if (( plan_size > max_plan_bytes )); then
     fail "verify.budget.plan_exceeded" "$plan_json exceeds ${max_plan_bytes} bytes"
+  fi
+fi
+
+
+scoring_file="$run_dir/retrieval/scoring.ndjson"
+if [[ -f "$scoring_file" ]]; then
+  scoring_size="$(wc -c < "$scoring_file")"
+  if (( scoring_size > max_scoring_bytes )); then
+    fail "verify.budget.scoring_exceeded" "$scoring_file exceeds ${max_scoring_bytes} bytes"
+  fi
+fi
+
+slice_decisions="$run_dir/slice/decisions.ndjson"
+if [[ -f "$slice_decisions" ]]; then
+  slice_decisions_size="$(wc -c < "$slice_decisions")"
+  if (( slice_decisions_size > max_slice_decisions_bytes )); then
+    fail "verify.budget.slice_decisions_exceeded" "$slice_decisions exceeds ${max_slice_decisions_bytes} bytes"
+  fi
+fi
+
+plan_evidence="$run_dir/plan_synthesis/evidence.ndjson"
+if [[ -f "$plan_evidence" ]]; then
+  plan_evidence_size="$(wc -c < "$plan_evidence")"
+  if (( plan_evidence_size > max_plan_evidence_bytes )); then
+    fail "verify.budget.plan_evidence_exceeded" "$plan_evidence exceeds ${max_plan_evidence_bytes} bytes"
   fi
 fi
 

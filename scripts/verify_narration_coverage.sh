@@ -47,14 +47,15 @@ run_required = [
     'startup.begin','startup.end',
     'retrieval.begin','retrieval.result',
     'builder.synthesis.start','builder.synthesis.end',
-    'builder.execute.start','builder.execute.end'
+    'builder.execute.start','builder.execute.end',
+    'builder.decision.selected_steps','builder.decision.skipped_steps','builder.decision.context_budget'
 ]
 replay_required = ['replay.begin', 'replay.inputs', 'replay.hash.compare', 'replay.result']
 
 if any(code in codes for code in run_required):
     missing = [c for c in run_required if c not in codes]
     if missing:
-        print(f"verify.narration.required_missing: {','.join(missing)}")
+        print(f"verify.narration.missing_required: {','.join(missing)}")
         raise SystemExit(1)
 
     step_begin = sum(1 for c in codes if c == 'execute.step.begin')

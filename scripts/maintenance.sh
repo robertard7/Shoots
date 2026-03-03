@@ -275,6 +275,24 @@ if [[ "$RUN_TESTS" == "1" ]]; then
     set_error_code tests
   fi
 
+  echo "==> Verifying slice decisions"
+  run_and_capture "$tests_log" bash scripts/verify_slice_decisions.sh
+  slice_decisions_status=$?
+  if [[ "$slice_decisions_status" -ne 0 ]]; then
+    tests_status=$slice_decisions_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying plan evidence"
+  run_and_capture "$tests_log" bash scripts/verify_plan_evidence.sh
+  plan_evidence_status=$?
+  if [[ "$plan_evidence_status" -ne 0 ]]; then
+    tests_status=$plan_evidence_status
+    overall_status=1
+    set_error_code tests
+  fi
+
   echo "==> Verifying plan hash chain"
   run_and_capture "$tests_log" bash scripts/verify_plan_hash_chain.sh
   plan_hash_chain_status=$?

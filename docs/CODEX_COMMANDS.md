@@ -22,6 +22,9 @@ Additional supported commands:
 12. `bash scripts/verify_artifact_budgets.sh`
 13. `bash scripts/verify_narration_coverage.sh`
 14. `bash scripts/verify_no_flaky_tests.sh`
+15. `bash scripts/verify_slice_decisions.sh`
+16. `bash scripts/verify_plan_evidence.sh`
+17. `bash scripts/verify_smoke_stamp.sh`
 
 ## Failure Triage Order
 
@@ -59,3 +62,16 @@ Always read failures in this exact order:
 - `artifacts/**/*.log`
 - `artifacts/**/*.trx`
 - `.state/runs/`
+
+
+## Smoke Stamp Artifacts
+
+`bash scripts/codex_ci_smoke.sh` writes deterministic provenance files:
+
+- `artifacts/smoke/version.txt`
+- `artifacts/smoke/command.txt`
+- `artifacts/smoke/env.txt`
+
+Use `bash scripts/verify_smoke_stamp.sh` to enforce presence/non-empty values.
+
+For successful-run triage on Windows, use `scripts/open_latest_run.ps1`.

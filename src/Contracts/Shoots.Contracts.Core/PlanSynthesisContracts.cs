@@ -30,6 +30,15 @@ public sealed record PlanSynthesisRequest
     }
 }
 
+public sealed record PlanStepEvidence
+{
+    public string StepId { get; init; } = string.Empty;
+    public string HitId { get; init; } = string.Empty;
+    public string Path { get; init; } = string.Empty;
+    public string SnippetHash { get; init; } = string.Empty;
+    public string Range { get; init; } = string.Empty;
+}
+
 public sealed record PlanSynthesisStats
 {
     public int RetrievedHitCount { get; init; }
@@ -42,5 +51,7 @@ public sealed record PlanSynthesisResult
     public string PlanJson { get; init; } = string.Empty;
     public string PlanHash { get; init; } = string.Empty;
     public string RequestHash { get; init; } = string.Empty;
+    public string EvidenceHash { get; init; } = string.Empty;
+    public IReadOnlyList<PlanStepEvidence> Evidence { get; init; } = Array.Empty<PlanStepEvidence>();
     public PlanSynthesisStats Stats { get; init; } = new();
 }

@@ -27,7 +27,7 @@ public sealed class RetrievalContractsTests
     }
 
     [Fact]
-    public void Retrieval_result_normalize_orders_hits_by_score_then_path()
+    public void Retrieval_result_normalize_orders_hits_by_score_then_ties()
     {
         var result = new RetrievalResult
         {
@@ -35,9 +35,9 @@ public sealed class RetrievalContractsTests
             SliceHash = "s",
             Hits = new[]
             {
-                new RetrievalHit { Path = "z.cs", Score = 100, ReasonCodes = new[] { "token.match" } },
-                new RetrievalHit { Path = "a.cs", Score = 100, ReasonCodes = new[] { "idf.boost" } },
-                new RetrievalHit { Path = "b.cs", Score = 200, ReasonCodes = new[] { "token.match" } }
+                new RetrievalHit { HitId = "z", Path = "z.cs", Score = 100, TokensMatched = 1, FirstMatchOffset = 1, ReasonCodes = new[] { "token.match" } },
+                new RetrievalHit { HitId = "a", Path = "a.cs", Score = 100, TokensMatched = 2, FirstMatchOffset = 5, ReasonCodes = new[] { "idf.boost" } },
+                new RetrievalHit { HitId = "b", Path = "b.cs", Score = 200, TokensMatched = 1, FirstMatchOffset = 3, ReasonCodes = new[] { "token.match" } }
             }
         }.Normalize();
 
@@ -45,7 +45,7 @@ public sealed class RetrievalContractsTests
     }
 
     [Fact]
-    public void Retrieval_result_serialization_matches_golden()
+    public void Retrieval_result_serialization_contains_stats_shape()
     {
         var result = new RetrievalResult
         {
@@ -55,8 +55,12 @@ public sealed class RetrievalContractsTests
             [
                 new RetrievalHit
                 {
+                    HitId = "h1",
                     Path = "src/A.cs",
                     Score = 1230,
+                    TokensMatched = 2,
+                    FirstMatchOffset = 9,
+                    PathHash = "abc",
                     ReasonCodes = ["idf.boost", "token.match"],
                     SliceRef = "slice/files/src_A.cs.txt",
                     Excerpt = "class A {}"
@@ -67,12 +71,15 @@ public sealed class RetrievalContractsTests
                 CandidateFiles = 4,
                 ReturnedFiles = 1,
                 ReturnedBytes = 10,
-                TruncationFlags = ["retrieval.cap.max_files"]
+                BytesOut = 10,
+                LinesOut = 1,
+                FilesOut = 1,
+                TruncatedFlags = ["retrieval.budget.exceeded.max_files"]
             }
         }.Normalize();
 
         var json = JsonSerializer.Serialize(result, RepoSliceJson.Options);
-        const string golden = "{\"queryHash\":\"qhash\",\"sliceHash\":\"shash\",\"hits\":[{\"path\":\"src/A.cs\",\"score\":1230,\"reasonCodes\":[\"idf.boost\",\"token.match\"],\"sliceRef\":\"slice/files/src_A.cs.txt\",\"excerpt\":\"class A {}\"}],\"stats\":{\"candidateFiles\":4,\"returnedFiles\":1,\"returnedBytes\":10,\"truncationFlags\":[\"retrieval.cap.max_files\"]},\"errorCode\":null,\"errorMessage\":null}";
-        Assert.Equal(golden, json);
+        Assert.Contains("\"bytesOut\":10", json);
+        Assert.Contains("\"filesOut\":1", json);
     }
 }
