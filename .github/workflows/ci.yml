@@ -125,6 +125,11 @@ for key in ['runId','planHash','providerHash','envHash']:
         raise SystemExit(f'mismatch for {key}: {actual.get(key)} != {expected.get(key)}')
 PYCHK
 
+      - name: Codex entrypoint all
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/codex_entrypoint.sh --all
+
       - name: Write CI first-failure summary (always)
         if: always()
         shell: bash
@@ -160,6 +165,7 @@ PYCHK
             artifacts/**/ci-first-failure.md
             artifacts/builder_loop/**
             artifacts/golden/**
+            .state/runs/**
             etc/tools.catalog.json
           if-no-files-found: warn
 
@@ -181,6 +187,9 @@ PYCHK
           Write-Host "PowerShell edition: $($PSVersionTable.PSEdition)"
           if (-not $IsWindows) { throw "This job must run on Windows." }
           if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) { throw "pwsh is required but not found." }
+
+      - name: Runner health
+        run: ./scripts/runner_health.ps1
 
       - name: Verify provider adapter naming
         run: ./scripts/verify_provideradapter_naming.ps1
@@ -392,6 +401,9 @@ PYCHK
           Write-Host "PowerShell edition: $($PSVersionTable.PSEdition)"
           if (-not $IsWindows) { throw "This job must run on Windows." }
           if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) { throw "pwsh is required but not found." }
+
+      - name: Runner health
+        run: ./scripts/runner_health.ps1
 
       - name: Verify provider adapter naming
         run: ./scripts/verify_provideradapter_naming.ps1
