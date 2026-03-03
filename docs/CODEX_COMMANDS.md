@@ -18,6 +18,7 @@ Additional supported commands:
 8. `SOLUTION_PATH=<path-to-sln> bash scripts/maintenance.sh`
 9. `bash scripts/verify_no_blocking_stubs.sh`
 10. `bash scripts/verify_diagnostics_order.sh`
+11. `bash scripts/verify_step_envelopes.sh`
 
 ## Command Matrix
 
@@ -34,6 +35,7 @@ Additional supported commands:
 | `SOLUTION_PATH=<path-to-sln> bash scripts/maintenance.sh` | `0` success; non-zero on restore/build/test failure for selected solution. | `artifacts/maintenance/`, `artifacts/**/*.log` | 1) `artifacts/maintenance/failure-fingerprint.json` 2) newest `artifacts/**/*.log` |
 | `bash scripts/verify_no_blocking_stubs.sh` | `0` when no bucket-1 stubs; non-zero when bucket-1 stubs exist. | `artifacts/stubs/` | 1) `artifacts/stubs/bucket-1.ndjson` 2) `artifacts/stubs/triage.md` 3) `artifacts/stubs/stubs.txt` |
 | `bash scripts/verify_diagnostics_order.sh` | `0` when codex diagnostics order is canonical; non-zero when drift is detected. | `scripts/codex_entrypoint.sh` | 1) update `print_diagnostics` ordering in `scripts/codex_entrypoint.sh` |
+| `bash scripts/verify_step_envelopes.sh` | `0` when each `steps/<stepId>/` envelope is complete and bounded; non-zero on missing/oversized files. | `.state/runs/**` or `artifacts/builder_loop/**/run/*` | 1) check `steps/*/{request,result,stdout,stderr,exit,hashes}` 2) verify step artifact size limits |
 
 ## Artifact Roots
 

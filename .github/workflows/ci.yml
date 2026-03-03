@@ -103,6 +103,11 @@ jobs:
         shell: bash
         run: bash scripts/builder_loop.sh
 
+      - name: Verify step envelopes
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_step_envelopes.sh --require-run
+
       - name: Golden builder replay check
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash

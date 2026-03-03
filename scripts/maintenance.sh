@@ -202,6 +202,15 @@ if [[ "$RUN_TESTS" == "1" ]]; then
     set_error_code tests
   fi
 
+  echo "==> Verifying step envelopes"
+  run_and_capture "$tests_log" bash scripts/verify_step_envelopes.sh
+  step_envelope_status=$?
+  if [[ "$step_envelope_status" -ne 0 ]]; then
+    tests_status=$step_envelope_status
+    overall_status=1
+    set_error_code tests
+  fi
+
   echo "==> Testing solution ($CONFIGURATION)"
   if [[ "$overall_status" -eq 0 ]]; then
     run_and_capture "$tests_log" dotnet test "$SOLUTION_PATH" -c "$CONFIGURATION" --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts/maintenance/tests-${stamp}.trx"
