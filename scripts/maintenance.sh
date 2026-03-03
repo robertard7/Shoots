@@ -212,15 +212,6 @@ else
 fi
 
 if [[ "$RUN_TESTS" == "1" ]]; then
-  echo "==> Verifying blocking stubs"
-  run_and_capture "$tests_log" bash scripts/verify_no_blocking_stubs.sh
-  stub_status=$?
-  if [[ "$stub_status" -ne 0 ]]; then
-    tests_status=$stub_status
-    overall_status=1
-    set_error_code tests
-  fi
-
   echo "==> Verifying codex diagnostics order"
   run_and_capture "$tests_log" bash scripts/verify_diagnostics_order.sh
   diagnostics_status=$?
@@ -230,11 +221,38 @@ if [[ "$RUN_TESTS" == "1" ]]; then
     set_error_code tests
   fi
 
+  echo "==> Verifying blocking stubs"
+  run_and_capture "$tests_log" bash scripts/verify_no_blocking_stubs.sh
+  stub_status=$?
+  if [[ "$stub_status" -ne 0 ]]; then
+    tests_status=$stub_status
+    overall_status=1
+    set_error_code tests
+  fi
+
   echo "==> Verifying step envelopes"
   run_and_capture "$tests_log" bash scripts/verify_step_envelopes.sh
   step_envelope_status=$?
   if [[ "$step_envelope_status" -ne 0 ]]; then
     tests_status=$step_envelope_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying artifact budgets"
+  run_and_capture "$tests_log" bash scripts/verify_artifact_budgets.sh
+  artifact_budget_status=$?
+  if [[ "$artifact_budget_status" -ne 0 ]]; then
+    tests_status=$artifact_budget_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying narration coverage"
+  run_and_capture "$tests_log" bash scripts/verify_narration_coverage.sh
+  narration_coverage_status=$?
+  if [[ "$narration_coverage_status" -ne 0 ]]; then
+    tests_status=$narration_coverage_status
     overall_status=1
     set_error_code tests
   fi

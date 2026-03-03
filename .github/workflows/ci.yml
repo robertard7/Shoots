@@ -66,13 +66,13 @@ jobs:
         shell: bash
         run: bash scripts/verify_no_spin_timeouts.sh
 
-      - name: Verify no blocking stubs
-        shell: bash
-        run: bash scripts/verify_no_blocking_stubs.sh
-
       - name: Verify codex diagnostics order
         shell: bash
         run: bash scripts/verify_diagnostics_order.sh
+
+      - name: Verify no blocking stubs
+        shell: bash
+        run: bash scripts/verify_no_blocking_stubs.sh
 
       - name: Restore Runtime
         shell: bash
@@ -107,6 +107,16 @@ jobs:
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
         run: bash scripts/verify_step_envelopes.sh --require-run
+
+      - name: Verify artifact budgets
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_artifact_budgets.sh
+
+      - name: Verify narration coverage
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_narration_coverage.sh
 
       - name: Verify UI contracts
         if: env.RUN_TESTS_LINUX == '1'
