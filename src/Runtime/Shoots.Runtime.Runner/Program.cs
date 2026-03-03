@@ -237,6 +237,7 @@ static async Task<int> RunScenarioAsync(string[] args)
         var stepEvents = new List<object>();
         var stepSummaries = new List<Dictionary<string, string>>();
         var retrievalHash = string.Empty;
+        RetrievalResult? retrievalResult = null;
         var planSteps = ResolveSteps(planDoc.RootElement, planHash);
 
         if (!ValidateResolvedSteps(planDoc.RootElement, envDescriptorDoc.RootElement, planSteps, out var validationErrorCode, out var validationSummary, out var validationDetails))
@@ -322,6 +323,7 @@ static async Task<int> RunScenarioAsync(string[] args)
 
                 var retrievalService = new RetrievalService();
                 var retrieval = retrievalService.Retrieve(request).Normalize();
+                retrievalResult = retrieval;
                 if (!string.IsNullOrWhiteSpace(retrieval.ErrorCode))
                 {
                     EmitFailure(narrator, "retrieval", "retrieval.error", "Retrieval step failed", runId, planHash, providerHash, envHash, refs, step.StepId, details: retrieval.ErrorCode + ";" + retrieval.ErrorMessage);
@@ -362,6 +364,46 @@ static async Task<int> RunScenarioAsync(string[] args)
                 Emit(narrator, "retrieval", "retrieval.pack.done", "Built retrieval context pack", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["retrievalHash"] = retrievalHash }));
             }
 
+            if (step.Kind == "synthesize_plan.v1")
+            {
+                Emit(narrator, "builder", "builder.synthesis.start", "Starting plan synthesis", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["retrievalHash"] = retrievalHash }));
+
+                if (retrievalResult is null || string.IsNullOrWhiteSpace(retrievalHash))
+                {
+                    EmitFailure(narrator, "builder", "builder.synthesis.failed", "Synthesis requires retrieval result", runId, planHash, providerHash, envHash, refs, step.StepId);
+                    return ExitCodes.PlanInvalid;
+                }
+
+                var synthRoot = Path.Combine(runDir, "plan_synthesis");
+                var planRoot = Path.Combine(runDir, "plan");
+                Directory.CreateDirectory(synthRoot);
+                Directory.CreateDirectory(planRoot);
+
+                var request = new PlanSynthesisRequest
+                {
+                    PlanKind = GetArgString(step.Args, "planKind", "builder_v1"),
+                    RetrievalHash = retrievalHash,
+                    ProviderKind = providerKind,
+                    EnvironmentKind = envId,
+                    Constraints = new[] { "deterministic=true", "network=off" },
+                    ProjectRoot = RelativePath(root, project)
+                };
+
+                var synthesis = SynthesizePlanV1(request, retrievalResult.Hits);
+                await File.WriteAllTextAsync(Path.Combine(synthRoot, "request.json"), JsonSerializer.Serialize(request.Normalize(), RepoSliceJson.Options)).ConfigureAwait(false);
+                await File.WriteAllTextAsync(Path.Combine(synthRoot, "result.json"), JsonSerializer.Serialize(synthesis, RepoSliceJson.Options)).ConfigureAwait(false);
+                await File.WriteAllTextAsync(Path.Combine(planRoot, "plan.json"), synthesis.PlanJson).ConfigureAwait(false);
+                var planHashes = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["requestHash"] = synthesis.RequestHash,
+                    ["retrievalHash"] = retrievalHash,
+                    ["planHash"] = synthesis.PlanHash
+                };
+                await File.WriteAllTextAsync(Path.Combine(planRoot, "hashes.json"), JsonSerializer.Serialize(planHashes, JsonOptions())).ConfigureAwait(false);
+
+                Emit(narrator, "builder", "builder.synthesis.end", "Plan synthesis completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["synthPlanHash"] = synthesis.PlanHash }));
+            }
+
             Emit(narrator, "execute", "execute.step.end", "Step completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["stepKind"] = step.Kind }));
             stepEvents.Add(new { step.StepId, kind = step.Kind, toolId = step.ToolId, status = "completed" });
             stepSummaries.Add(new Dictionary<string, string>(StringComparer.Ordinal)
@@ -371,7 +413,7 @@ static async Task<int> RunScenarioAsync(string[] args)
                 ["expects"] = "status=completed",
                 ["inputs"] = "plan/provider/env",
                 ["kind"] = step.Kind,
-                ["outputs"] = string.Equals(step.Kind, "retrieve_context.v1", StringComparison.Ordinal) ? "retrieval" : $"tool/{step.StepId}",
+                ["outputs"] = string.Equals(step.Kind, "retrieve_context.v1", StringComparison.Ordinal) ? "retrieval" : string.Equals(step.Kind, "synthesize_plan.v1", StringComparison.Ordinal) ? "plan_synthesis,plan" : $"tool/{step.StepId}",
                 ["status"] = "completed",
                 ["stepId"] = step.StepId,
                 ["toolId"] = step.ToolId
@@ -421,6 +463,10 @@ static async Task<int> RunScenarioAsync(string[] args)
             outputManifest.Add("retrieval/hits.ndjson");
             outputManifest.Add("retrieval/context_pack.txt");
             outputManifest.Add("retrieval/hashes.json");
+            outputManifest.Add("plan_synthesis/request.json");
+            outputManifest.Add("plan_synthesis/result.json");
+            outputManifest.Add("plan/plan.json");
+            outputManifest.Add("plan/hashes.json");
         }
         var outputManifestHash = ComputeHashHex(string.Join("\n", outputManifest));
 
@@ -625,7 +671,7 @@ static void EmitFailure(INarrator narrator, string phase, string errorCode, stri
 
 static string RelativePath(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');
 
-static string BaseArtifactRefs() => "json:run.json,json:hashes.json,json:result.json,ndjson:trace/events.ndjson,ndjson:narration/events.ndjson,json:retrieval/result.json,txt:retrieval/context_pack.txt";
+static string BaseArtifactRefs() => "json:run.json,json:hashes.json,json:result.json,ndjson:trace/events.ndjson,ndjson:narration/events.ndjson,json:retrieval/result.json,txt:retrieval/context_pack.txt,json:plan_synthesis/result.json,json:plan/plan.json";
 
 static Dictionary<string, string> IdentityData(string runId, string planHash, string providerHash, string envHash, string artifactRefs) => new(StringComparer.Ordinal)
 {
@@ -828,6 +874,53 @@ static HashSet<string> LoadEnvironmentCapabilities(JsonElement envDescriptor, ou
     return capabilities;
 }
 
+
+static PlanSynthesisResult SynthesizePlanV1(PlanSynthesisRequest request, IReadOnlyList<RetrievalHit> hits)
+{
+    var normalized = request.Normalize();
+    var requestHash = normalized.ComputeRequestHash();
+    var selected = hits.OrderByDescending(h => h.Score).ThenBy(h => h.Path, StringComparer.Ordinal).Take(3).ToArray();
+
+    var steps = selected.Select((hit, idx) => new Dictionary<string, object?>
+    {
+        ["stepId"] = ComputeHashHex($"{requestHash}|{idx}|{hit.Path}")[..12],
+        ["kind"] = "RunTool",
+        ["toolId"] = "linux.noop.v1",
+        ["args"] = new Dictionary<string, object?> { ["targetPath"] = hit.Path, ["requiresNetwork"] = false },
+        ["inputs"] = new[] { $"retrieval/hits/{idx}" },
+        ["outputs"] = new[] { $"tool/{idx}/result.json" },
+        ["expects"] = new[] { "exitCode==0" }
+    }).ToArray();
+
+    var planObj = new Dictionary<string, object?>
+    {
+        ["schemaVersion"] = 1,
+        ["planKind"] = normalized.PlanKind,
+        ["retrievalHash"] = normalized.RetrievalHash,
+        ["requestHash"] = requestHash,
+        ["providerKind"] = normalized.ProviderKind,
+        ["environmentKind"] = normalized.EnvironmentKind,
+        ["projectRoot"] = normalized.ProjectRoot,
+        ["steps"] = steps
+    };
+
+    var planJson = JsonSerializer.Serialize(planObj, RepoSliceJson.Options);
+    var synthesizedPlanHash = ComputeHashHex(planJson);
+
+    return new PlanSynthesisResult
+    {
+        PlanJson = planJson,
+        PlanHash = synthesizedPlanHash,
+        RequestHash = requestHash,
+        Stats = new PlanSynthesisStats
+        {
+            RetrievedHitCount = hits.Count,
+            StepCount = steps.Length,
+            ToolCount = steps.Select(x => x["toolId"]?.ToString() ?? string.Empty).Distinct(StringComparer.Ordinal).Count()
+        }
+    };
+}
+
 static string BuildRunSummary(string runId, string planHash, string providerHash, string envHash, IReadOnlyList<Dictionary<string, string>> stepSummaries)
 {
     var lines = new List<string>
@@ -881,7 +974,8 @@ static class StepKinds
         ["RunTool"] = new[] { "process" },
         ["Verify"] = new[] { "verify" },
         ["EmitArtifact"] = new[] { "filesystem" },
-        ["retrieve_context.v1"] = new[] { "retrieval.lexical" }
+        ["retrieve_context.v1"] = new[] { "retrieval.lexical" },
+        ["synthesize_plan.v1"] = new[] { "planner" }
     };
 
     public static bool IsSupportedInEnvironment(string kind, HashSet<string> capabilities)

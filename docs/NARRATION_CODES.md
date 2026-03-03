@@ -29,4 +29,7 @@
 | `retrieval.pack.start` | retrieval | info | Retrieval hit summary | run folder + context pack | inspect path/score/reasons |
 | `retrieval.pack.done` | retrieval | info | Built retrieval context pack | run folder + context pack | inspect truncation markers |
 | `retrieval.error` | retrieval | error | Retrieval failed | run folder + retrieval artifacts | inspect retrieval error code and message |
-| `error` | startup/plan/provider/env/execute/tool/finalize/replay/retrieval | error | Failure | run folder + failing artifact refs | open `failure-fingerprint.json` then narration tail |
+| `builder.synthesis.start` | builder | info | Starting plan synthesis | run folder + plan synthesis request | inspect retrievalHash and constraints |
+| `builder.synthesis.end` | builder | info | Plan synthesis completed | run folder + synthesized plan | inspect synthesized planHash and steps |
+| `builder.synthesis.failed` | builder | error | Plan synthesis failed | run folder + synthesis artifacts | inspect retrieval prerequisites and request hash |
+| `error` | startup/plan/provider/env/execute/tool/finalize/replay/retrieval/builder | error | Failure | run folder + failing artifact refs | open `failure-fingerprint.json` then narration tail |

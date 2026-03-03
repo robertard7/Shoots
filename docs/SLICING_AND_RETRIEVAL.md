@@ -76,3 +76,29 @@ Artifacts produced by retrieval runner step:
 - `retrieval/hits.ndjson`
 - `retrieval/context_pack.txt`
 - `retrieval/hashes.json`
+
+## Context Pack Stability
+
+`retrieval/context_pack.txt` is treated as a stable operator artifact.
+
+Format order is fixed:
+
+1. `# Context Pack` header
+2. `runId`
+3. `planHash`
+4. `retrievalHash`
+5. `budget.maxTotalBytes`
+6. blank line
+7. repeated file sections sorted by retrieval ordering
+
+Per-file section format:
+
+- `### file: <path>`
+- `score: <fixed-point-int-score>`
+- `reason: <comma-separated reason codes, sorted>`
+- excerpt body
+
+Truncation markers are stable when applied:
+
+- `[TRUNCATED_BYTES]`
+- `[TRUNCATED_LINES]`
