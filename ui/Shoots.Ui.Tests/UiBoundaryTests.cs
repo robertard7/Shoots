@@ -278,8 +278,8 @@ public sealed class UiBoundaryTests
         var loaded = store.LoadRecentWorkspaces().ToList();
 
         Assert.Equal(2, loaded.Count);
-        Assert.Equal("Beta", loaded[0].Name);
-        Assert.Equal("Alpha", loaded[1].Name);
+        Assert.Equal("Alpha", loaded[0].Name);
+        Assert.Equal("Beta", loaded[1].Name);
     }
 
     // Language hygiene guard: UI strings stay descriptive.

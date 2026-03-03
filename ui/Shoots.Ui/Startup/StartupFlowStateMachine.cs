@@ -12,6 +12,10 @@ public sealed class StartupFlowStateMachine
 
     public string? Description { get; private set; }
 
+    public string? ProviderKind { get; private set; }
+
+    public string? EnvironmentId { get; private set; }
+
     public string? ExistingProjectPath { get; private set; }
 
     public bool TryBeginNewProject(out string? error)
@@ -84,6 +88,34 @@ public sealed class StartupFlowStateMachine
         }
 
         Description = description;
+        State = StartupFlowState.StartNewProvider;
+        error = null;
+        return true;
+    }
+
+    public bool TrySetProviderKind(string providerKind, out string? error)
+    {
+        if (State != StartupFlowState.StartNewProvider)
+        {
+            error = "Provider selection is not active.";
+            return false;
+        }
+
+        ProviderKind = providerKind;
+        State = StartupFlowState.StartNewEnvironment;
+        error = null;
+        return true;
+    }
+
+    public bool TrySetEnvironmentId(string environmentId, out string? error)
+    {
+        if (State != StartupFlowState.StartNewEnvironment)
+        {
+            error = "Environment selection is not active.";
+            return false;
+        }
+
+        EnvironmentId = environmentId;
         State = StartupFlowState.StartNewConfirm;
         error = null;
         return true;
@@ -123,6 +155,8 @@ public sealed class StartupFlowStateMachine
         SelectedLanguage = null;
         ProjectName = null;
         Description = null;
+        ProviderKind = null;
+        EnvironmentId = null;
         ExistingProjectPath = null;
     }
 }

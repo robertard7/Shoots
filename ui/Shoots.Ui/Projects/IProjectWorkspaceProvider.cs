@@ -107,7 +107,9 @@ public sealed class ProjectWorkspaceProvider : IProjectWorkspaceProvider
 
         _recentWorkspaces.Clear();
         _recentWorkspaces.AddRange(_store.LoadRecentWorkspaces()
-            .OrderByDescending(workspace => workspace.LastOpenedUtc));
+            .OrderBy(workspace => workspace.Name, StringComparer.Ordinal)
+            .ThenBy(workspace => workspace.ProjectId ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(workspace => workspace.RootPath, StringComparer.Ordinal));
         _activeWorkspace = _recentWorkspaces.FirstOrDefault();
         _isLoaded = true;
     }

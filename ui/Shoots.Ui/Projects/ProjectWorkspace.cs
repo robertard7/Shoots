@@ -9,5 +9,10 @@ public sealed record ProjectWorkspace(
     UiToolpackTier AllowedTier = UiToolpackTier.Public,
     IReadOnlyList<UiToolpackCapability>? AllowedCapabilities = null,
     string? RootFsId = null,
-    string? RootFsSourceOverride = null
+    string? RootFsSourceOverride = null,
+    string? ProjectId = null,
+    DateTimeOffset? CreatedUtc = null,
+    string? SelectedEnvironmentId = null,
+    string? SelectedProviderKind = null,
+    string? SelectedProviderEndpoint = null
 );
