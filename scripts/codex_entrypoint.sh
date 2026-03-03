@@ -36,6 +36,7 @@ run_builder() {
 
 run_stubs() {
   bash scripts/find_stubs.sh
+  bash scripts/triage_stubs.sh
 }
 
 run_default() {

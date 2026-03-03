@@ -66,6 +66,10 @@ jobs:
         shell: bash
         run: bash scripts/verify_no_spin_timeouts.sh
 
+      - name: Verify no blocking stubs
+        shell: bash
+        run: bash scripts/verify_no_blocking_stubs.sh
+
       - name: Restore Runtime
         shell: bash
         run: dotnet restore src/Runtime/Shoots.Runtime.sln

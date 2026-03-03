@@ -10,6 +10,7 @@
 6. `RUN_TESTS=1 bash scripts/maintenance.sh`
 7. `CONFIGURATION=Debug bash scripts/maintenance.sh`
 8. `SOLUTION_PATH=<path-to-sln> bash scripts/maintenance.sh`
+9. `bash scripts/verify_no_blocking_stubs.sh`
 
 ## Command Matrix
 
@@ -23,6 +24,7 @@
 | `RUN_TESTS=1 bash scripts/maintenance.sh` | `0` success; non-zero on restore/build/test failure. | `artifacts/maintenance/`, `artifacts/**/*.log`, `artifacts/**/*.trx` | 1) `artifacts/maintenance/failure-fingerprint.json` 2) newest `artifacts/**/*.log` |
 | `CONFIGURATION=Debug bash scripts/maintenance.sh` | `0` success; non-zero on restore/build/test failure. | `artifacts/maintenance/`, `artifacts/**/*.log` | 1) `artifacts/maintenance/failure-fingerprint.json` 2) newest `artifacts/**/*.log` |
 | `SOLUTION_PATH=<path-to-sln> bash scripts/maintenance.sh` | `0` success; non-zero on restore/build/test failure for selected solution. | `artifacts/maintenance/`, `artifacts/**/*.log` | 1) `artifacts/maintenance/failure-fingerprint.json` 2) newest `artifacts/**/*.log` |
+| `bash scripts/verify_no_blocking_stubs.sh` | `0` when no bucket-1 stubs; non-zero when bucket-1 stubs exist. | `artifacts/stubs/` | 1) `artifacts/stubs/bucket-1.ndjson` 2) `artifacts/stubs/triage.md` 3) `artifacts/stubs/stubs.txt` |
 
 ## Artifact Roots
 
