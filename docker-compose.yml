@@ -3,7 +3,6 @@ name: shoots
 services:
   # -------------------------
   # Linux runner (optional)
-  # A stable place to run Linux tools from Windows.
   # -------------------------
   runner:
     image: ubuntu:24.04
@@ -33,9 +32,7 @@ services:
     restart: unless-stopped
 
   # -------------------------
-  # One-shot model pull (run manually)
-  # Usage:
-  #   docker compose --profile ai run --rm ollama-pull
+  # One-shot model pull (manual)
   # -------------------------
   ollama-pull:
     image: ollama/ollama:0.17.5
@@ -52,7 +49,6 @@ services:
       - |
         set -e
         sleep 2
-        ollama pull qwen2.5:0.5b-instruct
         ollama pull qwen2.5:7b-instruct
         ollama pull nomic-embed-text
         echo "done"
