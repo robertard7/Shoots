@@ -28,20 +28,30 @@ public sealed class PlanSynthesizerV1
             ["expects"] = new[] { "exitCode==0" }
         }).ToArray();
 
-        var planObj = new Dictionary<string, object?>
+        var basePlan = new Dictionary<string, object?>
         {
             ["schemaVersion"] = 1,
             ["planKind"] = normalized.PlanKind,
-            ["retrievalHash"] = normalized.RetrievalHash,
-            ["requestHash"] = requestHash,
-            ["providerKind"] = normalized.ProviderKind,
-            ["environmentKind"] = normalized.EnvironmentKind,
-            ["projectRoot"] = normalized.ProjectRoot,
-            ["steps"] = steps
+            ["inputs"] = new Dictionary<string, object?>
+            {
+                ["requestHash"] = requestHash,
+                ["retrievalHash"] = normalized.RetrievalHash,
+                ["constraints"] = normalized.Constraints,
+                ["projectRoot"] = normalized.ProjectRoot
+            },
+            ["providerRef"] = normalized.ProviderKind,
+            ["envRef"] = normalized.EnvironmentKind,
+            ["steps"] = steps.OrderBy(x => x["stepId"]?.ToString(), StringComparer.Ordinal).ToArray()
         };
 
-        var planJson = JsonSerializer.Serialize(planObj, RepoSliceJson.Options);
-        var planHash = ComputeHash(planJson);
+        var semanticJson = JsonSerializer.Serialize(basePlan, RepoSliceJson.Options);
+        var planHash = ComputeHash(semanticJson);
+        var planEnvelope = new Dictionary<string, object?>(basePlan)
+        {
+            ["planHash"] = planHash
+        };
+
+        var planJson = JsonSerializer.Serialize(planEnvelope, RepoSliceJson.Options);
 
         return new PlanSynthesisResult
         {

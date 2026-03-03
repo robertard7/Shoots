@@ -32,4 +32,9 @@
 | `builder.synthesis.start` | builder | info | Starting plan synthesis | run folder + plan synthesis request | inspect retrievalHash and constraints |
 | `builder.synthesis.end` | builder | info | Plan synthesis completed | run folder + synthesized plan | inspect synthesized planHash and steps |
 | `builder.synthesis.failed` | builder | error | Plan synthesis failed | run folder + synthesis artifacts | inspect retrieval prerequisites and request hash |
+| `builder.execute.start` | builder | info | Starting builder execution | run folder + plan artifact refs | inspect executable plan envelope |
+| `builder.execute.step.start` | builder | info | Executing builder tool step | run folder + tool step artifacts | inspect step/tool bindings |
+| `builder.execute.step.end` | builder | info | Completed builder tool step | run folder + tool step artifacts | verify step outputs and hashes |
+| `builder.execute.end` | builder | info | Builder execution completed | run folder + run summary | inspect step summary + replay readiness |
+| `builder.execute.failed` | builder | error | Builder execution failed | run folder + failure artifacts | inspect failure fingerprint and narration |
 | `error` | startup/plan/provider/env/execute/tool/finalize/replay/retrieval/builder | error | Failure | run folder + failing artifact refs | open `failure-fingerprint.json` then narration tail |

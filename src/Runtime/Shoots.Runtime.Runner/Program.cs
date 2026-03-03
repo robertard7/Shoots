@@ -232,6 +232,7 @@ static async Task<int> RunScenarioAsync(string[] args)
         Emit(narrator, "env", "env.read", "Reading environment scaffold", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["path"] = RelativePath(project, envSelectedPath) }));
         Emit(narrator, "env", "env.hash", "Environment hash loaded", IdentityData(runId, planHash, providerHash, envHash, refs));
         Emit(narrator, "execute", "execute.begin", "Executing deterministic builder steps", IdentityData(runId, planHash, providerHash, envHash, refs));
+        Emit(narrator, "builder", "builder.execute.start", "Starting builder execution", IdentityData(runId, planHash, providerHash, envHash, refs));
 
         var planNetworkDisabled = planDoc.RootElement.TryGetProperty("tool.network_disabled", out var nd) && nd.ValueKind == JsonValueKind.True;
         var stepEvents = new List<object>();
@@ -254,6 +255,7 @@ static async Task<int> RunScenarioAsync(string[] args)
             if (step.Kind == "RunTool")
             {
                 var argsHash = ComputeHashHex(JsonSerializer.Serialize(step.Args));
+                Emit(narrator, "builder", "builder.execute.step.start", "Executing builder tool step", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["toolId"] = step.ToolId }));
                 Emit(narrator, "tool", "tool.start", "Starting tool execution", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["toolId"] = step.ToolId, ["argsHash"] = argsHash }));
 
                 if (planNetworkDisabled && step.RequiresNetwork)
@@ -289,6 +291,7 @@ static async Task<int> RunScenarioAsync(string[] args)
 
                 var outputHash = stepHashes["result.json"];
                 Emit(narrator, "tool", "tool.complete", "Tool execution completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["toolId"] = step.ToolId, ["outputHash"] = outputHash }));
+                Emit(narrator, "builder", "builder.execute.step.end", "Completed builder tool step", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["toolId"] = step.ToolId }));
             }
 
             if (step.Kind == "retrieve_context.v1")
@@ -390,6 +393,12 @@ static async Task<int> RunScenarioAsync(string[] args)
                 };
 
                 var synthesis = SynthesizePlanV1(request, retrievalResult.Hits);
+                if (!ValidateSynthesizedPlan(synthesis.PlanJson, envDescriptorDoc.RootElement, out var synthErrorCode, out var synthSummary, out var synthDetails))
+                {
+                    EmitFailure(narrator, "builder", "builder.synthesis.failed", synthSummary, runId, planHash, providerHash, envHash, refs, step.StepId, details: synthErrorCode + ";" + synthDetails);
+                    return ExitCodes.PlanInvalid;
+                }
+
                 await File.WriteAllTextAsync(Path.Combine(synthRoot, "request.json"), JsonSerializer.Serialize(request.Normalize(), RepoSliceJson.Options)).ConfigureAwait(false);
                 await File.WriteAllTextAsync(Path.Combine(synthRoot, "result.json"), JsonSerializer.Serialize(synthesis, RepoSliceJson.Options)).ConfigureAwait(false);
                 await File.WriteAllTextAsync(Path.Combine(planRoot, "plan.json"), synthesis.PlanJson).ConfigureAwait(false);
@@ -421,6 +430,7 @@ static async Task<int> RunScenarioAsync(string[] args)
         }
 
         Emit(narrator, "execute", "execute.end", "Execution completed", IdentityData(runId, planHash, providerHash, envHash, refs));
+        Emit(narrator, "builder", "builder.execute.end", "Builder execution completed", IdentityData(runId, planHash, providerHash, envHash, refs));
 
         var inputFiles = Directory.GetFiles(project, "*", SearchOption.AllDirectories)
             .Select(path => Path.GetRelativePath(project, path).Replace('\\', '/'))
@@ -497,6 +507,7 @@ static async Task<int> RunScenarioAsync(string[] args)
     }
     catch (Exception ex)
     {
+        EmitFailure(narrator, "builder", "builder.execute.failed", "Builder execution failed", runId, planHash, providerHash, envHash, refs, details: ex.Message);
         EmitFailure(narrator, "finalize", "tool.exec.failed", "Scenario execution failed", runId, planHash, providerHash, envHash, refs, details: ex.Message);
         Console.Error.WriteLine(ex.Message);
         return ExitCodes.Unknown;
@@ -890,22 +901,33 @@ static PlanSynthesisResult SynthesizePlanV1(PlanSynthesisRequest request, IReadO
         ["inputs"] = new[] { $"retrieval/hits/{idx}" },
         ["outputs"] = new[] { $"tool/{idx}/result.json" },
         ["expects"] = new[] { "exitCode==0" }
-    }).ToArray();
+    }).OrderBy(x => x["stepId"]?.ToString(), StringComparer.Ordinal).ToArray();
 
-    var planObj = new Dictionary<string, object?>
+    var basePlanObj = new Dictionary<string, object?>
     {
         ["schemaVersion"] = 1,
         ["planKind"] = normalized.PlanKind,
-        ["retrievalHash"] = normalized.RetrievalHash,
-        ["requestHash"] = requestHash,
-        ["providerKind"] = normalized.ProviderKind,
-        ["environmentKind"] = normalized.EnvironmentKind,
-        ["projectRoot"] = normalized.ProjectRoot,
+        ["inputs"] = new Dictionary<string, object?>
+        {
+            ["requestHash"] = requestHash,
+            ["retrievalHash"] = normalized.RetrievalHash,
+            ["constraints"] = normalized.Constraints,
+            ["projectRoot"] = normalized.ProjectRoot
+        },
+        ["providerRef"] = normalized.ProviderKind,
+        ["envRef"] = normalized.EnvironmentKind,
         ["steps"] = steps
     };
 
-    var planJson = JsonSerializer.Serialize(planObj, RepoSliceJson.Options);
-    var synthesizedPlanHash = ComputeHashHex(planJson);
+    var semanticJson = JsonSerializer.Serialize(basePlanObj, RepoSliceJson.Options);
+    var synthesizedPlanHash = ComputeHashHex(semanticJson);
+
+    var planEnvelope = new Dictionary<string, object?>(basePlanObj)
+    {
+        ["planHash"] = synthesizedPlanHash
+    };
+
+    var planJson = JsonSerializer.Serialize(planEnvelope, RepoSliceJson.Options);
 
     return new PlanSynthesisResult
     {
@@ -919,6 +941,80 @@ static PlanSynthesisResult SynthesizePlanV1(PlanSynthesisRequest request, IReadO
             ToolCount = steps.Select(x => x["toolId"]?.ToString() ?? string.Empty).Distinct(StringComparer.Ordinal).Count()
         }
     };
+}
+
+
+static bool ValidateSynthesizedPlan(string planJson, JsonElement envDescriptor, out string errorCode, out string summary, out string details)
+{
+    errorCode = string.Empty;
+    summary = string.Empty;
+    details = string.Empty;
+
+    var doc = JsonDocument.Parse(planJson);
+    var root = doc.RootElement;
+
+    if (!root.TryGetProperty("steps", out var stepsEl) || stepsEl.ValueKind != JsonValueKind.Array)
+    {
+        errorCode = "builder.plan.steps.missing";
+        summary = "Synthesized plan is missing steps array.";
+        details = "steps.missing";
+        return false;
+    }
+
+    var outputs = new HashSet<string>(StringComparer.Ordinal);
+    var caps = LoadEnvironmentCapabilities(envDescriptor, out _);
+    if (caps.Count == 0)
+    {
+        caps.Add("process");
+    }
+
+    var idx = 0;
+    foreach (var step in stepsEl.EnumerateArray())
+    {
+        var kind = step.TryGetProperty("kind", out var k) ? k.GetString() ?? string.Empty : string.Empty;
+        if (!StepKinds.Registry.ContainsKey(kind))
+        {
+            errorCode = "builder.plan.step.kind.unknown";
+            summary = "Synthesized plan contains unknown step kind.";
+            details = $"index={idx};kind={kind}";
+            return false;
+        }
+
+        if (!StepKinds.IsSupportedInEnvironment(kind, caps))
+        {
+            errorCode = "builder.plan.step.kind.unsupported";
+            summary = "Synthesized plan step kind not supported in environment.";
+            details = $"index={idx};kind={kind}";
+            return false;
+        }
+
+        var toolId = step.TryGetProperty("toolId", out var t) ? t.GetString() ?? string.Empty : string.Empty;
+        if (!string.Equals(toolId, "linux.noop.v1", StringComparison.Ordinal))
+        {
+            errorCode = "builder.plan.tool.missing";
+            summary = "Synthesized plan references unknown tool.";
+            details = $"index={idx};toolId={toolId}";
+            return false;
+        }
+
+        if (step.TryGetProperty("outputs", out var outEl) && outEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var output in outEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty))
+            {
+                if (!outputs.Add(output))
+                {
+                    errorCode = "builder.plan.output.duplicate";
+                    summary = "Synthesized plan has duplicate outputs.";
+                    details = $"index={idx};output={output}";
+                    return false;
+                }
+            }
+        }
+
+        idx++;
+    }
+
+    return true;
 }
 
 static string BuildRunSummary(string runId, string planHash, string providerHash, string envHash, IReadOnlyList<Dictionary<string, string>> stepSummaries)
@@ -975,7 +1071,7 @@ static class StepKinds
         ["Verify"] = new[] { "verify" },
         ["EmitArtifact"] = new[] { "filesystem" },
         ["retrieve_context.v1"] = new[] { "retrieval.lexical" },
-        ["synthesize_plan.v1"] = new[] { "planner" }
+        ["synthesize_plan.v1"] = new[] { "process" }
     };
 
     public static bool IsSupportedInEnvironment(string kind, HashSet<string> capabilities)
