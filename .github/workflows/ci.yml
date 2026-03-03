@@ -8,11 +8,20 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  actions: read
+  checks: read
+  pull-requests: write
+
 jobs:
   runtime-linux:
     name: runtime-linux
     runs-on: ubuntu-latest
     steps:
+      - name: Clean artifacts folder
+        run: |
+          if (Test-Path artifacts) { Remove-Item -Recurse -Force artifacts }
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -42,67 +51,54 @@ jobs:
       - name: Restore Runtime
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
-      - name: Build Runtime
-        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
+      - name: Build Runtime (Release) with binlog + log
+        run: |
+          mkdir -p artifacts
+          (dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true /bl:artifacts/build-runtime-linux.binlog) 2>&1 | tee artifacts/build.log
 
-      - name: Test Runtime.Tests (trx)
-        run: dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=runtime-linux.trx"
+      - name: Test Runtime.Tests (trx) + log
+        run: |
+          mkdir -p artifacts
+          (dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts/runtime-linux.trx") 2>&1 | tee artifacts/test-runtime.log
 
-      - name: Test Builder.Tests (trx)
-        run: dotnet test src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=builder-linux.trx"
+      - name: Test Builder.Tests (trx) + log
+        run: |
+          mkdir -p artifacts
+          (dotnet test src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts/builder-linux.trx") 2>&1 | tee artifacts/test-builder.log
 
-      - name: Write CI first-failure summary
+      - name: Write CI first-failure summary (always)
         if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const { owner, repo } = context.repo;
-            const runId = context.runId;
-            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
-            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
-              owner,
-              repo,
-              run_id: runId,
-              per_page: 100,
-            });
-            const jobs = jobsResp.data.jobs || [];
-            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
-            let failingStep = null;
-            if (failingJob && Array.isArray(failingJob.steps)) {
-              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
-            }
-            const lines = [
-              '# CI first-failure summary',
-              '',
-              `Workflow: ${context.workflow}`,
-              `Run URL: ${runUrl}`,
-              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
-              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
-              '',
-              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
-              '',
-              'Failure excerpt:',
-              '> Step log excerpt unavailable in this summary (see run logs).',
-            ];
-            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
-            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+        run: |
+          mkdir -p artifacts
+          # Prefer test logs, fall back to build log.
+          tailfile="artifacts/test-runtime.log"
+          if [ -f "artifacts/test-builder.log" ]; then tailfile="artifacts/test-builder.log"; fi
+          if [ ! -f "$tailfile" ] && [ -f "artifacts/build.log" ]; then tailfile="artifacts/build.log"; fi
 
-      - name: Upload CI first-failure summary
+          {
+            echo "# CI first-failure summary"
+            echo
+            echo "Workflow: $GITHUB_WORKFLOW"
+            echo "Job: runtime-linux"
+            echo "Run: $GITHUB_RUN_ID"
+            echo "Commit: $GITHUB_SHA"
+            echo
+            echo "Failure excerpt (tail):"
+            echo '```'
+            if [ -f "$tailfile" ]; then tail -n 120 "$tailfile"; else echo "<no local log captured>"; fi
+            echo '```'
+          } > artifacts/ci-first-failure.md
+
+      - name: Upload CI artifacts (always)
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-first-failure-${{ github.job }}
-          path: artifacts/ci-first-failure.md
-      - name: Upload runtime artifacts
         uses: actions/upload-artifact@v4
         with:
           name: runtime-linux-artifacts
           path: |
-            **/runtime-linux.trx
-            **/builder-linux.trx
+            artifacts/**
             etc/tools.catalog.json
+          if-no-files-found: warn
+
   full-windows:
     name: full-windows
     runs-on: [self-hosted, Windows, X64, Shoots]
@@ -147,11 +143,15 @@ jobs:
       - name: Restore
         run: dotnet restore Shoots.sln
 
-      - name: Build
-        run: dotnet build Shoots.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
+      - name: Build (Release) with binlog + log
+        run: |
+          New-Item -Force -ItemType Directory artifacts | Out-Null
+          dotnet build Shoots.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true /bl:artifacts\build-release.binlog 2>&1 | Tee-Object -FilePath artifacts\build.log
 
-      - name: Test
-        run: dotnet test Shoots.sln -c Release -v minimal --no-build -p:ContinuousIntegrationBuild=true
+      - name: Test (Release) with TRX + log
+        run: |
+          New-Item -Force -ItemType Directory artifacts\trx | Out-Null
+          dotnet test Shoots.sln -c Release -v minimal --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts\trx\full-windows.trx" 2>&1 | Tee-Object -FilePath artifacts\test.log
 
       - name: Host smoke
         run: pwsh -NoLogo -NoProfile -File .\scripts\run_host_smoke.ps1
@@ -180,59 +180,39 @@ jobs:
           name: shoots-release-bundle
           path: artifacts/release/*/Shoots-*.zip
 
-      - name: Write CI first-failure summary
+      - name: Write CI first-failure summary (always)
         if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const { owner, repo } = context.repo;
-            const runId = context.runId;
-            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
-            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
-              owner,
-              repo,
-              run_id: runId,
-              per_page: 100,
-            });
-            const jobs = jobsResp.data.jobs || [];
-            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
-            let failingStep = null;
-            if (failingJob && Array.isArray(failingJob.steps)) {
-              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
-            }
-            const lines = [
-              '# CI first-failure summary',
-              '',
-              `Workflow: ${context.workflow}`,
-              `Run URL: ${runUrl}`,
-              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
-              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
-              '',
-              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
-              '',
-              'Failure excerpt:',
-              '> Step log excerpt unavailable in this summary (see run logs).',
-            ];
-            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
-            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+        run: |
+          New-Item -Force -ItemType Directory artifacts | Out-Null
+          $tailFile = "artifacts\test.log"
+          if (-not (Test-Path $tailFile)) { $tailFile = "artifacts\build.log" }
 
-      - name: Upload CI first-failure summary
+          $excerpt = "<no local log captured>"
+          if (Test-Path $tailFile) { $excerpt = (Get-Content $tailFile -Tail 120) -join "`n" }
+
+          @(
+            "# CI first-failure summary"
+            ""
+            "Workflow: $env:GITHUB_WORKFLOW"
+            "Job: full-windows"
+            "Run: $env:GITHUB_RUN_ID"
+            "Commit: $env:GITHUB_SHA"
+            ""
+            "Failure excerpt (tail):"
+            "```"
+            $excerpt
+            "```"
+          ) | Out-File -Encoding utf8 artifacts\ci-first-failure.md
+
+      - name: Upload CI artifacts (always)
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-first-failure-${{ github.job }}
-          path: artifacts/ci-first-failure.md
-      - name: Upload test artifacts
         uses: actions/upload-artifact@v4
         with:
           name: full-windows-artifacts
           path: |
-            **/*.trx
-            artifacts/smoke/${{ github.run_id }}/**
+            artifacts/**
             etc/tools.catalog.json
-
+          if-no-files-found: warn
 
   release-candidate-pack:
     name: release-candidate-pack
@@ -255,14 +235,17 @@ jobs:
       - name: Verify version consistency
         run: bash scripts/verify_versions.sh
 
-      - name: Build host/runtime/smoke
-        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release -p:ContinuousIntegrationBuild=true
-
-      - name: Test runtime + host
+      - name: Build host/runtime/smoke (Release) with binlog + log
         run: |
-          dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true
-          dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true
-          dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true
+          mkdir -p artifacts
+          (dotnet build src/Runtime/Shoots.Runtime.sln -c Release -p:ContinuousIntegrationBuild=true /bl:artifacts/build-rc-linux.binlog) 2>&1 | tee artifacts/build.log
+
+      - name: Test runtime + host + client (log)
+        run: |
+          mkdir -p artifacts
+          (dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-runtime.log
+          (dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-host.log
+          (dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-client.log
 
       - name: Pack release candidate
         run: |
@@ -272,55 +255,37 @@ jobs:
           dotnet pack src/Runtime/Shoots.Runtime.Abstractions/Shoots.Runtime.Abstractions.csproj -c Release -o artifacts/nuget
           dotnet pack src/Client/Shoots.Client/Shoots.Client.csproj -c Release -o artifacts/nuget
 
-      - name: Write CI first-failure summary
+      - name: Write CI first-failure summary (always)
         if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const { owner, repo } = context.repo;
-            const runId = context.runId;
-            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
-            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
-              owner,
-              repo,
-              run_id: runId,
-              per_page: 100,
-            });
-            const jobs = jobsResp.data.jobs || [];
-            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
-            let failingStep = null;
-            if (failingJob && Array.isArray(failingJob.steps)) {
-              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
-            }
-            const lines = [
-              '# CI first-failure summary',
-              '',
-              `Workflow: ${context.workflow}`,
-              `Run URL: ${runUrl}`,
-              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
-              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
-              '',
-              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
-              '',
-              'Failure excerpt:',
-              '> Step log excerpt unavailable in this summary (see run logs).',
-            ];
-            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
-            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+        run: |
+          mkdir -p artifacts
+          tailfile="artifacts/test-client.log"
+          if [ -f "artifacts/test-host.log" ]; then tailfile="artifacts/test-host.log"; fi
+          if [ -f "artifacts/test-runtime.log" ]; then tailfile="artifacts/test-runtime.log"; fi
+          if [ ! -f "$tailfile" ] && [ -f "artifacts/build.log" ]; then tailfile="artifacts/build.log"; fi
 
-      - name: Upload CI first-failure summary
+          {
+            echo "# CI first-failure summary"
+            echo
+            echo "Workflow: $GITHUB_WORKFLOW"
+            echo "Job: release-candidate-pack"
+            echo "Run: $GITHUB_RUN_ID"
+            echo "Commit: $GITHUB_SHA"
+            echo
+            echo "Failure excerpt (tail):"
+            echo '```'
+            if [ -f "$tailfile" ]; then tail -n 120 "$tailfile"; else echo "<no local log captured>"; fi
+            echo '```'
+          } > artifacts/ci-first-failure.md
+
+      - name: Upload CI artifacts (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-first-failure-${{ github.job }}
-          path: artifacts/ci-first-failure.md
-      - name: Upload nuget artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: rc-nuget-packages
-          path: artifacts/nuget/*
+          name: rc-linux-artifacts
+          path: |
+            artifacts/**
+          if-no-files-found: warn
 
   determinism-guard:
     name: determinism-guard
@@ -362,63 +327,49 @@ jobs:
       - name: Restore
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
-      - name: Build
-        run: dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
+      - name: Build Runtime (Release) with binlog + log
+        run: |
+          New-Item -Force -ItemType Directory artifacts | Out-Null
+          dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true /bl:artifacts\build-determinism.binlog 2>&1 | Tee-Object -FilePath artifacts\build.log
 
-      - name: Determinism pass 1 (trx)
-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -p:ContinuousIntegrationBuild=true --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-1.trx"
+      - name: Determinism pass 1 (trx) + log
+        run: |
+          dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -p:ContinuousIntegrationBuild=true --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=artifacts\determinism-pass-1.trx" 2>&1 | Tee-Object -FilePath artifacts\test-pass-1.log
 
-      - name: Determinism pass 2 (trx)
-        run: dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -p:ContinuousIntegrationBuild=true --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=determinism-pass-2.trx"
+      - name: Determinism pass 2 (trx) + log
+        run: |
+          dotnet test src/Runtime/Shoots.Runtime.sln -c Release --no-build -p:ContinuousIntegrationBuild=true --filter "FullyQualifiedName~Trace_replays_deterministically" --logger "trx;LogFileName=artifacts\determinism-pass-2.trx" 2>&1 | Tee-Object -FilePath artifacts\test-pass-2.log
 
-      - name: Write CI first-failure summary
+      - name: Write CI first-failure summary (always)
         if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const { owner, repo } = context.repo;
-            const runId = context.runId;
-            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
-            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
-              owner,
-              repo,
-              run_id: runId,
-              per_page: 100,
-            });
-            const jobs = jobsResp.data.jobs || [];
-            const failingJob = jobs.find(j => j.conclusion && j.conclusion !== 'success' && j.conclusion !== 'skipped');
-            let failingStep = null;
-            if (failingJob && Array.isArray(failingJob.steps)) {
-              failingStep = failingJob.steps.find(s => s.conclusion && s.conclusion !== 'success' && s.conclusion !== 'skipped');
-            }
-            const lines = [
-              '# CI first-failure summary',
-              '',
-              `Workflow: ${context.workflow}`,
-              `Run URL: ${runUrl}`,
-              `First failing job: ${failingJob ? failingJob.name : '<none>'}`,
-              `First failing step: ${failingStep ? failingStep.name : '<none>'}`,
-              '',
-              `Status: ${process.env.JOB_STATUS || 'unknown'}`,
-              '',
-              'Failure excerpt:',
-              '> Step log excerpt unavailable in this summary (see run logs).',
-            ];
-            fs.mkdirSync(path.join(process.cwd(), 'artifacts'), { recursive: true });
-            fs.writeFileSync(path.join(process.cwd(), 'artifacts', 'ci-first-failure.md'), lines.join('\n') + '\n');
+        run: |
+          New-Item -Force -ItemType Directory artifacts | Out-Null
+          $tailFile = "artifacts\test-pass-2.log"
+          if (-not (Test-Path $tailFile)) { $tailFile = "artifacts\test-pass-1.log" }
+          if (-not (Test-Path $tailFile)) { $tailFile = "artifacts\build.log" }
 
-      - name: Upload CI first-failure summary
+          $excerpt = "<no local log captured>"
+          if (Test-Path $tailFile) { $excerpt = (Get-Content $tailFile -Tail 120) -join "`n" }
+
+          @(
+            "# CI first-failure summary"
+            ""
+            "Workflow: $env:GITHUB_WORKFLOW"
+            "Job: determinism-guard"
+            "Run: $env:GITHUB_RUN_ID"
+            "Commit: $env:GITHUB_SHA"
+            ""
+            "Failure excerpt (tail):"
+            "```"
+            $excerpt
+            "```"
+          ) | Out-File -Encoding utf8 artifacts\ci-first-failure.md
+
+      - name: Upload CI artifacts (always)
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-first-failure-${{ github.job }}
-          path: artifacts/ci-first-failure.md
-      - name: Upload determinism artifacts
         uses: actions/upload-artifact@v4
         with:
           name: determinism-artifacts
           path: |
-            **/determinism-pass-1.trx
-            **/determinism-pass-2.trx
+            artifacts/**
+          if-no-files-found: warn
