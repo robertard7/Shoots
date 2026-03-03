@@ -18,8 +18,19 @@ resolve_latest_run() {
   printf '%s' "$candidate"
 }
 
+require_run=0
+if [[ "${1:-}" == "--require-run" ]]; then
+  require_run=1
+  shift
+fi
+
 run_dir="${1:-$(resolve_latest_run)}"
 if [[ -z "$run_dir" || ! -d "$run_dir" ]]; then
+  if (( require_run == 1 )); then
+    echo "verify.budget.run_missing: no run directory found" >&2
+    exit 1
+  fi
+
   echo "verify.budget.run_missing: no run directory found"
   exit 0
 fi

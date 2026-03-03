@@ -118,6 +118,11 @@ jobs:
         shell: bash
         run: bash scripts/verify_narration_coverage.sh
 
+      - name: Verify no flaky tests
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_no_flaky_tests.sh
+
       - name: Verify UI contracts
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash

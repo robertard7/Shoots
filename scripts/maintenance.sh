@@ -62,6 +62,7 @@ tests_log="artifacts/maintenance/tests-${stamp}.log"
 ui_build_log="artifacts/maintenance/ui-build-${stamp}.log"
 ui_tests_log="artifacts/maintenance/ui-tests-${stamp}.log"
 fingerprint_file="artifacts/maintenance/failure-fingerprint.json"
+flaky_file="artifacts/maintenance/flaky-test.md"
 
 restore_status=0
 build_status=0
@@ -176,6 +177,19 @@ write_failure_fingerprint() {
     echo "  \"sourceLog\": $(printf '%s' "$source_log" | json_escape)"
     echo "}"
   } > "$fingerprint_file"
+
+  if [[ "$error_code" == "maintenance.tests.failed" ]]; then
+    local commit_sha="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    {
+      echo "# Flaky Test Capture"
+      echo
+      echo "- commit: ${commit_sha}"
+      echo "- failingTest: ${failing_test:-unknown}"
+      echo "- errorCode: ${error_code}"
+      echo "- assertion: ${message:-unknown}"
+      echo "- sourceLog: ${source_log:-unknown}"
+    } > "$flaky_file"
+  fi
 }
 
 ensure_dotnet || exit $?
@@ -253,6 +267,15 @@ if [[ "$RUN_TESTS" == "1" ]]; then
   narration_coverage_status=$?
   if [[ "$narration_coverage_status" -ne 0 ]]; then
     tests_status=$narration_coverage_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying no flaky tests"
+  run_and_capture "$tests_log" bash scripts/verify_no_flaky_tests.sh
+  flaky_status=$?
+  if [[ "$flaky_status" -ne 0 ]]; then
+    tests_status=$flaky_status
     overall_status=1
     set_error_code tests
   fi
@@ -340,6 +363,7 @@ solution:
 
 failure fingerprint:
 - $fingerprint_file
+- $flaky_file
 ==============================
 SUMMARY
 
