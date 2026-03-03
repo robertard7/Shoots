@@ -35,7 +35,7 @@ jobs:
       - name: Clean artifacts folder
         shell: bash
         run: |
-          if [ -d artifacts ]; then rm -rf artifacts; fi
+          rm -rf artifacts || true
 
       - name: Verify provider adapter naming
         shell: bash
@@ -68,13 +68,13 @@ jobs:
 
       - name: Restore Runtime
         shell: bash
-        run: dotnet restore Shoots.sln
+        run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
       - name: Build Runtime (Release) with binlog + log
         shell: bash
         run: |
           mkdir -p artifacts
-          (dotnet build Shoots.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true /bl:artifacts/build-runtime-linux.binlog) 2>&1 | tee artifacts/build.log
+          (dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true /bl:artifacts/build-runtime-linux.binlog) 2>&1 | tee artifacts/build.log
 
       - name: Test Runtime.Tests (trx) + log
         if: env.RUN_TESTS_LINUX == '1'
@@ -254,7 +254,7 @@ jobs:
 
       - name: Clean artifacts folder
         shell: bash
-        run: if [ -d artifacts ]; then rm -rf artifacts; fi
+        run: rm -rf artifacts || true
 
       - name: Verify UI test project guard
         shell: bash
@@ -275,21 +275,21 @@ jobs:
 
       - name: Restore
         shell: bash
-        run: dotnet restore Shoots.sln
+        run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
       - name: Build host/runtime/smoke (Release) with binlog + log
         shell: bash
         run: |
           mkdir -p artifacts
-          (dotnet build Shoots.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true /bl:artifacts/build-rc-linux.binlog) 2>&1 | tee artifacts/build.log
+          (dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true /bl:artifacts/build-rc-linux.binlog) 2>&1 | tee artifacts/build.log
 
       - name: Test runtime + host + client (log)
         shell: bash
         run: |
           mkdir -p artifacts
-          (dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-runtime.log
-          (dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release --no-build -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-host.log
-          (dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release --no-build -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-client.log
+          (dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-runtime.log
+          (dotnet test src/Host/Shoots.Host.Tests/Shoots.Host.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-host.log
+          (dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-client.log
 
       - name: Pack release candidate
         shell: bash

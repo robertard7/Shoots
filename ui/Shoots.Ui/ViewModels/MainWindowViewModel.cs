@@ -5,6 +5,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text.Json;
+using System.Text;
+using System.Security.Cryptography;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core;
@@ -95,6 +99,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private StartupSessionMode _sessionMode = StartupSessionMode.Startup;
     private bool _startupComplete;
+
+    private string _pendingProjectLanguage = "dotnet";
+    private string _pendingProjectName = string.Empty;
+    private string _pendingProjectDescription = string.Empty;
 
     private ExecutionEnvironmentSettings _executionSettings = CreateDefaultExecutionEnvironmentSettings();
 
@@ -976,6 +984,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!HasActiveWorkspace) return Task.CompletedTask;
 
+        if (State is UiExecutionState.Running or UiExecutionState.Waiting)
+        {
+            AddStartupMessage("System: Current project has unsaved run state. Save/export before switching projects.");
+            return Task.CompletedTask;
+        }
+
         ActiveWorkspace = null;
         _startupFlow.Reset();
         _startupComplete = false;
@@ -1236,16 +1250,188 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         // keep your real implementation elsewhere (partial)
     }
 
-    // ---- Startup handler stubs (remove if real ones exist in a partial) ----
-    private Task HandleStartupLanguageAsync(string input) => Task.CompletedTask;
-    private Task HandleStartupProjectNameAsync(string input) => Task.CompletedTask;
-    private Task HandleStartupDescriptionAsync(string input) => Task.CompletedTask;
-    private Task HandleStartupConfirmAsync(string input) => Task.CompletedTask;
-    private Task HandleContinueExistingPathAsync(string input) => Task.CompletedTask;
-    private Task HandleContinueExistingConfirmAsync(string input) => Task.CompletedTask;
-    private Task HandleExploreModeAsync(string input) => Task.CompletedTask;
+    // ---- Startup handlers ----
+    private Task HandleStartupLanguageAsync(string input)
+    {
+        var previous = _startupFlow.State;
+        _pendingProjectLanguage = string.Equals(input, "skip", StringComparison.OrdinalIgnoreCase)
+            ? "dotnet"
+            : input;
+
+        if (!_startupFlow.TrySetLanguage(_pendingProjectLanguage, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, "Language captured.");
+        AddStartupMessage($"System: Language = {_pendingProjectLanguage}.");
+        AddStartupMessage($"System: {StartupPrompt}");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleStartupProjectNameAsync(string input)
+    {
+        var previous = _startupFlow.State;
+        _pendingProjectName = string.Equals(input, "skip", StringComparison.OrdinalIgnoreCase)
+            ? $"project-{DateTimeOffset.UtcNow:yyyyMMdd}"
+            : input;
+
+        if (!_startupFlow.TrySetProjectName(_pendingProjectName, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, "Project name captured.");
+        AddStartupMessage($"System: Project name = {_pendingProjectName}.");
+        AddStartupMessage($"System: {StartupPrompt}");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleStartupDescriptionAsync(string input)
+    {
+        var previous = _startupFlow.State;
+        _pendingProjectDescription = string.Equals(input, "skip", StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : input;
+
+        if (!_startupFlow.TrySetDescription(_pendingProjectDescription, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, "Description captured.");
+        AddStartupMessage($"System: Description captured.");
+        AddStartupMessage($"System: {StartupPrompt}");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleStartupConfirmAsync(string input)
+    {
+        if (!string.Equals(input, "confirm", StringComparison.OrdinalIgnoreCase))
+        {
+            AddStartupMessage("System: Type \"confirm\" to create the project.");
+            return Task.CompletedTask;
+        }
+
+        var createdUtc = DateTimeOffset.UtcNow;
+        var projectName = string.IsNullOrWhiteSpace(_pendingProjectName) ? $"project-{createdUtc:yyyyMMdd}" : _pendingProjectName;
+        var projectId = ComputeDeterministicProjectId(projectName);
+        var projectRoot = Path.GetFullPath(Path.Combine(".state", "projects", projectId));
+
+        Directory.CreateDirectory(projectRoot);
+        Directory.CreateDirectory(Path.Combine(projectRoot, "inputs"));
+        Directory.CreateDirectory(Path.Combine(projectRoot, "outputs"));
+
+        var descriptor = new PersistedProjectDescriptor(
+            projectId,
+            projectName,
+            createdUtc,
+            selectedEnvironmentId: SelectedProfile?.Name ?? "host-local",
+            providerKind: ProviderKind.Local.ToString(),
+            providerEndpoint: string.Empty,
+            language: _pendingProjectLanguage,
+            description: _pendingProjectDescription,
+            projectRoot);
+
+        var descriptorPath = Path.Combine(projectRoot, "project.json");
+        File.WriteAllText(descriptorPath, JsonSerializer.Serialize(descriptor, new JsonSerializerOptions { WriteIndented = true }));
+
+        var workspace = new ProjectWorkspace(
+            Name: projectName,
+            RootPath: projectRoot,
+            LastOpenedUtc: createdUtc,
+            ProjectId: projectId,
+            CreatedUtc: createdUtc,
+            SelectedEnvironmentId: descriptor.SelectedEnvironmentId,
+            SelectedProviderKind: descriptor.ProviderKind,
+            SelectedProviderEndpoint: descriptor.ProviderEndpoint);
+
+        _workspaceProvider.SetActiveWorkspace(workspace);
+        LoadWorkspaces();
+        SelectWorkspace(workspace);
+
+        _startupComplete = true;
+        _startupFlow.TryConfirmCreate(out _);
+        AddStartupMessage($"System: Project created at {projectRoot}.");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleContinueExistingPathAsync(string input)
+    {
+        var root = Path.GetFullPath(input);
+        if (!Directory.Exists(root))
+        {
+            AddStartupMessage("System: Path does not exist.");
+            return Task.CompletedTask;
+        }
+
+        var name = new DirectoryInfo(root).Name;
+        var now = DateTimeOffset.UtcNow;
+        var workspace = new ProjectWorkspace(name, root, now, ProjectId: ComputeDeterministicProjectId(name), CreatedUtc: now);
+        _workspaceProvider.SetActiveWorkspace(workspace);
+
+        if (!_startupFlow.TrySetExistingProjectPath(root, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        _startupComplete = true;
+        AddStartupMessage($"System: Attached project {name}.");
+        LoadWorkspaces();
+        SelectWorkspace(workspace);
+        NotifyStartupFlowChanged();
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleContinueExistingConfirmAsync(string input)
+    {
+        AddStartupMessage("System: Existing project attachment is completed via path input.");
+        return Task.CompletedTask;
+    }
+
+    private Task HandleExploreModeAsync(string input)
+    {
+        if (string.Equals(input, "promote", StringComparison.OrdinalIgnoreCase))
+        {
+            _startupFlow.Reset();
+            _startupFlow.TryBeginNewProject(out _);
+            AddStartupMessage("System: Explore mode promoted to startup project flow.");
+            NotifyStartupFlowChanged();
+            return Task.CompletedTask;
+        }
+
+        AddStartupMessage("System: Explore mode active. Type \"promote\" to start a project.");
+        return Task.CompletedTask;
+    }
 
     private static string NormalizeStartupInput(string input) => input.Trim();
+
+    private static string ComputeDeterministicProjectId(string projectName)
+    {
+        var normalized = projectName.Trim().ToLowerInvariant();
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+        return Convert.ToHexString(bytes[..8]).ToLowerInvariant();
+    }
+
+    private sealed record PersistedProjectDescriptor(
+        string Id,
+        string Name,
+        DateTimeOffset CreatedUtc,
+        string SelectedEnvironmentId,
+        string ProviderKind,
+        string ProviderEndpoint,
+        string Language,
+        string Description,
+        string ProjectRootPath);
 
     private StartupSessionMode GetSessionMode()
     {

@@ -6,6 +6,15 @@ cd "$root"
 
 RUN_TESTS="${RUN_TESTS:-0}"
 CONFIGURATION="${CONFIGURATION:-Release}"
+SOLUTION_PATH="${SOLUTION_PATH:-}"
+
+if [[ -z "$SOLUTION_PATH" ]]; then
+  if [[ "${OS:-}" == "Windows_NT" ]]; then
+    SOLUTION_PATH="Shoots.sln"
+  else
+    SOLUTION_PATH="src/Runtime/Shoots.Runtime.sln"
+  fi
+fi
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,6 +29,7 @@ Usage: bash scripts/maintenance.sh [--tests]
 Environment variables:
   RUN_TESTS=1         Run tests after restore/build
   CONFIGURATION=Debug Build/test configuration (default: Release)
+  SOLUTION_PATH=...    Override solution path (default: Shoots.sln on Windows, src/Runtime/Shoots.Runtime.sln otherwise)
 USAGE
       exit 0
       ;;
@@ -105,7 +115,7 @@ write_failure_fingerprint() {
 }
 
 echo "==> Restoring solution"
-run_and_capture "$restore_log" dotnet restore Shoots.sln
+run_and_capture "$restore_log" dotnet restore "$SOLUTION_PATH"
 restore_status=$?
 if [[ "$restore_status" -ne 0 ]]; then
   overall_status=1
@@ -113,7 +123,7 @@ fi
 
 echo "==> Building solution ($CONFIGURATION)"
 if [[ "$overall_status" -eq 0 ]]; then
-  run_and_capture "$build_log" dotnet build Shoots.sln -c "$CONFIGURATION" --no-restore -p:ContinuousIntegrationBuild=true /bl:"artifacts/maintenance/build-${stamp}.binlog"
+  run_and_capture "$build_log" dotnet build "$SOLUTION_PATH" -c "$CONFIGURATION" --no-restore -p:ContinuousIntegrationBuild=true /bl:"artifacts/maintenance/build-${stamp}.binlog"
   build_status=$?
   if [[ "$build_status" -ne 0 ]]; then
     overall_status=1
@@ -126,7 +136,7 @@ fi
 if [[ "$RUN_TESTS" == "1" ]]; then
   echo "==> Testing solution ($CONFIGURATION)"
   if [[ "$overall_status" -eq 0 ]]; then
-    run_and_capture "$tests_log" dotnet test Shoots.sln -c "$CONFIGURATION" --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts/maintenance/tests-${stamp}.trx"
+    run_and_capture "$tests_log" dotnet test "$SOLUTION_PATH" -c "$CONFIGURATION" --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts/maintenance/tests-${stamp}.trx"
     tests_status=$?
     if [[ "$tests_status" -ne 0 ]]; then
       overall_status=1
@@ -153,6 +163,9 @@ logs:
 - $restore_log
 - $build_log
 - $tests_log
+
+solution:
+- $SOLUTION_PATH
 
 failure fingerprint:
 - $fingerprint_file
