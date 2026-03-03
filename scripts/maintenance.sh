@@ -7,6 +7,15 @@ cd "$root"
 RUN_TESTS="${RUN_TESTS:-0}"
 CONFIGURATION="${CONFIGURATION:-Release}"
 SOLUTION_PATH="${SOLUTION_PATH:-}"
+RUN_UI="${RUN_UI:-}"
+
+if [[ -z "$RUN_UI" ]]; then
+  if [[ "${OS:-}" == "Windows_NT" ]]; then
+    RUN_UI=1
+  else
+    RUN_UI=0
+  fi
+fi
 
 if [[ -z "$SOLUTION_PATH" ]]; then
   if [[ "${OS:-}" == "Windows_NT" ]]; then
@@ -22,14 +31,19 @@ while [[ $# -gt 0 ]]; do
       RUN_TESTS=1
       shift
       ;;
+    --ui)
+      RUN_UI=1
+      shift
+      ;;
     -h|--help)
       cat <<'USAGE'
-Usage: bash scripts/maintenance.sh [--tests]
+Usage: bash scripts/maintenance.sh [--tests] [--ui]
 
 Environment variables:
   RUN_TESTS=1          Run tests after restore/build
   CONFIGURATION=Debug  Build/test configuration (default: Release)
   SOLUTION_PATH=...    Override solution path (default: Shoots.sln on Windows, src/Runtime/Shoots.Runtime.sln otherwise)
+  RUN_UI=1             Build/test UI projects (default: 1 on Windows, 0 otherwise)
 USAGE
       exit 0
       ;;
@@ -45,11 +59,15 @@ stamp="$(date +%Y%m%d-%H%M%S)"
 restore_log="artifacts/maintenance/restore-${stamp}.log"
 build_log="artifacts/maintenance/build-${stamp}.log"
 tests_log="artifacts/maintenance/tests-${stamp}.log"
+ui_build_log="artifacts/maintenance/ui-build-${stamp}.log"
+ui_tests_log="artifacts/maintenance/ui-tests-${stamp}.log"
 fingerprint_file="artifacts/maintenance/failure-fingerprint.json"
 
 restore_status=0
 build_status=0
 tests_status=99
+ui_build_status=99
+ui_tests_status=99
 overall_status=0
 error_code=""
 
@@ -170,6 +188,16 @@ if [[ "$restore_status" -ne 0 ]]; then
   set_error_code restore
 fi
 
+echo "==> Verifying UI contract drift guard"
+if [[ "$overall_status" -eq 0 ]]; then
+  run_and_capture "$build_log" bash scripts/verify_ui_contracts.sh
+  ui_contract_status=$?
+  if [[ "$ui_contract_status" -ne 0 ]]; then
+    overall_status=1
+    set_error_code build
+  fi
+fi
+
 echo "==> Building solution ($CONFIGURATION)"
 if [[ "$overall_status" -eq 0 ]]; then
   run_and_capture "$build_log" dotnet build "$SOLUTION_PATH" -c "$CONFIGURATION" --no-restore -p:ContinuousIntegrationBuild=true /bl:"artifacts/maintenance/build-${stamp}.binlog"
@@ -228,6 +256,48 @@ else
   tests_status=99
 fi
 
+if [[ "$RUN_UI" == "1" ]]; then
+  echo "==> Restoring UI projects"
+  if [[ "$overall_status" -eq 0 ]]; then
+    run_and_capture "$ui_build_log" dotnet restore ui/Shoots.Ui/Shoots.Ui.csproj
+    ui_restore_status=$?
+    if [[ "$ui_restore_status" -ne 0 ]]; then
+      overall_status=1
+      set_error_code restore
+    fi
+  fi
+
+  echo "==> Building UI projects ($CONFIGURATION)"
+  if [[ "$overall_status" -eq 0 ]]; then
+    run_and_capture "$ui_build_log" dotnet build ui/Shoots.Ui/Shoots.Ui.csproj -c "$CONFIGURATION" --no-restore -p:ContinuousIntegrationBuild=true
+    ui_build_status=$?
+    if [[ "$ui_build_status" -ne 0 ]]; then
+      overall_status=1
+      set_error_code build
+    fi
+  else
+    echo "Skipping UI build because previous stage failed." | tee "$ui_build_log"
+    ui_build_status=99
+  fi
+
+  if [[ "$RUN_TESTS" == "1" ]]; then
+    echo "==> Testing UI projects ($CONFIGURATION)"
+    if [[ "$overall_status" -eq 0 ]]; then
+      run_and_capture "$ui_tests_log" dotnet test ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -c "$CONFIGURATION" --no-build -p:ContinuousIntegrationBuild=true
+      ui_tests_status=$?
+      if [[ "$ui_tests_status" -ne 0 ]]; then
+        overall_status=1
+        set_error_code tests
+      fi
+    else
+      echo "Skipping UI tests because previous stage failed." | tee "$ui_tests_log"
+      ui_tests_status=99
+    fi
+  fi
+else
+  echo "RUN_UI is not set to 1; skipping UI build/test." | tee "$ui_build_log"
+fi
+
 write_failure_fingerprint
 
 cat <<SUMMARY
@@ -236,12 +306,16 @@ cat <<SUMMARY
 restore: $(status_word "$restore_status")
 build:   $(status_word "$build_status")
 tests:   $(status_word "$tests_status")
+ui_build: $(status_word "$ui_build_status")
+ui_tests: $(status_word "$ui_tests_status")
 errorCode: ${error_code:-none}
 
 logs:
 - $restore_log
 - $build_log
 - $tests_log
+- $ui_build_log
+- $ui_tests_log
 
 solution:
 - $SOLUTION_PATH

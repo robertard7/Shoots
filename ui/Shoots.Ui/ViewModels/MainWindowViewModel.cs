@@ -1641,11 +1641,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             projectId,
             projectName,
             createdUtc,
-            SelectedEnvironmentId: _pendingEnvironmentId,
-            providerKind: _pendingProviderKind,
-            providerEndpoint: _pendingProviderEndpoint,
-            language: _pendingProjectLanguage,
-            description: _pendingProjectDescription,
+            _pendingEnvironmentId,
+            _pendingProviderKind,
+            _pendingProviderEndpoint,
+            _pendingProjectLanguage,
+            _pendingProjectDescription,
             projectRoot);
 
         var descriptorPath = Path.Combine(projectRoot, "project.json");

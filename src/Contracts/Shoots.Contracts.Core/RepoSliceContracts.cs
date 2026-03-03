@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Encodings.Web;
 using System.Text;
 using System.Text.Json;
 
@@ -74,6 +75,7 @@ public static class RepoSliceJson
 {
     public static readonly JsonSerializerOptions Options = new()
     {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false
     };

@@ -6,6 +6,7 @@ using Shoots.Contracts.Core.AI.Narration;
 using Shoots.Runtime.Language;
 using Shoots.Runtime.Loader;
 using Shoots.Runtime.Runner;
+using Shoots.Runtime.Abstractions;
 
 namespace Shoots.Runtime.Runner;
 
@@ -538,7 +539,7 @@ public static class Program
                         ProviderKind = providerKind,
                         EnvironmentKind = envId,
                         Constraints = new[] { "deterministic=true", "network=off" },
-                        ProjectRoot = RelativePath(root, project)
+                        ProjectRoot = RelativePath(project, project)
                     };
 
                     var synthesis = SynthesizePlanV1(request, retrievalResult.Hits);
@@ -601,7 +602,7 @@ public static class Program
 
             await File.WriteAllTextAsync(Path.Combine(runDir, "run.json"), JsonSerializer.Serialize(runRecord, JsonOptions())).ConfigureAwait(false);
 
-            var traceEvents = new[]
+            var traceEvents = new object[]
             {
                 new { index = 0, type = "run.started", runId, scenario = "builder_smoke" },
                 new { index = 1, type = "plan.validated", planHash },

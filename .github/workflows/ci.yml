@@ -108,6 +108,11 @@ jobs:
         shell: bash
         run: bash scripts/verify_step_envelopes.sh --require-run
 
+      - name: Verify UI contracts
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_ui_contracts.sh
+
       - name: Golden builder replay check
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash

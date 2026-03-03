@@ -15,7 +15,7 @@ resolve_latest_run() {
   local candidate=""
   candidate="$(find .state/runs -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | sort | tail -n 1 || true)"
   if [[ -z "$candidate" ]]; then
-    candidate="$(find artifacts/builder_loop -type d -path '*/run/*' -print 2>/dev/null | sort | tail -n 1 || true)"
+    candidate="$(find artifacts/builder_loop -type d -path '*/run/*' ! -path '*/run/*/*' -print 2>/dev/null | sort | tail -n 1 || true)"
   fi
   printf '%s' "$candidate"
 }

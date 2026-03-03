@@ -27,6 +27,12 @@ public sealed class WorkspaceShellService : IWorkspaceShellService
         if (ct.IsCancellationRequested || string.IsNullOrWhiteSpace(path))
             return Task.CompletedTask;
 
+        if (!OperatingSystem.IsWindows())
+        {
+            Trace.WriteLine("ui.shell.unsupported_os");
+            return Task.CompletedTask;
+        }
+
         var full = Path.GetFullPath(path);
         if (!Directory.Exists(full) && !File.Exists(full))
             return Task.CompletedTask;
