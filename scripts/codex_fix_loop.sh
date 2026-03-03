@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$root"
+
+if RUN_TESTS=1 bash scripts/maintenance.sh; then
+  exit 0
+fi
+
+latest_log="$(ls -1t artifacts/maintenance/tests-*.log 2>/dev/null | head -n 1 || true)"
+if [[ -z "$latest_log" ]]; then
+  echo "No tests log found under artifacts/maintenance/."
+  exit 1
+fi
+
+echo "Newest tests log: $latest_log"
+echo "----- tail (120 lines) -----"
+tail -n 120 "$latest_log"
+echo "----------------------------"
+
+exit 1
