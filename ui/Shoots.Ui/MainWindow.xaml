@@ -206,7 +206,7 @@
                           SelectedItem="{Binding SelectedModelId, Mode=TwoWay}" />
                 <Button Margin="8,0,0,0"
                         Content="Refresh"
-                        Command="{Binding RefreshModelCatalogCommand}" />
+                        Command="{Binding RefreshBackendStatusCommand}" />
                 <Button Margin="8,0,0,0"
                         Content="Reset catalog"
                         Command="{Binding ResetModelCatalogCommand}" />
@@ -226,6 +226,20 @@
                          TextWrapping="Wrap"
                          Text="{Binding ModelCatalogError}"
                          Visibility="{Binding HasModelCatalogError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+              <TextBlock Margin="0,2,0,0"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding OllamaEndpoint, StringFormat=Ollama Endpoint: {0}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding QdrantEndpoint, StringFormat=Qdrant Endpoint: {0}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontSize="11"
+                         Foreground="#FFB91C1C"
+                         TextWrapping="Wrap"
+                         Text="{Binding BackendDisabledReason}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">

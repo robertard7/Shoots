@@ -6,7 +6,10 @@ using Shoots.UI.ExecutionEnvironments;
 using Shoots.UI.Projects;
 using Shoots.UI.Services;
 using Shoots.UI.Settings;
+using Shoots.UI.Services.Backends;
 using Shoots.UI.ViewModels;
+using System;
+using System.Net.Http;
 
 namespace Shoots.UI;
 
@@ -23,6 +26,19 @@ public partial class MainWindow : Window
         var blueprintStore = new SystemBlueprintStore();
         var executionEnvironmentStore = new ExecutionEnvironmentSettingsStore();
         var aiPolicyStore = new AiPolicyStore();
+        var ollamaHttpClient = new HttpClient
+        {
+            BaseAddress = new Uri(EndpointResolver.ResolveOllamaEndpoint(), UriKind.Absolute)
+        };
+        var qdrantHttpClient = new HttpClient
+        {
+            BaseAddress = new Uri(EndpointResolver.ResolveQdrantEndpoint(), UriKind.Absolute)
+        };
+
+        var ollamaClient = new OllamaClient(ollamaHttpClient);
+        var qdrantClient = new QdrantClient(qdrantHttpClient);
+        var backendProbeService = new BackendProbeService(ollamaClient, qdrantClient);
+
         DataContext = new MainWindowViewModel(
             new NullExecutionCommandService(),
             new EnvironmentProfileService(),
@@ -37,6 +53,8 @@ public partial class MainWindow : Window
             executionEnvironmentStore,
             aiPolicyStore,
             new AiPanelVisibilityService(),
-            new NullAiHelpFacade());
+            new NullAiHelpFacade(),
+            backendProbeService,
+            ollamaClient);
     }
 }
