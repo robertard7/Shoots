@@ -10,6 +10,7 @@ using Shoots.UI.ExecutionEnvironments;
 using Shoots.UI.Intents;
 using Shoots.UI.Projects;
 using Shoots.UI.Services;
+using Shoots.UI.Services.Backends;
 using Shoots.UI.Settings;
 using Shoots.UI.ViewModels;
 using Xunit;
@@ -63,6 +64,7 @@ public sealed class UiSurfaceCatalogTripwireTests
         var blueprintStore = new SystemBlueprintStore();
         var executionEnvironmentStore = new ExecutionEnvironmentSettingsStore();
         var aiPolicyStore = new AiPolicyStore();
+        var ollama = new FakeOllamaClient();
 
         return new MainWindowViewModel(
             new NullExecutionCommandService(),
@@ -78,6 +80,20 @@ public sealed class UiSurfaceCatalogTripwireTests
             executionEnvironmentStore,
             aiPolicyStore,
             new AiPanelVisibilityService(),
-            new NullAiHelpFacade());
+            new NullAiHelpFacade(),
+            new BackendProbeService(ollama, new FakeQdrantClient()),
+            ollama);
+    }
+
+    private sealed class FakeOllamaClient : IOllamaClient
+    {
+        public System.Threading.Tasks.Task<OllamaTagsResult> GetTagsAsync(System.Threading.CancellationToken cancellationToken)
+            => System.Threading.Tasks.Task.FromResult(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok"));
+    }
+
+    private sealed class FakeQdrantClient : IQdrantClient
+    {
+        public System.Threading.Tasks.Task<QdrantHealthResult> GetHealthAsync(System.Threading.CancellationToken cancellationToken)
+            => System.Threading.Tasks.Task.FromResult(new QdrantHealthResult(true, null, "ok"));
     }
 }
