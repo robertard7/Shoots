@@ -14,63 +14,86 @@ permissions:
   checks: read
   pull-requests: write
 
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+  NUGET_XMLDOC_MODE: "skip"
+  # Toggle Linux tests without editing the workflow:
+  # set to "1" to run tests, "0" to skip.
+  RUN_TESTS_LINUX: "1"
+
 jobs:
   runtime-linux:
     name: runtime-linux
     runs-on: ubuntu-latest
     steps:
-      - name: Clean artifacts folder
-        run: |
-          if (Test-Path artifacts) { Remove-Item -Recurse -Force artifacts }
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Clean artifacts folder
+        shell: bash
+        run: |
+          rm -rf artifacts || true
+
       - name: Verify provider adapter naming
+        shell: bash
         run: bash scripts/verify_provideradapter_naming.sh
 
       - name: Verify UI test project guard
+        shell: bash
         run: bash scripts/verify_ui_test_project_guard.sh
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: "8.0.x"
 
       - name: Dotnet info
+        shell: bash
         run: dotnet --info
 
       - name: Verify version consistency
+        shell: bash
         run: bash scripts/verify_versions.sh
 
       - name: Verify repo topology guard
+        shell: bash
         run: bash scripts/verify_repo_topology_guard.sh
 
       - name: Verify no-spin timeout guard
+        shell: bash
         run: bash scripts/verify_no_spin_timeouts.sh
 
       - name: Restore Runtime
+        shell: bash
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
       - name: Build Runtime (Release) with binlog + log
+        shell: bash
         run: |
           mkdir -p artifacts
           (dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true /bl:artifacts/build-runtime-linux.binlog) 2>&1 | tee artifacts/build.log
 
       - name: Test Runtime.Tests (trx) + log
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
         run: |
           mkdir -p artifacts
           (dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts/runtime-linux.trx") 2>&1 | tee artifacts/test-runtime.log
 
       - name: Test Builder.Tests (trx) + log
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
         run: |
           mkdir -p artifacts
           (dotnet test src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts/builder-linux.trx") 2>&1 | tee artifacts/test-builder.log
 
       - name: Write CI first-failure summary (always)
         if: always()
+        shell: bash
         run: |
           mkdir -p artifacts
-          # Prefer test logs, fall back to build log.
           tailfile="artifacts/test-runtime.log"
           if [ -f "artifacts/test-builder.log" ]; then tailfile="artifacts/test-builder.log"; fi
           if [ ! -f "$tailfile" ] && [ -f "artifacts/build.log" ]; then tailfile="artifacts/build.log"; fi
@@ -126,7 +149,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: "8.0.x"
 
       - name: Dotnet info
         run: dotnet --info
@@ -221,26 +244,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Clean artifacts folder
+        shell: bash
+        run: rm -rf artifacts || true
+
       - name: Verify UI test project guard
+        shell: bash
         run: bash scripts/verify_ui_test_project_guard.sh
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: "8.0.x"
 
       - name: Dotnet info
+        shell: bash
         run: dotnet --info
 
       - name: Verify version consistency
+        shell: bash
         run: bash scripts/verify_versions.sh
 
       - name: Build host/runtime/smoke (Release) with binlog + log
+        shell: bash
         run: |
           mkdir -p artifacts
           (dotnet build src/Runtime/Shoots.Runtime.sln -c Release -p:ContinuousIntegrationBuild=true /bl:artifacts/build-rc-linux.binlog) 2>&1 | tee artifacts/build.log
 
       - name: Test runtime + host + client (log)
+        shell: bash
         run: |
           mkdir -p artifacts
           (dotnet test src/Runtime/Shoots.Runtime.Tests/Shoots.Runtime.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-runtime.log
@@ -248,6 +280,7 @@ jobs:
           (dotnet test src/Client/Shoots.Client.Tests/Shoots.Client.Tests.csproj -c Release -m:1 -p:ContinuousIntegrationBuild=true) 2>&1 | tee artifacts/test-client.log
 
       - name: Pack release candidate
+        shell: bash
         run: |
           mkdir -p artifacts/nuget
           dotnet pack src/Contracts/Shoots.Contracts.Core/Shoots.Contracts.Core.csproj -c Release -o artifacts/nuget
@@ -257,6 +290,7 @@ jobs:
 
       - name: Write CI first-failure summary (always)
         if: always()
+        shell: bash
         run: |
           mkdir -p artifacts
           tailfile="artifacts/test-client.log"
@@ -313,7 +347,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: "8.0.x"
 
       - name: Dotnet info
         run: dotnet --info
