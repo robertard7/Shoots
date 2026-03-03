@@ -1,0 +1,16 @@
+{
+  "projectId": "builder-execute-fail-assert",
+  "planHash": "7c8e7ee1a2204b8e03cbfb915b39fb6576524cb95ecef3378c32234489f44f16",
+  "steps": [
+    {
+      "stepId": "writetext01",
+      "kind": "write_text.v1",
+      "args": { "targetPath": "output/demo.txt", "text": "hello builder" }
+    },
+    {
+      "stepId": "assert0001",
+      "kind": "assert_contains.v1",
+      "args": { "targetPath": "output/demo.txt", "contains": "goodbye" }
+    }
+  ]
+}

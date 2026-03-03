@@ -4,6 +4,7 @@
     <ProjectReference Include="..\..\Contracts\Shoots.Contracts.Core\Shoots.Contracts.Core.csproj" />
     <ProjectReference Include="..\Shoots.Runtime.Abstractions\Shoots.Runtime.Abstractions.csproj" />
     <ProjectReference Include="..\Shoots.Runtime.Loader\Shoots.Runtime.Loader.csproj" />
+    <ProjectReference Include="..\Shoots.Runtime.Language\Shoots.Runtime.Language.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -1,0 +1,15 @@
+{
+  "projectId": "builder-smoke",
+  "planHash": "6f0cd2ab6f5ec9d7d35db5b8475a421f5d86d0d27424634b2fe07062f1389f5f",
+  "tool.network_disabled": false,
+  "steps": [
+    {
+      "stepId": "invalid-step",
+      "kind": "RunToolUnsupported",
+      "toolId": "linux.noop.v1",
+      "args": {
+        "message": "invalid kind fixture"
+      }
+    }
+  ]
+}

@@ -184,6 +184,33 @@ else
 fi
 
 if [[ "$RUN_TESTS" == "1" ]]; then
+  echo "==> Verifying blocking stubs"
+  run_and_capture "$tests_log" bash scripts/verify_no_blocking_stubs.sh
+  stub_status=$?
+  if [[ "$stub_status" -ne 0 ]]; then
+    tests_status=$stub_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying codex diagnostics order"
+  run_and_capture "$tests_log" bash scripts/verify_diagnostics_order.sh
+  diagnostics_status=$?
+  if [[ "$diagnostics_status" -ne 0 ]]; then
+    tests_status=$diagnostics_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying step envelopes"
+  run_and_capture "$tests_log" bash scripts/verify_step_envelopes.sh
+  step_envelope_status=$?
+  if [[ "$step_envelope_status" -ne 0 ]]; then
+    tests_status=$step_envelope_status
+    overall_status=1
+    set_error_code tests
+  fi
+
   echo "==> Testing solution ($CONFIGURATION)"
   if [[ "$overall_status" -eq 0 ]]; then
     run_and_capture "$tests_log" dotnet test "$SOLUTION_PATH" -c "$CONFIGURATION" --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts/maintenance/tests-${stamp}.trx"

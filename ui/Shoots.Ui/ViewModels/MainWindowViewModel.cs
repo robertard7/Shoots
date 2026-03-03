@@ -21,6 +21,7 @@ using Shoots.UI.Intents;
 using Shoots.UI.Projects;
 using Shoots.UI.Roles;
 using Shoots.UI.Services;
+using Shoots.UI.Services.Backends;
 using Shoots.UI.Settings;
 using Shoots.UI.Startup;
 using Shoots.Runtime.Ui.Abstractions;
@@ -67,6 +68,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private readonly IAiPolicyStore _aiPolicyStore;
     private readonly AiPanelVisibilityService _aiPanelVisibilityService;
     private readonly IAiHelpFacade _aiHelpFacade;
+    private readonly IBackendProbeService _backendProbeService;
+    private readonly IOllamaClient _ollamaClient;
 
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private readonly ObservableCollection<BlueprintEntryViewModel> _blueprints;
@@ -74,14 +77,17 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private readonly StartupFlowStateMachine _startupFlow;
     private readonly ObservableCollection<string> _startupMessages;
     private readonly ObservableCollection<string> _narrationLines;
+    private readonly ObservableCollection<string> _availableModels;
 
     public ReadOnlyObservableCollection<ProjectWorkspace> RecentWorkspaces { get; }
     public ReadOnlyObservableCollection<BlueprintEntryViewModel> Blueprints { get; }
     public ReadOnlyObservableCollection<UiRootFsDescriptor> RootFsCatalog { get; }
     public ReadOnlyObservableCollection<string> StartupMessages { get; }
     public ReadOnlyObservableCollection<string> NarrationLines { get; }
+    public ReadOnlyObservableCollection<string> AvailableModels { get; }
 
     private string _startupInput = string.Empty;
+    private string _selectedModelId = string.Empty;
     private string _selectedNarrationPhase = "all";
     private readonly ReadOnlyCollection<ProviderCapabilityMatrixRow> _providerCapabilityMatrix;
 
@@ -120,6 +126,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private ExecutionEnvironmentSettings _executionSettings = CreateDefaultExecutionEnvironmentSettings();
 
     private string _blueprintSaveStatus = "Blueprint changes are saved.";
+    private BackendStatus _ollamaStatus = new(BackendKind.Ollama, false, "ui.backend.ollama.not_probed", "Ollama status has not been probed.", DateTimeOffset.MinValue, EndpointResolver.ResolveOllamaEndpoint(), null);
+    private BackendStatus _qdrantStatus = new(BackendKind.Qdrant, false, "ui.backend.qdrant.not_probed", "Qdrant status has not been probed.", DateTimeOffset.MinValue, EndpointResolver.ResolveQdrantEndpoint(), null);
+    private DateTimeOffset? _lastProbeUtc;
+    private bool _probeInFlight;
+    private string _modelCatalogError = string.Empty;
 
     private AiPresentationPolicy _aiPresentationPolicy =
         new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true, EnterpriseMode: false);
@@ -354,6 +365,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public AsyncRelayCommand GeneratePlanCommand { get; private set; } = null!;
         public AsyncRelayCommand RunIntakePlanCommand { get; private set; } = null!;
         public AsyncRelayCommand ResumeInjectDecisionCommand { get; private set; } = null!;
+        public AsyncRelayCommand RefreshModelCatalogCommand { get; private set; } = null!;
+        public AsyncRelayCommand ResetModelCatalogCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenStateFolderCommand { get; private set; } = null!;
+        public AsyncRelayCommand QuickStartCommand { get; private set; } = null!;
 
 	// Call this from your constructor AFTER other command setup
 	private void InitializeChatIntakeSurface()
@@ -365,9 +380,43 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 		RunIntakePlanCommand = new AsyncRelayCommand(RunIntakePlanAsync, CanRunIntakePlan);
 
 		ResumeInjectDecisionCommand = new AsyncRelayCommand(ResumeInjectDecisionAsync, CanResumeInjectDecision);
+        RefreshModelCatalogCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, () => !ProbeInFlight);
+        ResetModelCatalogCommand = new AsyncRelayCommand(ResetModelCatalogAsync, () => !ProbeInFlight);
+        OpenStateFolderCommand = new AsyncRelayCommand(OpenStateFolderAsync);
+        QuickStartCommand = new AsyncRelayCommand(QuickStartAsync);
 
 		RebuildJobSpecDigest();
 	}
+
+    private Task ResetModelCatalogAsync()
+    {
+        _availableModels.Clear();
+        SelectedModelId = string.Empty;
+        ModelCatalogError = string.Empty;
+        OnPropertyChanged(nameof(DefaultModelId));
+        OnPropertyChanged(nameof(CatalogHash));
+        return Task.CompletedTask;
+    }
+
+    private Task OpenStateFolderAsync()
+    {
+        var statePath = Path.GetFullPath(Path.Combine(".state"));
+        if (!Directory.Exists(statePath))
+        {
+            Directory.CreateDirectory(statePath);
+        }
+
+        return _workspaceShell.OpenFolderAsync(statePath);
+    }
+
+    private Task QuickStartAsync()
+    {
+        IntakeIntent = "Create deterministic builder smoke run";
+        IntakeTarget = "builder_smoke";
+        IntakeStack = "dotnet";
+        RebuildJobSpecDigest();
+        return Task.CompletedTask;
+    }
 
 	private Task LockWorkOrderAsync()
 	{
@@ -404,8 +453,20 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 	{
 		if (!HasActiveWorkspace) return false;
 		if (string.IsNullOrWhiteSpace(IntakeIntent)) return false;
+		if (!string.IsNullOrWhiteSpace(BuildBackendDisabledReason())) return false;
 		return true;
 	}
+
+    public string RunIntakePlanDisabledReason => GetRunIntakePlanDisabledReason();
+
+    private string GetRunIntakePlanDisabledReason()
+    {
+        if (!HasActiveWorkspace) return "ui.workspace.missing: select a workspace first.";
+        if (string.IsNullOrWhiteSpace(IntakeIntent)) return "ui.intake.intent.missing: provide an intake intent.";
+        var backendReason = BuildBackendDisabledReason();
+        if (!string.IsNullOrWhiteSpace(backendReason)) return backendReason;
+        return string.Empty;
+    }
 
 	private Task RunIntakePlanAsync()
 	{
@@ -453,7 +514,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         IExecutionEnvironmentSettingsStore executionEnvironmentStore,
         IAiPolicyStore aiPolicyStore,
         AiPanelVisibilityService aiPanelVisibilityService,
-        IAiHelpFacade aiHelpFacade)
+        IAiHelpFacade aiHelpFacade,
+        IBackendProbeService backendProbeService,
+        IOllamaClient ollamaClient)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
         _hostExecutionService = new HostExecutionService(_commandService);
@@ -474,6 +537,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _aiPolicyStore = aiPolicyStore ?? throw new ArgumentNullException(nameof(aiPolicyStore));
         _aiPanelVisibilityService = aiPanelVisibilityService ?? throw new ArgumentNullException(nameof(aiPanelVisibilityService));
         _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
+        _backendProbeService = backendProbeService ?? throw new ArgumentNullException(nameof(backendProbeService));
+        _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
 
         _state = UiExecutionState.Idle;
 
@@ -506,6 +571,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ExplainExecutionCommand = new AsyncRelayCommand(ExplainExecutionAsync, CanRefreshAiHelp);
         ReplayPlanCommand = new AsyncRelayCommand(ReplayPlanAsync, CanReplayPlan);
         RefreshNarrationCommand = new AsyncRelayCommand(RefreshNarrationAsync);
+        RefreshBackendStatusCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, () => !ProbeInFlight);
 
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
@@ -528,6 +594,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         StartupMessages = new ReadOnlyObservableCollection<string>(_startupMessages);
         _narrationLines = new ObservableCollection<string>();
         NarrationLines = new ReadOnlyObservableCollection<string>(_narrationLines);
+        _availableModels = new ObservableCollection<string>();
+        AvailableModels = new ReadOnlyObservableCollection<string>(_availableModels);
 
         _providerCapabilityMatrix = new ReadOnlyCollection<ProviderCapabilityMatrixRow>(new[]
         {
@@ -577,6 +645,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         RegisterAiSurfaces();
         InitializeChatIntake(); // partial if you have it
         InitializeChatIntakeSurface();
+        _ = RefreshBackendStatusAsync();
         _ = RefreshAiHelpAsync();
     }
 
@@ -878,7 +947,50 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ? "AI help is available for this role."
         : "AI is running in the background but hidden by settings.";
 
-    public string AiProviderStatus => "Provider: Ollama";
+    public string AiProviderStatus => $"Provider: Ollama ({(OllamaStatus.IsAvailable ? "available" : OllamaStatus.ErrorCode ?? "unavailable")})";
+    public BackendStatus OllamaStatus => _ollamaStatus;
+    public BackendStatus QdrantStatus => _qdrantStatus;
+    public DateTimeOffset? LastProbeUtc => _lastProbeUtc;
+    public bool ProbeInFlight
+    {
+        get => _probeInFlight;
+        private set
+        {
+            if (_probeInFlight == value) return;
+            _probeInFlight = value;
+            OnPropertyChanged(nameof(ProbeInFlight));
+            RefreshBackendStatusCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    public string OllamaEndpoint => _ollamaStatus.Endpoint ?? EndpointResolver.ResolveOllamaEndpoint();
+    public string QdrantEndpoint => _qdrantStatus.Endpoint ?? EndpointResolver.ResolveQdrantEndpoint();
+    public string ModelCatalogError
+    {
+        get => _modelCatalogError;
+        private set
+        {
+            if (_modelCatalogError == value) return;
+            _modelCatalogError = value;
+            OnPropertyChanged(nameof(ModelCatalogError));
+            OnPropertyChanged(nameof(HasModelCatalogError));
+        }
+    }
+
+    public bool HasModelCatalogError => !string.IsNullOrWhiteSpace(ModelCatalogError);
+    public string DefaultModelId => _availableModels.FirstOrDefault() ?? "none";
+    public string SelectedModelId
+    {
+        get => _selectedModelId;
+        set
+        {
+            if (_selectedModelId == value) return;
+            _selectedModelId = value;
+            OnPropertyChanged(nameof(SelectedModelId));
+        }
+    }
+    public string CatalogHash => ComputeDeterministicHash(string.Join("\n", _availableModels));
+    public string BackendDisabledReason => BuildBackendDisabledReason();
     public string AiExportNotice => IsCopyExportDisabled ? "Copy and export are disabled by settings." : string.Empty;
 
     public string StartDisabledReason => GetStartDisabledReason();
@@ -966,6 +1078,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public AsyncRelayCommand ExplainExecutionCommand { get; }
     public AsyncRelayCommand ReplayPlanCommand { get; }
     public AsyncRelayCommand RefreshNarrationCommand { get; }
+    public AsyncRelayCommand RefreshBackendStatusCommand { get; }
 
     // ---- UI-safe plan setter ----
     public void SetPlanPreview(string? planId, string? providerId, ProviderKind providerKind, string? graphHash, string? nodeSetHash, string? edgeSetHash)
@@ -1272,6 +1385,74 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         return Task.CompletedTask;
+    }
+
+    private async Task RefreshBackendStatusAsync()
+    {
+        ProbeInFlight = true;
+        try
+        {
+            var ollama = await _backendProbeService.ProbeOllamaAsync(default).ConfigureAwait(false);
+            var qdrant = await _backendProbeService.ProbeQdrantAsync(default).ConfigureAwait(false);
+            _ollamaStatus = ollama;
+            _qdrantStatus = qdrant;
+            _lastProbeUtc = DateTimeOffset.UtcNow;
+
+            OnPropertyChanged(nameof(OllamaStatus));
+            OnPropertyChanged(nameof(QdrantStatus));
+            OnPropertyChanged(nameof(LastProbeUtc));
+            OnPropertyChanged(nameof(OllamaEndpoint));
+            OnPropertyChanged(nameof(QdrantEndpoint));
+            OnPropertyChanged(nameof(AiProviderStatus));
+            OnPropertyChanged(nameof(BackendDisabledReason));
+            OnPropertyChanged(nameof(RunIntakePlanDisabledReason));
+
+            await RefreshModelCatalogFromBackendAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            ProbeInFlight = false;
+        }
+    }
+
+    private async Task RefreshModelCatalogFromBackendAsync()
+    {
+        if (!_ollamaStatus.IsAvailable)
+        {
+            _availableModels.Clear();
+            SelectedModelId = string.Empty;
+            ModelCatalogError = _ollamaStatus.ErrorCode ?? "ui.ollama.unreachable";
+            OnPropertyChanged(nameof(DefaultModelId));
+            OnPropertyChanged(nameof(CatalogHash));
+            return;
+        }
+
+        var tags = await _ollamaClient.GetTagsAsync(default).ConfigureAwait(false);
+        _availableModels.Clear();
+
+        if (!tags.IsSuccess)
+        {
+            ModelCatalogError = tags.ErrorCode ?? "ui.ollama.bad_json";
+            SelectedModelId = string.Empty;
+            OnPropertyChanged(nameof(DefaultModelId));
+            OnPropertyChanged(nameof(CatalogHash));
+            return;
+        }
+
+        foreach (var model in tags.ModelNames.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ThenBy(static x => x, StringComparer.Ordinal))
+        {
+            _availableModels.Add(model);
+        }
+
+        ModelCatalogError = _availableModels.Count == 0 ? "ui.ollama.no_models" : string.Empty;
+
+        if (_availableModels.Count > 0 && !_availableModels.Contains(_selectedModelId, StringComparer.Ordinal))
+        {
+            SelectedModelId = _availableModels[0];
+        }
+
+        OnPropertyChanged(nameof(DefaultModelId));
+        OnPropertyChanged(nameof(CatalogHash));
     }
 
 	private void RegisterAiSurfaces()
@@ -1721,6 +1902,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ExplainExecutionCommand.RaiseCanExecuteChanged();
         ReplayPlanCommand.RaiseCanExecuteChanged();
         RefreshNarrationCommand.RaiseCanExecuteChanged();
+        RunIntakePlanCommand.RaiseCanExecuteChanged();
 
         OnPropertyChanged(nameof(StartDisabledReason));
         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));
@@ -1728,6 +1910,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(AiHelpDisabledReason));
         OnPropertyChanged(nameof(SystemTierActionLabel));
         OnPropertyChanged(nameof(ExecutionDisabledReason));
+        OnPropertyChanged(nameof(RunIntakePlanDisabledReason));
     }
 
     private void OnBlueprintDraftChanged()
@@ -1892,7 +2075,27 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string GetStartDisabledReason() => string.IsNullOrWhiteSpace(_planId) ? "No plan loaded." : string.Empty;
     private string GetApplyEnvironmentDisabledReason() => string.Empty;
     private string GetApplyScriptDisabledReason() => string.Empty;
-    private string GetAiHelpDisabledReason() => string.Empty;
+    private string GetAiHelpDisabledReason() => BuildBackendDisabledReason();
+
+    private string BuildBackendDisabledReason()
+    {
+        if (!_ollamaStatus.IsAvailable)
+        {
+            return $"AI backend unavailable ({_ollamaStatus.ErrorCode ?? "ui.backend.ollama.unavailable"}).";
+        }
+
+        if (!_qdrantStatus.IsAvailable)
+        {
+            return $"Vector memory unavailable ({_qdrantStatus.ErrorCode ?? "ui.backend.qdrant.unavailable"}).";
+        }
+
+        if (_availableModels.Count == 0)
+        {
+            return "No models available (ui.ollama.no_models).";
+        }
+
+        return string.Empty;
+    }
 
     private static IReadOnlyList<string> DescribeCapabilities(object? caps)
     {

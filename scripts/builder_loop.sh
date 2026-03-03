@@ -37,11 +37,42 @@ cat > "${plan_root}/plan.json" <<PLAN
   "planHash": "${plan_hash}",
   "steps": [
     {
-      "stepId": "$(printf '%s' "${plan_hash}|RunTool" | sha256sum | awk '{print $1}' | cut -c1-12)",
-      "kind": "RunTool",
+      "stepId": "$(printf '%s' "${plan_hash}|Retrieve" | sha256sum | awk '{print $1}' | cut -c1-12)",
+      "kind": "retrieve_context.v1",
       "toolId": "linux.noop.v1",
       "args": {
-        "requiresNetwork": false
+        "queryText": "builder loop verification",
+        "includeGlobs": "src/**/*.cs,docs/*.md",
+        "excludeGlobs": "**/bin/**,**/obj/**",
+        "maxFiles": 6,
+        "maxTotalBytes": 64000,
+        "maxFileBytes": 8000
+      }
+    },
+    {
+      "stepId": "$(printf '%s' "${plan_hash}|Synthesize" | sha256sum | awk '{print $1}' | cut -c1-12)",
+      "kind": "synthesize_plan.v1",
+      "toolId": "linux.noop.v1",
+      "args": {
+        "planKind": "builder_v1"
+      }
+    },
+    {
+      "stepId": "$(printf '%s' "${plan_hash}|Write" | sha256sum | awk '{print $1}' | cut -c1-12)",
+      "kind": "write_text.v1",
+      "toolId": "linux.noop.v1",
+      "args": {
+        "targetPath": "output/builder-loop.txt",
+        "text": "builder loop wrote this file"
+      }
+    },
+    {
+      "stepId": "$(printf '%s' "${plan_hash}|Assert" | sha256sum | awk '{print $1}' | cut -c1-12)",
+      "kind": "assert_contains.v1",
+      "toolId": "linux.noop.v1",
+      "args": {
+        "targetPath": "output/builder-loop.txt",
+        "contains": "builder loop"
       }
     }
   ]
@@ -67,8 +98,10 @@ cat > "${env_root}/descriptor.json" <<ENVDESC
   "environmentId": "host-local",
   "descriptorHash": "${env_hash}",
   "capabilities": [
-    "fs.read",
-    "fs.write"
+    "filesystem",
+    "process",
+    "verify",
+    "retrieval.lexical"
   ]
 }
 ENVDESC
@@ -84,3 +117,15 @@ fi
 run_and_log "$out_root/replay.log" dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- replay --run "$latest_run"
 
 echo "builder_loop artifacts: $out_root"
+
+manifest_path="$out_root/manifest.json"
+cat > "$manifest_path" <<MANIFEST
+{
+  "projectId": "${project_id}",
+  "outRoot": "${out_root}",
+  "latestRun": "${latest_run}",
+  "planHash": "${plan_hash}",
+  "providerHash": "${provider_hash}",
+  "envHash": "${env_hash}"
+}
+MANIFEST

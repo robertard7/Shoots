@@ -66,6 +66,14 @@ jobs:
         shell: bash
         run: bash scripts/verify_no_spin_timeouts.sh
 
+      - name: Verify no blocking stubs
+        shell: bash
+        run: bash scripts/verify_no_blocking_stubs.sh
+
+      - name: Verify codex diagnostics order
+        shell: bash
+        run: bash scripts/verify_diagnostics_order.sh
+
       - name: Restore Runtime
         shell: bash
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
@@ -95,6 +103,11 @@ jobs:
         shell: bash
         run: bash scripts/builder_loop.sh
 
+      - name: Verify step envelopes
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_step_envelopes.sh --require-run
+
       - name: Golden builder replay check
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
@@ -115,6 +128,11 @@ jobs:
             exit 1
           fi
 
+          if dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke_invalid_kind/project --out "$outdir/invalid-kind"; then
+            echo "expected invalid kind fixture to fail"
+            exit 1
+          fi
+
           python - <<'PYCHK'
 import json, pathlib
 expected = json.loads(pathlib.Path('etc/fixtures/builder_smoke/expected-hashes.json').read_text())
@@ -124,6 +142,16 @@ for key in ['runId','planHash','providerHash','envHash']:
     if actual.get(key) != expected.get(key):
         raise SystemExit(f'mismatch for {key}: {actual.get(key)} != {expected.get(key)}')
 PYCHK
+
+      - name: Codex entrypoint retrieval
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/codex_entrypoint.sh --retrieval
+
+      - name: Codex entrypoint all
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/codex_entrypoint.sh --all
 
       - name: Write CI first-failure summary (always)
         if: always()
@@ -154,12 +182,16 @@ PYCHK
         with:
           name: runtime-linux-artifacts
           path: |
+            artifacts/**
             artifacts/**/*.trx
             artifacts/**/*.binlog
             artifacts/**/*.log
             artifacts/**/ci-first-failure.md
+            artifacts/stubs/**
             artifacts/builder_loop/**
             artifacts/golden/**
+            artifacts/retrieval/**
+            .state/runs/**
             etc/tools.catalog.json
           if-no-files-found: warn
 
@@ -181,6 +213,9 @@ PYCHK
           Write-Host "PowerShell edition: $($PSVersionTable.PSEdition)"
           if (-not $IsWindows) { throw "This job must run on Windows." }
           if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) { throw "pwsh is required but not found." }
+
+      - name: Runner health
+        run: ./scripts/runner_health.ps1
 
       - name: Verify provider adapter naming
         run: ./scripts/verify_provideradapter_naming.ps1
@@ -275,12 +310,16 @@ PYCHK
         with:
           name: full-windows-artifacts
           path: |
+            artifacts/**
             artifacts/**/*.trx
             artifacts/**/*.binlog
             artifacts/**/*.log
             artifacts/**/ci-first-failure.md
+            artifacts/stubs/**
             artifacts/builder_loop/**
             artifacts/golden/**
+            artifacts/retrieval/**
+            .state/runs/**
             etc/tools.catalog.json
           if-no-files-found: warn
 
@@ -369,10 +408,14 @@ PYCHK
         with:
           name: rc-linux-artifacts
           path: |
+            artifacts/**
             artifacts/**/*.trx
             artifacts/**/*.binlog
             artifacts/**/*.log
             artifacts/**/ci-first-failure.md
+            artifacts/stubs/**
+            artifacts/builder_loop/**
+            .state/runs/**
           if-no-files-found: warn
 
   determinism-guard:
@@ -392,6 +435,9 @@ PYCHK
           Write-Host "PowerShell edition: $($PSVersionTable.PSEdition)"
           if (-not $IsWindows) { throw "This job must run on Windows." }
           if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) { throw "pwsh is required but not found." }
+
+      - name: Runner health
+        run: ./scripts/runner_health.ps1
 
       - name: Verify provider adapter naming
         run: ./scripts/verify_provideradapter_naming.ps1
@@ -460,8 +506,12 @@ PYCHK
         with:
           name: determinism-artifacts
           path: |
+            artifacts/**
             artifacts/**/*.trx
             artifacts/**/*.binlog
             artifacts/**/*.log
             artifacts/**/ci-first-failure.md
+            artifacts/stubs/**
+            artifacts/builder_loop/**
+            .state/runs/**
           if-no-files-found: warn

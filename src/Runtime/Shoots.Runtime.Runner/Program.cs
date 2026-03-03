@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Shoots.Contracts.Core;
 using Shoots.Contracts.Core.AI.Narration;
+using Shoots.Runtime.Language;
 using Shoots.Runtime.Loader;
 using Shoots.Runtime.Runner;
 
@@ -231,10 +232,21 @@ static async Task<int> RunScenarioAsync(string[] args)
         Emit(narrator, "env", "env.read", "Reading environment scaffold", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["path"] = RelativePath(project, envSelectedPath) }));
         Emit(narrator, "env", "env.hash", "Environment hash loaded", IdentityData(runId, planHash, providerHash, envHash, refs));
         Emit(narrator, "execute", "execute.begin", "Executing deterministic builder steps", IdentityData(runId, planHash, providerHash, envHash, refs));
+        Emit(narrator, "builder", "builder.execute.start", "Starting builder execution", IdentityData(runId, planHash, providerHash, envHash, refs));
 
         var planNetworkDisabled = planDoc.RootElement.TryGetProperty("tool.network_disabled", out var nd) && nd.ValueKind == JsonValueKind.True;
         var stepEvents = new List<object>();
+        var stepSummaries = new List<Dictionary<string, string>>();
+        var retrievalHash = string.Empty;
+        RetrievalResult? retrievalResult = null;
         var planSteps = ResolveSteps(planDoc.RootElement, planHash);
+
+        if (!ValidateResolvedSteps(planDoc.RootElement, envDescriptorDoc.RootElement, planSteps, out var validationErrorCode, out var validationSummary, out var validationDetails))
+        {
+            EmitFailure(narrator, "plan", validationErrorCode, validationSummary, runId, planHash, providerHash, envHash, refs, details: validationDetails);
+            Console.Error.WriteLine(validationSummary);
+            return ExitCodes.PlanInvalid;
+        }
 
         foreach (var step in planSteps)
         {
@@ -243,6 +255,7 @@ static async Task<int> RunScenarioAsync(string[] args)
             if (step.Kind == "RunTool")
             {
                 var argsHash = ComputeHashHex(JsonSerializer.Serialize(step.Args));
+                Emit(narrator, "builder", "builder.execute.step.start", "Executing builder tool step", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["toolId"] = step.ToolId }));
                 Emit(narrator, "tool", "tool.start", "Starting tool execution", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["toolId"] = step.ToolId, ["argsHash"] = argsHash }));
 
                 if (planNetworkDisabled && step.RequiresNetwork)
@@ -253,20 +266,305 @@ static async Task<int> RunScenarioAsync(string[] args)
 
                 var toolRoot = Path.Combine(runDir, "tool", step.StepId);
                 Directory.CreateDirectory(toolRoot);
-                await File.WriteAllTextAsync(Path.Combine(toolRoot, "stdout.txt"), "noop\n").ConfigureAwait(false);
-                await File.WriteAllTextAsync(Path.Combine(toolRoot, "stderr.txt"), string.Empty).ConfigureAwait(false);
-                await File.WriteAllTextAsync(Path.Combine(toolRoot, "result.json"), JsonSerializer.Serialize(new { step.StepId, step.ToolId, status = "success" }, JsonOptions())).ConfigureAwait(false);
-                await File.WriteAllTextAsync(Path.Combine(toolRoot, "exit.json"), JsonSerializer.Serialize(new { exitCode = 0 }, JsonOptions())).ConfigureAwait(false);
+                var requestPath = Path.Combine(toolRoot, "request.json");
+                var stdoutPath = Path.Combine(toolRoot, "stdout.txt");
+                var stderrPath = Path.Combine(toolRoot, "stderr.txt");
+                var resultPath = Path.Combine(toolRoot, "result.json");
+                var exitPath = Path.Combine(toolRoot, "exit.json");
+                var hashesPath = Path.Combine(toolRoot, "hashes.json");
 
-                var outputHash = ComputeHashHex(await File.ReadAllTextAsync(Path.Combine(toolRoot, "result.json")).ConfigureAwait(false));
+                await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { step.StepId, step.ToolId, step.Args }, JsonOptions())).ConfigureAwait(false);
+                await File.WriteAllTextAsync(stdoutPath, TruncateDeterministic("noop\n", 2048, 64)).ConfigureAwait(false);
+                await File.WriteAllTextAsync(stderrPath, string.Empty).ConfigureAwait(false);
+                await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(new { step.StepId, step.ToolId, status = "success" }, JsonOptions())).ConfigureAwait(false);
+                await File.WriteAllTextAsync(exitPath, JsonSerializer.Serialize(new { exitCode = 0 }, JsonOptions())).ConfigureAwait(false);
+
+                var stepHashes = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["exit.json"] = ComputeHashHex(await File.ReadAllTextAsync(exitPath).ConfigureAwait(false)),
+                    ["request.json"] = ComputeHashHex(await File.ReadAllTextAsync(requestPath).ConfigureAwait(false)),
+                    ["result.json"] = ComputeHashHex(await File.ReadAllTextAsync(resultPath).ConfigureAwait(false)),
+                    ["stderr.txt"] = ComputeHashHex(await File.ReadAllTextAsync(stderrPath).ConfigureAwait(false)),
+                    ["stdout.txt"] = ComputeHashHex(await File.ReadAllTextAsync(stdoutPath).ConfigureAwait(false))
+                };
+                await File.WriteAllTextAsync(hashesPath, JsonSerializer.Serialize(stepHashes, JsonOptions())).ConfigureAwait(false);
+
+                var outputHash = stepHashes["result.json"];
                 Emit(narrator, "tool", "tool.complete", "Tool execution completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["toolId"] = step.ToolId, ["outputHash"] = outputHash }));
+                Emit(narrator, "builder", "builder.execute.step.end", "Completed builder tool step", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["toolId"] = step.ToolId }));
+            }
+
+            if (step.Kind == "write_text.v1")
+            {
+                var stepRoot = Path.Combine(runDir, "steps", step.StepId);
+                Directory.CreateDirectory(stepRoot);
+                var requestPath = Path.Combine(stepRoot, "request.json");
+                var stdoutPath = Path.Combine(stepRoot, "stdout.txt");
+                var stderrPath = Path.Combine(stepRoot, "stderr.txt");
+                var resultPath = Path.Combine(stepRoot, "result.json");
+                var exitPath = Path.Combine(stepRoot, "exit.json");
+                var hashesPath = Path.Combine(stepRoot, "hashes.json");
+
+                var targetPath = GetArgString(step.Args, "targetPath", string.Empty);
+                var text = GetArgString(step.Args, "text", string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal);
+                var absoluteTarget = ResolvePolicyPath(project, targetPath, out var policyError);
+                if (policyError is not null)
+                {
+                    EmitFailure(narrator, "builder", policyError, "File policy rejected write target", runId, planHash, providerHash, envHash, refs, step.StepId, details: targetPath);
+                    return ExitCodes.ToolExecFailed;
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(absoluteTarget!)!);
+                await File.WriteAllTextAsync(absoluteTarget!, text + "\n").ConfigureAwait(false);
+                await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { step.StepId, kind = step.Kind, targetPath, text }, JsonOptions())).ConfigureAwait(false);
+                await File.WriteAllTextAsync(stdoutPath, TruncateDeterministic($"wrote:{targetPath}\n", 2048, 64)).ConfigureAwait(false);
+                await File.WriteAllTextAsync(stderrPath, string.Empty).ConfigureAwait(false);
+                await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(new { status = "success", targetPath }, JsonOptions())).ConfigureAwait(false);
+                await File.WriteAllTextAsync(exitPath, JsonSerializer.Serialize(new { exitCode = 0 }, JsonOptions())).ConfigureAwait(false);
+                await WriteHashesAsync(hashesPath, requestPath, stdoutPath, stderrPath, resultPath, exitPath);
+            }
+
+            if (step.Kind == "read_text.v1")
+            {
+                var stepRoot = Path.Combine(runDir, "steps", step.StepId);
+                Directory.CreateDirectory(stepRoot);
+                var requestPath = Path.Combine(stepRoot, "request.json");
+                var stdoutPath = Path.Combine(stepRoot, "stdout.txt");
+                var stderrPath = Path.Combine(stepRoot, "stderr.txt");
+                var resultPath = Path.Combine(stepRoot, "result.json");
+                var exitPath = Path.Combine(stepRoot, "exit.json");
+                var hashesPath = Path.Combine(stepRoot, "hashes.json");
+
+                var targetPath = GetArgString(step.Args, "targetPath", string.Empty);
+                var maxChars = Math.Max(GetArgInt(step.Args, "maxChars", 8192), 1);
+                var absoluteTarget = ResolvePolicyPath(project, targetPath, out var policyError);
+                if (policyError is not null || !File.Exists(absoluteTarget))
+                {
+                    EmitFailure(narrator, "builder", policyError ?? "runner.read.target_missing", "Read target missing", runId, planHash, providerHash, envHash, refs, step.StepId, details: targetPath);
+                    return ExitCodes.ToolExecFailed;
+                }
+
+                var content = await File.ReadAllTextAsync(absoluteTarget!).ConfigureAwait(false);
+                var normalized = content.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal);
+                var truncated = normalized.Length > maxChars;
+                var excerpt = truncated ? normalized[..maxChars] + "[TRUNCATED_CHARS]" : normalized;
+
+                await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { step.StepId, kind = step.Kind, targetPath, maxChars }, JsonOptions())).ConfigureAwait(false);
+                await File.WriteAllTextAsync(stdoutPath, TruncateDeterministic(excerpt, 2048, 64)).ConfigureAwait(false);
+                await File.WriteAllTextAsync(stderrPath, string.Empty).ConfigureAwait(false);
+                await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(new { status = "success", targetPath, truncated }, JsonOptions())).ConfigureAwait(false);
+                await File.WriteAllTextAsync(exitPath, JsonSerializer.Serialize(new { exitCode = 0 }, JsonOptions())).ConfigureAwait(false);
+                await WriteHashesAsync(hashesPath, requestPath, stdoutPath, stderrPath, resultPath, exitPath);
+            }
+
+            if (step.Kind == "assert_contains.v1")
+            {
+                var stepRoot = Path.Combine(runDir, "steps", step.StepId);
+                Directory.CreateDirectory(stepRoot);
+                var requestPath = Path.Combine(stepRoot, "request.json");
+                var stdoutPath = Path.Combine(stepRoot, "stdout.txt");
+                var stderrPath = Path.Combine(stepRoot, "stderr.txt");
+                var resultPath = Path.Combine(stepRoot, "result.json");
+                var exitPath = Path.Combine(stepRoot, "exit.json");
+                var hashesPath = Path.Combine(stepRoot, "hashes.json");
+
+                var targetPath = GetArgString(step.Args, "targetPath", string.Empty);
+                var needle = GetArgString(step.Args, "contains", string.Empty);
+                var absoluteTarget = ResolvePolicyPath(project, targetPath, out var policyError);
+                if (policyError is not null || !File.Exists(absoluteTarget))
+                {
+                    EmitFailure(narrator, "builder", policyError ?? "runner.assert.target_missing", "Assert target missing", runId, planHash, providerHash, envHash, refs, step.StepId, details: targetPath);
+                    return ExitCodes.ToolExecFailed;
+                }
+
+                var content = await File.ReadAllTextAsync(absoluteTarget!).ConfigureAwait(false);
+                var ok = content.Contains(needle, StringComparison.Ordinal);
+                await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { step.StepId, kind = step.Kind, targetPath, contains = needle }, JsonOptions())).ConfigureAwait(false);
+                await File.WriteAllTextAsync(stdoutPath, ok ? "assert:pass\n" : "assert:fail\n").ConfigureAwait(false);
+                await File.WriteAllTextAsync(stderrPath, ok ? string.Empty : $"missing:{needle}\n").ConfigureAwait(false);
+                await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(new { status = ok ? "success" : "failed", targetPath }, JsonOptions())).ConfigureAwait(false);
+                await File.WriteAllTextAsync(exitPath, JsonSerializer.Serialize(new { exitCode = ok ? 0 : 1 }, JsonOptions())).ConfigureAwait(false);
+                await WriteHashesAsync(hashesPath, requestPath, stdoutPath, stderrPath, resultPath, exitPath);
+                if (!ok)
+                {
+                    EmitFailure(narrator, "builder", "builder.execute.assert_failed", "Assertion step failed", runId, planHash, providerHash, envHash, refs, step.StepId, details: targetPath);
+                    return ExitCodes.ToolExecFailed;
+                }
+            }
+
+            if (step.Kind == "apply_unified_diff.v1")
+            {
+                var stepRoot = Path.Combine(runDir, "steps", step.StepId);
+                Directory.CreateDirectory(stepRoot);
+                var requestPath = Path.Combine(stepRoot, "request.json");
+                var stdoutPath = Path.Combine(stepRoot, "stdout.txt");
+                var stderrPath = Path.Combine(stepRoot, "stderr.txt");
+                var resultPath = Path.Combine(stepRoot, "result.json");
+                var exitPath = Path.Combine(stepRoot, "exit.json");
+                var hashesPath = Path.Combine(stepRoot, "hashes.json");
+
+                var targetPath = GetArgString(step.Args, "targetPath", string.Empty);
+                var diffText = GetArgString(step.Args, "diffText", string.Empty);
+                var absoluteTarget = ResolvePolicyPath(project, targetPath, out var policyError);
+                if (policyError is not null || !File.Exists(absoluteTarget))
+                {
+                    EmitFailure(narrator, "builder", policyError ?? "builder.patch.target_missing", "Patch target missing", runId, planHash, providerHash, envHash, refs, step.StepId, details: targetPath);
+                    return ExitCodes.ToolExecFailed;
+                }
+
+                var content = await File.ReadAllTextAsync(absoluteTarget!).ConfigureAwait(false);
+                if (!TryApplySimpleUnifiedDiff(content, diffText, out var patched, out var patchError))
+                {
+                    EmitFailure(narrator, "builder", patchError ?? "builder.patch.invalid", "Failed to apply patch", runId, planHash, providerHash, envHash, refs, step.StepId, details: targetPath);
+                    return ExitCodes.ToolExecFailed;
+                }
+
+                await File.WriteAllTextAsync(absoluteTarget!, patched).ConfigureAwait(false);
+                await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { step.StepId, kind = step.Kind, targetPath, diffText }, JsonOptions())).ConfigureAwait(false);
+                await File.WriteAllTextAsync(stdoutPath, "patch:applied\n").ConfigureAwait(false);
+                await File.WriteAllTextAsync(stderrPath, string.Empty).ConfigureAwait(false);
+                await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(new { status = "success", targetPath }, JsonOptions())).ConfigureAwait(false);
+                await File.WriteAllTextAsync(exitPath, JsonSerializer.Serialize(new { exitCode = 0 }, JsonOptions())).ConfigureAwait(false);
+                await WriteHashesAsync(hashesPath, requestPath, stdoutPath, stderrPath, resultPath, exitPath);
+            }
+
+            if (step.Kind == "retrieve_context.v1")
+            {
+                Emit(narrator, "retrieval", "retrieval.start", "Starting retrieval step", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId }));
+                Emit(narrator, "retrieval", "retrieval.slice.start", "Building retrieval slice", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId }));
+
+                var retrievalRoot = Path.Combine(runDir, "retrieval");
+                Directory.CreateDirectory(retrievalRoot);
+
+                var request = new RetrievalQueryRequest
+                {
+                    Root = project,
+                    QueryText = GetArgString(step.Args, "queryText", "build plan context"),
+                    SliceRequest = new RepoSliceRequest
+                    {
+                        Root = project,
+                        IncludeGlobs = GetArgStringList(step.Args, "includeGlobs", new[] { "src/**/*.cs", "docs/*.md" }),
+                        ExcludeGlobs = GetArgStringList(step.Args, "excludeGlobs", new[] { "**/bin/**", "**/obj/**" }),
+                        MaxFiles = Math.Max(GetArgInt(step.Args, "maxFiles", 8), 1),
+                        MaxTotalBytes = Math.Max(GetArgInt(step.Args, "maxTotalBytes", 120000), 2048),
+                        MaxBytesPerFile = Math.Max(GetArgInt(step.Args, "maxFileBytes", 12000), 1024),
+                        LineCap = 400,
+                        NormalizeEol = true,
+                        AllowBinary = false
+                    },
+                    MaxFiles = Math.Max(GetArgInt(step.Args, "maxFiles", 8), 1),
+                    MaxTotalBytes = Math.Max(GetArgInt(step.Args, "maxTotalBytes", 120000), 2048),
+                    MaxFileBytes = Math.Max(GetArgInt(step.Args, "maxFileBytes", 12000), 1024),
+                    Scoring = RetrievalScoring.LexicalTfidfV1
+                };
+
+                var retrievalService = new RetrievalService();
+                var retrieval = retrievalService.Retrieve(request).Normalize();
+                retrievalResult = retrieval;
+                if (!string.IsNullOrWhiteSpace(retrieval.ErrorCode))
+                {
+                    EmitFailure(narrator, "retrieval", "retrieval.error", "Retrieval step failed", runId, planHash, providerHash, envHash, refs, step.StepId, details: retrieval.ErrorCode + ";" + retrieval.ErrorMessage);
+                    return ExitCodes.ToolExecFailed;
+                }
+
+                var requestPath = Path.Combine(retrievalRoot, "request.json");
+                var resultPath = Path.Combine(retrievalRoot, "result.json");
+                var hitsPath = Path.Combine(retrievalRoot, "hits.ndjson");
+                var packPath = Path.Combine(retrievalRoot, "context_pack.txt");
+                var hashPath = Path.Combine(retrievalRoot, "hashes.json");
+
+                var contextPack = RetrievalService.BuildContextPack(runId, planHash, retrieval, request.MaxTotalBytes);
+                await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(request.Normalize(), RepoSliceJson.Options)).ConfigureAwait(false);
+                await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(retrieval, RepoSliceJson.Options)).ConfigureAwait(false);
+                await File.WriteAllLinesAsync(hitsPath, retrieval.Hits.Select(h => JsonSerializer.Serialize(h, RepoSliceJson.Options))).ConfigureAwait(false);
+                await File.WriteAllTextAsync(packPath, contextPack).ConfigureAwait(false);
+
+                retrievalHash = RetrievalService.ComputeRetrievalHash(retrieval);
+                var retrievalHashes = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["queryHash"] = retrieval.QueryHash,
+                    ["sliceHash"] = retrieval.SliceHash,
+                    ["requestHash"] = ComputeHashHex(await File.ReadAllTextAsync(requestPath).ConfigureAwait(false)),
+                    ["retrievalHash"] = retrievalHash,
+                    ["contextHash"] = ComputeHashHex(contextPack)
+                };
+                await File.WriteAllTextAsync(hashPath, JsonSerializer.Serialize(retrievalHashes, JsonOptions())).ConfigureAwait(false);
+
+                Emit(narrator, "retrieval", "retrieval.slice.done", "Retrieval slice built", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["sliceHash"] = retrieval.SliceHash }));
+                Emit(narrator, "retrieval", "retrieval.rank.start", "Ranking retrieval hits", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["queryHash"] = retrieval.QueryHash }));
+                Emit(narrator, "retrieval", "retrieval.rank.done", "Ranked retrieval hits", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["hits"] = retrieval.Hits.Count.ToString() }));
+                foreach (var hit in retrieval.Hits.Take(10))
+                {
+                    Emit(narrator, "retrieval", "retrieval.pack.start", "Retrieval hit summary", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["path"] = hit.Path, ["score"] = hit.Score.ToString(), ["reasonCodes"] = string.Join(',', hit.ReasonCodes) }));
+                }
+
+                Emit(narrator, "retrieval", "retrieval.pack.done", "Built retrieval context pack", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["retrievalHash"] = retrievalHash }));
+            }
+
+            if (step.Kind == "synthesize_plan.v1")
+            {
+                Emit(narrator, "builder", "builder.synthesis.start", "Starting plan synthesis", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["retrievalHash"] = retrievalHash }));
+
+                if (retrievalResult is null || string.IsNullOrWhiteSpace(retrievalHash))
+                {
+                    EmitFailure(narrator, "builder", "builder.synthesis.failed", "Synthesis requires retrieval result", runId, planHash, providerHash, envHash, refs, step.StepId);
+                    return ExitCodes.PlanInvalid;
+                }
+
+                var synthRoot = Path.Combine(runDir, "plan_synthesis");
+                var planRoot = Path.Combine(runDir, "plan");
+                Directory.CreateDirectory(synthRoot);
+                Directory.CreateDirectory(planRoot);
+
+                var request = new PlanSynthesisRequest
+                {
+                    PlanKind = GetArgString(step.Args, "planKind", "builder_v1"),
+                    RetrievalHash = retrievalHash,
+                    ProviderKind = providerKind,
+                    EnvironmentKind = envId,
+                    Constraints = new[] { "deterministic=true", "network=off" },
+                    ProjectRoot = RelativePath(root, project)
+                };
+
+                var synthesis = SynthesizePlanV1(request, retrievalResult.Hits);
+                if (!ValidateSynthesizedPlan(synthesis.PlanJson, envDescriptorDoc.RootElement, out var synthErrorCode, out var synthSummary, out var synthDetails))
+                {
+                    EmitFailure(narrator, "builder", "builder.synthesis.failed", synthSummary, runId, planHash, providerHash, envHash, refs, step.StepId, details: synthErrorCode + ";" + synthDetails);
+                    return ExitCodes.PlanInvalid;
+                }
+
+                await File.WriteAllTextAsync(Path.Combine(synthRoot, "request.json"), JsonSerializer.Serialize(request.Normalize(), RepoSliceJson.Options)).ConfigureAwait(false);
+                await File.WriteAllTextAsync(Path.Combine(synthRoot, "result.json"), JsonSerializer.Serialize(synthesis, RepoSliceJson.Options)).ConfigureAwait(false);
+                await File.WriteAllTextAsync(Path.Combine(planRoot, "plan.json"), synthesis.PlanJson).ConfigureAwait(false);
+                var planHashes = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["requestHash"] = synthesis.RequestHash,
+                    ["retrievalHash"] = retrievalHash,
+                    ["planHash"] = synthesis.PlanHash
+                };
+                await File.WriteAllTextAsync(Path.Combine(planRoot, "hashes.json"), JsonSerializer.Serialize(planHashes, JsonOptions())).ConfigureAwait(false);
+
+                Emit(narrator, "builder", "builder.synthesis.end", "Plan synthesis completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["synthPlanHash"] = synthesis.PlanHash }));
             }
 
             Emit(narrator, "execute", "execute.step.end", "Step completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["stepKind"] = step.Kind }));
             stepEvents.Add(new { step.StepId, kind = step.Kind, toolId = step.ToolId, status = "completed" });
+            stepSummaries.Add(new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["durationBucket"] = "lt_1s",
+                ["errorCode"] = string.Empty,
+                ["expects"] = "status=completed",
+                ["inputs"] = "plan/provider/env",
+                ["kind"] = step.Kind,
+                ["outputs"] = string.Equals(step.Kind, "retrieve_context.v1", StringComparison.Ordinal) ? "retrieval" : string.Equals(step.Kind, "synthesize_plan.v1", StringComparison.Ordinal) ? "plan_synthesis,plan" : string.Equals(step.Kind, "write_text.v1", StringComparison.Ordinal) || string.Equals(step.Kind, "read_text.v1", StringComparison.Ordinal) || string.Equals(step.Kind, "assert_contains.v1", StringComparison.Ordinal) || string.Equals(step.Kind, "apply_unified_diff.v1", StringComparison.Ordinal) ? $"steps/{step.StepId}" : $"tool/{step.StepId}",
+                ["status"] = "completed",
+                ["stepId"] = step.StepId,
+                ["toolId"] = step.ToolId
+            });
         }
 
         Emit(narrator, "execute", "execute.end", "Execution completed", IdentityData(runId, planHash, providerHash, envHash, refs));
+        Emit(narrator, "builder", "builder.execute.end", "Builder execution completed", IdentityData(runId, planHash, providerHash, envHash, refs));
 
         var inputFiles = Directory.GetFiles(project, "*", SearchOption.AllDirectories)
             .Select(path => Path.GetRelativePath(project, path).Replace('\\', '/'))
@@ -301,14 +599,35 @@ static async Task<int> RunScenarioAsync(string[] args)
         await File.WriteAllLinesAsync(tracePath, traceEvents.Select(e => JsonSerializer.Serialize(e))).ConfigureAwait(false);
 
         var traceHash = ComputeHashHex(await File.ReadAllTextAsync(tracePath).ConfigureAwait(false));
-        var outputManifest = new[] { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" };
+        var outputManifest = new List<string> { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" };
+        if (!string.IsNullOrWhiteSpace(retrievalHash))
+        {
+            outputManifest.Add("retrieval/request.json");
+            outputManifest.Add("retrieval/result.json");
+            outputManifest.Add("retrieval/hits.ndjson");
+            outputManifest.Add("retrieval/context_pack.txt");
+            outputManifest.Add("retrieval/hashes.json");
+            outputManifest.Add("plan_synthesis/request.json");
+            outputManifest.Add("plan_synthesis/result.json");
+            outputManifest.Add("plan/plan.json");
+            outputManifest.Add("plan/hashes.json");
+        }
         var outputManifestHash = ComputeHashHex(string.Join("\n", outputManifest));
 
-        var hashes = new { runId, planHash, providerHash, envHash, traceHash, outputManifestHash };
+        var hashes = new { runId, planHash, providerHash, envHash, traceHash, retrievalHash, outputManifestHash };
         await File.WriteAllTextAsync(Path.Combine(runDir, "hashes.json"), JsonSerializer.Serialize(hashes, JsonOptions())).ConfigureAwait(false);
 
         var result = new { status = "completed", outputs = outputManifest, steps = stepEvents };
         await File.WriteAllTextAsync(Path.Combine(runDir, "result.json"), JsonSerializer.Serialize(result, JsonOptions())).ConfigureAwait(false);
+
+        var stepsDir = Path.Combine(runDir, "steps");
+        Directory.CreateDirectory(stepsDir);
+        var sortedStepSummaries = stepSummaries.OrderBy(s => s["stepId"], StringComparer.Ordinal).ToArray();
+        var stepSummaryPath = Path.Combine(stepsDir, "summary.ndjson");
+        await File.WriteAllLinesAsync(stepSummaryPath, sortedStepSummaries.Select(s => JsonSerializer.Serialize(s, JsonOptions()))).ConfigureAwait(false);
+
+        var runSummaryPath = Path.Combine(runDir, "run_summary.md");
+        await File.WriteAllTextAsync(runSummaryPath, BuildRunSummary(runId, planHash, providerHash, envHash, sortedStepSummaries)).ConfigureAwait(false);
 
         Emit(narrator, "finalize", "finalize.write_artifacts", "Wrote run artifacts", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["runDir"] = runDir }));
         Console.WriteLine(runDir);
@@ -322,6 +641,7 @@ static async Task<int> RunScenarioAsync(string[] args)
     }
     catch (Exception ex)
     {
+        EmitFailure(narrator, "builder", "builder.execute.failed", "Builder execution failed", runId, planHash, providerHash, envHash, refs, details: ex.Message);
         EmitFailure(narrator, "finalize", "tool.exec.failed", "Scenario execution failed", runId, planHash, providerHash, envHash, refs, details: ex.Message);
         Console.Error.WriteLine(ex.Message);
         return ExitCodes.Unknown;
@@ -378,7 +698,19 @@ static async Task<int> ReplayAsync(string[] args)
 
     var expectedRunId = ComputeHashHex($"{planHash}|{providerHash}|{envHash}|builder_smoke.v2")[..16];
     var expectedTraceHash = ComputeHashHex(await File.ReadAllTextAsync(tracePath).ConfigureAwait(false));
-    var expectedManifestHash = ComputeHashHex(string.Join("\n", new[] { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" }));
+
+    var resultJsonPath = Path.Combine(resolved, "result.json");
+    var expectedManifest = new List<string> { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" };
+    if (File.Exists(resultJsonPath))
+    {
+        var resultDoc = JsonDocument.Parse(await File.ReadAllTextAsync(resultJsonPath).ConfigureAwait(false));
+        if (resultDoc.RootElement.TryGetProperty("outputs", out var outputsEl) && outputsEl.ValueKind == JsonValueKind.Array)
+        {
+            expectedManifest = outputsEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+        }
+    }
+
+    var expectedManifestHash = ComputeHashHex(string.Join("\n", expectedManifest));
 
     var actualTraceHash = hashesDoc.RootElement.GetProperty("traceHash").GetString() ?? string.Empty;
     var actualManifestHash = hashesDoc.RootElement.GetProperty("outputManifestHash").GetString() ?? string.Empty;
@@ -484,7 +816,7 @@ static void EmitFailure(INarrator narrator, string phase, string errorCode, stri
 
 static string RelativePath(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');
 
-static string BaseArtifactRefs() => "json:run.json,json:hashes.json,json:result.json,ndjson:trace/events.ndjson,ndjson:narration/events.ndjson";
+static string BaseArtifactRefs() => "json:run.json,json:hashes.json,json:result.json,ndjson:trace/events.ndjson,ndjson:narration/events.ndjson,json:retrieval/result.json,txt:retrieval/context_pack.txt,json:plan_synthesis/result.json,json:plan/plan.json";
 
 static Dictionary<string, string> IdentityData(string runId, string planHash, string providerHash, string envHash, string artifactRefs) => new(StringComparer.Ordinal)
 {
@@ -503,6 +835,138 @@ static Dictionary<string, string> Merge(Dictionary<string, string> left, Diction
     }
 
     return left;
+}
+
+
+static string GetArgString(Dictionary<string, object?> args, string key, string fallback)
+{
+    if (args.TryGetValue(key, out var value) && value is string s && !string.IsNullOrWhiteSpace(s))
+    {
+        return s;
+    }
+
+    return fallback;
+}
+
+static int GetArgInt(Dictionary<string, object?> args, string key, int fallback)
+{
+    if (args.TryGetValue(key, out var value))
+    {
+        if (value is double d)
+        {
+            return Convert.ToInt32(d);
+        }
+
+        if (value is string s && int.TryParse(s, out var parsed))
+        {
+            return parsed;
+        }
+    }
+
+    return fallback;
+}
+
+static string[] GetArgStringList(Dictionary<string, object?> args, string key, string[] fallback)
+{
+    if (args.TryGetValue(key, out var value) && value is string s && !string.IsNullOrWhiteSpace(s))
+    {
+        var parts = s.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length > 0)
+        {
+            return parts.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        }
+    }
+
+    return fallback.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+}
+
+static async Task WriteHashesAsync(string hashesPath, string requestPath, string stdoutPath, string stderrPath, string resultPath, string exitPath)
+{
+    var stepHashes = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["exit.json"] = ComputeHashHex(await File.ReadAllTextAsync(exitPath).ConfigureAwait(false)),
+        ["request.json"] = ComputeHashHex(await File.ReadAllTextAsync(requestPath).ConfigureAwait(false)),
+        ["result.json"] = ComputeHashHex(await File.ReadAllTextAsync(resultPath).ConfigureAwait(false)),
+        ["stderr.txt"] = ComputeHashHex(await File.ReadAllTextAsync(stderrPath).ConfigureAwait(false)),
+        ["stdout.txt"] = ComputeHashHex(await File.ReadAllTextAsync(stdoutPath).ConfigureAwait(false))
+    };
+
+    await File.WriteAllTextAsync(hashesPath, JsonSerializer.Serialize(stepHashes, JsonOptions())).ConfigureAwait(false);
+}
+
+static string? ResolvePolicyPath(string root, string relativePath, out string? errorCode)
+{
+    errorCode = null;
+    if (string.IsNullOrWhiteSpace(relativePath))
+    {
+        errorCode = "file.policy.path.missing";
+        return null;
+    }
+
+    var normalized = relativePath.Replace('\\', '/');
+    if (normalized.Contains("..", StringComparison.Ordinal))
+    {
+        errorCode = "file.policy.path.escape";
+        return null;
+    }
+
+    var candidate = Path.GetFullPath(Path.Combine(root, normalized));
+    var fullRoot = Path.GetFullPath(root) + Path.DirectorySeparatorChar;
+    if (!candidate.StartsWith(fullRoot, StringComparison.Ordinal))
+    {
+        errorCode = "file.policy.path.escape";
+        return null;
+    }
+
+    return candidate;
+}
+
+static bool TryApplySimpleUnifiedDiff(string original, string diffText, out string patched, out string? errorCode)
+{
+    patched = original;
+    errorCode = null;
+
+    if (string.IsNullOrWhiteSpace(diffText))
+    {
+        errorCode = "builder.patch.invalid";
+        return false;
+    }
+
+    var removed = new List<string>();
+    var added = new List<string>();
+    foreach (var line in diffText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+    {
+        if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal) || line.StartsWith("@@", StringComparison.Ordinal))
+        {
+            continue;
+        }
+
+        if (line.StartsWith("-", StringComparison.Ordinal))
+        {
+            removed.Add(line[1..]);
+        }
+        else if (line.StartsWith("+", StringComparison.Ordinal))
+        {
+            added.Add(line[1..]);
+        }
+    }
+
+    var oldBlock = string.Join("\n", removed);
+    var newBlock = string.Join("\n", added);
+    if (oldBlock.Length == 0)
+    {
+        errorCode = "builder.patch.invalid";
+        return false;
+    }
+
+    if (!original.Contains(oldBlock, StringComparison.Ordinal))
+    {
+        errorCode = "builder.patch.reject";
+        return false;
+    }
+
+    patched = original.Replace(oldBlock, newBlock, StringComparison.Ordinal);
+    return true;
 }
 
 static IReadOnlyList<(string StepId, string Kind, string ToolId, bool RequiresNetwork, Dictionary<string, object?> Args)> ResolveSteps(JsonElement plan, string planHash)
@@ -549,4 +1013,306 @@ static IReadOnlyList<(string StepId, string Kind, string ToolId, bool RequiresNe
         (ComputeHashHex($"{planHash}|RunTool")[..12], "RunTool", "linux.noop.v1", false, new Dictionary<string, object?>()),
         (ComputeHashHex($"{planHash}|Complete")[..12], "EmitArtifact", "linux.noop.v1", false, new Dictionary<string, object?>())
     };
+}
+
+static bool ValidateResolvedSteps(
+    JsonElement plan,
+    JsonElement envDescriptor,
+    IReadOnlyList<(string StepId, string Kind, string ToolId, bool RequiresNetwork, Dictionary<string, object?> Args)> steps,
+    out string errorCode,
+    out string summary,
+    out string details)
+{
+    errorCode = string.Empty;
+    summary = string.Empty;
+    details = string.Empty;
+
+    var supportedKinds = StepKinds.Registry.Keys;
+    var envCapabilities = LoadEnvironmentCapabilities(envDescriptor, out var hasExplicitCapabilities);
+
+    if (plan.TryGetProperty("steps", out var rawSteps) && rawSteps.ValueKind == JsonValueKind.Array)
+    {
+        var i = 0;
+        foreach (var s in rawSteps.EnumerateArray())
+        {
+            var kind = s.TryGetProperty("kind", out var kindEl) ? kindEl.GetString() ?? string.Empty : string.Empty;
+            if (!supportedKinds.Contains(kind))
+            {
+                errorCode = "plan.step.kind.unknown";
+                summary = "Plan contains unknown step kind.";
+                details = $"index={i};kind={kind}";
+                return false;
+            }
+
+            if (hasExplicitCapabilities && !StepKinds.IsSupportedInEnvironment(kind, envCapabilities))
+            {
+                errorCode = "plan.step.kind.unsupported_in_env";
+                summary = "Plan step kind is not supported in selected environment.";
+                details = $"index={i};kind={kind};capabilities={string.Join(',', envCapabilities.OrderBy(c => c, StringComparer.Ordinal))}";
+                return false;
+            }
+
+            if (string.Equals(kind, "RunTool", StringComparison.Ordinal))
+            {
+                var toolId = s.TryGetProperty("toolId", out var toolEl) ? toolEl.GetString() ?? string.Empty : string.Empty;
+                if (string.IsNullOrWhiteSpace(toolId))
+                {
+                    errorCode = "plan.step.toolid.missing";
+                    summary = "RunTool step is missing toolId.";
+                    details = $"index={i}";
+                    return false;
+                }
+            }
+
+            if (s.TryGetProperty("args", out var argsEl) && argsEl.ValueKind is not (JsonValueKind.Object or JsonValueKind.Undefined))
+            {
+                errorCode = "plan.step.args.invalid";
+                summary = "Plan step args must be an object.";
+                details = $"index={i};kind={kind};valueKind={argsEl.ValueKind}";
+                return false;
+            }
+
+            i++;
+        }
+    }
+
+    if (steps.Count == 0)
+    {
+        errorCode = "plan.step.output.missing";
+        summary = "Plan has no executable steps.";
+        details = "steps.count=0";
+        return false;
+    }
+
+    return true;
+}
+
+static HashSet<string> LoadEnvironmentCapabilities(JsonElement envDescriptor, out bool hasExplicitCapabilities)
+{
+    var capabilities = new HashSet<string>(StringComparer.Ordinal);
+    hasExplicitCapabilities = envDescriptor.TryGetProperty("capabilities", out var caps) && caps.ValueKind == JsonValueKind.Array;
+    if (!hasExplicitCapabilities)
+    {
+        return capabilities;
+    }
+
+    foreach (var cap in caps.EnumerateArray())
+    {
+        var v = cap.GetString();
+        if (!string.IsNullOrWhiteSpace(v))
+        {
+            capabilities.Add(v!);
+        }
+    }
+
+    return capabilities;
+}
+
+
+static PlanSynthesisResult SynthesizePlanV1(PlanSynthesisRequest request, IReadOnlyList<RetrievalHit> hits)
+{
+    var normalized = request.Normalize();
+    var requestHash = normalized.ComputeRequestHash();
+    var selected = hits.OrderByDescending(h => h.Score).ThenBy(h => h.Path, StringComparer.Ordinal).Take(3).ToArray();
+
+    var steps = selected.Select((hit, idx) => new Dictionary<string, object?>
+    {
+        ["stepId"] = ComputeHashHex($"{requestHash}|{idx}|{hit.Path}")[..12],
+        ["kind"] = "RunTool",
+        ["toolId"] = "linux.noop.v1",
+        ["args"] = new Dictionary<string, object?> { ["targetPath"] = hit.Path, ["requiresNetwork"] = false },
+        ["inputs"] = new[] { $"retrieval/hits/{idx}" },
+        ["outputs"] = new[] { $"tool/{idx}/result.json" },
+        ["expects"] = new[] { "exitCode==0" }
+    }).OrderBy(x => x["stepId"]?.ToString(), StringComparer.Ordinal).ToArray();
+
+    var basePlanObj = new Dictionary<string, object?>
+    {
+        ["schemaVersion"] = 1,
+        ["planKind"] = normalized.PlanKind,
+        ["inputs"] = new Dictionary<string, object?>
+        {
+            ["requestHash"] = requestHash,
+            ["retrievalHash"] = normalized.RetrievalHash,
+            ["constraints"] = normalized.Constraints,
+            ["projectRoot"] = normalized.ProjectRoot
+        },
+        ["providerRef"] = normalized.ProviderKind,
+        ["envRef"] = normalized.EnvironmentKind,
+        ["steps"] = steps
+    };
+
+    var semanticJson = JsonSerializer.Serialize(basePlanObj, RepoSliceJson.Options);
+    var synthesizedPlanHash = ComputeHashHex(semanticJson);
+
+    var planEnvelope = new Dictionary<string, object?>(basePlanObj)
+    {
+        ["planHash"] = synthesizedPlanHash
+    };
+
+    var planJson = JsonSerializer.Serialize(planEnvelope, RepoSliceJson.Options);
+
+    return new PlanSynthesisResult
+    {
+        PlanJson = planJson,
+        PlanHash = synthesizedPlanHash,
+        RequestHash = requestHash,
+        Stats = new PlanSynthesisStats
+        {
+            RetrievedHitCount = hits.Count,
+            StepCount = steps.Length,
+            ToolCount = steps.Select(x => x["toolId"]?.ToString() ?? string.Empty).Distinct(StringComparer.Ordinal).Count()
+        }
+    };
+}
+
+
+static bool ValidateSynthesizedPlan(string planJson, JsonElement envDescriptor, out string errorCode, out string summary, out string details)
+{
+    errorCode = string.Empty;
+    summary = string.Empty;
+    details = string.Empty;
+
+    var doc = JsonDocument.Parse(planJson);
+    var root = doc.RootElement;
+
+    if (!root.TryGetProperty("steps", out var stepsEl) || stepsEl.ValueKind != JsonValueKind.Array)
+    {
+        errorCode = "builder.plan.steps.missing";
+        summary = "Synthesized plan is missing steps array.";
+        details = "steps.missing";
+        return false;
+    }
+
+    var outputs = new HashSet<string>(StringComparer.Ordinal);
+    var caps = LoadEnvironmentCapabilities(envDescriptor, out _);
+    if (caps.Count == 0)
+    {
+        caps.Add("process");
+    }
+
+    var idx = 0;
+    foreach (var step in stepsEl.EnumerateArray())
+    {
+        var kind = step.TryGetProperty("kind", out var k) ? k.GetString() ?? string.Empty : string.Empty;
+        if (!StepKinds.Registry.ContainsKey(kind))
+        {
+            errorCode = "builder.plan.step.kind.unknown";
+            summary = "Synthesized plan contains unknown step kind.";
+            details = $"index={idx};kind={kind}";
+            return false;
+        }
+
+        if (!StepKinds.IsSupportedInEnvironment(kind, caps))
+        {
+            errorCode = "builder.plan.step.kind.unsupported";
+            summary = "Synthesized plan step kind not supported in environment.";
+            details = $"index={idx};kind={kind}";
+            return false;
+        }
+
+        var toolId = step.TryGetProperty("toolId", out var t) ? t.GetString() ?? string.Empty : string.Empty;
+        if (!string.Equals(toolId, "linux.noop.v1", StringComparison.Ordinal))
+        {
+            errorCode = "builder.plan.tool.missing";
+            summary = "Synthesized plan references unknown tool.";
+            details = $"index={idx};toolId={toolId}";
+            return false;
+        }
+
+        if (step.TryGetProperty("outputs", out var outEl) && outEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var output in outEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty))
+            {
+                if (!outputs.Add(output))
+                {
+                    errorCode = "builder.plan.output.duplicate";
+                    summary = "Synthesized plan has duplicate outputs.";
+                    details = $"index={idx};output={output}";
+                    return false;
+                }
+            }
+        }
+
+        idx++;
+    }
+
+    return true;
+}
+
+static string BuildRunSummary(string runId, string planHash, string providerHash, string envHash, IReadOnlyList<Dictionary<string, string>> stepSummaries)
+{
+    var lines = new List<string>
+    {
+        "# Run Summary",
+        string.Empty,
+        $"- runId: `{runId}`",
+        $"- planHash: `{planHash}`",
+        $"- providerHash: `{providerHash}`",
+        $"- envHash: `{envHash}`",
+        string.Empty,
+        "## Steps",
+        "| stepId | kind | toolId | status | errorCode | outputs |",
+        "|---|---|---|---|---|---|"
+    };
+
+    foreach (var step in stepSummaries)
+    {
+        var stepId = step.TryGetValue("stepId", out var sid) ? sid : string.Empty;
+        var kind = step.TryGetValue("kind", out var k) ? k : string.Empty;
+        var toolId = step.TryGetValue("toolId", out var tid) ? tid : string.Empty;
+        var status = step.TryGetValue("status", out var st) ? st : string.Empty;
+        var errorCode = step.TryGetValue("errorCode", out var ec) ? ec : string.Empty;
+        var outputs = step.TryGetValue("outputs", out var o) ? o : string.Empty;
+        lines.Add($"| {EscapeTable(stepId)} | {EscapeTable(kind)} | {EscapeTable(toolId)} | {EscapeTable(status)} | {EscapeTable(errorCode)} | {EscapeTable(outputs)} |");
+    }
+
+    return string.Join("\n", lines) + "\n";
+}
+
+static string EscapeTable(string value) => (value ?? string.Empty).Replace("|", "\\|", StringComparison.Ordinal);
+
+static string TruncateDeterministic(string value, int maxChars, int maxLines)
+{
+    var normalized = value.Replace("\r\n", "\n", StringComparison.Ordinal);
+    var lines = normalized.Split('\n');
+    if (lines.Length > maxLines)
+    {
+        lines = lines[..maxLines];
+    }
+
+    var joined = string.Join("\n", lines);
+    return joined.Length <= maxChars ? joined : joined[..maxChars];
+}
+
+static class StepKinds
+{
+    public static IReadOnlyDictionary<string, string[]> Registry { get; } = new Dictionary<string, string[]>(StringComparer.Ordinal)
+    {
+        ["SelectTool"] = new[] { "tool.select" },
+        ["RunTool"] = new[] { "process" },
+        ["Verify"] = new[] { "verify" },
+        ["EmitArtifact"] = new[] { "filesystem" },
+        ["retrieve_context.v1"] = new[] { "retrieval.lexical" },
+        ["synthesize_plan.v1"] = new[] { "process" },
+        ["write_text.v1"] = new[] { "filesystem" },
+        ["read_text.v1"] = new[] { "filesystem" },
+        ["apply_unified_diff.v1"] = new[] { "filesystem" },
+        ["assert_contains.v1"] = new[] { "verify" }
+    };
+
+    public static bool IsSupportedInEnvironment(string kind, HashSet<string> capabilities)
+    {
+        if (!Registry.TryGetValue(kind, out var required))
+        {
+            return false;
+        }
+
+        if (required.Length == 0)
+        {
+            return true;
+        }
+
+        return required.Any(capabilities.Contains);
+    }
 }
