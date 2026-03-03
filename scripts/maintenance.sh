@@ -27,8 +27,8 @@ while [[ $# -gt 0 ]]; do
 Usage: bash scripts/maintenance.sh [--tests]
 
 Environment variables:
-  RUN_TESTS=1         Run tests after restore/build
-  CONFIGURATION=Debug Build/test configuration (default: Release)
+  RUN_TESTS=1          Run tests after restore/build
+  CONFIGURATION=Debug  Build/test configuration (default: Release)
   SOLUTION_PATH=...    Override solution path (default: Shoots.sln on Windows, src/Runtime/Shoots.Runtime.sln otherwise)
 USAGE
       exit 0
@@ -51,6 +51,7 @@ restore_status=0
 build_status=0
 tests_status=99
 overall_status=0
+error_code=""
 
 ensure_dotnet() {
   if command -v dotnet >/dev/null 2>&1; then
@@ -100,6 +101,19 @@ json_escape() {
   python -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
 }
 
+set_error_code() {
+  if [[ -n "$error_code" ]]; then
+    return
+  fi
+
+  case "$1" in
+    restore) error_code="maintenance.restore.failed" ;;
+    build) error_code="maintenance.build.failed" ;;
+    tests) error_code="maintenance.tests.failed" ;;
+    *) error_code="maintenance.unknown.failed" ;;
+  esac
+}
+
 write_failure_fingerprint() {
   local source_log=""
   local failing_project=""
@@ -110,10 +124,13 @@ write_failure_fingerprint() {
 
   if [[ "$tests_status" -ne 0 && "$tests_status" -ne 99 ]]; then
     source_log="$tests_log"
+    set_error_code tests
   elif [[ "$build_status" -ne 0 && "$build_status" -ne 99 ]]; then
     source_log="$build_log"
+    set_error_code build
   elif [[ "$restore_status" -ne 0 ]]; then
     source_log="$restore_log"
+    set_error_code restore
   else
     rm -f "$fingerprint_file"
     return
@@ -132,6 +149,7 @@ write_failure_fingerprint() {
 
   {
     echo "{"
+    echo "  \"errorCode\": $(printf '%s' "$error_code" | json_escape),"
     echo "  \"failingProject\": $(printf '%s' "$failing_project" | json_escape),"
     echo "  \"failingTestFullName\": $(printf '%s' "$failing_test" | json_escape),"
     echo "  \"exceptionType\": $(printf '%s' "$exception" | json_escape),"
@@ -149,6 +167,7 @@ run_and_capture "$restore_log" dotnet restore "$SOLUTION_PATH"
 restore_status=$?
 if [[ "$restore_status" -ne 0 ]]; then
   overall_status=1
+  set_error_code restore
 fi
 
 echo "==> Building solution ($CONFIGURATION)"
@@ -157,6 +176,7 @@ if [[ "$overall_status" -eq 0 ]]; then
   build_status=$?
   if [[ "$build_status" -ne 0 ]]; then
     overall_status=1
+    set_error_code build
   fi
 else
   echo "Skipping build because restore failed." | tee "$build_log"
@@ -170,6 +190,7 @@ if [[ "$RUN_TESTS" == "1" ]]; then
     tests_status=$?
     if [[ "$tests_status" -ne 0 ]]; then
       overall_status=1
+      set_error_code tests
     fi
   else
     echo "Skipping tests because restore/build failed." | tee "$tests_log"
@@ -188,6 +209,7 @@ cat <<SUMMARY
 restore: $(status_word "$restore_status")
 build:   $(status_word "$build_status")
 tests:   $(status_word "$tests_status")
+errorCode: ${error_code:-none}
 
 logs:
 - $restore_log

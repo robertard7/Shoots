@@ -23,7 +23,7 @@ plan_root="${project_root}/plan"
 env_root="${project_root}/env"
 mkdir -p "$plan_root" "$env_root"
 
-plan_hash="$(printf '%s' "${project_id}|dotnet|Local|host-local" | sha256sum | awk '{print $1}')"
+plan_hash="$(printf '%s' "${project_id}|dotnet|Local|host-local|v2" | sha256sum | awk '{print $1}')"
 provider_hash="$(printf '%s' "Local|" | sha256sum | awk '{print $1}')"
 env_hash="$(printf '%s' "host-local" | sha256sum | awk '{print $1}')"
 
@@ -34,7 +34,17 @@ cat > "${plan_root}/plan.json" <<PLAN
   "providerKind": "Local",
   "environmentId": "host-local",
   "createdAtUtc": "1970-01-01T00:00:00Z",
-  "planHash": "${plan_hash}"
+  "planHash": "${plan_hash}",
+  "steps": [
+    {
+      "stepId": "$(printf '%s' "${plan_hash}|RunTool" | sha256sum | awk '{print $1}' | cut -c1-12)",
+      "kind": "RunTool",
+      "toolId": "linux.noop.v1",
+      "args": {
+        "requiresNetwork": false
+      }
+    }
+  ]
 }
 PLAN
 
@@ -55,7 +65,11 @@ ENVSEL
 cat > "${env_root}/descriptor.json" <<ENVDESC
 {
   "environmentId": "host-local",
-  "descriptorHash": "${env_hash}"
+  "descriptorHash": "${env_hash}",
+  "capabilities": [
+    "fs.read",
+    "fs.write"
+  ]
 }
 ENVDESC
 

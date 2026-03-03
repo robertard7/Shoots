@@ -17,3 +17,13 @@ Schema file: `etc/schemas/build_plan.schema.json`
 - `planHash` must not include timestamp fields.
 - Step ordering must be stable and deterministic.
 - Replays compare `planHash`, provider hash, environment hash, trace hash, and output manifest hash.
+
+
+## Step contract v1
+
+Each `steps[]` item includes:
+- `stepId` deterministic id
+- `kind` one of `SelectTool|RunTool|Verify|EmitArtifact`
+- `toolId` for tool steps
+- `args` sorted-key object
+- optional `inputs`, `outputs`, `expects`

@@ -1,22 +1,19 @@
 {
-  "projectId": "builder-fixture",
+  "projectId": "builder-fixture-args",
   "language": "dotnet",
   "providerKind": "Local",
   "environmentId": "host-local",
   "createdAtUtc": "1970-01-01T00:00:00Z",
-  "planHash": "17bcf764bbef6ee175e85186d16f8d46d8f4f7616215f8ff1b6f7ff56cc45795",
+  "planHash": "4e96df303f625ee34753bcf2b67e0250e4ad5ca16cb9df05de095893f9bf8e5f",
   "steps": [
     {
-      "stepId": "c973c501f2ab",
+      "stepId": "8d9b3e6318d2",
       "kind": "RunTool",
       "toolId": "linux.noop.v1",
       "args": {
+        "mode": "alt",
         "requiresNetwork": false
-      },
-      "inputs": [],
-      "outputs": [
-        "tool/result.json"
-      ]
+      }
     }
   ]
 }

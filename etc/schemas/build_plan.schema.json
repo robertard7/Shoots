@@ -17,19 +17,34 @@
     },
     "inputs": {
       "type": "object",
-      "required": ["language", "name", "description"],
+      "required": [
+        "language",
+        "name",
+        "description"
+      ],
       "properties": {
-        "language": { "type": "string" },
-        "name": { "type": "string" },
-        "description": { "type": "string" }
+        "language": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
       },
       "additionalProperties": false
     },
     "provider": {
       "type": "object",
-      "required": ["kind", "configHash"],
+      "required": [
+        "kind",
+        "configHash"
+      ],
       "properties": {
-        "kind": { "type": "string" },
+        "kind": {
+          "type": "string"
+        },
         "configHash": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
@@ -39,9 +54,14 @@
     },
     "environment": {
       "type": "object",
-      "required": ["id", "descriptorHash"],
+      "required": [
+        "id",
+        "descriptorHash"
+      ],
       "properties": {
-        "id": { "type": "string" },
+        "id": {
+          "type": "string"
+        },
         "descriptorHash": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
@@ -53,10 +73,61 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["stepId", "kind"],
+        "required": [
+          "stepId",
+          "kind",
+          "args"
+        ],
         "properties": {
-          "stepId": { "type": "string" },
-          "kind": { "type": "string" }
+          "stepId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "SelectTool",
+              "RunTool",
+              "Verify",
+              "EmitArtifact"
+            ]
+          },
+          "toolId": {
+            "type": "string"
+          },
+          "args": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expects": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            }
+          }
         },
         "additionalProperties": false
       }

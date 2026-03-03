@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Shoots.Contracts.Core.AI.Narration;
 using Xunit;
 
@@ -46,7 +47,7 @@ public sealed class NarrationEventTests
             data = evt.Data
         };
 
-        var json = JsonSerializer.Serialize(payload);
+        var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
         const string golden = "{\"phase\":\"execute\",\"code\":\"execute.step.begin\",\"message\":\"Running step\",\"data\":{\"stepId\":\"abc\",\"toolId\":\"linux.noop.v1\"}}";
 
         Assert.Equal(golden, json);

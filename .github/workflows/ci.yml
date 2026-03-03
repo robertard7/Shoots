@@ -101,13 +101,24 @@ jobs:
         run: |
           outdir="artifacts/golden"
           mkdir -p "$outdir"
-          dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke/project --out "$outdir"
-          run_dir="$(find "$outdir" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
+
+          dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke/project --out "$outdir/base"
+          run_dir="$(find "$outdir/base" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
           dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- replay --run "$run_dir"
+
+          dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke_success_args/project --out "$outdir/success-args"
+          run_dir_args="$(find "$outdir/success-args" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
+          dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- replay --run "$run_dir_args"
+
+          if dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke_failure/project --out "$outdir/failure"; then
+            echo "expected failure fixture to fail"
+            exit 1
+          fi
+
           python - <<'PYCHK'
 import json, pathlib
 expected = json.loads(pathlib.Path('etc/fixtures/builder_smoke/expected-hashes.json').read_text())
-run_dir = sorted(pathlib.Path('artifacts/golden').glob('*'))[-1]
+run_dir = sorted(pathlib.Path('artifacts/golden/base').glob('*'))[-1]
 actual = json.loads((run_dir / 'hashes.json').read_text())
 for key in ['runId','planHash','providerHash','envHash']:
     if actual.get(key) != expected.get(key):
