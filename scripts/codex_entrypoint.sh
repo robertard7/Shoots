@@ -14,6 +14,10 @@ print_diagnostics() {
     tail -n 120 "$latest_narration"
   fi
 
+  if [[ -f artifacts/stubs/stubs.txt ]]; then
+    tail -n 120 artifacts/stubs/stubs.txt
+  fi
+
   latest_test_log="$(find artifacts -type f -name "*.log" -print 2>/dev/null | sort | tail -n 1 || true)"
   if [[ -n "$latest_test_log" ]]; then
     tail -n 120 "$latest_test_log"
@@ -28,6 +32,10 @@ run_ui() {
 
 run_builder() {
   bash scripts/builder_loop.sh
+}
+
+run_stubs() {
+  bash scripts/find_stubs.sh
 }
 
 run_default() {
@@ -49,7 +57,14 @@ if [[ "$mode" == "--builder" ]]; then
   exit 0
 fi
 
+if [[ "$mode" == "--stubs" ]]; then
+  run_stubs || { print_diagnostics; exit 1; }
+  echo "codex entrypoint stubs mode completed"
+  exit 0
+fi
+
 if [[ "$mode" == "--all" ]]; then
+  run_stubs || { print_diagnostics; exit 1; }
   RUN_TESTS=1 bash scripts/maintenance.sh --tests || { print_diagnostics; exit 1; }
   run_builder || { print_diagnostics; exit 1; }
   run_ui || { print_diagnostics; exit 1; }
