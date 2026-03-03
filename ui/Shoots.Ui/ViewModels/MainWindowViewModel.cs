@@ -453,8 +453,20 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 	{
 		if (!HasActiveWorkspace) return false;
 		if (string.IsNullOrWhiteSpace(IntakeIntent)) return false;
+		if (!string.IsNullOrWhiteSpace(BuildBackendDisabledReason())) return false;
 		return true;
 	}
+
+    public string RunIntakePlanDisabledReason => GetRunIntakePlanDisabledReason();
+
+    private string GetRunIntakePlanDisabledReason()
+    {
+        if (!HasActiveWorkspace) return "ui.workspace.missing: select a workspace first.";
+        if (string.IsNullOrWhiteSpace(IntakeIntent)) return "ui.intake.intent.missing: provide an intake intent.";
+        var backendReason = BuildBackendDisabledReason();
+        if (!string.IsNullOrWhiteSpace(backendReason)) return backendReason;
+        return string.Empty;
+    }
 
 	private Task RunIntakePlanAsync()
 	{
@@ -1393,6 +1405,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(QdrantEndpoint));
             OnPropertyChanged(nameof(AiProviderStatus));
             OnPropertyChanged(nameof(BackendDisabledReason));
+            OnPropertyChanged(nameof(RunIntakePlanDisabledReason));
 
             await RefreshModelCatalogFromBackendAsync().ConfigureAwait(false);
         }
@@ -1889,6 +1902,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ExplainExecutionCommand.RaiseCanExecuteChanged();
         ReplayPlanCommand.RaiseCanExecuteChanged();
         RefreshNarrationCommand.RaiseCanExecuteChanged();
+        RunIntakePlanCommand.RaiseCanExecuteChanged();
 
         OnPropertyChanged(nameof(StartDisabledReason));
         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));
@@ -1896,6 +1910,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(AiHelpDisabledReason));
         OnPropertyChanged(nameof(SystemTierActionLabel));
         OnPropertyChanged(nameof(ExecutionDisabledReason));
+        OnPropertyChanged(nameof(RunIntakePlanDisabledReason));
     }
 
     private void OnBlueprintDraftChanged()

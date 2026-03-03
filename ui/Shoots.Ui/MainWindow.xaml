@@ -246,7 +246,11 @@
               <Button Content="Lock WorkOrder" Command="{Binding LockWorkOrderCommand}" />
               <Button Margin="8,0,0,0" Content="Unlock" Command="{Binding UnlockWorkOrderCommand}" />
               <Button Margin="8,0,0,0" Content="Generate Plan" Command="{Binding GeneratePlanCommand}" />
-              <Button Margin="8,0,0,0" Content="Run" Command="{Binding RunIntakePlanCommand}" />
+              <Button Margin="8,0,0,0"
+                      Content="Run"
+                      Command="{Binding RunIntakePlanCommand}"
+                      ToolTip="{Binding RunIntakePlanDisabledReason}"
+                      ToolTipService.ShowOnDisabled="True" />
               <Button Margin="8,0,0,0" Content="Quick Start" Command="{Binding QuickStartCommand}" />
             </StackPanel>
 

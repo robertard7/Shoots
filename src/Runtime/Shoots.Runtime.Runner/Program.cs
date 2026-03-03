@@ -236,6 +236,13 @@ static async Task<int> RunScenarioAsync(string[] args)
         var stepEvents = new List<object>();
         var planSteps = ResolveSteps(planDoc.RootElement, planHash);
 
+        if (!ValidateResolvedSteps(planDoc.RootElement, planSteps, out var validationErrorCode, out var validationSummary, out var validationDetails))
+        {
+            EmitFailure(narrator, "plan", validationErrorCode, validationSummary, runId, planHash, providerHash, envHash, refs, details: validationDetails);
+            Console.Error.WriteLine(validationSummary);
+            return ExitCodes.PlanInvalid;
+        }
+
         foreach (var step in planSteps)
         {
             Emit(narrator, "execute", "execute.step.begin", "Running step", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["stepKind"] = step.Kind }));
@@ -549,4 +556,72 @@ static IReadOnlyList<(string StepId, string Kind, string ToolId, bool RequiresNe
         (ComputeHashHex($"{planHash}|RunTool")[..12], "RunTool", "linux.noop.v1", false, new Dictionary<string, object?>()),
         (ComputeHashHex($"{planHash}|Complete")[..12], "EmitArtifact", "linux.noop.v1", false, new Dictionary<string, object?>())
     };
+}
+
+static bool ValidateResolvedSteps(
+    JsonElement plan,
+    IReadOnlyList<(string StepId, string Kind, string ToolId, bool RequiresNetwork, Dictionary<string, object?> Args)> steps,
+    out string errorCode,
+    out string summary,
+    out string details)
+{
+    errorCode = string.Empty;
+    summary = string.Empty;
+    details = string.Empty;
+
+    var supportedKinds = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "SelectTool",
+        "RunTool",
+        "Verify",
+        "EmitArtifact"
+    };
+
+    if (plan.TryGetProperty("steps", out var rawSteps) && rawSteps.ValueKind == JsonValueKind.Array)
+    {
+        var i = 0;
+        foreach (var s in rawSteps.EnumerateArray())
+        {
+            var kind = s.TryGetProperty("kind", out var kindEl) ? kindEl.GetString() ?? string.Empty : string.Empty;
+            if (!supportedKinds.Contains(kind))
+            {
+                errorCode = "plan.step.kind.unknown";
+                summary = "Plan contains unknown step kind.";
+                details = $"index={i};kind={kind}";
+                return false;
+            }
+
+            if (string.Equals(kind, "RunTool", StringComparison.Ordinal))
+            {
+                var toolId = s.TryGetProperty("toolId", out var toolEl) ? toolEl.GetString() ?? string.Empty : string.Empty;
+                if (string.IsNullOrWhiteSpace(toolId))
+                {
+                    errorCode = "plan.step.toolid.missing";
+                    summary = "RunTool step is missing toolId.";
+                    details = $"index={i}";
+                    return false;
+                }
+            }
+
+            if (s.TryGetProperty("args", out var argsEl) && argsEl.ValueKind is not (JsonValueKind.Object or JsonValueKind.Undefined))
+            {
+                errorCode = "plan.step.args.invalid";
+                summary = "Plan step args must be an object.";
+                details = $"index={i};kind={kind};valueKind={argsEl.ValueKind}";
+                return false;
+            }
+
+            i++;
+        }
+    }
+
+    if (steps.Count == 0)
+    {
+        errorCode = "plan.step.output.missing";
+        summary = "Plan has no executable steps.";
+        details = "steps.count=0";
+        return false;
+    }
+
+    return true;
 }

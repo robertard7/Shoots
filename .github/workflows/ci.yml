@@ -119,6 +119,11 @@ jobs:
             exit 1
           fi
 
+          if dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke_invalid_kind/project --out "$outdir/invalid-kind"; then
+            echo "expected invalid kind fixture to fail"
+            exit 1
+          fi
+
           python - <<'PYCHK'
 import json, pathlib
 expected = json.loads(pathlib.Path('etc/fixtures/builder_smoke/expected-hashes.json').read_text())

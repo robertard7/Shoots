@@ -46,6 +46,23 @@ public sealed class MainWindowViewModelBackendStatusTests
         Assert.False(vm.HasModelCatalogError);
     }
 
+    [Fact]
+    public async Task Run_intake_plan_is_disabled_with_stable_reason_when_backend_unavailable()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, false, "ui.ollama.unreachable", "Ollama unavailable.", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "Qdrant healthy.", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(false, new string[0], "ui.ollama.unreachable", "Ollama unavailable.")));
+
+        await vm.NewProjectCommand.ExecuteAsync();
+        vm.IntakeIntent = "run deterministic builder";
+        await vm.RefreshBackendStatusCommand.ExecuteAsync();
+
+        Assert.False(vm.RunIntakePlanCommand.CanExecute(null));
+        Assert.Contains("ui.ollama.unreachable", vm.RunIntakePlanDisabledReason);
+    }
+
     private static MainWindowViewModel BuildViewModel(IBackendProbeService probeService, IOllamaClient ollamaClient)
     {
         var workspaceStore = new ProjectWorkspaceStore();
