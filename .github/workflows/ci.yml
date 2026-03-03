@@ -70,6 +70,10 @@ jobs:
         shell: bash
         run: bash scripts/verify_no_blocking_stubs.sh
 
+      - name: Verify codex diagnostics order
+        shell: bash
+        run: bash scripts/verify_diagnostics_order.sh
+
       - name: Restore Runtime
         shell: bash
         run: dotnet restore src/Runtime/Shoots.Runtime.sln

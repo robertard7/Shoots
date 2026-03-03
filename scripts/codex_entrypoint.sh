@@ -9,7 +9,10 @@ print_diagnostics() {
     cat artifacts/maintenance/failure-fingerprint.json
   fi
 
-  latest_narration="$(ls -1t artifacts/builder_loop/*/run/*/narration/events.ndjson 2>/dev/null | head -n 1 || true)"
+  latest_narration="$(find .state/runs -type f -path '*/narration/events.ndjson' -print 2>/dev/null | sort | tail -n 1 || true)"
+  if [[ -z "$latest_narration" ]]; then
+    latest_narration="$(ls -1t artifacts/builder_loop/*/run/*/narration/events.ndjson 2>/dev/null | head -n 1 || true)"
+  fi
   if [[ -n "$latest_narration" ]]; then
     tail -n 120 "$latest_narration"
   fi
