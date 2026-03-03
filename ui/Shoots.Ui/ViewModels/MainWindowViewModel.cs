@@ -34,6 +34,13 @@ namespace Shoots.UI.ViewModels;
 /// </summary>
 public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 {
+    private static readonly IReadOnlyDictionary<string, string> NarrationHeadings =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["plan.materialize.start"] = "Materializing plan",
+            ["execute.step.begin"] = "Running step"
+        };
+
     // ---- UI-only execution state (do NOT reference runtime types here) ----
     public enum UiExecutionState
     {
@@ -66,13 +73,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private readonly ObservableCollection<UiRootFsDescriptor> _rootFsCatalog;
     private readonly StartupFlowStateMachine _startupFlow;
     private readonly ObservableCollection<string> _startupMessages;
+    private readonly ObservableCollection<string> _narrationLines;
 
     public ReadOnlyObservableCollection<ProjectWorkspace> RecentWorkspaces { get; }
     public ReadOnlyObservableCollection<BlueprintEntryViewModel> Blueprints { get; }
     public ReadOnlyObservableCollection<UiRootFsDescriptor> RootFsCatalog { get; }
     public ReadOnlyObservableCollection<string> StartupMessages { get; }
+    public ReadOnlyObservableCollection<string> NarrationLines { get; }
 
     private string _startupInput = string.Empty;
+    private string _selectedNarrationPhase = "all";
     private readonly ReadOnlyCollection<ProviderCapabilityMatrixRow> _providerCapabilityMatrix;
 
     private UiExecutionState _state;
@@ -495,6 +505,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         ExplainExecutionCommand = new AsyncRelayCommand(ExplainExecutionAsync, CanRefreshAiHelp);
         ReplayPlanCommand = new AsyncRelayCommand(ReplayPlanAsync, CanReplayPlan);
+        RefreshNarrationCommand = new AsyncRelayCommand(RefreshNarrationAsync);
 
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
@@ -515,6 +526,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _startupFlow = new StartupFlowStateMachine();
         _startupMessages = new ObservableCollection<string>();
         StartupMessages = new ReadOnlyObservableCollection<string>(_startupMessages);
+        _narrationLines = new ObservableCollection<string>();
+        NarrationLines = new ReadOnlyObservableCollection<string>(_narrationLines);
 
         _providerCapabilityMatrix = new ReadOnlyCollection<ProviderCapabilityMatrixRow>(new[]
         {
@@ -915,6 +928,21 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         private set { if (_blueprintSaveStatus == value) return; _blueprintSaveStatus = value; OnPropertyChanged(nameof(BlueprintSaveStatus)); }
     }
 
+
+    public IReadOnlyList<string> NarrationPhaseOptions => new[] { "all", "startup", "plan", "env", "provider", "execute", "tool", "finalize", "replay" };
+
+    public string SelectedNarrationPhase
+    {
+        get => _selectedNarrationPhase;
+        set
+        {
+            if (_selectedNarrationPhase == value) return;
+            _selectedNarrationPhase = value;
+            OnPropertyChanged(nameof(SelectedNarrationPhase));
+            _ = RefreshNarrationAsync();
+        }
+    }
+
     // ---- Commands ----
     public AsyncRelayCommand NewProjectCommand { get; }
     public AsyncRelayCommand StartAnotherProjectCommand { get; }
@@ -937,6 +965,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public AsyncRelayCommand SuggestBlueprintCommand { get; }
     public AsyncRelayCommand ExplainExecutionCommand { get; }
     public AsyncRelayCommand ReplayPlanCommand { get; }
+    public AsyncRelayCommand RefreshNarrationCommand { get; }
 
     // ---- UI-safe plan setter ----
     public void SetPlanPreview(string? planId, string? providerId, ProviderKind providerKind, string? graphHash, string? nodeSetHash, string? edgeSetHash)
@@ -1200,6 +1229,50 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private bool CanReplayPlan() => !string.IsNullOrWhiteSpace(_planId);
     private Task ReplayPlanAsync()
         => Task.CompletedTask; // keep your real implementation elsewhere (partial)
+
+    private static string WithNarrationHeading(string line)
+    {
+        foreach (var mapping in NarrationHeadings)
+        {
+            if (line.Contains($"\"code\":\"{mapping.Key}\"", StringComparison.Ordinal))
+            {
+                return $"[{mapping.Value}] {line}";
+            }
+        }
+
+        return line;
+    }
+
+    private Task RefreshNarrationAsync()
+    {
+        _narrationLines.Clear();
+
+        var newest = Directory.GetFiles(Path.GetFullPath(Path.Combine("artifacts")), "events.ndjson", SearchOption.AllDirectories)
+            .Where(path => path.Replace('\\', '/').Contains("/narration/", StringComparison.Ordinal))
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(newest) || !File.Exists(newest))
+        {
+            return Task.CompletedTask;
+        }
+
+        foreach (var line in File.ReadLines(newest))
+        {
+            if (string.Equals(_selectedNarrationPhase, "all", StringComparison.OrdinalIgnoreCase))
+            {
+                _narrationLines.Add(WithNarrationHeading(line));
+                continue;
+            }
+
+            if (line.Contains($"\"phase\":\"{_selectedNarrationPhase}\"", StringComparison.OrdinalIgnoreCase))
+            {
+                _narrationLines.Add(WithNarrationHeading(line));
+            }
+        }
+
+        return Task.CompletedTask;
+    }
 
 	private void RegisterAiSurfaces()
 	{
@@ -1647,6 +1720,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         ExplainExecutionCommand.RaiseCanExecuteChanged();
         ReplayPlanCommand.RaiseCanExecuteChanged();
+        RefreshNarrationCommand.RaiseCanExecuteChanged();
 
         OnPropertyChanged(nameof(StartDisabledReason));
         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));

@@ -29,6 +29,14 @@ if [[ -f "$fingerprint" ]]; then
   cat "$fingerprint"
 fi
 
+latest_narration="$(ls -1t artifacts/builder_loop/*/run/*/narration/events.ndjson 2>/dev/null | head -n 1 || true)"
+if [[ -n "$latest_narration" ]]; then
+  echo "Newest narration log: $latest_narration"
+  echo "----- narration tail (120 lines) -----"
+  tail -n 120 "$latest_narration"
+  echo "--------------------------------------"
+fi
+
 echo "----- tail (120 lines) -----"
 tail -n 120 "$latest_log"
 echo "----------------------------"

@@ -2,7 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Shoots.Contracts.Core;
+using Shoots.Contracts.Core.AI.Narration;
 using Shoots.Runtime.Loader;
+using Shoots.Runtime.Runner;
 
 return await MainAsync(args).ConfigureAwait(false);
 
@@ -180,58 +182,91 @@ static async Task<int> RunScenarioAsync(string[] args)
     var traceDir = Path.Combine(runDir, "trace");
     Directory.CreateDirectory(traceDir);
 
-    var commands = new[]
+    using var narrator = new TextNarrator(runDir);
+    Emit(narrator, "startup", "startup.begin", "Starting builder smoke scenario", new Dictionary<string, string>
     {
-        "validate.scaffold",
-        "materialize.plan",
-        "simulate.execution",
-        "write.results"
-    };
+        ["projectId"] = projectId,
+        ["scenario"] = "builder_smoke"
+    });
 
-    var inputFiles = Directory.GetFiles(project, "*", SearchOption.AllDirectories)
-        .Select(path => Path.GetRelativePath(project, path).Replace('\\', '/'))
-        .OrderBy(path => path, StringComparer.Ordinal)
-        .ToArray();
-
-    var runRecord = new
+    try
     {
-        runId,
-        scenario = "builder_smoke",
-        projectId,
-        planHash,
-        providerHash,
-        envHash,
-        commandList = commands,
-        inputFileList = inputFiles,
-        status = "completed"
-    };
+        Emit(narrator, "plan", "plan.materialize.start", "Materializing plan", new Dictionary<string, string>());
+        Emit(narrator, "plan", "plan.read", "Reading plan scaffold", new Dictionary<string, string> { ["path"] = RelativePath(project, planPath) });
+        Emit(narrator, "plan", "plan.hash", "Plan hash loaded", new Dictionary<string, string> { ["planHash"] = planHash });
+        Emit(narrator, "provider", "provider.read", "Reading provider scaffold", new Dictionary<string, string> { ["path"] = RelativePath(project, providerPath) });
+        Emit(narrator, "provider", "provider.hash", "Provider hash loaded", new Dictionary<string, string> { ["providerHash"] = providerHash });
+        Emit(narrator, "env", "env.read", "Reading environment scaffold", new Dictionary<string, string> { ["path"] = RelativePath(project, envSelectedPath) });
+        Emit(narrator, "env", "env.hash", "Environment hash loaded", new Dictionary<string, string> { ["envHash"] = envHash });
+        Emit(narrator, "execute", "execute.begin", "Executing deterministic builder steps", new Dictionary<string, string>());
 
-    await File.WriteAllTextAsync(Path.Combine(runDir, "run.json"), JsonSerializer.Serialize(runRecord, JsonOptions())).ConfigureAwait(false);
+        var steps = new[] { "SelectTool", "ApplyTool", "Complete" };
+        var stepEvents = new List<object>();
+        foreach (var step in steps)
+        {
+            var stepId = ComputeHashHex($"{planHash}|{step}")[..12];
+            Emit(narrator, "execute", "execute.step.begin", "Running step", new Dictionary<string, string> { ["stepId"] = stepId, ["stepKind"] = step });
+            Emit(narrator, "tool", "tool.invoke", "Invoking tool", new Dictionary<string, string> { ["toolId"] = "linux.noop.v1", ["stepId"] = stepId });
+            Emit(narrator, "tool", "tool.stdout.tail", "Tool produced deterministic output", new Dictionary<string, string> { ["line"] = "noop" });
+            Emit(narrator, "tool", "tool.exit", "Tool completed", new Dictionary<string, string> { ["exitCode"] = "0", ["stepId"] = stepId });
+            Emit(narrator, "execute", "execute.step.end", "Step completed", new Dictionary<string, string> { ["stepId"] = stepId, ["stepKind"] = step });
+            stepEvents.Add(new { stepId, kind = step, toolId = "linux.noop.v1", status = "completed" });
+        }
 
-    var traceEvents = new[]
+        Emit(narrator, "execute", "execute.end", "Execution completed", new Dictionary<string, string>());
+
+        var inputFiles = Directory.GetFiles(project, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(project, path).Replace('\\', '/'))
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+        var runRecord = new
+        {
+            runId,
+            scenario = "builder_smoke",
+            projectId,
+            planHash,
+            providerHash,
+            envHash,
+            commandList = new[] { "validate.scaffold", "materialize.plan", "simulate.execution", "write.results" },
+            inputFileList = inputFiles,
+            status = "completed"
+        };
+
+        await File.WriteAllTextAsync(Path.Combine(runDir, "run.json"), JsonSerializer.Serialize(runRecord, JsonOptions())).ConfigureAwait(false);
+
+        var traceEvents = new[]
+        {
+            new { index = 0, type = "run.started", runId, scenario = "builder_smoke" },
+            new { index = 1, type = "plan.validated", planHash },
+            new { index = 2, type = "provider.validated", providerHash },
+            new { index = 3, type = "environment.validated", envHash },
+            new { index = 4, type = "run.completed", status = "completed" }
+        };
+
+        var tracePath = Path.Combine(traceDir, "events.ndjson");
+        await File.WriteAllLinesAsync(tracePath, traceEvents.Select(e => JsonSerializer.Serialize(e))).ConfigureAwait(false);
+
+        var traceHash = ComputeHashHex(await File.ReadAllTextAsync(tracePath).ConfigureAwait(false));
+        var outputManifest = new[] { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" };
+        var outputManifestHash = ComputeHashHex(string.Join("\n", outputManifest));
+
+        var hashes = new { runId, planHash, providerHash, envHash, traceHash, outputManifestHash };
+        await File.WriteAllTextAsync(Path.Combine(runDir, "hashes.json"), JsonSerializer.Serialize(hashes, JsonOptions())).ConfigureAwait(false);
+
+        var result = new { status = "completed", outputs = outputManifest, steps = stepEvents };
+        await File.WriteAllTextAsync(Path.Combine(runDir, "result.json"), JsonSerializer.Serialize(result, JsonOptions())).ConfigureAwait(false);
+
+        Emit(narrator, "finalize", "finalize.write_artifacts", "Wrote run artifacts", new Dictionary<string, string> { ["runDir"] = runDir });
+        Console.WriteLine(runDir);
+        return 0;
+    }
+    catch (Exception ex)
     {
-        new { index = 0, type = "run.started", runId, scenario = "builder_smoke" },
-        new { index = 1, type = "plan.validated", planHash },
-        new { index = 2, type = "provider.validated", providerHash },
-        new { index = 3, type = "environment.validated", envHash },
-        new { index = 4, type = "run.completed", status = "completed" }
-    };
-
-    var tracePath = Path.Combine(traceDir, "events.ndjson");
-    await File.WriteAllLinesAsync(tracePath, traceEvents.Select(e => JsonSerializer.Serialize(e))).ConfigureAwait(false);
-
-    var traceHash = ComputeHashHex(await File.ReadAllTextAsync(tracePath).ConfigureAwait(false));
-    var outputManifest = new[] { "run.json", "hashes.json", "result.json", "trace/events.ndjson" };
-    var outputManifestHash = ComputeHashHex(string.Join("\n", outputManifest));
-
-    var hashes = new { runId, planHash, providerHash, envHash, traceHash, outputManifestHash };
-    await File.WriteAllTextAsync(Path.Combine(runDir, "hashes.json"), JsonSerializer.Serialize(hashes, JsonOptions())).ConfigureAwait(false);
-
-    var result = new { status = "completed", outputs = outputManifest };
-    await File.WriteAllTextAsync(Path.Combine(runDir, "result.json"), JsonSerializer.Serialize(result, JsonOptions())).ConfigureAwait(false);
-
-    Console.WriteLine(runDir);
-    return 0;
+        Emit(narrator, "finalize", "finalize.failure", "Run failed", new Dictionary<string, string> { ["error"] = ex.GetType().Name, ["message"] = ex.Message });
+        Console.Error.WriteLine(ex.Message);
+        return 1;
+    }
 }
 
 static async Task<int> ReplayAsync(string[] args)
@@ -257,12 +292,16 @@ static async Task<int> ReplayAsync(string[] args)
     }
 
     var resolved = Path.GetFullPath(runDir);
+    using var narrator = new TextNarrator(resolved);
+    Emit(narrator, "replay", "replay.begin", "Starting replay", new Dictionary<string, string> { ["runDir"] = resolved });
+
     var runJsonPath = Path.Combine(resolved, "run.json");
     var hashesPath = Path.Combine(resolved, "hashes.json");
     var tracePath = Path.Combine(resolved, "trace", "events.ndjson");
 
     if (!File.Exists(runJsonPath) || !File.Exists(hashesPath) || !File.Exists(tracePath))
     {
+        Emit(narrator, "replay", "replay.result", "Replay failed due to missing files", new Dictionary<string, string> { ["result"] = "fail" });
         Console.Error.WriteLine("run directory missing required files");
         return 1;
     }
@@ -275,18 +314,33 @@ static async Task<int> ReplayAsync(string[] args)
     var envHash = runDoc.RootElement.GetProperty("envHash").GetString() ?? string.Empty;
     var runId = runDoc.RootElement.GetProperty("runId").GetString() ?? string.Empty;
 
+    Emit(narrator, "replay", "replay.inputs", "Loaded replay inputs", new Dictionary<string, string>
+    {
+        ["planHash"] = planHash,
+        ["providerHash"] = providerHash,
+        ["envHash"] = envHash
+    });
+
     var expectedRunId = ComputeHashHex($"{planHash}|{providerHash}|{envHash}|builder_smoke.v1")[..16];
     var expectedTraceHash = ComputeHashHex(await File.ReadAllTextAsync(tracePath).ConfigureAwait(false));
-    var expectedManifestHash = ComputeHashHex(string.Join("\n", new[] { "run.json", "hashes.json", "result.json", "trace/events.ndjson" }));
+    var expectedManifestHash = ComputeHashHex(string.Join("\n", new[] { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" }));
 
     var pass = string.Equals(runId, expectedRunId, StringComparison.Ordinal)
         && string.Equals(hashesDoc.RootElement.GetProperty("traceHash").GetString(), expectedTraceHash, StringComparison.Ordinal)
         && string.Equals(hashesDoc.RootElement.GetProperty("outputManifestHash").GetString(), expectedManifestHash, StringComparison.Ordinal);
 
+    Emit(narrator, "replay", "replay.hash.compare", "Compared replay hashes", new Dictionary<string, string>
+    {
+        ["expectedRunId"] = expectedRunId,
+        ["actualRunId"] = runId,
+        ["result"] = pass ? "pass" : "fail"
+    });
+
     var replay = new
     {
         runId,
         pass,
+        summary = pass ? "Replay matched deterministic hash invariants." : "Replay hash invariants failed.",
         expectedRunId,
         actualRunId = runId,
         expectedTraceHash,
@@ -296,6 +350,7 @@ static async Task<int> ReplayAsync(string[] args)
     };
 
     await File.WriteAllTextAsync(Path.Combine(resolved, "replay.json"), JsonSerializer.Serialize(replay, JsonOptions())).ConfigureAwait(false);
+    Emit(narrator, "replay", "replay.result", "Replay completed", new Dictionary<string, string> { ["result"] = pass ? "pass" : "fail" });
     Console.WriteLine(pass ? "replay_pass" : "replay_fail");
     return pass ? 0 : 1;
 }
@@ -337,3 +392,10 @@ static string? ValidateAuthority(DelegationAuthority authority)
 
     return null;
 }
+
+static void Emit(INarrator narrator, string phase, string code, string message, IDictionary<string, string> data)
+{
+    narrator.Emit(new NarrationEvent(phase, code, message, data));
+}
+
+static string RelativePath(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');

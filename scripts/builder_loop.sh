@@ -17,7 +17,7 @@ run_and_log() {
 
 run_and_log "$out_root/maintenance.log" bash scripts/maintenance.sh --tests
 
-project_id="builder-smoke-${ts}"
+project_id="builder-smoke"
 project_root=".state/projects/${project_id}"
 plan_root="${project_root}/plan"
 env_root="${project_root}/env"
