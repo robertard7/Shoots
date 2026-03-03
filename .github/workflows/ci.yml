@@ -168,10 +168,12 @@ PYCHK
         with:
           name: runtime-linux-artifacts
           path: |
+            artifacts/**
             artifacts/**/*.trx
             artifacts/**/*.binlog
             artifacts/**/*.log
             artifacts/**/ci-first-failure.md
+            artifacts/stubs/**
             artifacts/builder_loop/**
             artifacts/golden/**
             .state/runs/**
@@ -293,12 +295,15 @@ PYCHK
         with:
           name: full-windows-artifacts
           path: |
+            artifacts/**
             artifacts/**/*.trx
             artifacts/**/*.binlog
             artifacts/**/*.log
             artifacts/**/ci-first-failure.md
+            artifacts/stubs/**
             artifacts/builder_loop/**
             artifacts/golden/**
+            .state/runs/**
             etc/tools.catalog.json
           if-no-files-found: warn
 
@@ -387,10 +392,14 @@ PYCHK
         with:
           name: rc-linux-artifacts
           path: |
+            artifacts/**
             artifacts/**/*.trx
             artifacts/**/*.binlog
             artifacts/**/*.log
             artifacts/**/ci-first-failure.md
+            artifacts/stubs/**
+            artifacts/builder_loop/**
+            .state/runs/**
           if-no-files-found: warn
 
   determinism-guard:
@@ -481,8 +490,12 @@ PYCHK
         with:
           name: determinism-artifacts
           path: |
+            artifacts/**
             artifacts/**/*.trx
             artifacts/**/*.binlog
             artifacts/**/*.log
             artifacts/**/ci-first-failure.md
+            artifacts/stubs/**
+            artifacts/builder_loop/**
+            .state/runs/**
           if-no-files-found: warn

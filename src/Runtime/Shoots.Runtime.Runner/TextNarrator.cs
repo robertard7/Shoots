@@ -24,6 +24,11 @@ internal sealed class TextNarrator : INarrator, IDisposable
 
     public void Emit(NarrationEvent narrationEvent)
     {
+        if (!NarrationCodebook.TryValidate(narrationEvent, out var validationError))
+        {
+            throw new InvalidOperationException($"Invalid narration event: {validationError}");
+        }
+
         var payload = new
         {
             phase = Truncate(narrationEvent.Phase),

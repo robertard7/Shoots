@@ -52,4 +52,26 @@ public sealed class NarrationEventTests
 
         Assert.Equal(golden, json);
     }
+
+    [Fact]
+    public void Codebook_rejects_unknown_phase()
+    {
+        var evt = new NarrationEvent("unknown", "plan.read", "Reading plan");
+
+        var valid = NarrationCodebook.TryValidate(evt, out var error);
+
+        Assert.False(valid);
+        Assert.Equal("narration.phase.unknown", error);
+    }
+
+    [Fact]
+    public void Codebook_requires_error_code_for_error_severity()
+    {
+        var evt = new NarrationEvent("execute", "error", "Failure");
+
+        var valid = NarrationCodebook.TryValidate(evt, out var error);
+
+        Assert.False(valid);
+        Assert.Equal("narration.errorcode.missing", error);
+    }
 }

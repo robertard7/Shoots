@@ -14,7 +14,9 @@ print_diagnostics() {
     tail -n 120 "$latest_narration"
   fi
 
-  if [[ -f artifacts/stubs/stubs.txt ]]; then
+  if [[ -f artifacts/stubs/triage.md ]]; then
+    tail -n 120 artifacts/stubs/triage.md
+  elif [[ -f artifacts/stubs/stubs.txt ]]; then
     tail -n 120 artifacts/stubs/stubs.txt
   fi
 
