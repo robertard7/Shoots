@@ -166,6 +166,7 @@ PYCHK
       - name: Codex CI smoke (blessed)
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
+        # If you change this, you break Codex.
         run: bash scripts/codex_ci_smoke.sh
 
       - name: Write CI first-failure summary (always)

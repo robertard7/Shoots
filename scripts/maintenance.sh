@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
+export LC_ALL=C
+export LANG=C
+export TZ=UTC
+
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
@@ -267,6 +271,15 @@ if [[ "$RUN_TESTS" == "1" ]]; then
   narration_coverage_status=$?
   if [[ "$narration_coverage_status" -ne 0 ]]; then
     tests_status=$narration_coverage_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying plan hash chain"
+  run_and_capture "$tests_log" bash scripts/verify_plan_hash_chain.sh
+  plan_hash_chain_status=$?
+  if [[ "$plan_hash_chain_status" -ne 0 ]]; then
+    tests_status=$plan_hash_chain_status
     overall_status=1
     set_error_code tests
   fi
