@@ -35,10 +35,11 @@ stamp="$(date +%Y%m%d-%H%M%S)"
 restore_log="artifacts/maintenance/restore-${stamp}.log"
 build_log="artifacts/maintenance/build-${stamp}.log"
 tests_log="artifacts/maintenance/tests-${stamp}.log"
+fingerprint_file="artifacts/maintenance/failure-fingerprint.json"
 
 restore_status=0
 build_status=0
-tests_status=0
+tests_status=99
 overall_status=0
 
 run_and_capture() {
@@ -46,6 +47,61 @@ run_and_capture() {
   shift
   ( "$@" ) 2>&1 | tee "$log_file"
   return ${PIPESTATUS[0]}
+}
+
+status_word() {
+  local code="$1"
+  case "$code" in
+    0) echo "success" ;;
+    99) echo "skipped" ;;
+    *) echo "fail (exit ${code})" ;;
+  esac
+}
+
+json_escape() {
+  python -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
+}
+
+write_failure_fingerprint() {
+  local source_log=""
+  local failing_project=""
+  local failing_test=""
+  local exception=""
+  local message=""
+  local excerpt=""
+
+  if [[ "$tests_status" -ne 0 && "$tests_status" -ne 99 ]]; then
+    source_log="$tests_log"
+  elif [[ "$build_status" -ne 0 && "$build_status" -ne 99 ]]; then
+    source_log="$build_log"
+  elif [[ "$restore_status" -ne 0 ]]; then
+    source_log="$restore_log"
+  else
+    rm -f "$fingerprint_file"
+    return
+  fi
+
+  if [[ -f "$source_log" ]]; then
+    failing_project="$(sed -nE 's#.*(src/[^[:space:]]+\.(csproj|sln)).*#\1#p' "$source_log" | tail -n1)"
+    failing_test="$(sed -nE 's#.*Failed[[:space:]]+([^[:space:]]+).*#\1#p' "$source_log" | tail -n1)"
+    if [[ -z "$failing_test" ]]; then
+      failing_test="$(sed -nE 's#.*(\b[A-Za-z0-9_.]+\.[A-Za-z0-9_]+\([^)]+\)).*#\1#p' "$source_log" | tail -n1)"
+    fi
+    exception="$(sed -nE 's#.*([A-Za-z0-9_.]+Exception).*#\1#p' "$source_log" | tail -n1)"
+    message="$(grep -E "error|failed|exception" -i "$source_log" | tail -n1 || true)"
+    excerpt="$(tail -n 200 "$source_log")"
+  fi
+
+  {
+    echo "{"
+    echo "  \"failingProject\": $(printf '%s' "$failing_project" | json_escape),"
+    echo "  \"failingTestFullName\": $(printf '%s' "$failing_test" | json_escape),"
+    echo "  \"exceptionType\": $(printf '%s' "$exception" | json_escape),"
+    echo "  \"exceptionMessage\": $(printf '%s' "$message" | json_escape),"
+    echo "  \"excerptLast200Lines\": $(printf '%s' "$excerpt" | json_escape),"
+    echo "  \"sourceLog\": $(printf '%s' "$source_log" | json_escape)"
+    echo "}"
+  } > "$fingerprint_file"
 }
 
 echo "==> Restoring solution"
@@ -81,17 +137,10 @@ if [[ "$RUN_TESTS" == "1" ]]; then
   fi
 else
   echo "RUN_TESTS is not set to 1; skipping tests." | tee "$tests_log"
-  tests_status=0
+  tests_status=99
 fi
 
-status_word() {
-  local code="$1"
-  case "$code" in
-    0) echo "success" ;;
-    99) echo "skipped" ;;
-    *) echo "fail (exit ${code})" ;;
-  esac
-}
+write_failure_fingerprint
 
 cat <<SUMMARY
 
@@ -104,6 +153,9 @@ logs:
 - $restore_log
 - $build_log
 - $tests_log
+
+failure fingerprint:
+- $fingerprint_file
 ==============================
 SUMMARY
 

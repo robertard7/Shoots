@@ -15,6 +15,14 @@ if [[ -z "$latest_log" ]]; then
 fi
 
 echo "Newest tests log: $latest_log"
+echo "----- failing tests (best effort) -----"
+failing_tests="$(sed -nE 's#^\s*Failed\s+([^[:space:]]+).*#\1#p' "$latest_log" | sort -u || true)"
+if [[ -n "$failing_tests" ]]; then
+  printf '%s\n' "$failing_tests"
+else
+  echo "<no explicit failing test names found>"
+fi
+
 echo "----- tail (120 lines) -----"
 tail -n 120 "$latest_log"
 echo "----------------------------"
