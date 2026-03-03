@@ -7,6 +7,8 @@ public enum StartupFlowState
     StartNewLanguage,
     StartNewName,
     StartNewDescription,
+    StartNewProvider,
+    StartNewEnvironment,
     StartNewConfirm,
     StartNewCompleted,
     ContinueExistingPath,

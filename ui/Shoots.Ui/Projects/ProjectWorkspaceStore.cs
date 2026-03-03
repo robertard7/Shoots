@@ -10,15 +10,13 @@ namespace Shoots.UI.Projects;
 public sealed class ProjectWorkspaceStore : IProjectWorkspaceStore
 {
     public const int MaxRecentWorkspaces = 10;
-    public const string FileName = "workspaces.json";
+    public const string FileName = "projects.json";
 
     private readonly string _storePath;
 
     public ProjectWorkspaceStore(string? baseDirectory = null)
     {
-        var root = baseDirectory ?? Path.Combine(
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
-            "Shoots");
+        var root = baseDirectory ?? Path.GetFullPath(Path.Combine(".state", "ui"));
 
         _storePath = Path.Combine(root, FileName);
     }
@@ -37,7 +35,9 @@ public sealed class ProjectWorkspaceStore : IProjectWorkspaceStore
                 ?? new List<ProjectWorkspace>();
 
             return workspaces
-                .OrderByDescending(workspace => workspace.LastOpenedUtc)
+                .OrderBy(workspace => workspace.Name, StringComparer.Ordinal)
+                .ThenBy(workspace => workspace.ProjectId ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(workspace => workspace.RootPath, StringComparer.Ordinal)
                 .Take(MaxRecentWorkspaces)
                 .ToList();
         }
@@ -57,6 +57,9 @@ public sealed class ProjectWorkspaceStore : IProjectWorkspaceStore
             Directory.CreateDirectory(directory);
 
         var payload = workspaces
+            .OrderBy(workspace => workspace.Name, StringComparer.Ordinal)
+            .ThenBy(workspace => workspace.ProjectId ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(workspace => workspace.RootPath, StringComparer.Ordinal)
             .Take(MaxRecentWorkspaces)
             .ToList();
 

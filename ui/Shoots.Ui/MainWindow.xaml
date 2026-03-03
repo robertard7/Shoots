@@ -451,7 +451,22 @@
               </StackPanel>
             </TabItem>
 
-          </TabControl>
+            <TabItem Header="Narration">
+        <Grid Margin="12">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock VerticalAlignment="Center" Text="Phase" Margin="0,0,8,0" />
+            <ComboBox Width="180" ItemsSource="{Binding NarrationPhaseOptions}" SelectedItem="{Binding SelectedNarrationPhase, Mode=TwoWay}" />
+            <Button Margin="8,0,0,0" Content="Refresh" Command="{Binding RefreshNarrationCommand}" />
+          </StackPanel>
+          <ListBox Grid.Row="1" ItemsSource="{Binding NarrationLines}" FontFamily="Consolas" FontSize="11" />
+        </Grid>
+      </TabItem>
+
+    </TabControl>
         </Grid>
       </TabItem>
 
@@ -637,6 +652,21 @@
            If you want me to normalize ALL of them too, paste the remainder after AI Help (or confirm you want me to keep exact content but reformat).
            The snippet you pasted is huge and I already rewrote the majority, but the last third would need the rest of the file text to avoid accidental drift.
       -->
+
+      <TabItem Header="Narration">
+        <Grid Margin="12">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock VerticalAlignment="Center" Text="Phase" Margin="0,0,8,0" />
+            <ComboBox Width="180" ItemsSource="{Binding NarrationPhaseOptions}" SelectedItem="{Binding SelectedNarrationPhase, Mode=TwoWay}" />
+            <Button Margin="8,0,0,0" Content="Refresh" Command="{Binding RefreshNarrationCommand}" />
+          </StackPanel>
+          <ListBox Grid.Row="1" ItemsSource="{Binding NarrationLines}" FontFamily="Consolas" FontSize="11" />
+        </Grid>
+      </TabItem>
 
     </TabControl>
   </Grid>

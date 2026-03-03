@@ -19,6 +19,7 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
   NUGET_XMLDOC_MODE: "skip"
+  ENABLE_WINDOWS_CI: "1"
   # Toggle Linux tests without editing the workflow:
   # set to "1" to run tests, "0" to skip.
   RUN_TESTS_LINUX: "1"
@@ -87,7 +88,42 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts
-          (dotnet test src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj -c Release -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts/builder-linux.trx") 2>&1 | tee artifacts/test-builder.log
+          (dotnet test src/Builder/Shoots.Builder.Tests/Shoots.Builder.Tests.csproj -c Release --no-build -p:ContinuousIntegrationBuild=true --logger "trx;LogFileName=artifacts/builder-linux.trx") 2>&1 | tee artifacts/test-builder.log
+
+      - name: Builder loop scenario
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/builder_loop.sh
+
+      - name: Golden builder replay check
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: |
+          outdir="artifacts/golden"
+          mkdir -p "$outdir"
+
+          dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke/project --out "$outdir/base"
+          run_dir="$(find "$outdir/base" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
+          dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- replay --run "$run_dir"
+
+          dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke_success_args/project --out "$outdir/success-args"
+          run_dir_args="$(find "$outdir/success-args" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
+          dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- replay --run "$run_dir_args"
+
+          if dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke_failure/project --out "$outdir/failure"; then
+            echo "expected failure fixture to fail"
+            exit 1
+          fi
+
+          python - <<'PYCHK'
+import json, pathlib
+expected = json.loads(pathlib.Path('etc/fixtures/builder_smoke/expected-hashes.json').read_text())
+run_dir = sorted(pathlib.Path('artifacts/golden/base').glob('*'))[-1]
+actual = json.loads((run_dir / 'hashes.json').read_text())
+for key in ['runId','planHash','providerHash','envHash']:
+    if actual.get(key) != expected.get(key):
+        raise SystemExit(f'mismatch for {key}: {actual.get(key)} != {expected.get(key)}')
+PYCHK
 
       - name: Write CI first-failure summary (always)
         if: always()
@@ -118,12 +154,18 @@ jobs:
         with:
           name: runtime-linux-artifacts
           path: |
-            artifacts/**
+            artifacts/**/*.trx
+            artifacts/**/*.binlog
+            artifacts/**/*.log
+            artifacts/**/ci-first-failure.md
+            artifacts/builder_loop/**
+            artifacts/golden/**
             etc/tools.catalog.json
           if-no-files-found: warn
 
   full-windows:
     name: full-windows
+    if: env.ENABLE_WINDOWS_CI == '1'
     runs-on: [self-hosted, Windows, X64, Shoots]
     timeout-minutes: 90
     defaults:
@@ -233,7 +275,12 @@ jobs:
         with:
           name: full-windows-artifacts
           path: |
-            artifacts/**
+            artifacts/**/*.trx
+            artifacts/**/*.binlog
+            artifacts/**/*.log
+            artifacts/**/ci-first-failure.md
+            artifacts/builder_loop/**
+            artifacts/golden/**
             etc/tools.catalog.json
           if-no-files-found: warn
 
@@ -265,11 +312,15 @@ jobs:
         shell: bash
         run: bash scripts/verify_versions.sh
 
+      - name: Restore
+        shell: bash
+        run: dotnet restore src/Runtime/Shoots.Runtime.sln
+
       - name: Build host/runtime/smoke (Release) with binlog + log
         shell: bash
         run: |
           mkdir -p artifacts
-          (dotnet build src/Runtime/Shoots.Runtime.sln -c Release -p:ContinuousIntegrationBuild=true /bl:artifacts/build-rc-linux.binlog) 2>&1 | tee artifacts/build.log
+          (dotnet build src/Runtime/Shoots.Runtime.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true /bl:artifacts/build-rc-linux.binlog) 2>&1 | tee artifacts/build.log
 
       - name: Test runtime + host + client (log)
         shell: bash
@@ -318,11 +369,15 @@ jobs:
         with:
           name: rc-linux-artifacts
           path: |
-            artifacts/**
+            artifacts/**/*.trx
+            artifacts/**/*.binlog
+            artifacts/**/*.log
+            artifacts/**/ci-first-failure.md
           if-no-files-found: warn
 
   determinism-guard:
     name: determinism-guard
+    if: env.ENABLE_WINDOWS_CI == '1'
     runs-on: [self-hosted, Windows, X64, Shoots]
     defaults:
       run:
@@ -405,5 +460,8 @@ jobs:
         with:
           name: determinism-artifacts
           path: |
-            artifacts/**
+            artifacts/**/*.trx
+            artifacts/**/*.binlog
+            artifacts/**/*.log
+            artifacts/**/ci-first-failure.md
           if-no-files-found: warn
