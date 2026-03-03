@@ -4,7 +4,7 @@
 
 Blessed command for Codex + CI:
 
-- `bash scripts/codex_entrypoint.sh --all`
+- `bash scripts/codex_ci_smoke.sh`
 
 Additional supported commands:
 
@@ -19,6 +19,19 @@ Additional supported commands:
 9. `bash scripts/verify_no_blocking_stubs.sh`
 10. `bash scripts/verify_diagnostics_order.sh`
 11. `bash scripts/verify_step_envelopes.sh`
+12. `bash scripts/verify_artifact_budgets.sh`
+13. `bash scripts/verify_narration_coverage.sh`
+14. `bash scripts/verify_no_flaky_tests.sh`
+
+## Failure Triage Order
+
+Always read failures in this exact order:
+
+1. `artifacts/maintenance/failure-fingerprint.json`
+2. newest `.state/runs/**/narration/events.ndjson` (fallback: `artifacts/builder_loop/*/run/*/narration/events.ndjson`)
+3. newest `.state/runs/**/run_summary.md` (fallback: `artifacts/builder_loop/*/run/*/run_summary.md`)
+4. `artifacts/stubs/triage.md`
+5. newest `artifacts/**/*.log`
 
 ## Command Matrix
 

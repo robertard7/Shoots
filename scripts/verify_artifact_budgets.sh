@@ -38,12 +38,39 @@ fi
 max_context_bytes="${MAX_CONTEXT_PACK_BYTES:-262144}"
 max_stream_bytes="${MAX_STEP_STREAM_BYTES:-131072}"
 max_narration_bytes="${MAX_NARRATION_BYTES:-262144}"
+max_plan_synthesis_bytes="${MAX_PLAN_SYNTHESIS_BYTES:-262144}"
+max_plan_bytes="${MAX_PLAN_BYTES:-262144}"
+max_retrieval_hits_bytes="${MAX_RETRIEVAL_HITS_BYTES:-262144}"
 
 context_pack="$run_dir/retrieval/context_pack.txt"
 if [[ -f "$context_pack" ]]; then
   context_size="$(wc -c < "$context_pack")"
   if (( context_size > max_context_bytes )); then
     fail "verify.budget.context_pack.exceeded" "$context_pack exceeds ${max_context_bytes} bytes"
+  fi
+fi
+
+retrieval_hits="$run_dir/retrieval/hits.ndjson"
+if [[ -f "$retrieval_hits" ]]; then
+  retrieval_hits_size="$(wc -c < "$retrieval_hits")"
+  if (( retrieval_hits_size > max_retrieval_hits_bytes )); then
+    fail "verify.budget.retrieval_hits_exceeded" "$retrieval_hits exceeds ${max_retrieval_hits_bytes} bytes"
+  fi
+fi
+
+plan_synthesis_result="$run_dir/plan_synthesis/result.json"
+if [[ -f "$plan_synthesis_result" ]]; then
+  plan_synthesis_size="$(wc -c < "$plan_synthesis_result")"
+  if (( plan_synthesis_size > max_plan_synthesis_bytes )); then
+    fail "verify.budget.plan_synthesis_exceeded" "$plan_synthesis_result exceeds ${max_plan_synthesis_bytes} bytes"
+  fi
+fi
+
+plan_json="$run_dir/plan/plan.json"
+if [[ -f "$plan_json" ]]; then
+  plan_size="$(wc -c < "$plan_json")"
+  if (( plan_size > max_plan_bytes )); then
+    fail "verify.budget.plan_exceeded" "$plan_json exceeds ${max_plan_bytes} bytes"
   fi
 fi
 

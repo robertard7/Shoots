@@ -163,15 +163,10 @@ for key in ['runId','planHash','providerHash','envHash']:
         raise SystemExit(f'mismatch for {key}: {actual.get(key)} != {expected.get(key)}')
 PYCHK
 
-      - name: Codex entrypoint retrieval
+      - name: Codex CI smoke (blessed)
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
-        run: bash scripts/codex_entrypoint.sh --retrieval
-
-      - name: Codex entrypoint all
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/codex_entrypoint.sh --all
+        run: bash scripts/codex_ci_smoke.sh
 
       - name: Write CI first-failure summary (always)
         if: always()
@@ -213,6 +208,8 @@ PYCHK
             artifacts/retrieval/**
             .state/runs/**
             etc/tools.catalog.json
+            etc/fixtures/**
+            docs/**
           if-no-files-found: warn
 
   full-windows:
