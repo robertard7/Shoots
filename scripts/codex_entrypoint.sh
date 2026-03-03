@@ -17,6 +17,14 @@ print_diagnostics() {
     tail -n 120 "$latest_narration"
   fi
 
+  latest_run_summary="$(find .state/runs -type f -path '*/run_summary.md' -print 2>/dev/null | sort | tail -n 1 || true)"
+  if [[ -z "$latest_run_summary" ]]; then
+    latest_run_summary="$(ls -1t artifacts/builder_loop/*/run/*/run_summary.md 2>/dev/null | head -n 1 || true)"
+  fi
+  if [[ -n "$latest_run_summary" ]]; then
+    tail -n 120 "$latest_run_summary"
+  fi
+
   if [[ -f artifacts/stubs/triage.md ]]; then
     tail -n 120 artifacts/stubs/triage.md
   elif [[ -f artifacts/stubs/stubs.txt ]]; then

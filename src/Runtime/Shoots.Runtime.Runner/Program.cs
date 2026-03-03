@@ -350,8 +350,12 @@ static async Task<int> RunScenarioAsync(string[] args)
 
         var stepsDir = Path.Combine(runDir, "steps");
         Directory.CreateDirectory(stepsDir);
+        var sortedStepSummaries = stepSummaries.OrderBy(s => s["stepId"], StringComparer.Ordinal).ToArray();
         var stepSummaryPath = Path.Combine(stepsDir, "summary.ndjson");
-        await File.WriteAllLinesAsync(stepSummaryPath, stepSummaries.OrderBy(s => s["stepId"], StringComparer.Ordinal).Select(s => JsonSerializer.Serialize(s, JsonOptions()))).ConfigureAwait(false);
+        await File.WriteAllLinesAsync(stepSummaryPath, sortedStepSummaries.Select(s => JsonSerializer.Serialize(s, JsonOptions()))).ConfigureAwait(false);
+
+        var runSummaryPath = Path.Combine(runDir, "run_summary.md");
+        await File.WriteAllTextAsync(runSummaryPath, BuildRunSummary(runId, planHash, providerHash, envHash, sortedStepSummaries)).ConfigureAwait(false);
 
         Emit(narrator, "finalize", "finalize.write_artifacts", "Wrote run artifacts", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["runDir"] = runDir }));
         Console.WriteLine(runDir);
@@ -607,7 +611,7 @@ static bool ValidateResolvedSteps(
     details = string.Empty;
 
     var supportedKinds = StepKinds.Registry.Keys;
-    var envCapabilities = LoadEnvironmentCapabilities(envDescriptor);
+    var envCapabilities = LoadEnvironmentCapabilities(envDescriptor, out var hasExplicitCapabilities);
 
     if (plan.TryGetProperty("steps", out var rawSteps) && rawSteps.ValueKind == JsonValueKind.Array)
     {
@@ -623,7 +627,7 @@ static bool ValidateResolvedSteps(
                 return false;
             }
 
-            if (!StepKinds.IsSupportedInEnvironment(kind, envCapabilities))
+            if (hasExplicitCapabilities && !StepKinds.IsSupportedInEnvironment(kind, envCapabilities))
             {
                 errorCode = "plan.step.kind.unsupported_in_env";
                 summary = "Plan step kind is not supported in selected environment.";
@@ -666,10 +670,11 @@ static bool ValidateResolvedSteps(
     return true;
 }
 
-static HashSet<string> LoadEnvironmentCapabilities(JsonElement envDescriptor)
+static HashSet<string> LoadEnvironmentCapabilities(JsonElement envDescriptor, out bool hasExplicitCapabilities)
 {
     var capabilities = new HashSet<string>(StringComparer.Ordinal);
-    if (!envDescriptor.TryGetProperty("capabilities", out var caps) || caps.ValueKind != JsonValueKind.Array)
+    hasExplicitCapabilities = envDescriptor.TryGetProperty("capabilities", out var caps) && caps.ValueKind == JsonValueKind.Array;
+    if (!hasExplicitCapabilities)
     {
         return capabilities;
     }
@@ -685,6 +690,38 @@ static HashSet<string> LoadEnvironmentCapabilities(JsonElement envDescriptor)
 
     return capabilities;
 }
+
+static string BuildRunSummary(string runId, string planHash, string providerHash, string envHash, IReadOnlyList<Dictionary<string, string>> stepSummaries)
+{
+    var lines = new List<string>
+    {
+        "# Run Summary",
+        string.Empty,
+        $"- runId: `{runId}`",
+        $"- planHash: `{planHash}`",
+        $"- providerHash: `{providerHash}`",
+        $"- envHash: `{envHash}`",
+        string.Empty,
+        "## Steps",
+        "| stepId | kind | toolId | status | errorCode | outputs |",
+        "|---|---|---|---|---|---|"
+    };
+
+    foreach (var step in stepSummaries)
+    {
+        var stepId = step.TryGetValue("stepId", out var sid) ? sid : string.Empty;
+        var kind = step.TryGetValue("kind", out var k) ? k : string.Empty;
+        var toolId = step.TryGetValue("toolId", out var tid) ? tid : string.Empty;
+        var status = step.TryGetValue("status", out var st) ? st : string.Empty;
+        var errorCode = step.TryGetValue("errorCode", out var ec) ? ec : string.Empty;
+        var outputs = step.TryGetValue("outputs", out var o) ? o : string.Empty;
+        lines.Add($"| {EscapeTable(stepId)} | {EscapeTable(kind)} | {EscapeTable(toolId)} | {EscapeTable(status)} | {EscapeTable(errorCode)} | {EscapeTable(outputs)} |");
+    }
+
+    return string.Join("\n", lines) + "\n";
+}
+
+static string EscapeTable(string value) => (value ?? string.Empty).Replace("|", "\\|", StringComparison.Ordinal);
 
 static string TruncateDeterministic(string value, int maxChars, int maxLines)
 {
