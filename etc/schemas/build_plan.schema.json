@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shoots.local/schemas/build_plan.schema.json",
+  "title": "Shoots Minimal Build Plan",
+  "type": "object",
+  "required": [
+    "planHash",
+    "inputs",
+    "provider",
+    "environment",
+    "steps"
+  ],
+  "properties": {
+    "planHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "inputs": {
+      "type": "object",
+      "required": ["language", "name", "description"],
+      "properties": {
+        "language": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "provider": {
+      "type": "object",
+      "required": ["kind", "configHash"],
+      "properties": {
+        "kind": { "type": "string" },
+        "configHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "required": ["id", "descriptorHash"],
+      "properties": {
+        "id": { "type": "string" },
+        "descriptorHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stepId", "kind"],
+        "properties": {
+          "stepId": { "type": "string" },
+          "kind": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
