@@ -103,6 +103,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string _pendingProjectLanguage = "dotnet";
     private string _pendingProjectName = string.Empty;
     private string _pendingProjectDescription = string.Empty;
+    private string _pendingProviderKind = "Local";
+    private string _pendingProviderEndpoint = string.Empty;
+    private string _pendingEnvironmentId = "host-local";
 
     private ExecutionEnvironmentSettings _executionSettings = CreateDefaultExecutionEnvironmentSettings();
 
@@ -721,7 +724,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         : "Startup flow is already active.";
 
     public int StartupTabIndex => HasActiveWorkspace ? 1 : 0;
-    public string StartupProviderLabel => "Provider: Ollama (default)";
+    public string StartupProviderLabel => $"Provider: {_pendingProviderKind}";
 
     public IReadOnlyList<string> StartupLanguageOptions =>
         StartupLanguageRegistry.All.Select(option => option.Name).ToList();
@@ -734,6 +737,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         StartupFlowState.StartNewLanguage or
         StartupFlowState.StartNewName or
         StartupFlowState.StartNewDescription or
+        StartupFlowState.StartNewProvider or
+        StartupFlowState.StartNewEnvironment or
         StartupFlowState.StartNewConfirm or
         StartupFlowState.ContinueExistingPath or
         StartupFlowState.ContinueExistingReview or
@@ -745,6 +750,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         StartupFlowState.StartNewLanguage => "Question: What primary language should the project use?",
         StartupFlowState.StartNewName => "Question: Project name (optional). Reply with a name or \"skip\".",
         StartupFlowState.StartNewDescription => "Question: Provide a 1–2 sentence description.",
+        StartupFlowState.StartNewProvider => "Question: Choose provider kind (Local, Remote, Delegated).",
+        StartupFlowState.StartNewEnvironment => "Question: Choose execution environment id (host-local or linux-container).",
         StartupFlowState.StartNewConfirm => "Type \"confirm\" to create the project.",
         StartupFlowState.ContinueExistingPath => "Question: Provide the path to the existing project.",
         StartupFlowState.ContinueExistingReview => "Type \"confirm\" to attach this project read-only.",
@@ -1049,6 +1056,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             StartupFlowState.StartNewLanguage => HandleStartupLanguageAsync(input),
             StartupFlowState.StartNewName => HandleStartupProjectNameAsync(input),
             StartupFlowState.StartNewDescription => HandleStartupDescriptionAsync(input),
+            StartupFlowState.StartNewProvider => HandleStartupProviderAsync(input),
+            StartupFlowState.StartNewEnvironment => HandleStartupEnvironmentAsync(input),
             StartupFlowState.StartNewConfirm => HandleStartupConfirmAsync(input),
             StartupFlowState.ContinueExistingPath => HandleContinueExistingPathAsync(input),
             StartupFlowState.ContinueExistingReview => HandleContinueExistingConfirmAsync(input),
@@ -1311,6 +1320,52 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    private Task HandleStartupProviderAsync(string input)
+    {
+        var previous = _startupFlow.State;
+        var normalized = input.Trim();
+        if (!string.Equals(normalized, "Local", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(normalized, "Remote", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(normalized, "Delegated", StringComparison.OrdinalIgnoreCase))
+        {
+            AddStartupMessage("System: Provider must be one of Local, Remote, Delegated.");
+            return Task.CompletedTask;
+        }
+
+        _pendingProviderKind = char.ToUpperInvariant(normalized[0]) + normalized[1..].ToLowerInvariant();
+        if (!_startupFlow.TrySetProviderKind(_pendingProviderKind, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, "Provider captured.");
+        AddStartupMessage($"System: Provider = {_pendingProviderKind}.");
+        AddStartupMessage($"System: {StartupPrompt}");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleStartupEnvironmentAsync(string input)
+    {
+        var previous = _startupFlow.State;
+        _pendingEnvironmentId = string.Equals(input, "skip", StringComparison.OrdinalIgnoreCase)
+            ? "host-local"
+            : input.Trim();
+
+        if (!_startupFlow.TrySetEnvironmentId(_pendingEnvironmentId, out var error))
+        {
+            AddStartupMessage($"System: {error}");
+            return Task.CompletedTask;
+        }
+
+        LogStartupTransition(previous, _startupFlow.State, "Environment captured.");
+        AddStartupMessage($"System: Environment = {_pendingEnvironmentId}.");
+        AddStartupMessage($"System: {StartupPrompt}");
+        NotifyStartupFlowChanged();
+        return Task.CompletedTask;
+    }
+
     private Task HandleStartupConfirmAsync(string input)
     {
         if (!string.Equals(input, "confirm", StringComparison.OrdinalIgnoreCase))
@@ -1332,15 +1387,26 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             projectId,
             projectName,
             createdUtc,
-            selectedEnvironmentId: SelectedProfile?.Name ?? "host-local",
-            providerKind: ProviderKind.Local.ToString(),
-            providerEndpoint: string.Empty,
+            selectedEnvironmentId: _pendingEnvironmentId,
+            providerKind: _pendingProviderKind,
+            providerEndpoint: _pendingProviderEndpoint,
             language: _pendingProjectLanguage,
             description: _pendingProjectDescription,
             projectRoot);
 
         var descriptorPath = Path.Combine(projectRoot, "project.json");
         File.WriteAllText(descriptorPath, JsonSerializer.Serialize(descriptor, new JsonSerializerOptions { WriteIndented = true }));
+
+        CreateProjectScaffold(
+            projectRoot,
+            projectId,
+            projectName,
+            _pendingProjectDescription,
+            _pendingProjectLanguage,
+            _pendingProviderKind,
+            _pendingProviderEndpoint,
+            _pendingEnvironmentId,
+            createdUtc);
 
         var workspace = new ProjectWorkspace(
             Name: projectName,
@@ -1349,8 +1415,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             ProjectId: projectId,
             CreatedUtc: createdUtc,
             SelectedEnvironmentId: descriptor.SelectedEnvironmentId,
-            SelectedProviderKind: descriptor.ProviderKind,
-            SelectedProviderEndpoint: descriptor.ProviderEndpoint);
+            SelectedProviderKind: _pendingProviderKind,
+            SelectedProviderEndpoint: _pendingProviderEndpoint);
 
         _workspaceProvider.SetActiveWorkspace(workspace);
         LoadWorkspaces();
@@ -1411,6 +1477,71 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         AddStartupMessage("System: Explore mode active. Type \"promote\" to start a project.");
         return Task.CompletedTask;
+    }
+
+    private static void CreateProjectScaffold(
+        string projectRoot,
+        string projectId,
+        string projectName,
+        string description,
+        string language,
+        string providerKind,
+        string providerEndpoint,
+        string environmentId,
+        DateTimeOffset createdUtc)
+    {
+        var semantic = new
+        {
+            projectId,
+            projectName,
+            description,
+            language,
+            providerKind,
+            providerEndpoint,
+            environmentId
+        };
+
+        var canonical = CanonicalJson.Normalize(JsonSerializer.Serialize(semantic));
+        var planHash = ComputeDeterministicHash(canonical);
+        var providerHash = ComputeDeterministicHash(CanonicalJson.Normalize(JsonSerializer.Serialize(new { providerKind, providerEndpoint })));
+        var envHash = ComputeDeterministicHash(CanonicalJson.Normalize(JsonSerializer.Serialize(new { environmentId })));
+
+        var planRoot = Path.Combine(projectRoot, "plan");
+        var envRoot = Path.Combine(projectRoot, "env");
+        Directory.CreateDirectory(planRoot);
+        Directory.CreateDirectory(envRoot);
+
+        var planPayload = new
+        {
+            projectId,
+            language,
+            providerKind,
+            environmentId,
+            createdAtUtc = createdUtc,
+            planHash
+        };
+
+        File.WriteAllText(
+            Path.Combine(planRoot, "plan.json"),
+            JsonSerializer.Serialize(planPayload, new JsonSerializerOptions { WriteIndented = true }));
+
+        File.WriteAllText(
+            Path.Combine(envRoot, "selected.json"),
+            JsonSerializer.Serialize(new { environmentId }, new JsonSerializerOptions { WriteIndented = true }));
+
+        File.WriteAllText(
+            Path.Combine(envRoot, "descriptor.json"),
+            JsonSerializer.Serialize(new { environmentId, descriptorHash = envHash }, new JsonSerializerOptions { WriteIndented = true }));
+
+        File.WriteAllText(
+            Path.Combine(projectRoot, "provider.json"),
+            JsonSerializer.Serialize(new { kind = providerKind, endpoint = providerEndpoint, configHash = providerHash }, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static string ComputeDeterministicHash(string value)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
     private static string NormalizeStartupInput(string input) => input.Trim();

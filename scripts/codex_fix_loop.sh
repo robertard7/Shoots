@@ -23,6 +23,12 @@ else
   echo "<no explicit failing test names found>"
 fi
 
+fingerprint="artifacts/maintenance/failure-fingerprint.json"
+if [[ -f "$fingerprint" ]]; then
+  echo "Failure fingerprint: $fingerprint"
+  cat "$fingerprint"
+fi
+
 echo "----- tail (120 lines) -----"
 tail -n 120 "$latest_log"
 echo "----------------------------"

@@ -114,7 +114,7 @@ Workspaces:
 - Are pure UI data (name, root path, last opened time)
 - Never execute commands or scripts
 - Do not depend on any source control provider, database, or external service
-- Persist only recent selections in LocalAppData/Shoots/workspaces.json
+- Persist only recent selections in .state/ui/projects.json
 
 Workspace isolation is strictly visual: each selection scopes UI context and
 environment script previews without mutating runtime behavior or determinism.
@@ -299,3 +299,18 @@ PROVIDER NAMING BOUNDARY
 
 This repository uses `src/ProviderAdapters` for .NET provider adapters/clients/stubs only.
 The adapter layer does not own routing decisions: Mermaid graph transitions remain authoritative.
+
+
+MAINTENANCE ENTRYPOINTS
+-----------------------
+
+Canonical local maintenance command:
+- `bash scripts/maintenance.sh`
+
+Codex patch-loop entrypoint:
+- `bash scripts/codex_fix_loop.sh`
+
+Maintenance solution defaults:
+- Linux default: `src/Runtime/Shoots.Runtime.sln`
+- Windows default: `Shoots.sln`
+- Override with `SOLUTION_PATH=<path>` when needed.

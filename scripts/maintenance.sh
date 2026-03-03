@@ -52,6 +52,34 @@ build_status=0
 tests_status=99
 overall_status=0
 
+ensure_dotnet() {
+  if command -v dotnet >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    echo "dotnet not found on GitHub Actions runner." >&2
+    return 127
+  fi
+
+  local install_root="${HOME}/.dotnet"
+  local install_script="${install_root}/dotnet-install.sh"
+  mkdir -p "$install_root"
+
+  if [[ ! -f "$install_script" ]]; then
+    curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$install_script"
+    chmod +x "$install_script"
+  fi
+
+  "$install_script" --channel 8.0 --install-dir "$install_root" --no-path
+  export PATH="$install_root:$PATH"
+
+  if ! command -v dotnet >/dev/null 2>&1; then
+    echo "dotnet installation did not provide dotnet on PATH." >&2
+    return 127
+  fi
+}
+
 run_and_capture() {
   local log_file="$1"
   shift
@@ -113,6 +141,8 @@ write_failure_fingerprint() {
     echo "}"
   } > "$fingerprint_file"
 }
+
+ensure_dotnet || exit $?
 
 echo "==> Restoring solution"
 run_and_capture "$restore_log" dotnet restore "$SOLUTION_PATH"
