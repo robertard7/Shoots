@@ -53,6 +53,7 @@ services:
         set -e
         sleep 2
         ollama pull qwen2.5:0.5b-instruct
+        ollama pull qwen2.5:7b-instruct
         ollama pull nomic-embed-text
         echo "done"
     restart: "no"
