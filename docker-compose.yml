@@ -2,10 +2,29 @@ name: shoots
 
 services:
   # -------------------------
+  # Linux runner (optional)
+  # A stable place to run Linux tools from Windows.
+  # -------------------------
+  runner:
+    image: ubuntu:24.04
+    container_name: shoots-runner
+    profiles: ["linux"]
+    init: true
+    working_dir: /work
+    # Keep it alive:
+    command: ["bash", "-lc", "sleep infinity"]
+    volumes:
+      # Mount your repo into the container
+      - ./:/work:rw
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+    restart: unless-stopped
+
+  # -------------------------
   # Ollama (optional)
   # -------------------------
   ollama:
-    image: ollama/ollama:0.1.58
+    image: ollama/ollama:0.17.5
     container_name: shoots-ollama
     profiles: ["ai"]
     ports:
@@ -18,13 +37,12 @@ services:
       test: ["CMD", "sh", "-lc", "wget -qO- http://localhost:11434/api/tags >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s
-      retries: 15
+      retries: 20
 
-  # One-shot model pull (optional). Run it when you actually want models pre-pulled.
-  # Usage:
-  #   docker compose --profile ai run --rm ollama-pull
+  # One-shot model pull (run manually)
+  # Usage: docker compose --profile ai run --rm ollama-pull
   ollama-pull:
-    image: ollama/ollama:0.1.58
+    image: ollama/ollama:0.17.5
     container_name: shoots-ollama-pull
     profiles: ["ai"]
     depends_on:
@@ -52,11 +70,6 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "sh", "-lc", "wget -qO- http://localhost:6333/readyz >/dev/null 2>&1 || wget -qO- http://localhost:6333/healthz >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 3s
-      retries: 20
 
 volumes:
   ollama_data:
