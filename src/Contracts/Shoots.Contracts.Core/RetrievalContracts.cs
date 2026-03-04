@@ -81,6 +81,13 @@ public sealed record RetrievalStats
     public IReadOnlyList<string> TruncatedFlags { get; init; } = Array.Empty<string>();
 }
 
+public sealed record RepoSliceDecision
+{
+    public string Path { get; init; } = string.Empty;
+    public string DecisionCode { get; init; } = string.Empty;
+    public string Detail { get; init; } = string.Empty;
+}
+
 public sealed record RetrievalResult
 {
     public string QueryHash { get; init; } = string.Empty;
@@ -95,6 +102,7 @@ public sealed record RetrievalResult
     public RetrievalResult Normalize() => this with
     {
         Hits = Hits.Select(h => h.Normalize()).OrderByDescending(h => h.Score).ThenBy(h => h.Path, StringComparer.Ordinal).ToArray(),
-        Stats = Stats with { TruncationFlags = Stats.TruncationFlags.OrderBy(x => x, StringComparer.Ordinal).ToArray() }
+        SliceDecisionTrace = SliceDecisionTrace.OrderBy(x => x.Path, StringComparer.Ordinal).ThenBy(x => x.DecisionCode, StringComparer.Ordinal).ToArray(),
+        Stats = Stats with { TruncatedFlags = Stats.TruncatedFlags.OrderBy(x => x, StringComparer.Ordinal).ToArray() }
     };
 }

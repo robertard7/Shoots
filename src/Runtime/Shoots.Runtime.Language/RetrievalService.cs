@@ -79,7 +79,7 @@ public sealed class RetrievalService
                 CandidateFiles = slice.Files.Count,
                 ReturnedFiles = selected.Count,
                 ReturnedBytes = bytes,
-                TruncationFlags = truncationFlags.ToArray()
+                TruncatedFlags = truncationFlags.ToArray()
             }
         }.Normalize();
     }
