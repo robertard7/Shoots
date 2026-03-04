@@ -18,6 +18,7 @@ query_file="$fixture_root/query.json"
 expected_pack="$fixture_root/expected/context_pack_first30.txt"
 expected_hits="$fixture_root/expected/top_hits.ndjson"
 expected_stats="$fixture_root/expected/stats.json"
+expected_manifest="$fixture_root/expected/manifest.json"
 
 [[ -f "$query_file" && -f "$expected_pack" && -f "$expected_hits" && -f "$expected_stats" ]] || fail "verify.retrieval_golden.missing" "fixture_files" "$fixture_root" "none"
 
@@ -95,6 +96,51 @@ if a!=e:
     raise SystemExit(1)
 PY
   fail "verify.retrieval_golden.drift" "stats" "$fixture_root" "$run_dir"
+fi
+
+if [[ -f "$expected_manifest" ]]; then
+  if ! python - "$query_file" "$expected_pack" "$expected_hits" "$expected_stats" "$expected_manifest" <<'PY'; then
+import hashlib, json, pathlib, re, sys
+query_path=pathlib.Path(sys.argv[1])
+pack_path=pathlib.Path(sys.argv[2])
+hits_path=pathlib.Path(sys.argv[3])
+stats_path=pathlib.Path(sys.argv[4])
+manifest_path=pathlib.Path(sys.argv[5])
+compact=lambda obj: json.dumps(obj, sort_keys=True, separators=(',',':')).encode('utf-8')
+sha=lambda b: hashlib.sha256(b).hexdigest()
+manifest=json.loads(manifest_path.read_text())
+required=['version','queryHash','retrievalHash','contextPackHash','hitsHash','statsHash','createdUtc','commitSha']
+for key in required:
+    if key not in manifest:
+        raise SystemExit(1)
+query=json.loads(query_path.read_text())
+if manifest.get('queryHash') != sha(compact(query)):
+    raise SystemExit(1)
+if manifest.get('hitsHash') != sha(hits_path.read_bytes()):
+    raise SystemExit(1)
+if manifest.get('statsHash') != sha(stats_path.read_bytes()):
+    raise SystemExit(1)
+ctx=manifest.get('contextPackHash',{})
+pack_bytes=pack_path.read_bytes()
+if ctx.get('first30Sha256') != sha(pack_bytes):
+    raise SystemExit(1)
+if not isinstance(ctx.get('fullBytes'), int) or ctx.get('fullBytes') < len(pack_bytes):
+    raise SystemExit(1)
+if not re.match(r'^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$', str(manifest.get('createdUtc',''))):
+    raise SystemExit(1)
+commit=str(manifest.get('commitSha',''))
+if commit and not re.match(r'^[0-9a-f]{40}$', commit):
+    raise SystemExit(1)
+line=''
+for l in pack_path.read_text().splitlines():
+    if l.startswith('retrievalHash: '):
+        line=l.split(': ',1)[1].strip()
+        break
+if line and manifest.get('retrievalHash') != line:
+    raise SystemExit(1)
+PY
+    fail "verify.retrieval_golden.drift" "manifest" "$fixture_root" "$run_dir"
+  fi
 fi
 
 echo "verify.retrieval_golden.ok"

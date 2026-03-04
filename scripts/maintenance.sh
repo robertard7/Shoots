@@ -347,6 +347,33 @@ if [[ "$RUN_TESTS" == "1" ]]; then
     set_error_code tests
   fi
 
+  echo "==> Verifying fixture provenance"
+  run_and_capture "$tests_log" bash scripts/verify_fixture_provenance.sh
+  fixture_provenance_status=$?
+  if [[ "$fixture_provenance_status" -ne 0 ]]; then
+    tests_status=$fixture_provenance_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying budget consistency"
+  run_and_capture "$tests_log" bash scripts/verify_budget_consistency.sh
+  budget_consistency_status=$?
+  if [[ "$budget_consistency_status" -ne 0 ]]; then
+    tests_status=$budget_consistency_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying backend optionality"
+  run_and_capture "$tests_log" bash scripts/verify_backend_optional.sh
+  backend_optional_status=$?
+  if [[ "$backend_optional_status" -ne 0 ]]; then
+    tests_status=$backend_optional_status
+    overall_status=1
+    set_error_code tests
+  fi
+
   echo "==> Verifying no flaky tests"
   run_and_capture "$tests_log" bash scripts/verify_no_flaky_tests.sh
   flaky_status=$?

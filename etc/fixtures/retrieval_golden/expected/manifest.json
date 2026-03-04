@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "queryHash": "98e38263b91433ce220f62121a3d95756075bc18e97bb193e851a7a5a7933788",
+  "retrievalHash": "a64faa6ee5654f984664b360760af6a95b3282876df9e09d53970d76e2cfe2c8",
+  "contextPackHash": {
+    "first30Sha256": "05ccb5272c4b60412db7361b1ff94d3f5ee8557132dda114194dd6ca16092eaa",
+    "fullSha256": "05ccb5272c4b60412db7361b1ff94d3f5ee8557132dda114194dd6ca16092eaa",
+    "fullBytes": 1043
+  },
+  "hitsHash": "bc471cb2e3293c35311620882a16d0ecb547221f68db1a1f36f0901b92f05b43",
+  "statsHash": "8079c95537fb454d5ab29b233d9d0ad447016c3b2fb3a78bc935764c172cad3c",
+  "createdUtc": "2026-03-04T00:42:17Z",
+  "commitSha": "a7327d7cb6a3c9f7c8afa83ff9223097f191cf02"
+}

@@ -150,6 +150,21 @@ jobs:
         shell: bash
         run: bash scripts/verify_retrieval_golden.sh
 
+      - name: Verify fixture provenance
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_fixture_provenance.sh
+
+      - name: Verify budget consistency
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_budget_consistency.sh
+
+      - name: Verify backend optionality
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_backend_optional.sh
+
       - name: Golden builder replay check
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash

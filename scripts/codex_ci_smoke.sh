@@ -44,3 +44,6 @@ else
 fi
 bash scripts/verify_retrieval_quality.sh
 bash scripts/verify_retrieval_golden.sh
+bash scripts/verify_fixture_provenance.sh
+bash scripts/verify_budget_consistency.sh
+bash scripts/verify_backend_optional.sh

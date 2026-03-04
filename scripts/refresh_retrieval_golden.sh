@@ -18,7 +18,7 @@ before_hashes="$work/before.hashes"
 after_hashes="$work/after.hashes"
 mkdir -p "$work"
 
-for f in "$expected_dir/context_pack_first30.txt" "$expected_dir/top_hits.ndjson" "$expected_dir/stats.json"; do
+for f in "$expected_dir/context_pack_first30.txt" "$expected_dir/top_hits.ndjson" "$expected_dir/stats.json" "$expected_dir/manifest.json"; do
   if [[ -f "$f" ]]; then
     sha256sum "$f"
   else
@@ -71,11 +71,51 @@ subset={k:stats.get(k) for k in ['bytesOut','linesOut','filesOut','truncatedFlag
 pathlib.Path(sys.argv[2]).write_text(json.dumps(subset,indent=2)+'\n')
 PY
 
-for f in "$expected_dir/context_pack_first30.txt" "$expected_dir/top_hits.ndjson" "$expected_dir/stats.json"; do
+python - "$query_file" "$run_dir" "$expected_dir" <<'PY'
+import datetime, hashlib, json, pathlib, subprocess, sys
+query_path=pathlib.Path(sys.argv[1])
+run_dir=pathlib.Path(sys.argv[2])
+expected=pathlib.Path(sys.argv[3])
+compact=lambda obj: json.dumps(obj, sort_keys=True, separators=(',',':')).encode('utf-8')
+sha=lambda b: hashlib.sha256(b).hexdigest()
+query=json.loads(query_path.read_text())
+query_hash=sha(compact(query))
+retrieval_hashes=json.loads((run_dir/'retrieval/hashes.json').read_text())
+retrieval_hash=retrieval_hashes.get('retrievalHash','')
+first30=(expected/'context_pack_first30.txt').read_bytes()
+full=(run_dir/'retrieval/context_pack.txt').read_bytes()
+hits=(expected/'top_hits.ndjson').read_bytes()
+stats=(expected/'stats.json').read_bytes()
+commit_sha=''
+try:
+    commit_sha=subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+except Exception:
+    pass
+manifest={
+  'version':1,
+  'queryHash':query_hash,
+  'retrievalHash':retrieval_hash,
+  'contextPackHash':{
+    'first30Sha256':sha(first30),
+    'fullSha256':sha(full),
+    'fullBytes':len(full)
+  },
+  'hitsHash':sha(hits),
+  'statsHash':sha(stats),
+  'createdUtc':datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+  'commitSha':commit_sha
+}
+(expected/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
+print(sha((expected/'manifest.json').read_bytes()))
+PY
+
+for f in "$expected_dir/context_pack_first30.txt" "$expected_dir/top_hits.ndjson" "$expected_dir/stats.json" "$expected_dir/manifest.json"; do
   sha256sum "$f"
 done | sort > "$after_hashes"
 
 echo "refresh.retrieval_golden.fixture=$fixture_root"
 echo "refresh.retrieval_golden.run_dir=$run_dir"
+manifest_hash="$(sha256sum "$expected_dir/manifest.json" | awk '{print $1}')"
+echo "refresh.retrieval_golden.manifest_hash=$manifest_hash"
 
 diff -u "$before_hashes" "$after_hashes" || true

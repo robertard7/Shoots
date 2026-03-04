@@ -55,6 +55,10 @@ Always read failures in this exact order:
 | `bash scripts/verify_diagnostics_order.sh` | `0` when codex diagnostics order is canonical; non-zero when drift is detected. | `scripts/codex_entrypoint.sh` | 1) update `print_diagnostics` ordering in `scripts/codex_entrypoint.sh` |
 | `bash scripts/verify_step_envelopes.sh` | `0` when each `steps/<stepId>/` envelope is complete and bounded; non-zero on missing/oversized files. | `.state/runs/**` or `artifacts/builder_loop/**/run/*` | 1) check `steps/*/{request,result,stdout,stderr,exit,hashes}` 2) verify step artifact size limits |
 
+## Retrieval Mode Note
+
+Retrieval in the deterministic smoke/CI path is **lexical + deterministic only**; Qdrant is optional and not on the critical path for `bash scripts/codex_ci_smoke.sh`.
+
 ## Artifact Roots
 
 - `artifacts/maintenance/`
