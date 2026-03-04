@@ -579,6 +579,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ReplayPlanCommand = new AsyncRelayCommand(ReplayPlanAsync, CanReplayPlan);
         RefreshNarrationCommand = new AsyncRelayCommand(RefreshNarrationAsync);
         RefreshBackendStatusCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, CanRefreshBackends);
+        InitializeChatIntake(); // partial if you have it
+        InitializeChatIntakeSurface();
 
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
@@ -650,8 +652,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         LoadEnvironmentScript();
         LoadAiPolicy();
         RegisterAiSurfaces();
-        InitializeChatIntake(); // partial if you have it
-        InitializeChatIntakeSurface();
         _ = RefreshBackendStatusAsync();
         _ = RefreshAiHelpAsync();
     }
@@ -1982,27 +1982,27 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private void RaiseCommandCanExecute()
     {
-        StartCommand.RaiseCanExecuteChanged();
-        CancelCommand.RaiseCanExecuteChanged();
-        RefreshStatusCommand.RaiseCanExecuteChanged();
-        ApplyEnvironmentCommand.RaiseCanExecuteChanged();
-        ApplyScriptCommand.RaiseCanExecuteChanged();
-        RemoveWorkspaceCommand.RaiseCanExecuteChanged();
-        OpenWorkspaceCommand.RaiseCanExecuteChanged();
-        ToggleSystemTierCommand.RaiseCanExecuteChanged();
-        RefreshAiHelpCommand.RaiseCanExecuteChanged();
+        StartCommand?.RaiseCanExecuteChanged();
+        CancelCommand?.RaiseCanExecuteChanged();
+        RefreshStatusCommand?.RaiseCanExecuteChanged();
+        ApplyEnvironmentCommand?.RaiseCanExecuteChanged();
+        ApplyScriptCommand?.RaiseCanExecuteChanged();
+        RemoveWorkspaceCommand?.RaiseCanExecuteChanged();
+        OpenWorkspaceCommand?.RaiseCanExecuteChanged();
+        ToggleSystemTierCommand?.RaiseCanExecuteChanged();
+        RefreshAiHelpCommand?.RaiseCanExecuteChanged();
 
-        AddBlueprintCommand.RaiseCanExecuteChanged();
-        SaveBlueprintCommand.RaiseCanExecuteChanged();
-        RevertBlueprintCommand.RaiseCanExecuteChanged();
-        ExplainBlueprintCommand.RaiseCanExecuteChanged();
-        ValidateBlueprintCommand.RaiseCanExecuteChanged();
-        SuggestBlueprintCommand.RaiseCanExecuteChanged();
+        AddBlueprintCommand?.RaiseCanExecuteChanged();
+        SaveBlueprintCommand?.RaiseCanExecuteChanged();
+        RevertBlueprintCommand?.RaiseCanExecuteChanged();
+        ExplainBlueprintCommand?.RaiseCanExecuteChanged();
+        ValidateBlueprintCommand?.RaiseCanExecuteChanged();
+        SuggestBlueprintCommand?.RaiseCanExecuteChanged();
 
-        ExplainExecutionCommand.RaiseCanExecuteChanged();
-        ReplayPlanCommand.RaiseCanExecuteChanged();
-        RefreshNarrationCommand.RaiseCanExecuteChanged();
-        RunIntakePlanCommand.RaiseCanExecuteChanged();
+        ExplainExecutionCommand?.RaiseCanExecuteChanged();
+        ReplayPlanCommand?.RaiseCanExecuteChanged();
+        RefreshNarrationCommand?.RaiseCanExecuteChanged();
+        RunIntakePlanCommand?.RaiseCanExecuteChanged();
 
         OnPropertyChanged(nameof(StartDisabledReason));
         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));
