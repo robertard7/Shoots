@@ -86,6 +86,8 @@ jobs:
           cat artifacts/smoke/latest_summary.env
           source artifacts/smoke/latest_summary.env
           bash scripts/verify_hash_contract.sh "$RUN_DIR"
+          bash scripts/verify_fixture_integrity.sh
+          bash scripts/verify_trace_schema.sh "$RUN_DIR"
 
       - name: Build Runtime (Release) with binlog + log
         shell: bash
