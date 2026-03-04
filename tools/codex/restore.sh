@@ -4,6 +4,13 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
+python_cmd="$(command -v python3 || command -v python || true)"
+if [ -z "$python_cmd" ]; then
+  echo "restore.python.missing: python3/python is required" >&2
+  exit 1
+fi
+
+required_sdk="$($python_cmd - <<'PY'
 required_sdk="$(python - <<'PY'
 import json
 from pathlib import Path

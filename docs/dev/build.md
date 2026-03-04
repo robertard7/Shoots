@@ -36,3 +36,13 @@ bash scripts/validate_build.sh
 bash scripts/validate_build.sh --warnings-as-errors
 bash scripts/verify_no_warnings.sh
 ```
+
+## Windows (PowerShell)
+
+```powershell
+./scripts/validate_build.ps1
+./scripts/validate_build.ps1 -WarningsAsErrors
+./scripts/verify_no_warnings.ps1
+```
+
+> Linux/macOS flows use the `*.sh` scripts shown above.
