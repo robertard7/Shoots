@@ -24,7 +24,10 @@ for arg in "${args[@]}"; do
 done
 
 bash tools/codex/restore.sh
+bash scripts/verify_dependency_lock.sh
 bash scripts/verify_tool_catalog_contract.sh
+bash scripts/verify_cli_contract.sh
+bash scripts/verify_script_dependencies.sh
 bash scripts/smoke_runner.sh "${args[@]}"
 source artifacts/smoke/latest_summary.env
 bash scripts/verify_hash_contract.sh "$RUN_DIR"
@@ -39,7 +42,11 @@ bash scripts/verify_artifact_bounds.sh "$RUN_DIR"
 bash scripts/verify_manifest_contract.sh "$RUN_DIR"
 bash scripts/verify_trace_correlations.sh "$RUN_DIR"
 bash scripts/verify_execution_ledger.sh "$RUN_DIR"
+bash scripts/verify_filesystem_contract.sh "$RUN_DIR"
+bash scripts/verify_env_drift.sh "$RUN_DIR"
+bash scripts/sample_artifact_repro.sh "$RUN_DIR"
 bash scripts/replay_runner.sh "$RUN_DIR"
+bash scripts/replay_plan_graph.sh "$RUN_DIR"
 bash scripts/replay_diff.sh "$RUN_DIR"
 bash scripts/inspect_run.sh "$RUN_DIR"
 bash scripts/repo_fingerprint.sh
