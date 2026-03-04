@@ -130,7 +130,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private BackendStatus _qdrantStatus = new(BackendKind.Qdrant, false, "ui.backend.qdrant.not_probed", "Qdrant status has not been probed.", DateTimeOffset.MinValue, EndpointResolver.ResolveQdrantEndpoint(), null);
     private DateTimeOffset? _lastProbeUtc;
     private bool _probeInFlight;
-    private bool _commandsReady;
     private string _modelCatalogError = string.Empty;
 
     private AiPresentationPolicy _aiPresentationPolicy =
@@ -582,7 +581,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         RefreshBackendStatusCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, CanRefreshBackends);
         InitializeChatIntake(); // partial if you have it
         InitializeChatIntakeSurface();
-        _commandsReady = true;
 
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
@@ -1984,11 +1982,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private void RaiseCommandCanExecute()
     {
-        if (!_commandsReady)
-        {
-            return;
-        }
-
         StartCommand.RaiseCanExecuteChanged();
         CancelCommand.RaiseCanExecuteChanged();
         RefreshStatusCommand.RaiseCanExecuteChanged();
