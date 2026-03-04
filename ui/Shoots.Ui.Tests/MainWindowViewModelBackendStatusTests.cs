@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Shoots.Contracts.Core.AI;
 using Shoots.UI.Blueprints;
 using Shoots.UI.Environment;
 using Shoots.UI.ExecutionEnvironments;
@@ -23,7 +24,7 @@ public sealed class MainWindowViewModelBackendStatusTests
             new FixedBackendProbeService(
                 new BackendStatus(BackendKind.Ollama, false, "ui.ollama.unreachable", "Ollama unavailable.", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
                 new BackendStatus(BackendKind.Qdrant, true, null, "Qdrant healthy.", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
-            new FixedOllamaClient(new OllamaTagsResult(false, new string[0], "ui.ollama.unreachable", "Ollama unavailable.")));
+            new FixedOllamaClient(new OllamaTagsResult(false, System.Array.Empty<string>(), "ui.ollama.unreachable", "Ollama unavailable.")));
 
         await vm.RefreshBackendStatusCommand.ExecuteAsync();
 
@@ -54,7 +55,7 @@ public sealed class MainWindowViewModelBackendStatusTests
             new FixedBackendProbeService(
                 new BackendStatus(BackendKind.Ollama, false, "ui.ollama.unreachable", "Ollama unavailable.", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
                 new BackendStatus(BackendKind.Qdrant, true, null, "Qdrant healthy.", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
-            new FixedOllamaClient(new OllamaTagsResult(false, new string[0], "ui.ollama.unreachable", "Ollama unavailable.")));
+            new FixedOllamaClient(new OllamaTagsResult(false, System.Array.Empty<string>(), "ui.ollama.unreachable", "Ollama unavailable.")));
 
         await vm.NewProjectCommand.ExecuteAsync();
         vm.IntakeIntent = "run deterministic builder";
@@ -72,7 +73,8 @@ public sealed class MainWindowViewModelBackendStatusTests
             new FixedBackendProbeService(
                 new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
                 new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
-            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            includeProfile: false);
 
         Assert.Equal("ui.environment.profile.missing: select an environment profile.", vm.ApplyEnvironmentDisabledReason);
         Assert.False(vm.ApplyEnvironmentCommand.CanExecute(null));
@@ -94,6 +96,20 @@ public sealed class MainWindowViewModelBackendStatusTests
 
         probeService.Release();
         await refreshTask;
+    }
+
+
+    [Fact]
+    public void Constructor_does_not_throw_when_profiles_are_missing()
+    {
+        var ex = Record.Exception(() => BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            includeProfile: false));
+
+        Assert.Null(ex);
     }
 
     [Fact]
@@ -129,26 +145,138 @@ public sealed class MainWindowViewModelBackendStatusTests
             System.Environment.SetEnvironmentVariable("SHOOTS_PREFERRED_MODEL_ID", null);
         }
     }
-    private static MainWindowViewModel BuildViewModel(IBackendProbeService probeService, IOllamaClient ollamaClient)
+    private static MainWindowViewModel BuildViewModel(
+        IBackendProbeService probeService,
+        IOllamaClient ollamaClient,
+        bool includeProfile = true)
     {
-        var workspaceStore = new ProjectWorkspaceStore();
         return new MainWindowViewModel(
             new NullExecutionCommandService(),
-            new EnvironmentProfileService(),
+            new DeterministicEnvironmentProfileService(includeProfile),
             new EnvironmentCapabilityProvider(),
             new EnvironmentProfilePrompt(),
             new EnvironmentScriptLoader(),
-            new ProjectWorkspaceProvider(workspaceStore),
-            new WorkspaceShellService(),
+            new DeterministicWorkspaceProvider(),
+            new NullWorkspaceShellService(),
             new DatabaseIntentStore(),
             new ToolTierPrompt(),
             new SystemBlueprintStore(),
             new ExecutionEnvironmentSettingsStore(),
-            new AiPolicyStore(),
+            new InMemoryAiPolicyStore(),
             new AiPanelVisibilityService(),
             new NullAiHelpFacade(),
             probeService,
             ollamaClient);
+    }
+
+
+    private sealed class DeterministicEnvironmentProfileService : IEnvironmentProfileService
+    {
+        private static readonly IEnvironmentProfile Profile = new DeterministicEnvironmentProfile();
+
+        public DeterministicEnvironmentProfileService(bool includeProfile)
+        {
+            Profiles = includeProfile ? new[] { Profile } : System.Array.Empty<IEnvironmentProfile>();
+        }
+
+        public IReadOnlyList<IEnvironmentProfile> Profiles { get; }
+
+        public EnvironmentProfileResult? LastResult => null;
+
+        public EnvironmentCapability AvailableCapabilities => EnvironmentCapability.None;
+
+        public EnvironmentProfileResult ApplyProfile(string sandboxRoot, IEnvironmentProfile profile)
+        {
+            return new EnvironmentProfileResult(profile.Name, System.Array.Empty<string>(), profile.DeclaredCapabilities, System.DateTimeOffset.UtcNow);
+        }
+    }
+
+    private sealed class DeterministicEnvironmentProfile : IEnvironmentProfile
+    {
+        public string Name => "deterministic";
+        public string Description => "Deterministic test profile";
+        public EnvironmentCapability DeclaredCapabilities => EnvironmentCapability.None;
+        public IReadOnlyList<SandboxPreparationStep> SandboxPreparationSteps => System.Array.Empty<SandboxPreparationStep>();
+    }
+
+    private sealed class DeterministicWorkspaceProvider : IProjectWorkspaceProvider
+    {
+        private readonly List<ProjectWorkspace> _workspaces;
+        private ProjectWorkspace? _active;
+
+        public DeterministicWorkspaceProvider()
+        {
+            _workspaces = new List<ProjectWorkspace>();
+
+            _active = new ProjectWorkspace(
+                Name: "deterministic-workspace",
+                RootPath: "deterministic-workspace",
+                LastOpenedUtc: System.DateTimeOffset.UtcNow,
+                ProjectId: "deterministic-project");
+            _workspaces.Add(_active);
+        }
+
+        public IReadOnlyList<ProjectWorkspace> GetRecentWorkspaces() => _workspaces;
+
+        public ProjectWorkspace? GetActiveWorkspace() => _active;
+
+        public void SetActiveWorkspace(ProjectWorkspace workspace)
+        {
+            _active = workspace;
+            if (!_workspaces.Contains(workspace))
+            {
+                _workspaces.Add(workspace);
+            }
+        }
+
+        public void RemoveWorkspace(ProjectWorkspace workspace)
+        {
+            _workspaces.Remove(workspace);
+            if (ReferenceEquals(_active, workspace))
+            {
+                _active = null;
+            }
+        }
+
+        public void UpdateWorkspace(ProjectWorkspace workspace)
+        {
+            var index = _workspaces.FindIndex(existing =>
+                string.Equals(existing.RootPath, workspace.RootPath, System.StringComparison.Ordinal));
+            if (index >= 0)
+            {
+                _workspaces[index] = workspace;
+            }
+
+            if (_active is not null && string.Equals(_active.RootPath, workspace.RootPath, System.StringComparison.Ordinal))
+            {
+                _active = workspace;
+            }
+        }
+    }
+
+    private sealed class NullWorkspaceShellService : IWorkspaceShellService
+    {
+        public bool OpenFolder(string path) => true;
+
+        public Task OpenFolderAsync(string path, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class InMemoryAiPolicyStore : IAiPolicyStore
+    {
+        private AiPolicySettings _settings = new(
+            AiAccessRole.Developer,
+            new AiPresentationPolicy(
+                AiVisibilityMode.Visible,
+                AllowAiPanelToggle: true,
+                AllowCopyExport: true,
+                EnterpriseMode: false));
+
+        public AiPolicySettings Load(string? workspaceRoot) => _settings;
+
+        public void Save(string? workspaceRoot, AiPolicySettings settings)
+        {
+            _settings = settings;
+        }
     }
 
     private sealed class FixedBackendProbeService : IBackendProbeService
@@ -212,7 +340,7 @@ public sealed class MainWindowViewModelBackendStatusTests
         {
             if (_results.Count == 0)
             {
-                return Task.FromResult(new OllamaTagsResult(true, new string[0], null, "ok"));
+                return Task.FromResult(new OllamaTagsResult(true, System.Array.Empty<string>(), null, "ok"));
             }
 
             return Task.FromResult(_results.Dequeue());

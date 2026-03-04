@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -28,34 +27,13 @@ public sealed class WorkspaceShellService : IWorkspaceShellService
             return Task.CompletedTask;
 
         if (!OperatingSystem.IsWindows())
-        {
-            Trace.WriteLine("ui.shell.unsupported_os");
             return Task.CompletedTask;
-        }
 
         var full = Path.GetFullPath(path);
         if (!Directory.Exists(full) && !File.Exists(full))
             return Task.CompletedTask;
 
-        if (File.Exists(full))
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "explorer.exe",
-                Arguments = $"/select,\"{full}\"",
-                UseShellExecute = true
-            });
-
-            return Task.CompletedTask;
-        }
-
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = "explorer.exe",
-            Arguments = $"\"{full}\"",
-            UseShellExecute = true
-        });
-
+        NativeMethods.ShellExecute(IntPtr.Zero, "open", full, null, null, 1);
         return Task.CompletedTask;
     }
 
