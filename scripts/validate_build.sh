@@ -6,7 +6,13 @@ cd "$repo_root"
 
 mkdir -p artifacts
 
-required_sdk="$(python - <<'PY'
+python_cmd="$(command -v python3 || command -v python || true)"
+if [ -z "$python_cmd" ]; then
+  echo "validate_build.python.missing: python3/python is required" >&2
+  exit 1
+fi
+
+required_sdk="$($python_cmd - <<'PY'
 import json
 from pathlib import Path
 print(json.loads(Path('global.json').read_text())['sdk']['version'])
@@ -81,7 +87,7 @@ run_step() {
 }
 
 write_warning_reports() {
-  python - <<'PY'
+  $python_cmd - <<'PY'
 from pathlib import Path
 import re
 from collections import Counter, defaultdict

@@ -302,7 +302,7 @@ public sealed class RoutingLoopTests
             .Run();
 
         Assert.Equal(RoutingStatus.Completed, result.State.Status);
-        var bypass = Assert.Single(result.Trace.Entries, e => e.Event == RoutingTraceEventKind.DecisionGateBypassed);
+        var bypass = Assert.Single(result.Trace.Entries, e => e.Event == RoutingTraceEventKind.DecisionGateBypassed && e.State is not null && e.State.WorkOrderId == workOrder.Id);
         Assert.Equal("select", bypass.FromNodeId);
         Assert.Equal("terminate", bypass.ToNodeId);
     }
