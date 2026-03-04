@@ -37,6 +37,9 @@ source artifacts/smoke/latest_summary.env
 bash scripts/verify_hash_contract.sh "$RUN_DIR"
 bash scripts/verify_scripts_portability.sh
 bash scripts/verify_smoke_artifacts.sh "$RUN_DIR"
+bash scripts/smoke_runner.sh "${args[@]}"
+source artifacts/smoke/latest_summary.env
+bash scripts/verify_hash_contract.sh "$RUN_DIR"
 bash scripts/verify_fixture_integrity.sh
 bash scripts/verify_trace_schema.sh "$RUN_DIR"
 bash scripts/verify_trace_contract.sh "$RUN_DIR"
@@ -70,6 +73,8 @@ bash scripts/inspect_run.sh "$RUN_DIR"
 bash scripts/repo_fingerprint.sh
 bash scripts/determinism_report.sh
 bash scripts/verify_report_integrity.sh
+bash scripts/replay_runner.sh "$RUN_DIR"
+bash scripts/inspect_run.sh "$RUN_DIR"
 
 echo "DETERMINISM_OK=1"
 echo "RUN_DIR=$RUN_DIR"

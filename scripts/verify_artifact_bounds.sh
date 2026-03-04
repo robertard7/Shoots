@@ -31,6 +31,7 @@ root=pathlib.Path(sys.argv[1])
 print(sum(p.stat().st_size for p in root.rglob("*") if p.is_file()))
 PY
 )"
+artifact_total="$(find "$run_dir" -type f -print0 | du --files0-from=- -cb | tail -n1 | awk '{print $1}')"
 
 if (( trace_size > trace_max )); then
   echo "ARTIFACT_BOUNDS_OK=0"

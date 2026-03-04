@@ -4,6 +4,7 @@ set -euo pipefail
 source "$(dirname "$0")/lib/endpoint_resolver.sh"
 
 OLLAMA_HOST="$(resolve_ollama_endpoint)"
+OLLAMA_HOST="${OLLAMA_HOST:-http://localhost:11434}"
 QDRANT_URL="${QDRANT_URL:-}"
 SKIP_QDRANT=0
 TIMEOUT_SECS="${SMOKE_TIMEOUT_SECS:-3}"

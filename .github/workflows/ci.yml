@@ -160,6 +160,7 @@ jobs:
           bash scripts/record_ci_metrics.sh "$RUN_DIR"
           bash scripts/determinism_report.sh
           bash scripts/verify_report_integrity.sh
+          bash scripts/verify_sorted_hash_inputs.sh
 
       - name: Build Runtime (Release) with binlog + log
         shell: bash
