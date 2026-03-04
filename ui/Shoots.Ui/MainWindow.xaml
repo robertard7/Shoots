@@ -40,7 +40,9 @@
       <Button Margin="0,6,0,0"
               Content="Start another project"
               Command="{Binding StartAnotherProjectCommand}"
-              IsEnabled="{Binding IsStartupLocked, Converter={x:Static converters:BooleanNegationConverter.Instance}}" />
+              ToolTip="{Binding StartAnotherProjectTooltip}"
+              ToolTipService.ShowOnDisabled="True"
+              IsEnabled="{Binding IsStartupLocked}" />
 
       <TextBlock Margin="0,16,0,0"
                  Text="Recent Projects"

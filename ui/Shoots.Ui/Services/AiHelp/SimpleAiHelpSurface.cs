@@ -82,7 +82,7 @@ public sealed class SimpleAiHelpSurface : IAiHelpSurface
         }
 
         // Absolute last resort: deterministic empty instance.
-        return default;
+        return default!;
     }
 
     private static bool TryCreate(Type t, out AiIntentDescriptor created, params object?[] args)
@@ -101,7 +101,7 @@ public sealed class SimpleAiHelpSurface : IAiHelpSurface
             // deterministic fallback below
         }
 
-        created = default;
+        created = default!;
         return false;
     }
 }

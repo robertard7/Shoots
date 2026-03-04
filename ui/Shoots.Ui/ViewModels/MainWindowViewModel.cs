@@ -801,9 +801,23 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     public bool IsEntryPathSelectionActive => _startupFlow.State == StartupFlowState.EntryPathSelection;
 
-    public string StartupButtonTooltip => _startupFlow.State == StartupFlowState.Initial
-        ? "Begin the startup flow."
-        : "Startup flow is already active.";
+    public string StartupButtonTooltip
+    {
+        get
+        {
+            var blocker = GetNewProjectBlockerReason();
+            return string.IsNullOrWhiteSpace(blocker) ? "Begin the startup flow." : blocker;
+        }
+    }
+
+    public string StartAnotherProjectTooltip
+    {
+        get
+        {
+            var blocker = GetStartAnotherProjectBlockerReason();
+            return string.IsNullOrWhiteSpace(blocker) ? "Switch to startup flow for another project." : blocker;
+        }
+    }
 
     public int StartupTabIndex => HasActiveWorkspace ? 1 : 0;
     public string StartupProviderLabel => $"Provider: {_pendingProviderKind}";
@@ -947,7 +961,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ? "AI help is available for this role."
         : "AI is running in the background but hidden by settings.";
 
-    public string AiProviderStatus => $"Provider: Ollama ({(OllamaStatus.IsAvailable ? "available" : OllamaStatus.ErrorCode ?? "unavailable")})";
+    public string AiProviderStatus =>
+        $"Provider: Ollama={(OllamaStatus.IsAvailable ? "available" : OllamaStatus.ErrorCode ?? "unavailable")}; Qdrant={(QdrantStatus.IsAvailable ? "available" : QdrantStatus.ErrorCode ?? "unavailable")}";
     public BackendStatus OllamaStatus => _ollamaStatus;
     public BackendStatus QdrantStatus => _qdrantStatus;
     public DateTimeOffset? LastProbeUtc => _lastProbeUtc;
@@ -1101,23 +1116,29 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     // ---- Startup flow ----
-    private bool CanStartNewProject() => _startupFlow.State == StartupFlowState.Initial && !HasActiveWorkspace;
-    private bool CanStartAnotherProject() => HasActiveWorkspace;
+    private bool CanStartNewProject() => string.IsNullOrWhiteSpace(GetNewProjectBlockerReason());
+    private bool CanStartAnotherProject() => string.IsNullOrWhiteSpace(GetStartAnotherProjectBlockerReason());
     private bool CanSelectEntryPath() => _startupFlow.State == StartupFlowState.EntryPathSelection && !_startupComplete;
     private bool CanSubmitStartupInput() => IsStartupInputActive && !_startupComplete && !string.IsNullOrWhiteSpace(StartupInput);
 
     private Task NewProjectAsync()
     {
         var previous = _startupFlow.State;
-        if (HasActiveWorkspace)
+        var blocker = GetNewProjectBlockerReason();
+        Trace.WriteLine($"[Shoots.UI] NewProject command invoked. state={_startupFlow.State}; hasWorkspace={HasActiveWorkspace}; startupComplete={_startupComplete}; blocker={blocker}");
+        if (!string.IsNullOrWhiteSpace(blocker))
         {
-            AddStartupMessage("System: Startup is locked while a project is active. Use \"Start another project\" to restart.");
+            AddStartupMessage($"System: {blocker}");
             return Task.CompletedTask;
         }
 
         if (!_startupFlow.TryBeginNewProject(out var error))
         {
-            AddStartupMessage($"System: {error}");
+            var reason = string.IsNullOrWhiteSpace(error)
+                ? "startup.blocked: gate=startupFlowTransition; property=startup.state; action=reset startup flow and retry"
+                : $"startup.blocked: gate=startupFlowTransition; property=startup.state; action={error}";
+            AddStartupMessage($"System: {reason}");
+            Trace.WriteLine($"[Shoots.UI] NewProject transition blocked. reason={reason}");
             return Task.CompletedTask;
         }
 
@@ -1131,11 +1152,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private Task StartAnotherProjectAsync()
     {
-        if (!HasActiveWorkspace) return Task.CompletedTask;
-
-        if (State is UiExecutionState.Running or UiExecutionState.Waiting)
+        var blocker = GetStartAnotherProjectBlockerReason();
+        Trace.WriteLine($"[Shoots.UI] StartAnotherProject command invoked. hasWorkspace={HasActiveWorkspace}; executionState={State}; blocker={blocker}");
+        if (!string.IsNullOrWhiteSpace(blocker))
         {
-            AddStartupMessage("System: Current project has unsaved run state. Save/export before switching projects.");
+            AddStartupMessage($"System: {blocker}");
             return Task.CompletedTask;
         }
 
@@ -1149,6 +1170,36 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         AddStartupMessage("System: Startup reset requested. Choose an entry path.");
         NotifyStartupFlowChanged();
         return Task.CompletedTask;
+    }
+
+    private string GetNewProjectBlockerReason()
+    {
+        if (HasActiveWorkspace)
+        {
+            return "startup.blocked: gate=activeWorkspace; property=HasActiveWorkspace=true; action=click Start another project";
+        }
+
+        if (_startupFlow.State != StartupFlowState.Initial)
+        {
+            return $"startup.blocked: gate=startupFlowState; property=StartupState={_startupFlow.State}; action=complete current startup flow or reset";
+        }
+
+        return string.Empty;
+    }
+
+    private string GetStartAnotherProjectBlockerReason()
+    {
+        if (!HasActiveWorkspace)
+        {
+            return "startup.blocked: gate=activeWorkspace; property=HasActiveWorkspace=false; action=attach or create a project first";
+        }
+
+        if (State is UiExecutionState.Running or UiExecutionState.Waiting)
+        {
+            return "startup.blocked: gate=executionState; property=State=RunningOrWaiting; action=wait for run completion or cancel current run";
+        }
+
+        return string.Empty;
     }
 
     private Task SelectEntryPathAsync(object? parameter)
@@ -1394,8 +1445,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         {
             var ollama = await _backendProbeService.ProbeOllamaAsync(default).ConfigureAwait(false);
             var qdrant = await _backendProbeService.ProbeQdrantAsync(default).ConfigureAwait(false);
-            _ollamaStatus = ollama;
-            _qdrantStatus = qdrant;
+            _ollamaStatus = ollama.WithBounds();
+            _qdrantStatus = qdrant.WithBounds();
             _lastProbeUtc = DateTimeOffset.UtcNow;
 
             OnPropertyChanged(nameof(OllamaStatus));
@@ -1439,16 +1490,32 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        foreach (var model in tags.ModelNames.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ThenBy(static x => x, StringComparer.Ordinal))
+        foreach (var model in tags.ModelNames.OrderBy(static x => x, StringComparer.Ordinal))
         {
             _availableModels.Add(model);
         }
 
-        ModelCatalogError = _availableModels.Count == 0 ? "ui.ollama.no_models" : string.Empty;
+        ModelCatalogError = string.Empty;
 
-        if (_availableModels.Count > 0 && !_availableModels.Contains(_selectedModelId, StringComparer.Ordinal))
+        if (_availableModels.Count > 0)
         {
-            SelectedModelId = _availableModels[0];
+            var preferred = System.Environment.GetEnvironmentVariable("SHOOTS_PREFERRED_MODEL_ID")?.Trim();
+            if (_availableModels.Contains(_selectedModelId, StringComparer.Ordinal))
+            {
+                // keep selection
+            }
+            else if (!string.IsNullOrWhiteSpace(preferred) && _availableModels.Contains(preferred, StringComparer.Ordinal))
+            {
+                SelectedModelId = preferred;
+            }
+            else
+            {
+                SelectedModelId = _availableModels[0];
+            }
+        }
+        else
+        {
+            SelectedModelId = string.Empty;
         }
 
         OnPropertyChanged(nameof(DefaultModelId));
@@ -1856,6 +1923,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(StartupEntryPathLabel));
         OnPropertyChanged(nameof(IsEntryPathSelectionActive));
         OnPropertyChanged(nameof(StartupButtonTooltip));
+        OnPropertyChanged(nameof(StartAnotherProjectTooltip));
         OnPropertyChanged(nameof(StartupPrompt));
         OnPropertyChanged(nameof(IsStartupInputActive));
         OnPropertyChanged(nameof(StartupProviderLabel));
