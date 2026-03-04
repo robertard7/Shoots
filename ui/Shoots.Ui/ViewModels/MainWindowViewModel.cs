@@ -130,6 +130,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private BackendStatus _qdrantStatus = new(BackendKind.Qdrant, false, "ui.backend.qdrant.not_probed", "Qdrant status has not been probed.", DateTimeOffset.MinValue, EndpointResolver.ResolveQdrantEndpoint(), null);
     private DateTimeOffset? _lastProbeUtc;
     private bool _probeInFlight;
+    private bool _commandsReady;
     private string _modelCatalogError = string.Empty;
 
     private AiPresentationPolicy _aiPresentationPolicy =
@@ -581,6 +582,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         RefreshBackendStatusCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, CanRefreshBackends);
         InitializeChatIntake(); // partial if you have it
         InitializeChatIntakeSurface();
+        _commandsReady = true;
 
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
@@ -1982,27 +1984,32 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private void RaiseCommandCanExecute()
     {
-        StartCommand?.RaiseCanExecuteChanged();
-        CancelCommand?.RaiseCanExecuteChanged();
-        RefreshStatusCommand?.RaiseCanExecuteChanged();
-        ApplyEnvironmentCommand?.RaiseCanExecuteChanged();
-        ApplyScriptCommand?.RaiseCanExecuteChanged();
-        RemoveWorkspaceCommand?.RaiseCanExecuteChanged();
-        OpenWorkspaceCommand?.RaiseCanExecuteChanged();
-        ToggleSystemTierCommand?.RaiseCanExecuteChanged();
-        RefreshAiHelpCommand?.RaiseCanExecuteChanged();
+        if (!_commandsReady)
+        {
+            return;
+        }
 
-        AddBlueprintCommand?.RaiseCanExecuteChanged();
-        SaveBlueprintCommand?.RaiseCanExecuteChanged();
-        RevertBlueprintCommand?.RaiseCanExecuteChanged();
-        ExplainBlueprintCommand?.RaiseCanExecuteChanged();
-        ValidateBlueprintCommand?.RaiseCanExecuteChanged();
-        SuggestBlueprintCommand?.RaiseCanExecuteChanged();
+        StartCommand.RaiseCanExecuteChanged();
+        CancelCommand.RaiseCanExecuteChanged();
+        RefreshStatusCommand.RaiseCanExecuteChanged();
+        ApplyEnvironmentCommand.RaiseCanExecuteChanged();
+        ApplyScriptCommand.RaiseCanExecuteChanged();
+        RemoveWorkspaceCommand.RaiseCanExecuteChanged();
+        OpenWorkspaceCommand.RaiseCanExecuteChanged();
+        ToggleSystemTierCommand.RaiseCanExecuteChanged();
+        RefreshAiHelpCommand.RaiseCanExecuteChanged();
 
-        ExplainExecutionCommand?.RaiseCanExecuteChanged();
-        ReplayPlanCommand?.RaiseCanExecuteChanged();
-        RefreshNarrationCommand?.RaiseCanExecuteChanged();
-        RunIntakePlanCommand?.RaiseCanExecuteChanged();
+        AddBlueprintCommand.RaiseCanExecuteChanged();
+        SaveBlueprintCommand.RaiseCanExecuteChanged();
+        RevertBlueprintCommand.RaiseCanExecuteChanged();
+        ExplainBlueprintCommand.RaiseCanExecuteChanged();
+        ValidateBlueprintCommand.RaiseCanExecuteChanged();
+        SuggestBlueprintCommand.RaiseCanExecuteChanged();
+
+        ExplainExecutionCommand.RaiseCanExecuteChanged();
+        ReplayPlanCommand.RaiseCanExecuteChanged();
+        RefreshNarrationCommand.RaiseCanExecuteChanged();
+        RunIntakePlanCommand.RaiseCanExecuteChanged();
 
         OnPropertyChanged(nameof(StartDisabledReason));
         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));
