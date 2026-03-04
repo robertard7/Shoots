@@ -13,19 +13,43 @@ public static class EndpointResolver
     private static string ResolveWithFallbacks(string variable, params string[] candidates)
     {
         var value = System.Environment.GetEnvironmentVariable(variable);
-        if (!string.IsNullOrWhiteSpace(value))
+        if (TryNormalizeAbsoluteHttpUrl(value, out var normalizedFromEnv))
         {
-            return value.Trim();
+            return normalizedFromEnv;
         }
 
         foreach (var candidate in candidates)
         {
-            if (!string.IsNullOrWhiteSpace(candidate))
+            if (TryNormalizeAbsoluteHttpUrl(candidate, out var normalizedCandidate))
             {
-                return candidate;
+                return normalizedCandidate;
             }
         }
 
         return string.Empty;
+    }
+
+    private static bool TryNormalizeAbsoluteHttpUrl(string? value, out string normalized)
+    {
+        normalized = string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var trimmed = value.Trim();
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        normalized = uri.ToString().TrimEnd('/');
+        return true;
     }
 }
