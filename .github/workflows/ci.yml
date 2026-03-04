@@ -84,6 +84,8 @@ jobs:
           bash tools/codex/restore.sh
           bash scripts/smoke_runner.sh --skip-backends
           cat artifacts/smoke/latest_summary.env
+          source artifacts/smoke/latest_summary.env
+          bash scripts/verify_hash_contract.sh "$RUN_DIR"
 
       - name: Build Runtime (Release) with binlog + log
         shell: bash
