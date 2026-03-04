@@ -98,6 +98,20 @@ public sealed class MainWindowViewModelBackendStatusTests
         await refreshTask;
     }
 
+
+    [Fact]
+    public void Constructor_does_not_throw_when_profiles_are_missing()
+    {
+        var ex = Record.Exception(() => BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            includeProfile: false));
+
+        Assert.Null(ex);
+    }
+
     [Fact]
     public async Task Refresh_backend_status_model_selection_prefers_current_then_preferred_then_first()
     {
@@ -134,8 +148,7 @@ public sealed class MainWindowViewModelBackendStatusTests
     private static MainWindowViewModel BuildViewModel(
         IBackendProbeService probeService,
         IOllamaClient ollamaClient,
-        bool includeProfile = true,
-        bool includeWorkspace = true)
+        bool includeProfile = true)
     {
         return new MainWindowViewModel(
             new NullExecutionCommandService(),
@@ -143,7 +156,7 @@ public sealed class MainWindowViewModelBackendStatusTests
             new EnvironmentCapabilityProvider(),
             new EnvironmentProfilePrompt(),
             new EnvironmentScriptLoader(),
-            new DeterministicWorkspaceProvider(includeWorkspace),
+            new DeterministicWorkspaceProvider(),
             new NullWorkspaceShellService(),
             new DatabaseIntentStore(),
             new ToolTierPrompt(),
@@ -191,13 +204,9 @@ public sealed class MainWindowViewModelBackendStatusTests
         private readonly List<ProjectWorkspace> _workspaces;
         private ProjectWorkspace? _active;
 
-        public DeterministicWorkspaceProvider(bool includeWorkspace)
+        public DeterministicWorkspaceProvider()
         {
             _workspaces = new List<ProjectWorkspace>();
-            if (!includeWorkspace)
-            {
-                return;
-            }
 
             _active = new ProjectWorkspace(
                 Name: "deterministic-workspace",
