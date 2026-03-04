@@ -548,6 +548,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
 
         _state = UiExecutionState.Idle;
+        _lastEnvironmentResult = _environmentService.LastResult;
 
         // Commands
         NewProjectCommand = new AsyncRelayCommand(NewProjectAsync, CanStartNewProject);
@@ -2171,7 +2172,36 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private void UpdateProfileCapabilities() { }
     private void UpdateDatabaseIntentSelection() { }
     private void UpdateExecutionEnvironmentSelection() { }
-    private void LoadEnvironmentScript() { }
+    private void LoadEnvironmentScript()
+    {
+        var workspacePath = ActiveWorkspace?.RootPath;
+        _scriptSearchPath = string.IsNullOrWhiteSpace(workspacePath)
+            ? string.Empty
+            : Path.Combine(workspacePath, EnvironmentScriptLoader.FileName);
+
+        _environmentScript = null;
+        _scriptUnsupportedCapabilitiesMessage = null;
+
+        string? scriptLoadError = null;
+        if (!string.IsNullOrWhiteSpace(workspacePath)
+            && _scriptLoader.TryLoad(workspacePath, out var script, out scriptLoadError))
+        {
+            _environmentScript = script;
+        }
+        else if (!string.IsNullOrWhiteSpace(scriptLoadError))
+        {
+            _scriptUnsupportedCapabilitiesMessage = scriptLoadError;
+        }
+
+        OnPropertyChanged(nameof(ScriptPreview));
+        OnPropertyChanged(nameof(ScriptCapabilities));
+        OnPropertyChanged(nameof(ScriptSteps));
+        OnPropertyChanged(nameof(ScriptSearchPath));
+        OnPropertyChanged(nameof(ScriptUnsupportedCapabilitiesMessage));
+        OnPropertyChanged(nameof(ScriptFolderCount));
+        OnPropertyChanged(nameof(ScriptFolderCountLabel));
+        OnPropertyChanged(nameof(ApplyScriptDisabledReason));
+    }
     private string BuildExecutionBlockerSummary() => "No execution blockers.";
     private string BuildExecutionEnvironmentSummary() => "No environment selected.";
     private string GetStartDisabledReason() => string.IsNullOrWhiteSpace(_planId) ? "No plan loaded." : string.Empty;

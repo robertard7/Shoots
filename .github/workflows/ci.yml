@@ -119,6 +119,10 @@ jobs:
         shell: bash
         run: bash scripts/validate_build.sh
 
+      - name: Verify no warnings gate
+        shell: bash
+        run: bash scripts/verify_no_warnings.sh
+
       - name: Runner smoke (skip backends)
         shell: bash
         run: |

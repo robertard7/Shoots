@@ -29,3 +29,10 @@ dotnet test Shoots.sln -c Release -v minimal
 ```bash
 bash scripts/validate_build.sh
 ```
+
+## No-warnings gate
+
+```bash
+bash scripts/validate_build.sh --warnings-as-errors
+bash scripts/verify_no_warnings.sh
+```
