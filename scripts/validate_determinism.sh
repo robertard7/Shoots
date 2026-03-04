@@ -29,6 +29,7 @@ source artifacts/smoke/latest_summary.env
 bash scripts/verify_hash_contract.sh "$RUN_DIR"
 bash scripts/verify_fixture_integrity.sh
 bash scripts/verify_trace_schema.sh "$RUN_DIR"
+bash scripts/verify_trace_contract.sh "$RUN_DIR"
 bash scripts/replay_runner.sh "$RUN_DIR"
 bash scripts/inspect_run.sh "$RUN_DIR"
 
