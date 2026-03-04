@@ -78,6 +78,12 @@ jobs:
         shell: bash
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
+      - name: Runner smoke (skip backends)
+        shell: bash
+        run: |
+          bash tools/codex/restore.sh
+          bash scripts/smoke_runner.sh --skip-backends
+
       - name: Build Runtime (Release) with binlog + log
         shell: bash
         run: |

@@ -116,7 +116,7 @@ print(obj.get('runId',''))
 PY
 )"
 
-echo "smoke.runner.run_dir=${latest_run}"
-echo "smoke.runner.run_id=${run_id}"
-echo "smoke.runner.hashes_sha256=${hashes_sha}"
-echo "smoke.runner.ok"
+echo "SMOKE_RUNNER_OK=1"
+echo "RUN_DIR=${latest_run}"
+echo "RUN_ID=${run_id}"
+echo "HASHES_SHA256=${hashes_sha}"
