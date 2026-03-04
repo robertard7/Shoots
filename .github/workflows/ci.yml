@@ -90,6 +90,10 @@ jobs:
         shell: bash
         run: bash scripts/verify_script_dependencies.sh
 
+      - name: Verify docs examples
+        shell: bash
+        run: bash scripts/verify_docs_examples.sh
+
       - name: Verify codex diagnostics order
         shell: bash
         run: bash scripts/verify_diagnostics_order.sh
@@ -125,8 +129,12 @@ jobs:
           bash scripts/verify_filesystem_contract.sh "$RUN_DIR"
           bash scripts/verify_env_drift.sh "$RUN_DIR"
           bash scripts/sample_artifact_repro.sh "$RUN_DIR"
+          bash scripts/verify_clock_usage.sh "$RUN_DIR"
+          bash scripts/verify_locale_contract.sh "$RUN_DIR"
+          bash scripts/verify_state_transitions.sh "$RUN_DIR"
           bash scripts/verify_sorted_hash_inputs.sh
           bash scripts/replay_plan_graph.sh "$RUN_DIR"
+          bash scripts/verify_archive_determinism.sh "$RUN_DIR"
           bash scripts/record_ci_metrics.sh "$RUN_DIR"
 
       - name: Build Runtime (Release) with binlog + log
