@@ -1641,11 +1641,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             projectId,
             projectName,
             createdUtc,
-            selectedEnvironmentId: _pendingEnvironmentId,
-            providerKind: _pendingProviderKind,
-            providerEndpoint: _pendingProviderEndpoint,
-            language: _pendingProjectLanguage,
-            description: _pendingProjectDescription,
+            SelectedEnvironmentId: _pendingEnvironmentId,
+            ProviderKind: _pendingProviderKind,
+            ProviderEndpoint: _pendingProviderEndpoint,
+            Language: _pendingProjectLanguage,
+            Description: _pendingProjectDescription,
             projectRoot);
 
         var descriptorPath = Path.Combine(projectRoot, "project.json");
@@ -1918,6 +1918,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         AddBlueprintCommand.RaiseCanExecuteChanged();
         BlueprintSaveStatus = "Blueprint draft updated.";
     }
+
+    private void LoadWorkspaces() => RefreshRecentWorkspaces();
 
     private void RefreshRecentWorkspaces()
     {
