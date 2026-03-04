@@ -123,6 +123,11 @@ jobs:
         shell: bash
         run: bash scripts/verify_provider_audit.sh
 
+      - name: Verify synthesis budget limits
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_synthesis_budgets.sh
+
       - name: Verify no flaky tests
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
@@ -132,6 +137,13 @@ jobs:
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
         run: bash scripts/verify_ui_contracts.sh
+
+      - name: Execute builder_smoke runtime path
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: |
+          mkdir -p artifacts/runtime_exec
+          dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke/project --out artifacts/runtime_exec
 
       - name: Verify retrieval golden
         if: env.RUN_TESTS_LINUX == '1'

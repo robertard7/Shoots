@@ -1343,6 +1343,11 @@ public static class Program
         var normalized = request.Normalize();
         var requestHash = normalized.ComputeRequestHash();
         var orderedHits = hits.OrderByDescending(h => h.Score).ThenByDescending(h => h.TokensMatched).ThenBy(h => h.Path, StringComparer.Ordinal).ThenBy(h => h.FirstMatchOffset).ToArray();
+        if (orderedHits.Length > normalized.MaxSteps)
+        {
+            throw new InvalidOperationException($"builder.synthesis.steps_exceeded:max={normalized.MaxSteps};actual={orderedHits.Length}");
+        }
+
         var selected = orderedHits.Take(normalized.MaxSteps).ToArray();
 
         var evidence = new List<PlanStepEvidence>();

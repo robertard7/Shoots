@@ -5,7 +5,11 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 fail() {
-  echo "$1: $2" >&2
+  local code="$1"
+  local reason="$2"
+  local fixture="$3"
+  local run_dir="$4"
+  echo "$code: fixture=$fixture run_dir=$run_dir compare=$reason" >&2
   exit 1
 }
 
@@ -15,7 +19,7 @@ expected_pack="$fixture_root/expected/context_pack_first30.txt"
 expected_hits="$fixture_root/expected/top_hits.ndjson"
 expected_stats="$fixture_root/expected/stats.json"
 
-[[ -f "$query_file" && -f "$expected_pack" && -f "$expected_hits" && -f "$expected_stats" ]] || fail "verify.retrieval_golden.missing" "fixture files missing"
+[[ -f "$query_file" && -f "$expected_pack" && -f "$expected_hits" && -f "$expected_stats" ]] || fail "verify.retrieval_golden.missing" "fixture_files" "$fixture_root" "none"
 
 work="artifacts/retrieval_golden"
 python - <<'PY2'
@@ -49,13 +53,15 @@ PY
 
 dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project "$work/project" --out "$work/run" >/dev/null
 run_dir="$(find "$work/run" -mindepth 1 -maxdepth 1 -type d | sort | tail -n1)"
-[[ -n "$run_dir" && -d "$run_dir" ]] || fail "verify.retrieval_golden.missing" "run output missing"
+[[ -n "$run_dir" && -d "$run_dir" ]] || fail "verify.retrieval_golden.missing" "run_output" "$fixture_root" "none"
+echo "verify.retrieval_golden.fixture=$fixture_root"
+echo "verify.retrieval_golden.run_dir=$run_dir"
 
 actual_pack="$work/context_pack_first30.txt"
 head -n 30 "$run_dir/retrieval/context_pack.txt" > "$actual_pack"
-cmp -s "$expected_pack" "$actual_pack" || fail "verify.retrieval_golden.drift" "context pack first30 drifted"
+cmp -s "$expected_pack" "$actual_pack" || fail "verify.retrieval_golden.drift" "context_pack" "$fixture_root" "$run_dir"
 
-python - "$run_dir/retrieval/hits.ndjson" "$expected_hits" "$query_file" <<'PY'
+if ! python - "$run_dir/retrieval/hits.ndjson" "$expected_hits" "$query_file" <<'PY'; then
 import json,sys,pathlib
 hits=[json.loads(x) for x in pathlib.Path(sys.argv[1]).read_text().splitlines() if x.strip()]
 expected=[json.loads(x) for x in pathlib.Path(sys.argv[2]).read_text().splitlines() if x.strip()]
@@ -73,11 +79,12 @@ def norm(items):
         })
     return out
 if norm(hits)!=norm(expected):
-    print('verify.retrieval_golden.drift: top hits drifted')
     raise SystemExit(1)
 PY
+  fail "verify.retrieval_golden.drift" "hits" "$fixture_root" "$run_dir"
+fi
 
-python - "$run_dir/retrieval/stats.json" "$expected_stats" <<'PY'
+if ! python - "$run_dir/retrieval/stats.json" "$expected_stats" <<'PY'; then
 import json,sys,pathlib
 actual=json.loads(pathlib.Path(sys.argv[1]).read_text())
 expected=json.loads(pathlib.Path(sys.argv[2]).read_text())
@@ -85,8 +92,9 @@ keys=['bytesOut','linesOut','filesOut','truncatedFlags']
 a={k:actual.get(k) for k in keys}
 e={k:expected.get(k) for k in keys}
 if a!=e:
-    print('verify.retrieval_golden.drift: stats drifted')
     raise SystemExit(1)
 PY
+  fail "verify.retrieval_golden.drift" "stats" "$fixture_root" "$run_dir"
+fi
 
 echo "verify.retrieval_golden.ok"

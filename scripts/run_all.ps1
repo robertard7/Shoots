@@ -18,6 +18,7 @@ try {
   $exitCode = 1
 }
 
+Write-Host 'Blessed command path includes retrieval golden via scripts/codex_ci_smoke.sh (verify_retrieval_golden.sh).'
 Write-Host 'Latest failure triage:'
 Write-Host '  artifacts/maintenance/failure-fingerprint.json'
 Write-Host '  artifacts/stubs/triage.md'

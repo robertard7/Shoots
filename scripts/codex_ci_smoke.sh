@@ -34,6 +34,7 @@ bash scripts/verify_narration_coverage.sh --require-run
 bash scripts/verify_slice_decisions.sh --require-run
 bash scripts/verify_plan_evidence.sh --require-run
 bash scripts/verify_provider_audit.sh --require-run
+bash scripts/verify_synthesis_budgets.sh
 
 baseline_count="$(find .state/runs artifacts/builder_loop -type f -path '*/retrieval/context_pack.txt' -print 2>/dev/null | wc -l | tr -d ' ')"
 if [[ "$baseline_count" == "0" ]]; then

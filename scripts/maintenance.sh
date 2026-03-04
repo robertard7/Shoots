@@ -302,6 +302,15 @@ if [[ "$RUN_TESTS" == "1" ]]; then
     set_error_code tests
   fi
 
+  echo "==> Verifying synthesis budget limits"
+  run_and_capture "$tests_log" bash scripts/verify_synthesis_budgets.sh
+  synthesis_budget_status=$?
+  if [[ "$synthesis_budget_status" -ne 0 ]]; then
+    tests_status=$synthesis_budget_status
+    overall_status=1
+    set_error_code tests
+  fi
+
   echo "==> Verifying plan hash chain"
   run_and_capture "$tests_log" bash scripts/verify_plan_hash_chain.sh
   plan_hash_chain_status=$?

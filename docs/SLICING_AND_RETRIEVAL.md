@@ -128,3 +128,14 @@ Per-file section format:
 Retrieval model selection (future integration):
 
 - `SHOOTS_EMBED_MODEL` (default planned: `nomic-embed-text`)
+
+
+## Refresh workflow (local-only)
+
+Use `bash scripts/refresh_retrieval_golden.sh` only when intentional retrieval behavior changes require a golden fixture update.
+
+Guardrails:
+
+- Script refuses to run in CI (`CI=true` or `GITHUB_ACTIONS=true`).
+- Script rewrites only `etc/fixtures/retrieval_golden/expected/*`.
+- Always review produced diff and include rationale in PR notes.
