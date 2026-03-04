@@ -13,4 +13,5 @@ if ! command -v dotnet >/dev/null 2>&1; then
   export PATH="$DOTNET_INSTALL_DIR:$PATH"
 fi
 
-dotnet restore
+dotnet --info
+dotnet restore Shoots.sln

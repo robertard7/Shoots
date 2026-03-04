@@ -51,6 +51,15 @@ public sealed class RetrievalContractsTests
         {
             QueryHash = "qhash",
             SliceHash = "shash",
+            SliceDecisionTrace =
+            [
+                new RepoSliceDecision
+                {
+                    Path = "src/A.cs",
+                    DecisionCode = "slice.include",
+                    Detail = "matched include globs"
+                }
+            ],
             Hits =
             [
                 new RetrievalHit
@@ -67,12 +76,24 @@ public sealed class RetrievalContractsTests
                 CandidateFiles = 4,
                 ReturnedFiles = 1,
                 ReturnedBytes = 10,
-                TruncationFlags = ["retrieval.cap.max_files"]
+                TruncatedFlags = ["retrieval.cap.max_files"]
             }
         }.Normalize();
 
         var json = JsonSerializer.Serialize(result, RepoSliceJson.Options);
-        const string golden = "{\"queryHash\":\"qhash\",\"sliceHash\":\"shash\",\"hits\":[{\"path\":\"src/A.cs\",\"score\":1230,\"reasonCodes\":[\"idf.boost\",\"token.match\"],\"sliceRef\":\"slice/files/src_A.cs.txt\",\"excerpt\":\"class A {}\"}],\"stats\":{\"candidateFiles\":4,\"returnedFiles\":1,\"returnedBytes\":10,\"truncationFlags\":[\"retrieval.cap.max_files\"]},\"errorCode\":null,\"errorMessage\":null}";
+        const string golden = "{\"queryHash\":\"qhash\",\"sliceHash\":\"shash\",\"hits\":[{\"hitId\":\"\",\"path\":\"src/A.cs\",\"score\":1230,\"tokensMatched\":0,\"firstMatchOffset\":0,\"pathHash\":\"\",\"reasonCodes\":[\"idf.boost\",\"token.match\"],\"sliceRef\":\"slice/files/src_A.cs.txt\",\"excerpt\":\"class A {}\"}],\"sliceDecisionTrace\":[{\"path\":\"src/A.cs\",\"decisionCode\":\"slice.include\",\"detail\":\"matched include globs\"}],\"scoringTrace\":[],\"stats\":{\"candidateFiles\":4,\"returnedFiles\":1,\"returnedBytes\":10,\"bytesOut\":0,\"linesOut\":0,\"filesOut\":0,\"truncatedFlags\":[\"retrieval.cap.max_files\"]},\"errorCode\":null,\"errorMessage\":null}";
         Assert.Equal(golden, json);
+    }
+
+    [Fact]
+    public void Retrieval_result_round_trip_preserves_slice_decisions()
+    {
+        var payload = "{\"queryHash\":\"q\",\"sliceHash\":\"s\",\"hits\":[],\"sliceDecisionTrace\":[{\"path\":\"src/Z.cs\",\"decisionCode\":\"slice.exclude\",\"detail\":\"matched obj/**\"}],\"scoringTrace\":[],\"stats\":{\"candidateFiles\":0,\"returnedFiles\":0,\"returnedBytes\":0,\"bytesOut\":0,\"linesOut\":0,\"filesOut\":0,\"truncatedFlags\":[]},\"errorCode\":null,\"errorMessage\":null}";
+
+        var model = JsonSerializer.Deserialize<RetrievalResult>(payload, RepoSliceJson.Options);
+
+        Assert.NotNull(model);
+        Assert.Single(model.SliceDecisionTrace);
+        Assert.Equal("slice.exclude", model.SliceDecisionTrace[0].DecisionCode);
     }
 }

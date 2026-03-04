@@ -78,6 +78,30 @@ jobs:
         shell: bash
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
 
+      - name: Build UI project (Linux compile gate)
+        shell: bash
+        run: |
+          dotnet restore ui/Shoots.Ui/Shoots.Ui.csproj -p:EnableWindowsTargeting=true
+          dotnet build ui/Shoots.Ui/Shoots.Ui.csproj -c Release --no-restore -p:EnableWindowsTargeting=true
+
+      - name: Runner smoke (skip backends)
+        shell: bash
+        run: |
+          bash tools/codex/restore.sh
+          bash scripts/smoke_runner.sh --skip-backends
+          cat artifacts/smoke/latest_summary.env
+          source artifacts/smoke/latest_summary.env
+          bash scripts/verify_hash_contract.sh "$RUN_DIR"
+          bash scripts/verify_smoke_artifacts.sh "$RUN_DIR"
+          bash scripts/verify_scripts_portability.sh
+          bash scripts/verify_fixture_integrity.sh
+          bash scripts/verify_trace_schema.sh "$RUN_DIR"
+          bash scripts/verify_trace_contract.sh "$RUN_DIR"
+          bash scripts/verify_manifest_contract.sh "$RUN_DIR"
+          bash scripts/verify_artifact_bounds.sh "$RUN_DIR"
+          bash scripts/verify_environment_schema.sh "$RUN_DIR"
+          bash scripts/verify_sorted_hash_inputs.sh
+
       - name: Build Runtime (Release) with binlog + log
         shell: bash
         run: |
@@ -153,6 +177,18 @@ PYCHK
         shell: bash
         run: bash scripts/codex_entrypoint.sh --all
 
+      - name: Collect failure bundle (runner smoke)
+        if: failure()
+        shell: bash
+        run: |
+          if [[ -f artifacts/smoke/latest_summary.env ]]; then
+            source artifacts/smoke/latest_summary.env
+            if [[ -n "${RUN_DIR:-}" && -d "$RUN_DIR" ]]; then
+              bash scripts/collect_failure_bundle.sh "$RUN_DIR"
+              bash scripts/verify_failure_bundle_schema.sh artifacts/failure_bundle.tgz
+            fi
+          fi
+
       - name: Write CI first-failure summary (always)
         if: always()
         shell: bash
@@ -191,6 +227,7 @@ PYCHK
             artifacts/builder_loop/**
             artifacts/golden/**
             artifacts/retrieval/**
+            runs/**
             .state/runs/**
             etc/tools.catalog.json
             etc/fixtures/**
@@ -321,6 +358,7 @@ PYCHK
             artifacts/builder_loop/**
             artifacts/golden/**
             artifacts/retrieval/**
+            runs/**
             .state/runs/**
             etc/tools.catalog.json
           if-no-files-found: warn
