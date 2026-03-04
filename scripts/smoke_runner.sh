@@ -52,7 +52,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-
 if ! command -v dotnet >/dev/null 2>&1; then
   if [[ -x "$HOME/.dotnet/dotnet" ]]; then
     export PATH="$HOME/.dotnet:$PATH"
@@ -116,7 +115,14 @@ print(obj.get('runId',''))
 PY
 )"
 
-echo "SMOKE_RUNNER_OK=1"
-echo "RUN_DIR=${latest_run}"
-echo "RUN_ID=${run_id}"
-echo "HASHES_SHA256=${hashes_sha}"
+summary_file="artifacts/smoke/latest_summary.env"
+mkdir -p "$(dirname "$summary_file")"
+cat > "$summary_file" <<SUMMARY
+SMOKE_RUNNER_OK=1
+RUN_DIR=${latest_run}
+RUN_ID=${run_id}
+HASHES_SHA256=${hashes_sha}
+SUMMARY
+cp "$summary_file" "$out_root/latest_summary.env"
+
+cat "$summary_file"

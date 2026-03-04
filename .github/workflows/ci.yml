@@ -83,6 +83,7 @@ jobs:
         run: |
           bash tools/codex/restore.sh
           bash scripts/smoke_runner.sh --skip-backends
+          cat artifacts/smoke/latest_summary.env
 
       - name: Build Runtime (Release) with binlog + log
         shell: bash
@@ -197,6 +198,7 @@ PYCHK
             artifacts/builder_loop/**
             artifacts/golden/**
             artifacts/retrieval/**
+            runs/**
             .state/runs/**
             etc/tools.catalog.json
             etc/fixtures/**
@@ -327,6 +329,7 @@ PYCHK
             artifacts/builder_loop/**
             artifacts/golden/**
             artifacts/retrieval/**
+            runs/**
             .state/runs/**
             etc/tools.catalog.json
           if-no-files-found: warn
