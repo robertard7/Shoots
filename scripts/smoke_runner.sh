@@ -90,10 +90,59 @@ dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scena
 latest_run="$(find "$run_root" -mindepth 1 -maxdepth 1 -type d | sort | tail -n1)"
 [[ -n "$latest_run" && -d "$latest_run" ]] || { echo "smoke.runner.missing: run directory" >&2; exit 1; }
 
+run_id="$(python - "$latest_run/run.json" <<'PY'
+import json, pathlib, sys
+obj=json.loads(pathlib.Path(sys.argv[1]).read_text())
+print(obj.get('runId',''))
+PY
+)"
+
+readarray -t manifest_fields < <(python - "$latest_run/hashes.json" <<'PY'
+import json, pathlib, sys
+obj=json.loads(pathlib.Path(sys.argv[1]).read_text())
+print(obj.get('planHash',''))
+print(obj.get('traceHash',''))
+PY
+)
+
+created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+python - "$latest_run/manifest.json" "$run_id" "${manifest_fields[0]}" "${manifest_fields[1]}" "$latest_run" "$created_at" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+obj = {
+    "run_id": sys.argv[2],
+    "plan_sha256": sys.argv[3],
+    "trace_sha256": sys.argv[4],
+    "artifact_root": sys.argv[5],
+    "created_at": sys.argv[6],
+}
+path.write_text(json.dumps(obj, indent=2) + "\n", encoding="utf-8")
+PY
+
+dotnet_info="$(dotnet --info 2>/dev/null | tr -d '\r')"
+os_name="$(uname -s 2>/dev/null || echo unknown)"
+kernel_name="$(uname -r 2>/dev/null || echo unknown)"
+git_commit="$(git rev-parse HEAD)"
+captured_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+python - "$latest_run/environment.json" "$captured_at" "$git_commit" "$os_name" "$kernel_name" "$dotnet_info" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+obj = {
+    "captured_at_utc": sys.argv[2],
+    "git_commit": sys.argv[3],
+    "os": sys.argv[4],
+    "kernel": sys.argv[5],
+    "dotnet_info": sys.argv[6],
+}
+path.write_text(json.dumps(obj, indent=2) + "\n", encoding="utf-8")
+PY
+
 required=(
   "run_summary.md"
   "result.json"
   "hashes.json"
+  "manifest.json"
+  "environment.json"
   "narration/events.ndjson"
   "trace/events.ndjson"
 )
@@ -105,13 +154,6 @@ done
 hashes_sha="$(python - "$latest_run/hashes.json" <<'PY'
 import hashlib, pathlib, sys
 print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())
-PY
-)"
-
-run_id="$(python - "$latest_run/run.json" <<'PY'
-import json, pathlib, sys
-obj=json.loads(pathlib.Path(sys.argv[1]).read_text())
-print(obj.get('runId',''))
 PY
 )"
 

@@ -36,6 +36,7 @@ On drift, the script fails and writes diagnostics under:
 - `artifacts/smoke/fixture_integrity/actual.sha256`
 - `artifacts/smoke/fixture_integrity/actual_manifest.tsv`
 - `artifacts/smoke/fixture_integrity/diff_hint.txt`
+- `RUN_DIR/environment.json` and `RUN_DIR/manifest.json` are also validated by deterministic contract scripts.
 
 CI artifact upload includes `artifacts/**`, so these diagnostics are retained automatically.
 
@@ -55,5 +56,5 @@ When `fixture.sha256` changes, reviewers should verify:
 
 1. Fixture content change was intentional and scoped to `etc/fixtures/builder_smoke/project/**`.
 2. No forbidden patterns/files were introduced.
-3. Determinism scripts still pass (`smoke_runner`, `verify_hash_contract`, `verify_fixture_integrity`, `verify_trace_schema`, `verify_trace_contract`, `replay_runner`).
+3. Determinism scripts still pass (`smoke_runner`, `verify_hash_contract`, `verify_fixture_integrity`, `verify_trace_schema`, `verify_trace_contract`, `verify_manifest_contract`, `verify_environment_schema`, `verify_artifact_bounds`, `replay_runner`).
 4. The change rationale is documented in the PR.
