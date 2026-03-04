@@ -11,6 +11,9 @@ print(json.loads(Path('global.json').read_text())['sdk']['version'])
 PY
 )"
 
+export DOTNET_ROOT="${DOTNET_ROOT:-/root/.dotnet}"
+export PATH="$DOTNET_ROOT:$PATH"
+
 if ! command -v dotnet >/dev/null 2>&1; then
   echo "verify.dotnet_bootstrap.missing_dotnet: dotnet is not on PATH. run bash tools/codex/restore.sh" >&2
   exit 1
