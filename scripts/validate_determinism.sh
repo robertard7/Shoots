@@ -56,10 +56,14 @@ bash scripts/replay_plan_graph.sh "$RUN_DIR"
 bash scripts/verify_archive_determinism.sh "$RUN_DIR"
 bash scripts/verify_tempfile_contract.sh "$RUN_DIR"
 bash scripts/build_artifact_index.sh "$RUN_DIR"
+bash scripts/verify_plan_input_fingerprint.sh "$RUN_DIR"
+bash scripts/verify_artifact_graph.sh "$RUN_DIR"
+bash scripts/verify_trace_ordering.sh "$RUN_DIR"
 bash scripts/replay_diff.sh "$RUN_DIR"
 bash scripts/inspect_run.sh "$RUN_DIR"
 bash scripts/repo_fingerprint.sh
 bash scripts/determinism_report.sh
+bash scripts/verify_report_integrity.sh
 
 echo "DETERMINISM_OK=1"
 echo "RUN_DIR=$RUN_DIR"
