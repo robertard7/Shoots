@@ -102,6 +102,10 @@ jobs:
         shell: bash
         run: bash scripts/verify_input_normalization.sh
 
+      - name: Verify line endings
+        shell: bash
+        run: bash scripts/verify_line_endings.sh
+
       - name: Verify codex diagnostics order
         shell: bash
         run: bash scripts/verify_diagnostics_order.sh
@@ -149,6 +153,9 @@ jobs:
           bash scripts/verify_artifact_graph.sh "$RUN_DIR"
           bash scripts/verify_trace_ordering.sh "$RUN_DIR"
           bash scripts/verify_path_canonicalization.sh "$RUN_DIR"
+          bash scripts/verify_permission_contract.sh "$RUN_DIR"
+          bash scripts/verify_randomness_contract.sh
+          bash scripts/verify_runner_identity.sh
           bash scripts/verify_memory_profile.sh
           bash scripts/record_ci_metrics.sh "$RUN_DIR"
           bash scripts/determinism_report.sh

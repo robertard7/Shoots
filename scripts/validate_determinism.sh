@@ -31,6 +31,7 @@ bash scripts/verify_script_dependencies.sh
 bash scripts/verify_docs_examples.sh
 bash scripts/verify_config_contract.sh
 bash scripts/verify_input_normalization.sh
+bash scripts/verify_line_endings.sh
 bash scripts/smoke_runner.sh "${args[@]}"
 source artifacts/smoke/latest_summary.env
 bash scripts/verify_hash_contract.sh "$RUN_DIR"
@@ -60,6 +61,9 @@ bash scripts/verify_plan_input_fingerprint.sh "$RUN_DIR"
 bash scripts/verify_artifact_graph.sh "$RUN_DIR"
 bash scripts/verify_trace_ordering.sh "$RUN_DIR"
 bash scripts/verify_path_canonicalization.sh "$RUN_DIR"
+bash scripts/verify_permission_contract.sh "$RUN_DIR"
+bash scripts/verify_randomness_contract.sh
+bash scripts/verify_runner_identity.sh
 bash scripts/verify_memory_profile.sh
 bash scripts/replay_diff.sh "$RUN_DIR"
 bash scripts/inspect_run.sh "$RUN_DIR"
