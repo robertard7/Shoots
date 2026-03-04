@@ -208,7 +208,9 @@
                           SelectedItem="{Binding SelectedModelId, Mode=TwoWay}" />
                 <Button Margin="8,0,0,0"
                         Content="Refresh"
-                        Command="{Binding RefreshBackendStatusCommand}" />
+                        Command="{Binding RefreshBackendStatusCommand}"
+                        ToolTip="{Binding RefreshBackendsDisabledReason}"
+                        ToolTipService.ShowOnDisabled="True" />
                 <Button Margin="8,0,0,0"
                         Content="Reset catalog"
                         Command="{Binding ResetModelCatalogCommand}" />

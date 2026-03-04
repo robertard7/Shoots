@@ -380,7 +380,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 		RunIntakePlanCommand = new AsyncRelayCommand(RunIntakePlanAsync, CanRunIntakePlan);
 
 		ResumeInjectDecisionCommand = new AsyncRelayCommand(ResumeInjectDecisionAsync, CanResumeInjectDecision);
-        RefreshModelCatalogCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, () => !ProbeInFlight);
+        RefreshModelCatalogCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, CanRefreshBackends);
         ResetModelCatalogCommand = new AsyncRelayCommand(ResetModelCatalogAsync, () => !ProbeInFlight);
         OpenStateFolderCommand = new AsyncRelayCommand(OpenStateFolderAsync);
         QuickStartCommand = new AsyncRelayCommand(QuickStartAsync);
@@ -470,6 +470,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
 	private Task RunIntakePlanAsync()
 	{
+		var blocker = GetRunIntakePlanDisabledReason();
+		if (!string.IsNullOrWhiteSpace(blocker))
+		{
+			Trace.WriteLine($"[Shoots.UI] RunIntakePlan command blocked. reason={blocker}");
+			return Task.CompletedTask;
+		}
+
 		// Placeholder: real implementation will call your host execution service.
 		// Keep UI state transitions deterministic.
 		State = UiExecutionState.Running;
@@ -571,7 +578,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ExplainExecutionCommand = new AsyncRelayCommand(ExplainExecutionAsync, CanRefreshAiHelp);
         ReplayPlanCommand = new AsyncRelayCommand(ReplayPlanAsync, CanReplayPlan);
         RefreshNarrationCommand = new AsyncRelayCommand(RefreshNarrationAsync);
-        RefreshBackendStatusCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, () => !ProbeInFlight);
+        RefreshBackendStatusCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, CanRefreshBackends);
 
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
@@ -974,7 +981,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (_probeInFlight == value) return;
             _probeInFlight = value;
             OnPropertyChanged(nameof(ProbeInFlight));
+            OnPropertyChanged(nameof(RefreshBackendsDisabledReason));
             RefreshBackendStatusCommand.RaiseCanExecuteChanged();
+            RefreshModelCatalogCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -1012,6 +1021,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public string ApplyEnvironmentDisabledReason => GetApplyEnvironmentDisabledReason();
     public string ApplyScriptDisabledReason => GetApplyScriptDisabledReason();
     public string AiHelpDisabledReason => GetAiHelpDisabledReason();
+    public string RefreshBackendsDisabledReason => GetRefreshBackendsDisabledReason();
 
     public string AiHelpContextSummary { get; private set; } = "AI Help is descriptive only.";
     public string AiHelpStateExplanation { get; private set; } = "No runtime context is available.";
@@ -1315,7 +1325,17 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     private Task ApplyEnvironmentAsync()
-        => Task.CompletedTask; // keep your real implementation elsewhere (partial)
+    {
+        var blocker = GetApplyEnvironmentDisabledReason();
+        if (!string.IsNullOrWhiteSpace(blocker))
+        {
+            Trace.WriteLine($"[Shoots.UI] ApplyEnvironment command blocked. reason={blocker}");
+            EnvironmentErrorMessage = blocker;
+            return Task.CompletedTask;
+        }
+
+        return Task.CompletedTask; // keep your real implementation elsewhere (partial)
+    }
 
     private Task ApplyScriptAsync()
         => Task.CompletedTask; // keep your real implementation elsewhere (partial)
@@ -1438,8 +1458,20 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    private bool CanRefreshBackends() => string.IsNullOrWhiteSpace(GetRefreshBackendsDisabledReason());
+
+    private string GetRefreshBackendsDisabledReason()
+        => ProbeInFlight ? "ui.backends.refresh.in_progress: wait for backend probe completion." : string.Empty;
+
     private async Task RefreshBackendStatusAsync()
     {
+        var blocker = GetRefreshBackendsDisabledReason();
+        if (!string.IsNullOrWhiteSpace(blocker))
+        {
+            Trace.WriteLine($"[Shoots.UI] RefreshBackends command blocked. reason={blocker}");
+            return;
+        }
+
         ProbeInFlight = true;
         try
         {
@@ -2143,7 +2175,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string BuildExecutionBlockerSummary() => "No execution blockers.";
     private string BuildExecutionEnvironmentSummary() => "No environment selected.";
     private string GetStartDisabledReason() => string.IsNullOrWhiteSpace(_planId) ? "No plan loaded." : string.Empty;
-    private string GetApplyEnvironmentDisabledReason() => string.Empty;
+    private string GetApplyEnvironmentDisabledReason()
+    {
+        if (SelectedProfile is null) return "ui.environment.profile.missing: select an environment profile.";
+        if (State is UiExecutionState.Running or UiExecutionState.Waiting or UiExecutionState.Replaying)
+            return "ui.environment.apply.blocked.execution_active: wait for execution to stop.";
+        if (_lastEnvironmentResult is not null && string.Equals(_lastEnvironmentResult.ProfileName, SelectedProfile.Name, StringComparison.Ordinal))
+            return "ui.environment.apply.noop: selected profile already applied.";
+        return string.Empty;
+    }
     private string GetApplyScriptDisabledReason() => string.Empty;
     private string GetAiHelpDisabledReason() => BuildBackendDisabledReason();
 
