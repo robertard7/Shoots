@@ -28,7 +28,6 @@ public sealed class RepoSliceService
         }
 
         var files = new List<RepoSliceFile>();
-        var decisions = new List<RepoSliceDecision>();
         var truncationFlags = new SortedSet<string>(StringComparer.Ordinal);
         var selectedBytes = 0;
         var truncatedFiles = 0;
@@ -37,116 +36,80 @@ public sealed class RepoSliceService
         foreach (var path in Directory.EnumerateFiles(normalized.Root, "*", SearchOption.AllDirectories).OrderBy(p => p, StringComparer.Ordinal))
         {
             var relPath = Path.GetRelativePath(normalized.Root, path).Replace('\\', '/');
-            var includeMatch = IsMatch(includes, relPath);
-            var excludeMatch = includeMatch && IsMatch(excludes, relPath);
-            var fileBytes = 0;
-            var fileHash = string.Empty;
-            var bytesIncluded = 0;
-            var linesIncluded = 0;
-            var truncated = false;
-            var rejectedReason = string.Empty;
-
-            byte[] bytes;
-            try
+            if (!IsMatch(includes, relPath) || IsMatch(excludes, relPath))
             {
-                bytes = File.ReadAllBytes(path);
-                fileBytes = bytes.Length;
-                fileHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            }
-            catch
-            {
-                decisions.Add(new RepoSliceDecision { Path = relPath, IncludeMatch = includeMatch, ExcludeMatch = excludeMatch, RejectedReason = "notText", Size = fileBytes, Hash = fileHash });
-                continue;
-            }
-
-            if (!includeMatch)
-            {
-                decisions.Add(new RepoSliceDecision { Path = relPath, IncludeMatch = false, ExcludeMatch = false, RejectedReason = "includeMiss", Size = fileBytes, Hash = fileHash });
-                continue;
-            }
-
-            if (excludeMatch)
-            {
-                decisions.Add(new RepoSliceDecision { Path = relPath, IncludeMatch = true, ExcludeMatch = true, RejectedReason = "excluded", Size = fileBytes, Hash = fileHash });
                 continue;
             }
 
             if (files.Count >= normalized.MaxFiles)
             {
                 truncationFlags.Add("slice.cap.exceeded.max_files");
-                rejectedReason = "maxFiles";
+                break;
             }
-            else if (!normalized.AllowBinary && bytes.Contains((byte)0))
+
+            byte[] bytes;
+            try
+            {
+                bytes = File.ReadAllBytes(path);
+            }
+            catch (Exception ex)
+            {
+                return Error(normalized, "slice.read.failed", $"{relPath}: {ex.Message}");
+            }
+
+            if (!normalized.AllowBinary && bytes.Contains((byte)0))
             {
                 rejectedBinary++;
                 truncationFlags.Add("slice.binary.disallowed");
-                rejectedReason = "binary";
-            }
-            else
-            {
-                var text = Encoding.UTF8.GetString(bytes);
-                if (normalized.NormalizeEol)
-                {
-                    text = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal);
-                }
-
-                var lines = text.Split('\n');
-                if (lines.Length > normalized.LineCap)
-                {
-                    lines = lines[..normalized.LineCap];
-                    truncated = true;
-                    truncationFlags.Add("slice.truncated.line_cap");
-                }
-
-                var excerpt = string.Join("\n", lines);
-                var excerptBytes = Encoding.UTF8.GetByteCount(excerpt);
-                if (excerptBytes > normalized.MaxBytesPerFile)
-                {
-                    excerpt = TruncateAtBoundary(excerpt, normalized.MaxBytesPerFile);
-                    excerptBytes = Encoding.UTF8.GetByteCount(excerpt);
-                    truncated = true;
-                    truncationFlags.Add("slice.truncated.bytes_per_file");
-                }
-
-                if (selectedBytes + excerptBytes > normalized.MaxTotalBytes)
-                {
-                    truncationFlags.Add("slice.cap.exceeded.total_bytes");
-                    rejectedReason = "tooLarge";
-                }
-                else
-                {
-                    selectedBytes += excerptBytes;
-                    if (truncated)
-                    {
-                        truncatedFiles++;
-                    }
-
-                    linesIncluded = excerpt.Length == 0 ? 0 : excerpt.Count(c => c == '\n') + 1;
-                    bytesIncluded = excerptBytes;
-                    var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(excerpt))).ToLowerInvariant();
-                    files.Add(new RepoSliceFile
-                    {
-                        RelPath = relPath,
-                        Sha256 = hash,
-                        Bytes = excerptBytes,
-                        Lines = linesIncluded,
-                        MimeHint = GuessMime(relPath),
-                        Excerpt = excerpt,
-                        Truncated = truncated
-                    });
-                }
+                continue;
             }
 
-            decisions.Add(new RepoSliceDecision
+            var text = Encoding.UTF8.GetString(bytes);
+            if (normalized.NormalizeEol)
             {
-                Path = relPath,
-                IncludeMatch = includeMatch,
-                ExcludeMatch = excludeMatch,
-                RejectedReason = rejectedReason,
-                Size = fileBytes,
-                Hash = fileHash,
-                BytesIncluded = bytesIncluded,
-                LinesIncluded = linesIncluded,
+                text = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal);
+            }
+
+            var lines = text.Split('\n');
+            var truncated = false;
+            if (lines.Length > normalized.LineCap)
+            {
+                lines = lines[..normalized.LineCap];
+                truncated = true;
+                truncationFlags.Add("slice.truncated.line_cap");
+            }
+
+            var excerpt = string.Join("\n", lines);
+            var excerptBytes = Encoding.UTF8.GetByteCount(excerpt);
+            if (excerptBytes > normalized.MaxBytesPerFile)
+            {
+                excerpt = TruncateAtBoundary(excerpt, normalized.MaxBytesPerFile);
+                excerptBytes = Encoding.UTF8.GetByteCount(excerpt);
+                truncated = true;
+                truncationFlags.Add("slice.truncated.bytes_per_file");
+            }
+
+            if (selectedBytes + excerptBytes > normalized.MaxTotalBytes)
+            {
+                truncationFlags.Add("slice.cap.exceeded.total_bytes");
+                break;
+            }
+
+            selectedBytes += excerptBytes;
+            if (truncated)
+            {
+                truncatedFiles++;
+            }
+
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(excerpt))).ToLowerInvariant();
+            files.Add(new RepoSliceFile
+            {
+                RelPath = relPath,
+                Sha256 = hash,
+                Bytes = excerptBytes,
+                Lines = lines.Length,
+                MimeHint = GuessMime(relPath),
+                Excerpt = excerpt,
                 Truncated = truncated
             });
         }
@@ -161,7 +124,6 @@ public sealed class RepoSliceService
             SliceId = sliceId,
             InputsHash = inputsHash,
             Files = normalizedFiles,
-            DecisionTrace = decisions.OrderBy(x => x.Path, StringComparer.Ordinal).ToArray(),
             TruncationFlags = truncationFlags.ToArray(),
             Stats = new RepoSliceStats
             {
@@ -181,7 +143,6 @@ public sealed class RepoSliceService
             ErrorCode = errorCode,
             ErrorMessage = message,
             Files = Array.Empty<RepoSliceFile>(),
-            DecisionTrace = Array.Empty<RepoSliceDecision>(),
             TruncationFlags = Array.Empty<string>(),
             Stats = new RepoSliceStats()
         };

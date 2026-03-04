@@ -4,7 +4,7 @@
 
 Blessed command for Codex + CI:
 
-- `bash scripts/codex_ci_smoke.sh`
+- `bash scripts/codex_entrypoint.sh --all`
 
 Additional supported commands:
 
@@ -19,24 +19,6 @@ Additional supported commands:
 9. `bash scripts/verify_no_blocking_stubs.sh`
 10. `bash scripts/verify_diagnostics_order.sh`
 11. `bash scripts/verify_step_envelopes.sh`
-12. `bash scripts/verify_artifact_budgets.sh`
-13. `bash scripts/verify_narration_coverage.sh`
-14. `bash scripts/verify_no_flaky_tests.sh`
-15. `bash scripts/verify_slice_decisions.sh`
-16. `bash scripts/verify_plan_evidence.sh`
-17. `bash scripts/verify_smoke_stamp.sh`
-18. `bash scripts/verify_context_pack_determinism.sh`
-19. `bash scripts/verify_retrieval_quality.sh`
-
-## Failure Triage Order
-
-Always read failures in this exact order:
-
-1. `artifacts/maintenance/failure-fingerprint.json`
-2. newest `.state/runs/**/narration/events.ndjson` (fallback: `artifacts/builder_loop/*/run/*/narration/events.ndjson`)
-3. newest `.state/runs/**/run_summary.md` (fallback: `artifacts/builder_loop/*/run/*/run_summary.md`)
-4. `artifacts/stubs/triage.md`
-5. newest `artifacts/**/*.log`
 
 ## Command Matrix
 
@@ -55,10 +37,6 @@ Always read failures in this exact order:
 | `bash scripts/verify_diagnostics_order.sh` | `0` when codex diagnostics order is canonical; non-zero when drift is detected. | `scripts/codex_entrypoint.sh` | 1) update `print_diagnostics` ordering in `scripts/codex_entrypoint.sh` |
 | `bash scripts/verify_step_envelopes.sh` | `0` when each `steps/<stepId>/` envelope is complete and bounded; non-zero on missing/oversized files. | `.state/runs/**` or `artifacts/builder_loop/**/run/*` | 1) check `steps/*/{request,result,stdout,stderr,exit,hashes}` 2) verify step artifact size limits |
 
-## Retrieval Mode Note
-
-Retrieval in the deterministic smoke/CI path is **lexical + deterministic only**; Qdrant is optional and not on the critical path for `bash scripts/codex_ci_smoke.sh`.
-
 ## Artifact Roots
 
 - `artifacts/maintenance/`
@@ -68,16 +46,3 @@ Retrieval in the deterministic smoke/CI path is **lexical + deterministic only**
 - `artifacts/**/*.log`
 - `artifacts/**/*.trx`
 - `.state/runs/`
-
-
-## Smoke Stamp Artifacts
-
-`bash scripts/codex_ci_smoke.sh` writes deterministic provenance files:
-
-- `artifacts/smoke/version.txt`
-- `artifacts/smoke/command.txt`
-- `artifacts/smoke/env.txt`
-
-Use `bash scripts/verify_smoke_stamp.sh` to enforce presence/non-empty values.
-
-For successful-run triage on Windows, use `scripts/open_latest_run.ps1`.

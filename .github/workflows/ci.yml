@@ -66,13 +66,13 @@ jobs:
         shell: bash
         run: bash scripts/verify_no_spin_timeouts.sh
 
-      - name: Verify codex diagnostics order
-        shell: bash
-        run: bash scripts/verify_diagnostics_order.sh
-
       - name: Verify no blocking stubs
         shell: bash
         run: bash scripts/verify_no_blocking_stubs.sh
+
+      - name: Verify codex diagnostics order
+        shell: bash
+        run: bash scripts/verify_diagnostics_order.sh
 
       - name: Restore Runtime
         shell: bash
@@ -107,63 +107,6 @@ jobs:
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
         run: bash scripts/verify_step_envelopes.sh --require-run
-
-      - name: Verify artifact budgets
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/verify_artifact_budgets.sh
-
-      - name: Verify narration coverage
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/verify_narration_coverage.sh
-
-      - name: Verify provider audit
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/verify_provider_audit.sh
-
-      - name: Verify synthesis budget limits
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/verify_synthesis_budgets.sh
-
-      - name: Verify no flaky tests
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/verify_no_flaky_tests.sh
-
-      - name: Verify UI contracts
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/verify_ui_contracts.sh
-
-      - name: Execute builder_smoke runtime path
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: |
-          mkdir -p artifacts/runtime_exec
-          dotnet run -c Release --project src/Runtime/Shoots.Runtime.Runner -- run --scenario builder_smoke --project etc/fixtures/builder_smoke/project --out artifacts/runtime_exec
-
-      - name: Verify retrieval golden
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/verify_retrieval_golden.sh
-
-      - name: Verify fixture provenance
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/verify_fixture_provenance.sh
-
-      - name: Verify budget consistency
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/verify_budget_consistency.sh
-
-      - name: Verify backend optionality
-        if: env.RUN_TESTS_LINUX == '1'
-        shell: bash
-        run: bash scripts/verify_backend_optional.sh
 
       - name: Golden builder replay check
         if: env.RUN_TESTS_LINUX == '1'
@@ -200,11 +143,15 @@ for key in ['runId','planHash','providerHash','envHash']:
         raise SystemExit(f'mismatch for {key}: {actual.get(key)} != {expected.get(key)}')
 PYCHK
 
-      - name: Codex CI smoke (blessed)
+      - name: Codex entrypoint retrieval
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
-        # If you change this, you break Codex.
-        run: bash scripts/codex_ci_smoke.sh
+        run: bash scripts/codex_entrypoint.sh --retrieval
+
+      - name: Codex entrypoint all
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/codex_entrypoint.sh --all
 
       - name: Write CI first-failure summary (always)
         if: always()

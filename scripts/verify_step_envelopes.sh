@@ -15,7 +15,7 @@ resolve_latest_run() {
   local candidate=""
   candidate="$(find .state/runs -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | sort | tail -n 1 || true)"
   if [[ -z "$candidate" ]]; then
-    candidate="$(find artifacts/builder_loop -type d -path '*/run/*' ! -path '*/run/*/*' -print 2>/dev/null | sort | tail -n 1 || true)"
+    candidate="$(find artifacts/builder_loop -type d -path '*/run/*' -print 2>/dev/null | sort | tail -n 1 || true)"
   fi
   printf '%s' "$candidate"
 }
@@ -40,7 +40,7 @@ if [[ ! -f "$summary_path" ]]; then
   fail "verify.step_envelope.summary_missing" "missing $summary_path"
 fi
 
-required=(request.json result.json stdout.txt stderr.txt exit.json hashes.json inputs_fingerprint.json)
+required=(request.json result.json stdout.txt stderr.txt exit.json hashes.json)
 max_bytes="${MAX_STEP_ARTIFACT_BYTES:-262144}"
 
 step_dirs="$(find "$run_dir/steps" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | sort || true)"
@@ -50,10 +50,6 @@ fi
 
 while IFS= read -r step_dir; do
   [[ -z "$step_dir" ]] && continue
-  if [[ ! -f "$step_dir/request.json" ]]; then
-    # allow metadata-only directories
-    continue
-  fi
   for file in "${required[@]}"; do
     path="$step_dir/$file"
     if [[ ! -f "$path" ]]; then

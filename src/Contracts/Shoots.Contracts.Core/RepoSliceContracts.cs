@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text.Encodings.Web;
 using System.Text;
 using System.Text.Json;
 
@@ -46,21 +45,6 @@ public sealed record RepoSliceFile
     public RepoSliceFile Normalize() => this with { RelPath = RelPath.Replace('\\', '/') };
 }
 
-public sealed record RepoSliceDecision
-{
-    public string Path { get; init; } = string.Empty;
-    public bool IncludeMatch { get; init; }
-    public bool ExcludeMatch { get; init; }
-    public string RejectedReason { get; init; } = string.Empty;
-    public int Size { get; init; }
-    public string Hash { get; init; } = string.Empty;
-    public int BytesIncluded { get; init; }
-    public int LinesIncluded { get; init; }
-    public bool Truncated { get; init; }
-
-    public RepoSliceDecision Normalize() => this with { Path = Path.Replace('\\', '/') };
-}
-
 public sealed record RepoSliceStats
 {
     public int SelectedFiles { get; init; }
@@ -74,7 +58,6 @@ public sealed record RepoSliceResult
     public string SliceId { get; init; } = string.Empty;
     public string InputsHash { get; init; } = string.Empty;
     public IReadOnlyList<RepoSliceFile> Files { get; init; } = Array.Empty<RepoSliceFile>();
-    public IReadOnlyList<RepoSliceDecision> DecisionTrace { get; init; } = Array.Empty<RepoSliceDecision>();
     public IReadOnlyList<string> TruncationFlags { get; init; } = Array.Empty<string>();
     public RepoSliceStats Stats { get; init; } = new();
     public string? ErrorCode { get; init; }
@@ -83,7 +66,6 @@ public sealed record RepoSliceResult
     public RepoSliceResult Normalize() => this with
     {
         Files = Files.Select(x => x.Normalize()).OrderBy(x => x.RelPath, StringComparer.Ordinal).ToArray(),
-        DecisionTrace = DecisionTrace.Select(x => x.Normalize()).OrderBy(x => x.Path, StringComparer.Ordinal).ToArray(),
         TruncationFlags = TruncationFlags.OrderBy(x => x, StringComparer.Ordinal).ToArray()
     };
 }
@@ -92,7 +74,6 @@ public static class RepoSliceJson
 {
     public static readonly JsonSerializerOptions Options = new()
     {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false
     };

@@ -1641,11 +1641,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             projectId,
             projectName,
             createdUtc,
-            _pendingEnvironmentId,
-            _pendingProviderKind,
-            _pendingProviderEndpoint,
-            _pendingProjectLanguage,
-            _pendingProjectDescription,
+            selectedEnvironmentId: _pendingEnvironmentId,
+            providerKind: _pendingProviderKind,
+            providerEndpoint: _pendingProviderEndpoint,
+            language: _pendingProjectLanguage,
+            description: _pendingProjectDescription,
             projectRoot);
 
         var descriptorPath = Path.Combine(projectRoot, "project.json");
@@ -1673,7 +1673,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             SelectedProviderEndpoint: _pendingProviderEndpoint);
 
         _workspaceProvider.SetActiveWorkspace(workspace);
-        RefreshRecentWorkspaces();
+        LoadWorkspaces();
         SelectWorkspace(workspace);
 
         _startupComplete = true;
@@ -1705,7 +1705,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         _startupComplete = true;
         AddStartupMessage($"System: Attached project {name}.");
-        RefreshRecentWorkspaces();
+        LoadWorkspaces();
         SelectWorkspace(workspace);
         NotifyStartupFlowChanged();
 

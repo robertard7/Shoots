@@ -27,7 +27,7 @@ public sealed class RepoSliceContractsTests
     }
 
     [Fact]
-    public void RepoSliceResult_normalize_sorts_files_flags_and_decisions()
+    public void RepoSliceResult_normalize_sorts_files_and_flags()
     {
         var result = new RepoSliceResult
         {
@@ -38,11 +38,6 @@ public sealed class RepoSliceContractsTests
                 new RepoSliceFile { RelPath = "z.cs", Sha256 = "2" },
                 new RepoSliceFile { RelPath = "a.cs", Sha256 = "1" }
             },
-            DecisionTrace = new[]
-            {
-                new RepoSliceDecision { Path = "z.cs" },
-                new RepoSliceDecision { Path = "a.cs" }
-            },
             TruncationFlags = new[]
             {
                 "slice.truncated.line_cap",
@@ -51,12 +46,11 @@ public sealed class RepoSliceContractsTests
         }.Normalize();
 
         Assert.Equal(new[] { "a.cs", "z.cs" }, result.Files.Select(x => x.RelPath));
-        Assert.Equal(new[] { "a.cs", "z.cs" }, result.DecisionTrace.Select(x => x.Path));
         Assert.Equal(new[] { "slice.binary.disallowed", "slice.truncated.line_cap" }, result.TruncationFlags);
     }
 
     [Fact]
-    public void RepoSliceResult_serialization_contains_decision_trace()
+    public void RepoSliceResult_serialization_matches_golden_order()
     {
         var result = new RepoSliceResult
         {
@@ -75,15 +69,13 @@ public sealed class RepoSliceContractsTests
                     Truncated = false
                 }
             ],
-            DecisionTrace =
-            [
-                new RepoSliceDecision { Path = "src/a.cs", IncludeMatch = true, Hash = "abc", Size = 10, BytesIncluded = 10, LinesIncluded = 2 }
-            ],
             TruncationFlags = ["slice.truncated.line_cap"],
             Stats = new RepoSliceStats { SelectedFiles = 1, SelectedBytes = 10, TruncatedFiles = 0, RejectedBinaryFiles = 0 }
         };
 
         var json = JsonSerializer.Serialize(result, RepoSliceJson.Options);
-        Assert.Contains("\"decisionTrace\":[", json);
+        const string golden = "{\"sliceId\":\"slice-1\",\"inputsHash\":\"hash-1\",\"files\":[{\"relPath\":\"src/a.cs\",\"sha256\":\"abc\",\"bytes\":10,\"lines\":2,\"mimeHint\":\"text/x-csharp\",\"excerpt\":\"class A {}\",\"truncated\":false}],\"truncationFlags\":[\"slice.truncated.line_cap\"],\"stats\":{\"selectedFiles\":1,\"selectedBytes\":10,\"truncatedFiles\":0,\"rejectedBinaryFiles\":0},\"errorCode\":null,\"errorMessage\":null}";
+
+        Assert.Equal(golden, json);
     }
 }

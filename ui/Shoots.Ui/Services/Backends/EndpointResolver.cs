@@ -12,7 +12,7 @@ public static class EndpointResolver
 
     private static string Resolve(string variable, string fallback)
     {
-        var value = System.Environment.GetEnvironmentVariable(variable);
+        var value = Environment.GetEnvironmentVariable(variable);
         return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
     }
 }

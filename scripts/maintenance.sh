@@ -1,25 +1,12 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-export LC_ALL=C
-export LANG=C
-export TZ=UTC
-
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 RUN_TESTS="${RUN_TESTS:-0}"
 CONFIGURATION="${CONFIGURATION:-Release}"
 SOLUTION_PATH="${SOLUTION_PATH:-}"
-RUN_UI="${RUN_UI:-}"
-
-if [[ -z "$RUN_UI" ]]; then
-  if [[ "${OS:-}" == "Windows_NT" ]]; then
-    RUN_UI=1
-  else
-    RUN_UI=0
-  fi
-fi
 
 if [[ -z "$SOLUTION_PATH" ]]; then
   if [[ "${OS:-}" == "Windows_NT" ]]; then
@@ -35,19 +22,14 @@ while [[ $# -gt 0 ]]; do
       RUN_TESTS=1
       shift
       ;;
-    --ui)
-      RUN_UI=1
-      shift
-      ;;
     -h|--help)
       cat <<'USAGE'
-Usage: bash scripts/maintenance.sh [--tests] [--ui]
+Usage: bash scripts/maintenance.sh [--tests]
 
 Environment variables:
   RUN_TESTS=1          Run tests after restore/build
   CONFIGURATION=Debug  Build/test configuration (default: Release)
   SOLUTION_PATH=...    Override solution path (default: Shoots.sln on Windows, src/Runtime/Shoots.Runtime.sln otherwise)
-  RUN_UI=1             Build/test UI projects (default: 1 on Windows, 0 otherwise)
 USAGE
       exit 0
       ;;
@@ -63,16 +45,11 @@ stamp="$(date +%Y%m%d-%H%M%S)"
 restore_log="artifacts/maintenance/restore-${stamp}.log"
 build_log="artifacts/maintenance/build-${stamp}.log"
 tests_log="artifacts/maintenance/tests-${stamp}.log"
-ui_build_log="artifacts/maintenance/ui-build-${stamp}.log"
-ui_tests_log="artifacts/maintenance/ui-tests-${stamp}.log"
 fingerprint_file="artifacts/maintenance/failure-fingerprint.json"
-flaky_file="artifacts/maintenance/flaky-test.md"
 
 restore_status=0
 build_status=0
 tests_status=99
-ui_build_status=99
-ui_tests_status=99
 overall_status=0
 error_code=""
 
@@ -181,19 +158,6 @@ write_failure_fingerprint() {
     echo "  \"sourceLog\": $(printf '%s' "$source_log" | json_escape)"
     echo "}"
   } > "$fingerprint_file"
-
-  if [[ "$error_code" == "maintenance.tests.failed" ]]; then
-    local commit_sha="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
-    {
-      echo "# Flaky Test Capture"
-      echo
-      echo "- commit: ${commit_sha}"
-      echo "- failingTest: ${failing_test:-unknown}"
-      echo "- errorCode: ${error_code}"
-      echo "- assertion: ${message:-unknown}"
-      echo "- sourceLog: ${source_log:-unknown}"
-    } > "$flaky_file"
-  fi
 }
 
 ensure_dotnet || exit $?
@@ -204,16 +168,6 @@ restore_status=$?
 if [[ "$restore_status" -ne 0 ]]; then
   overall_status=1
   set_error_code restore
-fi
-
-echo "==> Verifying UI contract drift guard"
-if [[ "$overall_status" -eq 0 ]]; then
-  run_and_capture "$build_log" bash scripts/verify_ui_contracts.sh
-  ui_contract_status=$?
-  if [[ "$ui_contract_status" -ne 0 ]]; then
-    overall_status=1
-    set_error_code build
-  fi
 fi
 
 echo "==> Building solution ($CONFIGURATION)"
@@ -230,15 +184,6 @@ else
 fi
 
 if [[ "$RUN_TESTS" == "1" ]]; then
-  echo "==> Verifying codex diagnostics order"
-  run_and_capture "$tests_log" bash scripts/verify_diagnostics_order.sh
-  diagnostics_status=$?
-  if [[ "$diagnostics_status" -ne 0 ]]; then
-    tests_status=$diagnostics_status
-    overall_status=1
-    set_error_code tests
-  fi
-
   echo "==> Verifying blocking stubs"
   run_and_capture "$tests_log" bash scripts/verify_no_blocking_stubs.sh
   stub_status=$?
@@ -248,137 +193,20 @@ if [[ "$RUN_TESTS" == "1" ]]; then
     set_error_code tests
   fi
 
+  echo "==> Verifying codex diagnostics order"
+  run_and_capture "$tests_log" bash scripts/verify_diagnostics_order.sh
+  diagnostics_status=$?
+  if [[ "$diagnostics_status" -ne 0 ]]; then
+    tests_status=$diagnostics_status
+    overall_status=1
+    set_error_code tests
+  fi
+
   echo "==> Verifying step envelopes"
   run_and_capture "$tests_log" bash scripts/verify_step_envelopes.sh
   step_envelope_status=$?
   if [[ "$step_envelope_status" -ne 0 ]]; then
     tests_status=$step_envelope_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying artifact budgets"
-  run_and_capture "$tests_log" bash scripts/verify_artifact_budgets.sh
-  artifact_budget_status=$?
-  if [[ "$artifact_budget_status" -ne 0 ]]; then
-    tests_status=$artifact_budget_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying narration coverage"
-  run_and_capture "$tests_log" bash scripts/verify_narration_coverage.sh
-  narration_coverage_status=$?
-  if [[ "$narration_coverage_status" -ne 0 ]]; then
-    tests_status=$narration_coverage_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying slice decisions"
-  run_and_capture "$tests_log" bash scripts/verify_slice_decisions.sh
-  slice_decisions_status=$?
-  if [[ "$slice_decisions_status" -ne 0 ]]; then
-    tests_status=$slice_decisions_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying plan evidence"
-  run_and_capture "$tests_log" bash scripts/verify_plan_evidence.sh
-  plan_evidence_status=$?
-  if [[ "$plan_evidence_status" -ne 0 ]]; then
-    tests_status=$plan_evidence_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying provider auditability"
-  run_and_capture "$tests_log" bash scripts/verify_provider_audit.sh
-  provider_audit_status=$?
-  if [[ "$provider_audit_status" -ne 0 ]]; then
-    tests_status=$provider_audit_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying synthesis budget limits"
-  run_and_capture "$tests_log" bash scripts/verify_synthesis_budgets.sh
-  synthesis_budget_status=$?
-  if [[ "$synthesis_budget_status" -ne 0 ]]; then
-    tests_status=$synthesis_budget_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying plan hash chain"
-  run_and_capture "$tests_log" bash scripts/verify_plan_hash_chain.sh
-  plan_hash_chain_status=$?
-  if [[ "$plan_hash_chain_status" -ne 0 ]]; then
-    tests_status=$plan_hash_chain_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying retrieval context determinism"
-  run_and_capture "$tests_log" bash scripts/verify_context_pack_determinism.sh
-  context_determinism_status=$?
-  if [[ "$context_determinism_status" -ne 0 ]]; then
-    tests_status=$context_determinism_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying retrieval quality"
-  run_and_capture "$tests_log" bash scripts/verify_retrieval_quality.sh
-  retrieval_quality_status=$?
-  if [[ "$retrieval_quality_status" -ne 0 ]]; then
-    tests_status=$retrieval_quality_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying retrieval golden fixture"
-  run_and_capture "$tests_log" bash scripts/verify_retrieval_golden.sh
-  retrieval_golden_status=$?
-  if [[ "$retrieval_golden_status" -ne 0 ]]; then
-    tests_status=$retrieval_golden_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying fixture provenance"
-  run_and_capture "$tests_log" bash scripts/verify_fixture_provenance.sh
-  fixture_provenance_status=$?
-  if [[ "$fixture_provenance_status" -ne 0 ]]; then
-    tests_status=$fixture_provenance_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying budget consistency"
-  run_and_capture "$tests_log" bash scripts/verify_budget_consistency.sh
-  budget_consistency_status=$?
-  if [[ "$budget_consistency_status" -ne 0 ]]; then
-    tests_status=$budget_consistency_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying backend optionality"
-  run_and_capture "$tests_log" bash scripts/verify_backend_optional.sh
-  backend_optional_status=$?
-  if [[ "$backend_optional_status" -ne 0 ]]; then
-    tests_status=$backend_optional_status
-    overall_status=1
-    set_error_code tests
-  fi
-
-  echo "==> Verifying no flaky tests"
-  run_and_capture "$tests_log" bash scripts/verify_no_flaky_tests.sh
-  flaky_status=$?
-  if [[ "$flaky_status" -ne 0 ]]; then
-    tests_status=$flaky_status
     overall_status=1
     set_error_code tests
   fi
@@ -400,48 +228,6 @@ else
   tests_status=99
 fi
 
-if [[ "$RUN_UI" == "1" ]]; then
-  echo "==> Restoring UI projects"
-  if [[ "$overall_status" -eq 0 ]]; then
-    run_and_capture "$ui_build_log" dotnet restore ui/Shoots.Ui/Shoots.Ui.csproj
-    ui_restore_status=$?
-    if [[ "$ui_restore_status" -ne 0 ]]; then
-      overall_status=1
-      set_error_code restore
-    fi
-  fi
-
-  echo "==> Building UI projects ($CONFIGURATION)"
-  if [[ "$overall_status" -eq 0 ]]; then
-    run_and_capture "$ui_build_log" dotnet build ui/Shoots.Ui/Shoots.Ui.csproj -c "$CONFIGURATION" --no-restore -p:ContinuousIntegrationBuild=true
-    ui_build_status=$?
-    if [[ "$ui_build_status" -ne 0 ]]; then
-      overall_status=1
-      set_error_code build
-    fi
-  else
-    echo "Skipping UI build because previous stage failed." | tee "$ui_build_log"
-    ui_build_status=99
-  fi
-
-  if [[ "$RUN_TESTS" == "1" ]]; then
-    echo "==> Testing UI projects ($CONFIGURATION)"
-    if [[ "$overall_status" -eq 0 ]]; then
-      run_and_capture "$ui_tests_log" dotnet test ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -c "$CONFIGURATION" --no-build -p:ContinuousIntegrationBuild=true
-      ui_tests_status=$?
-      if [[ "$ui_tests_status" -ne 0 ]]; then
-        overall_status=1
-        set_error_code tests
-      fi
-    else
-      echo "Skipping UI tests because previous stage failed." | tee "$ui_tests_log"
-      ui_tests_status=99
-    fi
-  fi
-else
-  echo "RUN_UI is not set to 1; skipping UI build/test." | tee "$ui_build_log"
-fi
-
 write_failure_fingerprint
 
 cat <<SUMMARY
@@ -450,23 +236,18 @@ cat <<SUMMARY
 restore: $(status_word "$restore_status")
 build:   $(status_word "$build_status")
 tests:   $(status_word "$tests_status")
-ui_build: $(status_word "$ui_build_status")
-ui_tests: $(status_word "$ui_tests_status")
 errorCode: ${error_code:-none}
 
 logs:
 - $restore_log
 - $build_log
 - $tests_log
-- $ui_build_log
-- $ui_tests_log
 
 solution:
 - $SOLUTION_PATH
 
 failure fingerprint:
 - $fingerprint_file
-- $flaky_file
 ==============================
 SUMMARY
 

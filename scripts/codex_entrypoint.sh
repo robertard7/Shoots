@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export LC_ALL=C
-export LANG=C
-export TZ=UTC
-
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
@@ -42,7 +38,9 @@ print_diagnostics() {
 }
 
 run_ui() {
-  RUN_TESTS=1 RUN_UI=1 bash scripts/maintenance.sh --tests --ui
+  RUN_TESTS=1 bash scripts/maintenance.sh --tests
+  dotnet build ui/Shoots.Ui/Shoots.Ui.csproj -c Release --no-restore
+  dotnet test ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -c Release --no-build
 }
 
 run_builder() {
@@ -65,7 +63,6 @@ run_default() {
 }
 
 mode="${1:---default}"
-run_ui_requested="${RUN_UI:-}"
 
 if [[ "$mode" == "--ui" ]]; then
   run_ui || { print_diagnostics; exit 1; }
@@ -96,22 +93,7 @@ if [[ "$mode" == "--all" ]]; then
   RUN_TESTS=1 bash scripts/maintenance.sh --tests || { print_diagnostics; exit 1; }
   run_builder || { print_diagnostics; exit 1; }
   run_retrieval || { print_diagnostics; exit 1; }
-
-  run_ui_in_all=0
-  if [[ -n "$run_ui_requested" ]]; then
-    if [[ "$run_ui_requested" == "1" ]]; then
-      run_ui_in_all=1
-    fi
-  elif [[ "${ENABLE_WINDOWS_CI:-0}" == "1" ]]; then
-    run_ui_in_all=1
-  fi
-
-  if [[ "$run_ui_in_all" == "1" ]]; then
-    run_ui || { print_diagnostics; exit 1; }
-  else
-    echo "Skipping --ui in --all (set RUN_UI=1 or ENABLE_WINDOWS_CI=1 to enable)."
-  fi
-
+  run_ui || { print_diagnostics; exit 1; }
   echo "codex entrypoint all mode completed"
   exit 0
 fi

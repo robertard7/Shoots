@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export LC_ALL=C
-export LANG=C
-export TZ=UTC
-
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
