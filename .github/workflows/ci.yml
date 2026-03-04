@@ -193,6 +193,8 @@ PYCHK
             artifacts/retrieval/**
             .state/runs/**
             etc/tools.catalog.json
+            etc/fixtures/**
+            docs/**
           if-no-files-found: warn
 
   full-windows:

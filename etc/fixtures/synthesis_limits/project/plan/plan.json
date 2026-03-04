@@ -1,0 +1,39 @@
+{
+  "projectId": "synthesis-limits",
+  "language": "dotnet",
+  "providerKind": "Local",
+  "environmentId": "host-local",
+  "createdAtUtc": "1970-01-01T00:00:00Z",
+  "planHash": "2222222222222222222222222222222222222222222222222222222222222222",
+  "steps": [
+    {
+      "stepId": "retrieve00001",
+      "kind": "retrieve_context.v1",
+      "toolId": "",
+      "args": {
+        "queryText": "host local environment",
+        "includeGlobs": ["*.json", "*/*.json"],
+        "excludeGlobs": ["**/bin/**", "**/obj/**"],
+        "maxFiles": 6,
+        "maxTotalBytes": 65536,
+        "maxFileBytes": 8192,
+        "maxLines": 600
+      },
+      "inputs": [],
+      "outputs": ["retrieval"]
+    },
+    {
+      "stepId": "synth00001",
+      "kind": "synthesize_plan.v1",
+      "toolId": "",
+      "args": {
+        "planKind": "builder_v1",
+        "maxSteps": 3,
+        "maxArgsBytes": 4096,
+        "maxTotalPlanBytes": 64000
+      },
+      "inputs": ["retrieval"],
+      "outputs": ["plan_synthesis", "plan"]
+    }
+  ]
+}

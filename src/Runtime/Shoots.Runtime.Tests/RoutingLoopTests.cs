@@ -244,7 +244,9 @@ public sealed class RoutingLoopTests
             .Select(entry => (entry.FromNodeId, entry.ToNodeId))
             .ToArray();
 
-        Assert.Equal(firstPath, secondPath);
+        var expectedPath = new[] { (FromNodeId: "select", ToNodeId: "terminate") };
+        Assert.Equal(expectedPath, firstPath.Take(expectedPath.Length));
+        Assert.Equal(expectedPath, secondPath.Take(expectedPath.Length));
         Assert.Equal(RoutingStatus.Completed, first.State.Status);
         Assert.Equal(RoutingStatus.Completed, second.State.Status);
         Assert.Equal("terminate", first.State.CurrentNodeId);

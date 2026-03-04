@@ -1,0 +1,8 @@
+{
+  "project": "etc/fixtures/retrieval_quality/project",
+  "requiredTopN": 5,
+  "requiredPaths": [],
+  "forbiddenPaths": [
+    "README.md"
+  ]
+}

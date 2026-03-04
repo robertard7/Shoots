@@ -43,8 +43,12 @@ public sealed record RetrievalQueryRequest
 
 public sealed record RetrievalHit
 {
+    public string HitId { get; init; } = string.Empty;
     public string Path { get; init; } = string.Empty;
     public long Score { get; init; }
+    public int TokensMatched { get; init; }
+    public int FirstMatchOffset { get; init; }
+    public string PathHash { get; init; } = string.Empty;
     public IReadOnlyList<string> ReasonCodes { get; init; } = Array.Empty<string>();
     public string SliceRef { get; init; } = string.Empty;
     public string Excerpt { get; init; } = string.Empty;
@@ -56,12 +60,25 @@ public sealed record RetrievalHit
     };
 }
 
+public sealed record RetrievalScoringTrace
+{
+    public string HitId { get; init; } = string.Empty;
+    public string Path { get; init; } = string.Empty;
+    public int TokensMatched { get; init; }
+    public long Score { get; init; }
+    public string PathHash { get; init; } = string.Empty;
+    public int FirstMatchOffset { get; init; }
+}
+
 public sealed record RetrievalStats
 {
     public int CandidateFiles { get; init; }
     public int ReturnedFiles { get; init; }
     public int ReturnedBytes { get; init; }
-    public IReadOnlyList<string> TruncationFlags { get; init; } = Array.Empty<string>();
+    public int BytesOut { get; init; }
+    public int LinesOut { get; init; }
+    public int FilesOut { get; init; }
+    public IReadOnlyList<string> TruncatedFlags { get; init; } = Array.Empty<string>();
 }
 
 public sealed record RetrievalResult
@@ -69,6 +86,8 @@ public sealed record RetrievalResult
     public string QueryHash { get; init; } = string.Empty;
     public string SliceHash { get; init; } = string.Empty;
     public IReadOnlyList<RetrievalHit> Hits { get; init; } = Array.Empty<RetrievalHit>();
+    public IReadOnlyList<RepoSliceDecision> SliceDecisionTrace { get; init; } = Array.Empty<RepoSliceDecision>();
+    public IReadOnlyList<RetrievalScoringTrace> ScoringTrace { get; init; } = Array.Empty<RetrievalScoringTrace>();
     public RetrievalStats Stats { get; init; } = new();
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
