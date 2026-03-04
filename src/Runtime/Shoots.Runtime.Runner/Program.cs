@@ -747,7 +747,7 @@ public static class Program
             await File.WriteAllLinesAsync(tracePath, traceEvents.Select(e => JsonSerializer.Serialize(e))).ConfigureAwait(false);
 
             var traceHash = ComputeHashHex(await File.ReadAllTextAsync(tracePath).ConfigureAwait(false));
-            var outputManifest = new List<string> { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson", "provider/request.json", "provider/result.json" };
+            var outputManifest = new List<string> { "run.json", "hashes.json", "identity.json", "result.json", "trace/events.ndjson", "narration/events.ndjson", "provider/request.json", "provider/result.json" };
             if (!string.IsNullOrWhiteSpace(retrievalHash))
             {
                 outputManifest.Add("retrieval/request.json");
@@ -792,6 +792,17 @@ public static class Program
                 hashes["evidenceHash"] = ComputeHashHex(await File.ReadAllTextAsync(evidencePath).ConfigureAwait(false));
             }
             await File.WriteAllTextAsync(Path.Combine(runDir, "hashes.json"), JsonSerializer.Serialize(hashes, JsonOptions())).ConfigureAwait(false);
+
+            var identity = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["runId"] = runId,
+                ["planHash"] = planHash,
+                ["retrievalHash"] = retrievalHash,
+                ["scoringHash"] = hashes.TryGetValue("scoringHash", out var sh) ? sh : string.Empty,
+                ["evidenceHash"] = hashes.TryGetValue("evidenceHash", out var ehv) ? ehv : string.Empty,
+                ["replayOfRunId"] = string.Empty
+            };
+            await File.WriteAllTextAsync(Path.Combine(runDir, "identity.json"), JsonSerializer.Serialize(identity, JsonOptions())).ConfigureAwait(false);
 
             var result = new { status = "completed", outputs = outputManifest, steps = stepEvents };
             await File.WriteAllTextAsync(Path.Combine(runDir, "result.json"), JsonSerializer.Serialize(result, JsonOptions())).ConfigureAwait(false);
@@ -869,6 +880,35 @@ public static class Program
         var providerHash = runDoc.RootElement.GetProperty("providerHash").GetString() ?? string.Empty;
         var envHash = runDoc.RootElement.GetProperty("envHash").GetString() ?? string.Empty;
         var runId = runDoc.RootElement.GetProperty("runId").GetString() ?? string.Empty;
+
+        var replayRoot = Path.Combine(resolved, "replay");
+        var replayRetrievalRoot = Path.Combine(replayRoot, "retrieval");
+        Directory.CreateDirectory(replayRetrievalRoot);
+        foreach (var file in new[] { "context_pack.txt", "hits.ndjson", "scoring.ndjson", "hashes.json" })
+        {
+            var src = Path.Combine(resolved, "retrieval", file);
+            var dst = Path.Combine(replayRetrievalRoot, file);
+            if (File.Exists(src))
+            {
+                await File.WriteAllTextAsync(dst, await File.ReadAllTextAsync(src).ConfigureAwait(false)).ConfigureAwait(false);
+            }
+        }
+
+        var runIdentityPath = Path.Combine(resolved, "identity.json");
+        var replayIdentity = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["runId"] = runId,
+            ["planHash"] = planHash,
+            ["retrievalHash"] = hashesDoc.RootElement.TryGetProperty("retrievalHash", out var rh) ? rh.GetString() ?? string.Empty : string.Empty,
+            ["scoringHash"] = hashesDoc.RootElement.TryGetProperty("scoringHash", out var rsh) ? rsh.GetString() ?? string.Empty : string.Empty,
+            ["evidenceHash"] = hashesDoc.RootElement.TryGetProperty("evidenceHash", out var reh) ? reh.GetString() ?? string.Empty : string.Empty,
+            ["replayOfRunId"] = runId
+        };
+        await File.WriteAllTextAsync(Path.Combine(replayRoot, "identity.json"), JsonSerializer.Serialize(replayIdentity, JsonOptions())).ConfigureAwait(false);
+        if (!File.Exists(runIdentityPath))
+        {
+            await File.WriteAllTextAsync(runIdentityPath, JsonSerializer.Serialize(new Dictionary<string, string>(replayIdentity, StringComparer.Ordinal) { ["replayOfRunId"] = string.Empty }, JsonOptions())).ConfigureAwait(false);
+        }
 
         Emit(narrator, "replay", "replay.inputs", "Loaded replay inputs", IdentityData(runId, planHash, providerHash, envHash, refs));
 
