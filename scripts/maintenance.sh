@@ -302,6 +302,24 @@ if [[ "$RUN_TESTS" == "1" ]]; then
     set_error_code tests
   fi
 
+  echo "==> Verifying retrieval context determinism"
+  run_and_capture "$tests_log" bash scripts/verify_context_pack_determinism.sh
+  context_determinism_status=$?
+  if [[ "$context_determinism_status" -ne 0 ]]; then
+    tests_status=$context_determinism_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying retrieval quality"
+  run_and_capture "$tests_log" bash scripts/verify_retrieval_quality.sh
+  retrieval_quality_status=$?
+  if [[ "$retrieval_quality_status" -ne 0 ]]; then
+    tests_status=$retrieval_quality_status
+    overall_status=1
+    set_error_code tests
+  fi
+
   echo "==> Verifying no flaky tests"
   run_and_capture "$tests_log" bash scripts/verify_no_flaky_tests.sh
   flaky_status=$?

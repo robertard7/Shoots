@@ -240,6 +240,31 @@ public static class Program
                 }
             }
 
+            Emit(narrator, "provider", "provider.resolve.start", "Resolving provider adapter", IdentityData(runId, planHash, providerHash, envHash, refs));
+            var providerRoot = Path.Combine(runDir, "provider");
+            Directory.CreateDirectory(providerRoot);
+            var providerRequest = new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["providerKind"] = providerKind,
+                ["endpoint"] = providerEndpoint,
+                ["model"] = providerDoc.RootElement.TryGetProperty("model", out var m) ? m.GetString() ?? string.Empty : string.Empty,
+                ["providerHash"] = providerHash,
+                ["declaredCapabilities"] = envDescriptorDoc.RootElement.TryGetProperty("capabilities", out var providerCapsEl) && providerCapsEl.ValueKind == JsonValueKind.Array ? providerCapsEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).OrderBy(x => x, StringComparer.Ordinal).ToArray() : Array.Empty<string>()
+            };
+            await File.WriteAllTextAsync(Path.Combine(providerRoot, "request.json"), JsonSerializer.Serialize(providerRequest, JsonOptions())).ConfigureAwait(false);
+            Emit(narrator, "provider", "provider.resolve.end", "Resolved provider adapter", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["providerKind"] = providerKind }));
+            Emit(narrator, "provider", "provider.invoke.start", "Preparing provider invocation", IdentityData(runId, planHash, providerHash, envHash, refs));
+            var providerResult = new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["providerKind"] = providerKind,
+                ["endpoint"] = providerEndpoint,
+                ["adapterVersion"] = versionStamp,
+                ["providerHash"] = providerHash,
+                ["status"] = "ready"
+            };
+            await File.WriteAllTextAsync(Path.Combine(providerRoot, "result.json"), JsonSerializer.Serialize(providerResult, JsonOptions())).ConfigureAwait(false);
+            Emit(narrator, "provider", "provider.invoke.end", "Provider invocation prepared", IdentityData(runId, planHash, providerHash, envHash, refs));
+
             Emit(narrator, "plan", "plan.materialize.start", "Materializing plan", IdentityData(runId, planHash, providerHash, envHash, refs));
             Emit(narrator, "plan", "plan.read", "Reading plan scaffold", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["path"] = RelativePath(project, planPath) }));
             Emit(narrator, "plan", "plan.hash", "Plan hash loaded", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["planHash"] = planHash }));
@@ -254,6 +279,7 @@ public static class Program
             var stepEvents = new List<object>();
             var stepSummaries = new List<Dictionary<string, string>>();
             var retrievalHash = string.Empty;
+            var synthesisEvidenceHash = string.Empty;
             RetrievalResult? retrievalResult = null;
             var planSteps = ResolveSteps(planDoc.RootElement, planHash);
 
@@ -456,7 +482,7 @@ public static class Program
                     var maxTotalBytes = Math.Max(GetArgInt(step.Args, "maxTotalBytes", 120000), 2048);
                     var maxFileBytes = Math.Max(GetArgInt(step.Args, "maxFileBytes", 12000), 1024);
                     var maxLines = Math.Max(GetArgInt(step.Args, "maxLines", 2000), 100);
-                    var request = new RetrievalQueryRequest
+                    var baseRequest = new RetrievalQueryRequest
                     {
                         Root = project,
                         QueryText = GetArgString(step.Args, "queryText", "build plan context"),
@@ -487,16 +513,83 @@ public static class Program
                         Scoring = RetrievalScoring.LexicalTfidfV1
                     };
 
-                    var retrievalService = new RetrievalService();
-                    var retrieval = retrievalService.Retrieve(request).Normalize();
-                    retrievalResult = retrieval;
-                    if (!string.IsNullOrWhiteSpace(retrieval.ErrorCode))
+                    var queries = GetArgStringList(step.Args, "queries", Array.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                    var queryFile = GetArgString(step.Args, "queryFile", string.Empty);
+                    if (queries.Count == 0 && !string.IsNullOrWhiteSpace(queryFile))
                     {
-                        EmitFailure(narrator, "retrieval", "retrieval.error", "Retrieval step failed", runId, planHash, providerHash, envHash, refs, step.StepId, details: retrieval.ErrorCode + ";" + retrieval.ErrorMessage);
-                        return ExitCodes.ToolExecFailed;
+                        var resolvedQueryFile = ResolvePolicyPath(project, queryFile, out var queryPolicyError);
+                        if (queryPolicyError is not null || resolvedQueryFile is null || !File.Exists(resolvedQueryFile))
+                        {
+                            EmitFailure(narrator, "retrieval", queryPolicyError ?? "retrieval.query_file.missing", "Query file missing", runId, planHash, providerHash, envHash, refs, step.StepId, details: queryFile);
+                            return ExitCodes.ToolExecFailed;
+                        }
+
+                        queries = (await File.ReadAllLinesAsync(resolvedQueryFile).ConfigureAwait(false)).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
                     }
 
+                    if (queries.Count == 0)
+                    {
+                        queries.Add(baseRequest.QueryText);
+                    }
+
+                    var retrievalService = new RetrievalService();
+                    var perQueryResults = new List<RetrievalResult>();
+                    var queryPackEntries = new List<Dictionary<string, object?>>();
+                    foreach (var (query, index) in queries.Select((q, i) => (q, i)))
+                    {
+                        var req = baseRequest with { QueryText = query };
+                        var queryResult = retrievalService.Retrieve(req).Normalize();
+                        if (!string.IsNullOrWhiteSpace(queryResult.ErrorCode))
+                        {
+                            EmitFailure(narrator, "retrieval", "retrieval.error", "Retrieval step failed", runId, planHash, providerHash, envHash, refs, step.StepId, details: queryResult.ErrorCode + ";" + queryResult.ErrorMessage);
+                            return ExitCodes.ToolExecFailed;
+                        }
+
+                        perQueryResults.Add(queryResult);
+                        queryPackEntries.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+                        {
+                            ["index"] = index,
+                            ["query"] = query,
+                            ["requestHash"] = req.ComputeQueryHash(),
+                            ["retrievalHash"] = RetrievalService.ComputeRetrievalHash(queryResult),
+                            ["hitCount"] = queryResult.Hits.Count
+                        });
+                    }
+
+                    var mergedHits = perQueryResults.SelectMany(x => x.Hits)
+                        .GroupBy(x => x.Path, StringComparer.Ordinal)
+                        .Select(g => g.OrderByDescending(h => h.Score).ThenByDescending(h => h.TokensMatched).ThenBy(h => h.Path, StringComparer.Ordinal).ThenBy(h => h.FirstMatchOffset).First())
+                        .OrderByDescending(h => h.Score).ThenByDescending(h => h.TokensMatched).ThenBy(h => h.Path, StringComparer.Ordinal).ThenBy(h => h.FirstMatchOffset)
+                        .Take(maxFiles)
+                        .ToArray();
+
+                    var mergedTruncationFlags = perQueryResults.SelectMany(x => x.Stats.TruncatedFlags).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+                    var mergedScoring = mergedHits.Select(h => new RetrievalScoringTrace { HitId = h.HitId, Path = h.Path, TokensMatched = h.TokensMatched, Score = h.Score, PathHash = h.PathHash, FirstMatchOffset = h.FirstMatchOffset }).ToArray();
+                    var mergedBytes = mergedHits.Sum(h => Encoding.UTF8.GetByteCount(h.Excerpt));
+                    var mergedLines = mergedHits.Sum(h => h.Excerpt.Length == 0 ? 0 : h.Excerpt.Count(c => c == '\n') + 1);
+                    var retrieval = new RetrievalResult
+                    {
+                        QueryHash = ComputeHashHex(string.Join("\n", queryPackEntries.Select(x => x["requestHash"]?.ToString() ?? string.Empty))),
+                        SliceHash = perQueryResults.FirstOrDefault()?.SliceHash ?? string.Empty,
+                        Hits = mergedHits,
+                        SliceDecisionTrace = perQueryResults.FirstOrDefault()?.SliceDecisionTrace ?? Array.Empty<RepoSliceDecision>(),
+                        ScoringTrace = mergedScoring,
+                        Stats = new RetrievalStats
+                        {
+                            CandidateFiles = perQueryResults.FirstOrDefault()?.Stats.CandidateFiles ?? 0,
+                            ReturnedFiles = mergedHits.Length,
+                            ReturnedBytes = mergedBytes,
+                            BytesOut = mergedBytes,
+                            LinesOut = mergedLines,
+                            FilesOut = mergedHits.Length,
+                            TruncatedFlags = mergedTruncationFlags
+                        }
+                    }.Normalize();
+
+                    retrievalResult = retrieval;
+
                     var requestPath = Path.Combine(retrievalRoot, "request.json");
+                    var queryPackPath = Path.Combine(retrievalRoot, "query_pack.json");
                     var resultPath = Path.Combine(retrievalRoot, "result.json");
                     var statsPath = Path.Combine(retrievalRoot, "stats.json");
                     var hitsPath = Path.Combine(retrievalRoot, "hits.ndjson");
@@ -506,8 +599,14 @@ public static class Program
                     var packPath = Path.Combine(retrievalRoot, "context_pack.txt");
                     var hashPath = Path.Combine(retrievalRoot, "hashes.json");
 
-                    var contextPack = RetrievalService.BuildContextPack(runId, planHash, retrieval, request.Budget);
-                    await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(request.Normalize(), RepoSliceJson.Options)).ConfigureAwait(false);
+                    var queryPack = new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["queries"] = queryPackEntries.OrderBy(x => Convert.ToInt32(x["index"])).ToArray(),
+                        ["sortedRequestHashes"] = queryPackEntries.Select(x => x["requestHash"]?.ToString() ?? string.Empty).OrderBy(x => x, StringComparer.Ordinal).ToArray()
+                    };
+                    var contextPack = RetrievalService.BuildContextPack(runId, planHash, retrieval, baseRequest.Budget);
+                    await File.WriteAllTextAsync(queryPackPath, JsonSerializer.Serialize(queryPack, JsonOptions())).ConfigureAwait(false);
+                    await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(baseRequest.Normalize(), RepoSliceJson.Options)).ConfigureAwait(false);
                     await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(retrieval, RepoSliceJson.Options)).ConfigureAwait(false);
                     await File.WriteAllTextAsync(statsPath, JsonSerializer.Serialize(retrieval.Stats, RepoSliceJson.Options)).ConfigureAwait(false);
                     await File.WriteAllLinesAsync(hitsPath, retrieval.Hits.Select(h => JsonSerializer.Serialize(h, RepoSliceJson.Options))).ConfigureAwait(false);
@@ -521,6 +620,7 @@ public static class Program
                         ["queryHash"] = retrieval.QueryHash,
                         ["sliceHash"] = retrieval.SliceHash,
                         ["requestHash"] = ComputeHashHex(await File.ReadAllTextAsync(requestPath).ConfigureAwait(false)),
+                        ["queryPackHash"] = ComputeHashHex(await File.ReadAllTextAsync(queryPackPath).ConfigureAwait(false)),
                         ["retrievalHash"] = retrievalHash,
                         ["contextHash"] = ComputeHashHex(contextPack),
                         ["scoringHash"] = ComputeHashHex(await File.ReadAllTextAsync(scoringPath).ConfigureAwait(false)),
@@ -536,7 +636,7 @@ public static class Program
                         Emit(narrator, "retrieval", "retrieval.pack.start", "Retrieval hit summary", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["path"] = hit.Path, ["score"] = hit.Score.ToString(), ["reasonCodes"] = string.Join(',', hit.ReasonCodes) }));
                     }
 
-                    Emit(narrator, "builder", "builder.decision.context_budget", "Applied context budgets", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["maxBytes"] = request.Budget.MaxBytes.ToString(), ["maxLines"] = request.Budget.MaxLines.ToString(), ["maxFiles"] = request.Budget.MaxFiles.ToString(), ["truncated"] = string.Join(',', retrieval.Stats.TruncatedFlags) }));
+                    Emit(narrator, "builder", "builder.decision.context_budget", "Applied context budgets", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["maxBytes"] = baseRequest.Budget.MaxBytes.ToString(), ["maxLines"] = baseRequest.Budget.MaxLines.ToString(), ["maxFiles"] = baseRequest.Budget.MaxFiles.ToString(), ["truncated"] = string.Join(',', retrieval.Stats.TruncatedFlags) }));
                     Emit(narrator, "retrieval", "retrieval.pack.done", "Built retrieval context pack", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["retrievalHash"] = retrievalHash }));
                 }
 
@@ -586,6 +686,7 @@ public static class Program
                     };
                     await File.WriteAllTextAsync(Path.Combine(planRoot, "hashes.json"), JsonSerializer.Serialize(planHashes, JsonOptions())).ConfigureAwait(false);
 
+                    synthesisEvidenceHash = synthesis.EvidenceHash;
                     var selectedSteps = string.Join(',', synthesis.Evidence.Select(x => x.StepId).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
                     var skippedSteps = string.Join(',', retrievalResult.Hits.Select(x => x.HitId).Except(synthesis.Evidence.Select(x => x.HitId), StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
                     Emit(narrator, "builder", "builder.decision.selected_steps", "Selected executable steps", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["steps"] = selectedSteps, ["reason"] = "top_ranked_hits" }));
@@ -593,6 +694,7 @@ public static class Program
                     Emit(narrator, "builder", "builder.synthesis.end", "Plan synthesis completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["synthPlanHash"] = synthesis.PlanHash, ["evidenceHash"] = synthesis.EvidenceHash, ["evidenceBytes"] = Encoding.UTF8.GetByteCount(evidenceText).ToString() }));
                 }
 
+                await WriteInputsFingerprintAsync(runDir, project, step, retrievalHash, synthesisEvidenceHash).ConfigureAwait(false);
                 Emit(narrator, "execute", "execute.step.end", "Step completed", Merge(IdentityData(runId, planHash, providerHash, envHash, refs), new() { ["stepId"] = step.StepId, ["stepKind"] = step.Kind }));
                 stepEvents.Add(new { step.StepId, kind = step.Kind, toolId = step.ToolId, status = "completed" });
                 stepSummaries.Add(new Dictionary<string, string>(StringComparer.Ordinal)
@@ -645,11 +747,12 @@ public static class Program
             await File.WriteAllLinesAsync(tracePath, traceEvents.Select(e => JsonSerializer.Serialize(e))).ConfigureAwait(false);
 
             var traceHash = ComputeHashHex(await File.ReadAllTextAsync(tracePath).ConfigureAwait(false));
-            var outputManifest = new List<string> { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson" };
+            var outputManifest = new List<string> { "run.json", "hashes.json", "result.json", "trace/events.ndjson", "narration/events.ndjson", "provider/request.json", "provider/result.json" };
             if (!string.IsNullOrWhiteSpace(retrievalHash))
             {
                 outputManifest.Add("retrieval/request.json");
                 outputManifest.Add("retrieval/result.json");
+                outputManifest.Add("retrieval/query_pack.json");
                 outputManifest.Add("retrieval/hits.ndjson");
                 outputManifest.Add("retrieval/context_pack.txt");
                 outputManifest.Add("retrieval/hashes.json");
@@ -889,7 +992,7 @@ public static class Program
 
     static string RelativePath(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');
 
-    static string BaseArtifactRefs() => "json:run.json,json:hashes.json,json:result.json,ndjson:trace/events.ndjson,ndjson:narration/events.ndjson,json:retrieval/result.json,json:retrieval/stats.json,ndjson:retrieval/scoring.ndjson,ndjson:slice/decisions.ndjson,txt:retrieval/context_pack.txt,json:plan_synthesis/result.json,ndjson:plan_synthesis/evidence.ndjson,json:plan/plan.json";
+    static string BaseArtifactRefs() => "json:run.json,json:hashes.json,json:result.json,json:provider/request.json,json:provider/result.json,ndjson:trace/events.ndjson,ndjson:narration/events.ndjson,json:retrieval/result.json,json:retrieval/stats.json,ndjson:retrieval/scoring.ndjson,ndjson:slice/decisions.ndjson,txt:retrieval/context_pack.txt,json:plan_synthesis/result.json,ndjson:plan_synthesis/evidence.ndjson,json:plan/plan.json";
 
     static Dictionary<string, string> IdentityData(string runId, string planHash, string providerHash, string envHash, string artifactRefs) => new(StringComparer.Ordinal)
     {
@@ -1341,6 +1444,59 @@ public static class Program
         }
 
         return true;
+    }
+
+    static async Task WriteInputsFingerprintAsync(string runDir, string projectRoot, (string StepId, string Kind, string ToolId, bool RequiresNetwork, Dictionary<string, object?> Args) step, string retrievalHash, string evidenceHash)
+    {
+        var stepRoot = Path.Combine(runDir, "steps", step.StepId);
+        if (!Directory.Exists(stepRoot))
+        {
+            return;
+        }
+
+        var refs = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        if (step.Args.TryGetValue("targetPath", out var targetObj) && targetObj is string targetPath && !string.IsNullOrWhiteSpace(targetPath))
+        {
+            var abs = Path.GetFullPath(Path.Combine(projectRoot, targetPath));
+            if (File.Exists(abs))
+            {
+                refs[$"project/{targetPath.Replace('\\', '/')}"] = ComputeHashHex(await File.ReadAllTextAsync(abs).ConfigureAwait(false));
+            }
+        }
+
+        if (step.Args.TryGetValue("queryFile", out var queryObj) && queryObj is string queryFile && !string.IsNullOrWhiteSpace(queryFile))
+        {
+            var abs = Path.GetFullPath(Path.Combine(projectRoot, queryFile));
+            if (File.Exists(abs))
+            {
+                refs[$"project/{queryFile.Replace('\\', '/')}"] = ComputeHashHex(await File.ReadAllTextAsync(abs).ConfigureAwait(false));
+            }
+        }
+
+        var contextPackPath = Path.Combine(runDir, "retrieval", "context_pack.txt");
+        if (File.Exists(contextPackPath))
+        {
+            refs["retrieval/context_pack.txt"] = ComputeHashHex(await File.ReadAllTextAsync(contextPackPath).ConfigureAwait(false));
+        }
+
+        if (!string.IsNullOrWhiteSpace(retrievalHash))
+        {
+            refs["retrieval/hash"] = retrievalHash;
+        }
+
+        if (!string.IsNullOrWhiteSpace(evidenceHash))
+        {
+            refs["plan_synthesis/evidenceHash"] = evidenceHash;
+        }
+
+        var payload = new
+        {
+            stepId = step.StepId,
+            stepKind = step.Kind,
+            inputs = refs.Select(x => new { path = x.Key, hash = x.Value }).ToArray()
+        };
+
+        await File.WriteAllTextAsync(Path.Combine(stepRoot, "inputs_fingerprint.json"), JsonSerializer.Serialize(payload, JsonOptions())).ConfigureAwait(false);
     }
 
     static string BuildRunSummary(string runId, string planHash, string providerHash, string envHash, IReadOnlyList<Dictionary<string, string>> stepSummaries)

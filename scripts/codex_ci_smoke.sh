@@ -33,3 +33,6 @@ bash scripts/verify_artifact_budgets.sh --require-run
 bash scripts/verify_narration_coverage.sh --require-run
 bash scripts/verify_slice_decisions.sh --require-run
 bash scripts/verify_plan_evidence.sh --require-run
+
+bash scripts/verify_context_pack_determinism.sh
+bash scripts/verify_retrieval_quality.sh

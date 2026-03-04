@@ -40,7 +40,7 @@ if [[ ! -f "$summary_path" ]]; then
   fail "verify.step_envelope.summary_missing" "missing $summary_path"
 fi
 
-required=(request.json result.json stdout.txt stderr.txt exit.json hashes.json)
+required=(request.json result.json stdout.txt stderr.txt exit.json hashes.json inputs_fingerprint.json)
 max_bytes="${MAX_STEP_ARTIFACT_BYTES:-262144}"
 
 step_dirs="$(find "$run_dir/steps" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | sort || true)"
@@ -50,6 +50,10 @@ fi
 
 while IFS= read -r step_dir; do
   [[ -z "$step_dir" ]] && continue
+  if [[ ! -f "$step_dir/request.json" ]]; then
+    # allow metadata-only directories
+    continue
+  fi
   for file in "${required[@]}"; do
     path="$step_dir/$file"
     if [[ ! -f "$path" ]]; then

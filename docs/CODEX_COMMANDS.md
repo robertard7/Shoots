@@ -25,6 +25,8 @@ Additional supported commands:
 15. `bash scripts/verify_slice_decisions.sh`
 16. `bash scripts/verify_plan_evidence.sh`
 17. `bash scripts/verify_smoke_stamp.sh`
+18. `bash scripts/verify_context_pack_determinism.sh`
+19. `bash scripts/verify_retrieval_quality.sh`
 
 ## Failure Triage Order
 
