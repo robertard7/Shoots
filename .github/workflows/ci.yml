@@ -45,14 +45,19 @@ jobs:
         shell: bash
         run: bash scripts/verify_ui_test_project_guard.sh
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-
-      - name: Dotnet info
+      - name: Install bootstrap dependencies
         shell: bash
-        run: dotnet --info
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates curl
+
+      - name: Bootstrap .NET SDK + restore
+        shell: bash
+        run: bash tools/codex/restore.sh
+
+      - name: Verify dotnet bootstrap
+        shell: bash
+        run: bash scripts/verify_dotnet_bootstrap.sh
 
       - name: Capture CI environment snapshot
         shell: bash
@@ -123,7 +128,6 @@ jobs:
       - name: Runner smoke (skip backends)
         shell: bash
         run: |
-          bash tools/codex/restore.sh
           bash scripts/smoke_runner.sh --skip-backends
           cat artifacts/smoke/latest_summary.env
           source artifacts/smoke/latest_summary.env
