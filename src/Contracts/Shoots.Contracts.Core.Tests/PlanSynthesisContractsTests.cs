@@ -24,6 +24,17 @@ public sealed class PlanSynthesisContractsTests
         Assert.Equal(a.ComputeRequestHash(), b.ComputeRequestHash());
     }
 
+
+    [Fact]
+    public void Request_normalize_enforces_positive_budgets()
+    {
+        var normalized = new PlanSynthesisRequest { MaxSteps = 0, MaxArgsBytes = -1, MaxTotalPlanBytes = 0 }.Normalize();
+
+        Assert.Equal(1, normalized.MaxSteps);
+        Assert.Equal(1, normalized.MaxArgsBytes);
+        Assert.Equal(1, normalized.MaxTotalPlanBytes);
+    }
+
     [Fact]
     public void Result_serialization_contains_evidence()
     {

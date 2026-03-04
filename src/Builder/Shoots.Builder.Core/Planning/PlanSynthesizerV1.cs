@@ -12,9 +12,10 @@ public sealed class PlanSynthesizerV1
         var normalized = request.Normalize();
         var requestHash = normalized.ComputeRequestHash();
         var orderedHits = hits.OrderByDescending(h => h.Score).ThenByDescending(h => h.TokensMatched).ThenBy(h => h.Path, StringComparer.Ordinal).ThenBy(h => h.FirstMatchOffset).ToArray();
+        var selectedHits = orderedHits.Take(normalized.MaxSteps).ToArray();
 
         var evidence = new List<PlanStepEvidence>();
-        var steps = orderedHits.Take(3).Select((hit, idx) =>
+        var steps = selectedHits.Select((hit, idx) =>
         {
             var stepId = ComputeHash($"{requestHash}|{idx}|{hit.Path}")[..12];
             var stepEvidence = new PlanStepEvidence
@@ -53,6 +54,23 @@ public sealed class PlanSynthesizerV1
             };
         }).ToArray();
 
+        var maxArgsBytes = 0;
+        foreach (var step in steps)
+        {
+            if (!step.TryGetValue("args", out var argsObj))
+            {
+                continue;
+            }
+
+            var argsJson = JsonSerializer.Serialize(argsObj, RepoSliceJson.Options);
+            maxArgsBytes = Math.Max(maxArgsBytes, Encoding.UTF8.GetByteCount(argsJson));
+        }
+
+        if (maxArgsBytes > normalized.MaxArgsBytes)
+        {
+            throw new InvalidOperationException($"builder.synthesis.args_exceeded:max={normalized.MaxArgsBytes};actual={maxArgsBytes}");
+        }
+
         var basePlan = new Dictionary<string, object?>
         {
             ["schemaVersion"] = 1,
@@ -70,6 +88,11 @@ public sealed class PlanSynthesizerV1
         };
 
         var semanticJson = JsonSerializer.Serialize(basePlan, RepoSliceJson.Options);
+        var planBytes = Encoding.UTF8.GetByteCount(semanticJson);
+        if (planBytes > normalized.MaxTotalPlanBytes)
+        {
+            throw new InvalidOperationException($"builder.synthesis.plan_exceeded:max={normalized.MaxTotalPlanBytes};actual={planBytes}");
+        }
         var planHash = ComputeHash(semanticJson);
         var evidencePayload = JsonSerializer.Serialize(evidence.OrderBy(x => x.StepId, StringComparer.Ordinal).ThenBy(x => x.HitId, StringComparer.Ordinal).ToArray(), RepoSliceJson.Options);
         var evidenceHash = ComputeHash(evidencePayload);

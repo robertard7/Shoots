@@ -662,11 +662,24 @@ public static class Program
                         ProviderKind = providerKind,
                         EnvironmentKind = envId,
                         Constraints = new[] { "deterministic=true", "network=off" },
-                        ProjectRoot = RelativePath(project, project)
+                        ProjectRoot = RelativePath(project, project),
+                        MaxSteps = GetArgInt(step.Args, "maxSteps", 3),
+                        MaxArgsBytes = GetArgInt(step.Args, "maxArgsBytes", 4096),
+                        MaxTotalPlanBytes = GetArgInt(step.Args, "maxTotalPlanBytes", 64000)
                     };
 
-                    var synthesis = SynthesizePlanV1(request, retrievalResult.Hits);
-                    if (!ValidateSynthesizedPlan(synthesis.PlanJson, envDescriptorDoc.RootElement, out var synthErrorCode, out var synthSummary, out var synthDetails))
+                    PlanSynthesisResult synthesis;
+                    try
+                    {
+                        synthesis = SynthesizePlanV1(request, retrievalResult.Hits);
+                    }
+                    catch (InvalidOperationException ex) when (ex.Message.StartsWith("builder.synthesis.", StringComparison.Ordinal))
+                    {
+                        EmitFailure(narrator, "builder", "builder.synthesis.failed", "Synthesis budget exceeded", runId, planHash, providerHash, envHash, refs, step.StepId, details: ex.Message);
+                        return ExitCodes.PlanInvalid;
+                    }
+
+                    if (!ValidateSynthesizedPlan(synthesis.PlanJson, request.Normalize(), envDescriptorDoc.RootElement, out var synthErrorCode, out var synthSummary, out var synthDetails))
                     {
                         EmitFailure(narrator, "builder", "builder.synthesis.failed", synthSummary, runId, planHash, providerHash, envHash, refs, step.StepId, details: synthErrorCode + ";" + synthDetails);
                         return ExitCodes.PlanInvalid;
@@ -1329,7 +1342,8 @@ public static class Program
     {
         var normalized = request.Normalize();
         var requestHash = normalized.ComputeRequestHash();
-        var selected = hits.OrderByDescending(h => h.Score).ThenByDescending(h => h.TokensMatched).ThenBy(h => h.Path, StringComparer.Ordinal).ThenBy(h => h.FirstMatchOffset).Take(3).ToArray();
+        var orderedHits = hits.OrderByDescending(h => h.Score).ThenByDescending(h => h.TokensMatched).ThenBy(h => h.Path, StringComparer.Ordinal).ThenBy(h => h.FirstMatchOffset).ToArray();
+        var selected = orderedHits.Take(normalized.MaxSteps).ToArray();
 
         var evidence = new List<PlanStepEvidence>();
         var steps = selected.Select((hit, idx) =>
@@ -1383,7 +1397,30 @@ public static class Program
             ["steps"] = steps
         };
 
+        var maxArgsBytes = 0;
+        foreach (var step in steps)
+        {
+            if (!step.TryGetValue("args", out var argsObj))
+            {
+                continue;
+            }
+
+            var argsJson = JsonSerializer.Serialize(argsObj, RepoSliceJson.Options);
+            maxArgsBytes = Math.Max(maxArgsBytes, Encoding.UTF8.GetByteCount(argsJson));
+        }
+
+        if (maxArgsBytes > normalized.MaxArgsBytes)
+        {
+            throw new InvalidOperationException($"builder.synthesis.args_exceeded:max={normalized.MaxArgsBytes};actual={maxArgsBytes}");
+        }
+
         var semanticJson = JsonSerializer.Serialize(basePlanObj, RepoSliceJson.Options);
+        var planBytes = Encoding.UTF8.GetByteCount(semanticJson);
+        if (planBytes > normalized.MaxTotalPlanBytes)
+        {
+            throw new InvalidOperationException($"builder.synthesis.plan_exceeded:max={normalized.MaxTotalPlanBytes};actual={planBytes}");
+        }
+
         var synthesizedPlanHash = ComputeHashHex(semanticJson);
         var evidencePayload = JsonSerializer.Serialize(evidence.OrderBy(x => x.StepId, StringComparer.Ordinal).ThenBy(x => x.HitId, StringComparer.Ordinal).ToArray(), RepoSliceJson.Options);
         var evidenceHash = ComputeHashHex(evidencePayload);
@@ -1405,7 +1442,7 @@ public static class Program
             Evidence = evidence.OrderBy(x => x.StepId, StringComparer.Ordinal).ThenBy(x => x.HitId, StringComparer.Ordinal).ToArray(),
             Stats = new PlanSynthesisStats
             {
-                RetrievedHitCount = hits.Count,
+                RetrievedHitCount = orderedHits.Length,
                 StepCount = steps.Length,
                 ToolCount = steps.Select(x => x["toolId"]?.ToString() ?? string.Empty).Distinct(StringComparer.Ordinal).Count()
             }
@@ -1413,7 +1450,7 @@ public static class Program
     }
 
 
-    static bool ValidateSynthesizedPlan(string planJson, JsonElement envDescriptor, out string errorCode, out string summary, out string details)
+    static bool ValidateSynthesizedPlan(string planJson, PlanSynthesisRequest request, JsonElement envDescriptor, out string errorCode, out string summary, out string details)
     {
         errorCode = string.Empty;
         summary = string.Empty;
@@ -1435,6 +1472,15 @@ public static class Program
         if (caps.Count == 0)
         {
             caps.Add("process");
+        }
+
+        var stepCount = stepsEl.GetArrayLength();
+        if (stepCount > request.MaxSteps)
+        {
+            errorCode = "builder.synthesis.steps_exceeded";
+            summary = "Synthesized plan exceeded step budget.";
+            details = $"max={request.MaxSteps};actual={stepCount}";
+            return false;
         }
 
         var idx = 0;
@@ -1466,6 +1512,18 @@ public static class Program
                 return false;
             }
 
+            if (step.TryGetProperty("args", out var argsEl) && argsEl.ValueKind != JsonValueKind.Undefined)
+            {
+                var argsBytes = Encoding.UTF8.GetByteCount(argsEl.GetRawText());
+                if (argsBytes > request.MaxArgsBytes)
+                {
+                    errorCode = "builder.synthesis.args_exceeded";
+                    summary = "Synthesized step args exceeded byte budget.";
+                    details = $"index={idx};max={request.MaxArgsBytes};actual={argsBytes}";
+                    return false;
+                }
+            }
+
             if (step.TryGetProperty("outputs", out var outEl) && outEl.ValueKind == JsonValueKind.Array)
             {
                 foreach (var output in outEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty))
@@ -1481,6 +1539,15 @@ public static class Program
             }
 
             idx++;
+        }
+
+        var planBytes = Encoding.UTF8.GetByteCount(planJson);
+        if (planBytes > request.MaxTotalPlanBytes)
+        {
+            errorCode = "builder.synthesis.plan_exceeded";
+            summary = "Synthesized plan exceeded total byte budget.";
+            details = $"max={request.MaxTotalPlanBytes};actual={planBytes}";
+            return false;
         }
 
         return true;

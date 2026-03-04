@@ -118,6 +118,11 @@ jobs:
         shell: bash
         run: bash scripts/verify_narration_coverage.sh
 
+      - name: Verify provider audit
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_provider_audit.sh
+
       - name: Verify no flaky tests
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
@@ -127,6 +132,11 @@ jobs:
         if: env.RUN_TESTS_LINUX == '1'
         shell: bash
         run: bash scripts/verify_ui_contracts.sh
+
+      - name: Verify retrieval golden
+        if: env.RUN_TESTS_LINUX == '1'
+        shell: bash
+        run: bash scripts/verify_retrieval_golden.sh
 
       - name: Golden builder replay check
         if: env.RUN_TESTS_LINUX == '1'

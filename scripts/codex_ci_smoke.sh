@@ -33,6 +33,7 @@ bash scripts/verify_artifact_budgets.sh --require-run
 bash scripts/verify_narration_coverage.sh --require-run
 bash scripts/verify_slice_decisions.sh --require-run
 bash scripts/verify_plan_evidence.sh --require-run
+bash scripts/verify_provider_audit.sh --require-run
 
 baseline_count="$(find .state/runs artifacts/builder_loop -type f -path '*/retrieval/context_pack.txt' -print 2>/dev/null | wc -l | tr -d ' ')"
 if [[ "$baseline_count" == "0" ]]; then
@@ -41,3 +42,4 @@ else
   bash scripts/verify_context_pack_determinism.sh
 fi
 bash scripts/verify_retrieval_quality.sh
+bash scripts/verify_retrieval_golden.sh

@@ -68,36 +68,40 @@ public sealed class SimpleAiHelpSurface : IAiHelpSurface
         // This prevents "contract drift" from blowing up the UI build.
         var t = typeof(AiIntentDescriptor);
 
-        object? created =
-            // Newer-ish shapes (enum-heavy)
-            TryCreate(t, type, scope, id, label, description) ??
-            TryCreate(t, type, scope, label, description) ??
-            TryCreate(t, type, scope, id, label) ??
-            TryCreate(t, type, scope, label) ??
-            TryCreate(t, type, scope, id) ??
+        if (TryCreate(t, out var created, type, scope, id, label, description) ||
+            TryCreate(t, out created, type, scope, label, description) ||
+            TryCreate(t, out created, type, scope, id, label) ||
+            TryCreate(t, out created, type, scope, label) ||
+            TryCreate(t, out created, type, scope, id) ||
+            TryCreate(t, out created, id, label, description) ||
+            TryCreate(t, out created, id, label) ||
+            TryCreate(t, out created, id) ||
+            TryCreate(t, out created))
+        {
+            return created;
+        }
 
-            // Older shapes (string-heavy)
-            TryCreate(t, id, label, description) ??
-            TryCreate(t, id, label) ??
-            TryCreate(t, id) ??
-            TryCreate(t);
-
-        if (created is AiIntentDescriptor typed)
-            return typed;
-
-        // Absolute last resort: default instance. Keeps compilation/runtime stable.
+        // Absolute last resort: deterministic empty instance.
         return default;
     }
 
-    private static object? TryCreate(Type t, params object?[] args)
+    private static bool TryCreate(Type t, out AiIntentDescriptor created, params object?[] args)
     {
         try
         {
-            return Activator.CreateInstance(t, args);
+            var instance = Activator.CreateInstance(t, args);
+            if (instance is AiIntentDescriptor typed)
+            {
+                created = typed;
+                return true;
+            }
         }
         catch
         {
-            return null;
+            // deterministic fallback below
         }
+
+        created = default;
+        return false;
     }
 }

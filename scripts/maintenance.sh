@@ -293,6 +293,15 @@ if [[ "$RUN_TESTS" == "1" ]]; then
     set_error_code tests
   fi
 
+  echo "==> Verifying provider auditability"
+  run_and_capture "$tests_log" bash scripts/verify_provider_audit.sh
+  provider_audit_status=$?
+  if [[ "$provider_audit_status" -ne 0 ]]; then
+    tests_status=$provider_audit_status
+    overall_status=1
+    set_error_code tests
+  fi
+
   echo "==> Verifying plan hash chain"
   run_and_capture "$tests_log" bash scripts/verify_plan_hash_chain.sh
   plan_hash_chain_status=$?
@@ -316,6 +325,15 @@ if [[ "$RUN_TESTS" == "1" ]]; then
   retrieval_quality_status=$?
   if [[ "$retrieval_quality_status" -ne 0 ]]; then
     tests_status=$retrieval_quality_status
+    overall_status=1
+    set_error_code tests
+  fi
+
+  echo "==> Verifying retrieval golden fixture"
+  run_and_capture "$tests_log" bash scripts/verify_retrieval_golden.sh
+  retrieval_golden_status=$?
+  if [[ "$retrieval_golden_status" -ne 0 ]]; then
+    tests_status=$retrieval_golden_status
     overall_status=1
     set_error_code tests
   fi
