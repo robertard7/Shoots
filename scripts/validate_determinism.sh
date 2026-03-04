@@ -29,6 +29,8 @@ bash scripts/verify_tool_catalog_contract.sh
 bash scripts/verify_cli_contract.sh
 bash scripts/verify_script_dependencies.sh
 bash scripts/verify_docs_examples.sh
+bash scripts/verify_config_contract.sh
+bash scripts/verify_input_normalization.sh
 bash scripts/smoke_runner.sh "${args[@]}"
 source artifacts/smoke/latest_summary.env
 bash scripts/verify_hash_contract.sh "$RUN_DIR"
@@ -52,9 +54,12 @@ bash scripts/verify_state_transitions.sh "$RUN_DIR"
 bash scripts/replay_runner.sh "$RUN_DIR"
 bash scripts/replay_plan_graph.sh "$RUN_DIR"
 bash scripts/verify_archive_determinism.sh "$RUN_DIR"
+bash scripts/verify_tempfile_contract.sh "$RUN_DIR"
+bash scripts/build_artifact_index.sh "$RUN_DIR"
 bash scripts/replay_diff.sh "$RUN_DIR"
 bash scripts/inspect_run.sh "$RUN_DIR"
 bash scripts/repo_fingerprint.sh
+bash scripts/determinism_report.sh
 
 echo "DETERMINISM_OK=1"
 echo "RUN_DIR=$RUN_DIR"

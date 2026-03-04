@@ -94,6 +94,14 @@ jobs:
         shell: bash
         run: bash scripts/verify_docs_examples.sh
 
+      - name: Verify config contract
+        shell: bash
+        run: bash scripts/verify_config_contract.sh
+
+      - name: Verify input normalization
+        shell: bash
+        run: bash scripts/verify_input_normalization.sh
+
       - name: Verify codex diagnostics order
         shell: bash
         run: bash scripts/verify_diagnostics_order.sh
@@ -135,7 +143,10 @@ jobs:
           bash scripts/verify_sorted_hash_inputs.sh
           bash scripts/replay_plan_graph.sh "$RUN_DIR"
           bash scripts/verify_archive_determinism.sh "$RUN_DIR"
+          bash scripts/verify_tempfile_contract.sh "$RUN_DIR"
+          bash scripts/build_artifact_index.sh "$RUN_DIR"
           bash scripts/record_ci_metrics.sh "$RUN_DIR"
+          bash scripts/determinism_report.sh
 
       - name: Build Runtime (Release) with binlog + log
         shell: bash
