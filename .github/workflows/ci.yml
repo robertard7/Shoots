@@ -54,6 +54,14 @@ jobs:
         shell: bash
         run: dotnet --info
 
+      - name: Verify tool catalog contract
+        shell: bash
+        run: bash scripts/verify_tool_catalog_contract.sh
+
+      - name: Compute repo fingerprint
+        shell: bash
+        run: bash scripts/repo_fingerprint.sh
+
       - name: Verify version consistency
         shell: bash
         run: bash scripts/verify_versions.sh
@@ -100,7 +108,10 @@ jobs:
           bash scripts/verify_manifest_contract.sh "$RUN_DIR"
           bash scripts/verify_artifact_bounds.sh "$RUN_DIR"
           bash scripts/verify_environment_schema.sh "$RUN_DIR"
+          bash scripts/verify_trace_correlations.sh "$RUN_DIR"
+          bash scripts/verify_execution_ledger.sh "$RUN_DIR"
           bash scripts/verify_sorted_hash_inputs.sh
+          bash scripts/record_ci_metrics.sh "$RUN_DIR"
 
       - name: Build Runtime (Release) with binlog + log
         shell: bash
@@ -386,6 +397,14 @@ PYCHK
       - name: Dotnet info
         shell: bash
         run: dotnet --info
+
+      - name: Verify tool catalog contract
+        shell: bash
+        run: bash scripts/verify_tool_catalog_contract.sh
+
+      - name: Compute repo fingerprint
+        shell: bash
+        run: bash scripts/repo_fingerprint.sh
 
       - name: Verify version consistency
         shell: bash

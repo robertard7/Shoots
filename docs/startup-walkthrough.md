@@ -40,11 +40,12 @@ Deterministic startup commands
 - Determinism pipeline: `bash scripts/validate_determinism.sh --skip-backends`
 - Run UI (Linux/macOS shell): `bash scripts/run_ui_local.sh`
 - Run UI (Windows PowerShell): `pwsh -File .\scripts\run_ui_local.ps1`
+- Repo snapshot: `bash scripts/dev_snapshot.sh`
 
 Failure triage matrix
 ---------------------
 - Restore failures: run `bash tools/codex/restore.sh`; inspect `dotnet --info` output and SDK install.
 - Smoke failures: run `bash scripts/smoke_runner.sh --skip-backends`; inspect `artifacts/smoke/latest_summary.env`.
-- Replay failures: run `bash scripts/replay_runner.sh "$RUN_DIR"`; compare trace/manifest hashes in output.
+- Replay failures: run `bash scripts/replay_runner.sh "$RUN_DIR"`; if mismatch persists run `bash scripts/replay_diff.sh "$RUN_DIR"` for stable diff sections.
 - Fixture drift: run `bash scripts/verify_fixture_integrity.sh`; for intentional updates use `ALLOW_FIXTURE_UPDATE=1 bash scripts/update_fixture_integrity.sh`.
 - Backend unreachable: run `bash scripts/smoke_backends.sh --ollama "$OLLAMA_HOST" --qdrant "$QDRANT_URL"` or `bash scripts/smoke_ui_backends.sh`.
