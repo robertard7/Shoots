@@ -67,3 +67,14 @@ Expected success output:
 - `Ollama probe passed.`
 - `Qdrant probe passed.` (unless skipped)
 - `Backend smoke checks passed.`
+
+## 6) UI backend smoke (endpoint-resolution parity)
+
+```bash
+bash scripts/smoke_ui_backends.sh
+```
+
+Stable output keys:
+- `UI_BACKENDS_OK`
+- `OLLAMA_OK` / `QDRANT_OK`
+- `OLLAMA_ENDPOINT` / `QDRANT_ENDPOINT`

@@ -24,6 +24,19 @@ for arg in "${args[@]}"; do
 done
 
 bash tools/codex/restore.sh
+bash scripts/verify_dependency_lock.sh
+bash scripts/verify_tool_catalog_contract.sh
+bash scripts/verify_cli_contract.sh
+bash scripts/verify_script_dependencies.sh
+bash scripts/verify_docs_examples.sh
+bash scripts/verify_config_contract.sh
+bash scripts/verify_input_normalization.sh
+bash scripts/verify_line_endings.sh
+bash scripts/smoke_runner.sh "${args[@]}"
+source artifacts/smoke/latest_summary.env
+bash scripts/verify_hash_contract.sh "$RUN_DIR"
+bash scripts/verify_scripts_portability.sh
+bash scripts/verify_smoke_artifacts.sh "$RUN_DIR"
 bash scripts/smoke_runner.sh "${args[@]}"
 source artifacts/smoke/latest_summary.env
 bash scripts/verify_hash_contract.sh "$RUN_DIR"
@@ -34,6 +47,32 @@ bash scripts/verify_sorted_hash_inputs.sh
 bash scripts/verify_environment_schema.sh "$RUN_DIR"
 bash scripts/verify_artifact_bounds.sh "$RUN_DIR"
 bash scripts/verify_manifest_contract.sh "$RUN_DIR"
+bash scripts/verify_trace_correlations.sh "$RUN_DIR"
+bash scripts/verify_execution_ledger.sh "$RUN_DIR"
+bash scripts/verify_filesystem_contract.sh "$RUN_DIR"
+bash scripts/verify_env_drift.sh "$RUN_DIR"
+bash scripts/sample_artifact_repro.sh "$RUN_DIR"
+bash scripts/verify_clock_usage.sh "$RUN_DIR"
+bash scripts/verify_locale_contract.sh "$RUN_DIR"
+bash scripts/verify_state_transitions.sh "$RUN_DIR"
+bash scripts/replay_runner.sh "$RUN_DIR"
+bash scripts/replay_plan_graph.sh "$RUN_DIR"
+bash scripts/verify_archive_determinism.sh "$RUN_DIR"
+bash scripts/verify_tempfile_contract.sh "$RUN_DIR"
+bash scripts/build_artifact_index.sh "$RUN_DIR"
+bash scripts/verify_plan_input_fingerprint.sh "$RUN_DIR"
+bash scripts/verify_artifact_graph.sh "$RUN_DIR"
+bash scripts/verify_trace_ordering.sh "$RUN_DIR"
+bash scripts/verify_path_canonicalization.sh "$RUN_DIR"
+bash scripts/verify_permission_contract.sh "$RUN_DIR"
+bash scripts/verify_randomness_contract.sh
+bash scripts/verify_runner_identity.sh
+bash scripts/verify_memory_profile.sh
+bash scripts/replay_diff.sh "$RUN_DIR"
+bash scripts/inspect_run.sh "$RUN_DIR"
+bash scripts/repo_fingerprint.sh
+bash scripts/determinism_report.sh
+bash scripts/verify_report_integrity.sh
 bash scripts/replay_runner.sh "$RUN_DIR"
 bash scripts/inspect_run.sh "$RUN_DIR"
 

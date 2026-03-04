@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source "$(dirname "$0")/lib/endpoint_resolver.sh"
+
+OLLAMA_HOST="$(resolve_ollama_endpoint)"
 OLLAMA_HOST="${OLLAMA_HOST:-http://localhost:11434}"
 QDRANT_URL="${QDRANT_URL:-}"
 SKIP_QDRANT=0
@@ -55,6 +58,18 @@ done
 if ! [[ "$TIMEOUT_SECS" =~ ^[0-9]+$ ]] || [[ "$TIMEOUT_SECS" -le 0 ]]; then
   echo "ERROR: --timeout-secs must be a positive integer" >&2
   exit 64
+fi
+
+if ! OLLAMA_HOST="$(normalize_absolute_http_url "$OLLAMA_HOST" 2>/dev/null)"; then
+  echo "ERROR: invalid OLLAMA endpoint: $OLLAMA_HOST" >&2
+  exit 64
+fi
+
+if [[ -n "$QDRANT_URL" ]]; then
+  if ! QDRANT_URL="$(normalize_absolute_http_url "$QDRANT_URL" 2>/dev/null)"; then
+    echo "ERROR: invalid QDRANT endpoint: $QDRANT_URL" >&2
+    exit 64
+  fi
 fi
 
 echo "Resolved OLLAMA_HOST=${OLLAMA_HOST}"

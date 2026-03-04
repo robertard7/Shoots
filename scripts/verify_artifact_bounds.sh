@@ -25,6 +25,12 @@ trace_max="${TRACE_MAX_BYTES:-10485760}"
 artifact_max="${ARTIFACT_TOTAL_MAX_BYTES:-52428800}"
 
 trace_size="$(wc -c < "$trace_path" | awk '{print $1}')"
+artifact_total="$(python - "$run_dir" <<'PY'
+import pathlib, sys
+root=pathlib.Path(sys.argv[1])
+print(sum(p.stat().st_size for p in root.rglob("*") if p.is_file()))
+PY
+)"
 artifact_total="$(find "$run_dir" -type f -print0 | du --files0-from=- -cb | tail -n1 | awk '{print $1}')"
 
 if (( trace_size > trace_max )); then

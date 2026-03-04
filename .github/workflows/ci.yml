@@ -54,9 +54,25 @@ jobs:
         shell: bash
         run: dotnet --info
 
+      - name: Capture CI environment snapshot
+        shell: bash
+        run: bash scripts/capture_ci_environment.sh
+
+      - name: Verify tool catalog contract
+        shell: bash
+        run: bash scripts/verify_tool_catalog_contract.sh
+
+      - name: Compute repo fingerprint
+        shell: bash
+        run: bash scripts/repo_fingerprint.sh
+
       - name: Verify version consistency
         shell: bash
         run: bash scripts/verify_versions.sh
+
+      - name: Verify dependency lock
+        shell: bash
+        run: bash scripts/verify_dependency_lock.sh
 
       - name: Verify repo topology guard
         shell: bash
@@ -70,6 +86,26 @@ jobs:
         shell: bash
         run: bash scripts/verify_no_blocking_stubs.sh
 
+      - name: Verify script dependencies
+        shell: bash
+        run: bash scripts/verify_script_dependencies.sh
+
+      - name: Verify docs examples
+        shell: bash
+        run: bash scripts/verify_docs_examples.sh
+
+      - name: Verify config contract
+        shell: bash
+        run: bash scripts/verify_config_contract.sh
+
+      - name: Verify input normalization
+        shell: bash
+        run: bash scripts/verify_input_normalization.sh
+
+      - name: Verify line endings
+        shell: bash
+        run: bash scripts/verify_line_endings.sh
+
       - name: Verify codex diagnostics order
         shell: bash
         run: bash scripts/verify_diagnostics_order.sh
@@ -77,6 +113,12 @@ jobs:
       - name: Restore Runtime
         shell: bash
         run: dotnet restore src/Runtime/Shoots.Runtime.sln
+
+      - name: Build UI project (Linux compile gate)
+        shell: bash
+        run: |
+          dotnet restore ui/Shoots.Ui/Shoots.Ui.csproj -p:EnableWindowsTargeting=true
+          dotnet build ui/Shoots.Ui/Shoots.Ui.csproj -c Release --no-restore -p:EnableWindowsTargeting=true
 
       - name: Runner smoke (skip backends)
         shell: bash
@@ -86,12 +128,38 @@ jobs:
           cat artifacts/smoke/latest_summary.env
           source artifacts/smoke/latest_summary.env
           bash scripts/verify_hash_contract.sh "$RUN_DIR"
+          bash scripts/verify_smoke_artifacts.sh "$RUN_DIR"
+          bash scripts/verify_scripts_portability.sh
           bash scripts/verify_fixture_integrity.sh
           bash scripts/verify_trace_schema.sh "$RUN_DIR"
           bash scripts/verify_trace_contract.sh "$RUN_DIR"
           bash scripts/verify_manifest_contract.sh "$RUN_DIR"
           bash scripts/verify_artifact_bounds.sh "$RUN_DIR"
           bash scripts/verify_environment_schema.sh "$RUN_DIR"
+          bash scripts/verify_trace_correlations.sh "$RUN_DIR"
+          bash scripts/verify_execution_ledger.sh "$RUN_DIR"
+          bash scripts/verify_filesystem_contract.sh "$RUN_DIR"
+          bash scripts/verify_env_drift.sh "$RUN_DIR"
+          bash scripts/sample_artifact_repro.sh "$RUN_DIR"
+          bash scripts/verify_clock_usage.sh "$RUN_DIR"
+          bash scripts/verify_locale_contract.sh "$RUN_DIR"
+          bash scripts/verify_state_transitions.sh "$RUN_DIR"
+          bash scripts/verify_sorted_hash_inputs.sh
+          bash scripts/replay_plan_graph.sh "$RUN_DIR"
+          bash scripts/verify_archive_determinism.sh "$RUN_DIR"
+          bash scripts/verify_tempfile_contract.sh "$RUN_DIR"
+          bash scripts/build_artifact_index.sh "$RUN_DIR"
+          bash scripts/verify_plan_input_fingerprint.sh "$RUN_DIR"
+          bash scripts/verify_artifact_graph.sh "$RUN_DIR"
+          bash scripts/verify_trace_ordering.sh "$RUN_DIR"
+          bash scripts/verify_path_canonicalization.sh "$RUN_DIR"
+          bash scripts/verify_permission_contract.sh "$RUN_DIR"
+          bash scripts/verify_randomness_contract.sh
+          bash scripts/verify_runner_identity.sh
+          bash scripts/verify_memory_profile.sh
+          bash scripts/record_ci_metrics.sh "$RUN_DIR"
+          bash scripts/determinism_report.sh
+          bash scripts/verify_report_integrity.sh
           bash scripts/verify_sorted_hash_inputs.sh
 
       - name: Build Runtime (Release) with binlog + log
@@ -177,6 +245,7 @@ PYCHK
             source artifacts/smoke/latest_summary.env
             if [[ -n "${RUN_DIR:-}" && -d "$RUN_DIR" ]]; then
               bash scripts/collect_failure_bundle.sh "$RUN_DIR"
+              bash scripts/verify_failure_bundle_schema.sh artifacts/failure_bundle.tgz
             fi
           fi
 
@@ -378,9 +447,25 @@ PYCHK
         shell: bash
         run: dotnet --info
 
+      - name: Capture CI environment snapshot
+        shell: bash
+        run: bash scripts/capture_ci_environment.sh
+
+      - name: Verify tool catalog contract
+        shell: bash
+        run: bash scripts/verify_tool_catalog_contract.sh
+
+      - name: Compute repo fingerprint
+        shell: bash
+        run: bash scripts/repo_fingerprint.sh
+
       - name: Verify version consistency
         shell: bash
         run: bash scripts/verify_versions.sh
+
+      - name: Verify dependency lock
+        shell: bash
+        run: bash scripts/verify_dependency_lock.sh
 
       - name: Restore
         shell: bash

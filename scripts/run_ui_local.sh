@@ -7,14 +7,17 @@ if ! command -v dotnet >/dev/null 2>&1; then
   fi
 fi
 
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "run.ui_local.dotnet_missing: dotnet is required" >&2
+  exit 127
+fi
 
 source "$(dirname "$0")/lib/endpoint_resolver.sh"
 export OLLAMA_HOST="$(resolve_ollama_endpoint)"
 export QDRANT_URL="$(resolve_qdrant_endpoint)"
-export OLLAMA_HOST="${OLLAMA_HOST:-http://localhost:11434}"
-export QDRANT_URL="${QDRANT_URL:-http://localhost:6333}"
 
-printf 'Resolved OLLAMA_HOST=%s\n' "$OLLAMA_HOST"
-printf 'Resolved QDRANT_URL=%s\n' "$QDRANT_URL"
+echo "OLLAMA_HOST=$OLLAMA_HOST"
+echo "QDRANT_URL=$QDRANT_URL"
+dotnet --info
 
 exec dotnet run --project ui/Shoots.Ui/Shoots.Ui.csproj -c Debug
