@@ -236,6 +236,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 	private string _intakeTarget = string.Empty;
 	private string _intakeAttachments = string.Empty;
 	private string _intakeStack = string.Empty;
+	private string _chatInputText = string.Empty;
+	private string _projectCreationErrorMessage = string.Empty;
+	private bool _isCreatingProject;
+	private readonly ObservableCollection<string> _chatTranscript = new();
+    private readonly DeterministicIntentParser _intentParser = new();
 
 	private bool _isWorkOrderLocked;
 	private string _jobSpecDigest = string.Empty;
@@ -257,6 +262,52 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 			RaiseCommandCanExecute();
 		}
 	}
+
+    public ReadOnlyObservableCollection<string> ChatTranscript { get; private set; } = null!;
+
+    public string ChatInputText
+    {
+        get => _chatInputText;
+        set
+        {
+            if (_chatInputText == value) return;
+            _chatInputText = value;
+            OnPropertyChanged(nameof(ChatInputText));
+            SendChatIntentCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    public bool IsCreatingProject
+    {
+        get => _isCreatingProject;
+        private set
+        {
+            if (_isCreatingProject == value) return;
+            _isCreatingProject = value;
+            OnPropertyChanged(nameof(IsCreatingProject));
+            OnPropertyChanged(nameof(ProjectCreationStatus));
+            OnPropertyChanged(nameof(CanStartNewProjectUi));
+            NewProjectCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    public string ProjectCreationStatus => IsCreatingProject ? "Creating project..." : string.Empty;
+
+    public string ProjectCreationErrorMessage
+    {
+        get => _projectCreationErrorMessage;
+        private set
+        {
+            if (_projectCreationErrorMessage == value) return;
+            _projectCreationErrorMessage = value;
+            OnPropertyChanged(nameof(ProjectCreationErrorMessage));
+            OnPropertyChanged(nameof(HasProjectCreationError));
+        }
+    }
+
+    public bool HasProjectCreationError => !string.IsNullOrWhiteSpace(ProjectCreationErrorMessage);
+    public string UiLogPath => Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Shoots.UI", "ui.log");
+    public bool CanStartNewProjectUi => !IsCreatingProject;
 
 	public string IntakeTarget
 	{
@@ -374,6 +425,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public AsyncRelayCommand ResetModelCatalogCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenStateFolderCommand { get; private set; } = null!;
         public AsyncRelayCommand QuickStartCommand { get; private set; } = null!;
+        public AsyncRelayCommand SendChatIntentCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenCurrentWorkspaceFolderCommand { get; private set; } = null!;
 
 	// Call this from your constructor AFTER other command setup
 	private void InitializeChatIntakeSurface()
@@ -389,9 +442,21 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ResetModelCatalogCommand = new AsyncRelayCommand(ResetModelCatalogAsync, () => !ProbeInFlight);
         OpenStateFolderCommand = new AsyncRelayCommand(OpenStateFolderAsync);
         QuickStartCommand = new AsyncRelayCommand(QuickStartAsync);
+        SendChatIntentCommand = new AsyncRelayCommand(SendChatIntentAsync, () => !string.IsNullOrWhiteSpace(ChatInputText));
+        OpenCurrentWorkspaceFolderCommand = new AsyncRelayCommand(OpenCurrentWorkspaceFolderAsync, () => HasProjectLoaded);
 
-		RebuildJobSpecDigest();
-	}
+        RebuildJobSpecDigest();
+    }
+
+    private Task OpenCurrentWorkspaceFolderAsync()
+    {
+        if (CurrentProject is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _workspaceShell.OpenFolderAsync(CurrentProject.WorkspacePath);
+    }
 
     private Task ResetModelCatalogAsync()
     {
@@ -421,6 +486,73 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         IntakeStack = "dotnet";
         RebuildJobSpecDigest();
         return Task.CompletedTask;
+    }
+
+    private Task SendChatIntentAsync()
+    {
+        var rawText = ChatInputText;
+        if (string.IsNullOrWhiteSpace(rawText))
+        {
+            return Task.CompletedTask;
+        }
+
+        _chatTranscript.Add($"User: {rawText}");
+        var intent = _intentParser.Parse(rawText);
+        _chatTranscript.Add($"System: Intent recognized: {intent.Kind} (confidence={intent.Confidence:0.00}).");
+        DispatchIntent(intent);
+        ChatInputText = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private void DispatchIntent(IntentModel intent)
+    {
+        Trace.WriteLine($"[Shoots.UI] BEGIN IntentDispatch id={intent.IntentId} kind={intent.Kind}");
+
+        try
+        {
+            switch (intent.Kind)
+            {
+                case IntentKind.CreateProject:
+                    _ = NewProjectAsync();
+                    break;
+                case IntentKind.RunDemoPlan:
+                    _ = RunDemoPlanAsync();
+                    break;
+                case IntentKind.OpenProject:
+                    if (intent.Args.TryGetValue("path", out var path))
+                    {
+                        var fullPath = Path.GetFullPath(path);
+                        var projectFilePath = Directory.Exists(fullPath)
+                            ? Path.Combine(fullPath, "project.json")
+                            : fullPath;
+                        var project = LoadProject(projectFilePath);
+                        var workspace = new ProjectWorkspace(project.Name, project.WorkspacePath, DateTimeOffset.UtcNow, ProjectId: project.ProjectId, CreatedUtc: project.CreatedUtc);
+                        _workspaceProvider.SetActiveWorkspace(workspace);
+                        LoadWorkspaces();
+                        SelectWorkspace(workspace);
+                        _chatTranscript.Add($"System: Project opened at {project.WorkspacePath}.");
+                    }
+                    break;
+                case IntentKind.BuildFromPlanFile:
+                    _chatTranscript.Add("System: BuildFromPlanFile is recognized but not yet connected.");
+                    break;
+                case IntentKind.AddNote:
+                    _chatTranscript.Add("System: AddNote is recognized but not yet connected.");
+                    break;
+                case IntentKind.Unknown:
+                    _chatTranscript.Add("System: Intent unknown. Try 'start new project' or 'run demo'.");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _chatTranscript.Add($"System: Intent dispatch failed: {ex.Message}");
+            Trace.WriteLine($"[Shoots.UI] Intent dispatch failed: {ex}");
+        }
+        finally
+        {
+            Trace.WriteLine($"[Shoots.UI] END IntentDispatch id={intent.IntentId} kind={intent.Kind}");
+        }
     }
 
 	private Task LockWorkOrderAsync()
@@ -1177,20 +1309,31 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     // ---- Startup flow ----
-    private bool CanStartNewProject() => true;
+    private bool CanStartNewProject() => !IsCreatingProject;
     private bool CanStartAnotherProject() => string.IsNullOrWhiteSpace(GetStartAnotherProjectBlockerReason());
     private bool CanSelectEntryPath() => _startupFlow.State == StartupFlowState.EntryPathSelection && !_startupComplete;
     private bool CanSubmitStartupInput() => IsStartupInputActive && !_startupComplete && !string.IsNullOrWhiteSpace(StartupInput);
 
     private Task NewProjectAsync()
     {
-        LogUiAction("BEGIN StartNewProject");
+        var operationId = Guid.NewGuid().ToString("N");
+        LogUiAction($"BEGIN StartNewProject run_id={operationId}");
         var result = "ok";
+        IsCreatingProject = true;
+        ProjectCreationErrorMessage = string.Empty;
 
         try
         {
             var model = _localProjectService.CreateNewProject();
             var loaded = LoadProject(model.ProjectFilePath);
+            var verificationErrors = _localProjectService.VerifyProjectStructure(loaded);
+            if (verificationErrors.Count > 0)
+            {
+                result = "verification_failed";
+                ProjectCreationErrorMessage = string.Join("; ", verificationErrors);
+                AddStartupMessage($"System: Project verification failed. {ProjectCreationErrorMessage}");
+                return Task.CompletedTask;
+            }
 
             var workspace = new ProjectWorkspace(
                 Name: loaded.Name,
@@ -1205,18 +1348,21 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
             AddStartupMessage($"System: Project created at {loaded.WorkspacePath}.");
             AddStartupMessage($"System: Project file: {loaded.ProjectFilePath}.");
+            AddStartupMessage($"System: ui.log path: {UiLogPath}.");
             return Task.CompletedTask;
         }
         catch (Exception ex)
         {
             result = $"error:{ex.GetType().Name}";
+            ProjectCreationErrorMessage = $"Start new project failed: {ex.Message}. See log: {UiLogPath}";
             Trace.WriteLine($"[Shoots.UI] StartNewProject failed: {ex}");
             AddStartupMessage($"System: Start new project failed: {ex.Message}");
             return Task.CompletedTask;
         }
         finally
         {
-            LogUiAction($"END StartNewProject (result={result})");
+            IsCreatingProject = false;
+            LogUiAction($"END StartNewProject run_id={operationId} (result={result})");
         }
 
     }
@@ -1746,7 +1892,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private void InitializeChatIntake()
     {
-        // keep your real implementation elsewhere (partial)
+        ChatTranscript = new ReadOnlyObservableCollection<string>(_chatTranscript);
     }
 
     // ---- Startup handlers ----
@@ -2140,6 +2286,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ReplayPlanCommand.RaiseCanExecuteChanged();
         RefreshNarrationCommand.RaiseCanExecuteChanged();
         RunIntakePlanCommand.RaiseCanExecuteChanged();
+        SendChatIntentCommand.RaiseCanExecuteChanged();
+        OpenCurrentWorkspaceFolderCommand.RaiseCanExecuteChanged();
+        RunDemoPlanCommand.RaiseCanExecuteChanged();
+        NewProjectCommand.RaiseCanExecuteChanged();
 
         OnPropertyChanged(nameof(StartDisabledReason));
         OnPropertyChanged(nameof(ApplyEnvironmentDisabledReason));

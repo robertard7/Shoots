@@ -33,8 +33,30 @@
       <Button Margin="0,8,0,0"
               Content="New Project"
               Command="{Binding NewProjectCommand}"
+              IsEnabled="{Binding CanStartNewProjectUi}"
               ToolTip="{Binding StartupButtonTooltip}"
               ToolTipService.ShowOnDisabled="True" />
+
+      <TextBlock Margin="0,4,0,0"
+                 Foreground="#FF2B6CB0"
+                 Text="{Binding ProjectCreationStatus}" />
+
+      <Border Margin="0,4,0,0"
+              Background="#FFFEE2E2"
+              BorderBrush="#FFFCA5A5"
+              BorderThickness="1"
+              Padding="6"
+              Visibility="{Binding HasProjectCreationError, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <StackPanel>
+          <TextBlock Foreground="#FFB91C1C"
+                     Text="{Binding ProjectCreationErrorMessage}"
+                     TextWrapping="Wrap" />
+          <TextBlock Margin="0,4,0,0"
+                     FontFamily="Consolas"
+                     FontSize="11"
+                     Text="{Binding UiLogPath}" />
+        </StackPanel>
+      </Border>
 
       <!-- If startup is locked, you typically *can't* start another project. -->
       <Button Margin="0,6,0,0"
@@ -100,6 +122,11 @@
       <Button Margin="0,6,0,0"
               Content="Run Demo Plan"
               Command="{Binding RunDemoPlanCommand}"
+              IsEnabled="{Binding HasProjectLoaded}" />
+
+      <Button Margin="0,6,0,0"
+              Content="Open Workspace Folder"
+              Command="{Binding OpenCurrentWorkspaceFolderCommand}"
               IsEnabled="{Binding HasProjectLoaded}" />
 
       <!-- TOOL TIER -->
@@ -199,6 +226,16 @@
           <!-- Intake -->
           <StackPanel Grid.Column="1" Margin="0,0,10,0">
             <TextBlock Text="Chat / Intake" FontWeight="SemiBold" />
+
+            <TextBlock Margin="0,8,0,0" Text="Chat Input" />
+            <TextBox Text="{Binding ChatInputText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Margin="0,6,0,0"
+                    Content="Send"
+                    Command="{Binding SendChatIntentCommand}" />
+
+            <ListBox Margin="0,8,0,0"
+                     ItemsSource="{Binding ChatTranscript}"
+                     Height="100" />
 
             <TextBlock Margin="0,8,0,0" Text="Intent" />
             <TextBox Text="{Binding IntakeIntent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

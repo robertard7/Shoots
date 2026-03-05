@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 
 namespace Shoots.UI.Projects;
@@ -10,7 +10,9 @@ public sealed class LocalProjectService
 {
     private const string ProjectFileName = "project.json";
     private const string DemoPlanFileName = "demo.mmd";
+    private const string RunCounterFileName = ".run-counter";
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
+    private static readonly string[] RequiredFolders = { "plans", "runs", "artifacts", "notes" };
 
     private readonly string _workspaceRoot;
 
@@ -27,19 +29,47 @@ public sealed class LocalProjectService
         var createdUtc = DateTimeOffset.UtcNow;
         var projectId = Guid.NewGuid().ToString("N");
         var shortId = projectId[..8];
-        var safeName = string.IsNullOrWhiteSpace(name) ? $"Project-{createdUtc:yyyyMMdd-HHmmssZ}" : name.Trim();
-        var folderName = $"{createdUtc:yyyyMMdd-HHmmssZ}_{shortId}";
-        var workspacePath = Path.Combine(_workspaceRoot, folderName);
-        Directory.CreateDirectory(workspacePath);
+        var safeName = NormalizeProjectName(name, createdUtc);
+        var finalFolderName = $"{createdUtc:yyyyMMdd-HHmmssZ}_{shortId}";
+        var tempWorkspacePath = Path.Combine(_workspaceRoot, ".tmp", projectId);
+        var finalWorkspacePath = Path.Combine(_workspaceRoot, finalFolderName);
 
-        foreach (var sub in new[] { "plans", "runs", "artifacts", "notes" })
+        EnsureValidWorkspacePath(finalWorkspacePath);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(tempWorkspacePath)!);
+        Directory.CreateDirectory(_workspaceRoot);
+
+        try
         {
-            Directory.CreateDirectory(Path.Combine(workspacePath, sub));
-        }
+            if (Directory.Exists(tempWorkspacePath))
+            {
+                Directory.Delete(tempWorkspacePath, recursive: true);
+            }
 
-        var model = new ProjectModel(projectId, safeName, createdUtc, workspacePath, Path.Combine(workspacePath, ProjectFileName));
-        File.WriteAllText(model.ProjectFilePath, JsonSerializer.Serialize(model, JsonOptions));
-        return model;
+            Directory.CreateDirectory(tempWorkspacePath);
+            CreateRequiredFolders(tempWorkspacePath);
+
+            var tempProjectFilePath = Path.Combine(tempWorkspacePath, ProjectFileName);
+            var model = new ProjectModel(projectId, safeName, createdUtc, finalWorkspacePath, Path.Combine(finalWorkspacePath, ProjectFileName));
+            File.WriteAllText(tempProjectFilePath, JsonSerializer.Serialize(model, JsonOptions));
+
+            if (Directory.Exists(finalWorkspacePath))
+            {
+                throw new IOException($"Workspace path already exists: {finalWorkspacePath}");
+            }
+
+            Directory.Move(tempWorkspacePath, finalWorkspacePath);
+            return model;
+        }
+        catch
+        {
+            if (Directory.Exists(tempWorkspacePath))
+            {
+                Directory.Delete(tempWorkspacePath, recursive: true);
+            }
+
+            throw;
+        }
     }
 
     public ProjectModel LoadProject(string projectFilePath)
@@ -51,6 +81,11 @@ public sealed class LocalProjectService
 
         var model = JsonSerializer.Deserialize<ProjectModel>(File.ReadAllText(projectFilePath), JsonOptions)
             ?? throw new InvalidDataException("Project file payload is invalid.");
+
+        if (string.IsNullOrWhiteSpace(model.ProjectId) || string.IsNullOrWhiteSpace(model.Name) || string.IsNullOrWhiteSpace(model.WorkspacePath))
+        {
+            throw new InvalidDataException("Project file payload is missing required fields.");
+        }
 
         return model;
     }
@@ -68,11 +103,80 @@ public sealed class LocalProjectService
         var plan = "flowchart TD\n  A[Start] --> B[Write deterministic artifact]\n  B --> C[Done]\n";
         File.WriteAllText(planPath, plan);
 
-        var runId = DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture);
+        var runId = NextRunId(project.WorkspacePath);
         var runPath = Path.Combine(runsDir, runId);
         Directory.CreateDirectory(runPath);
         File.WriteAllText(Path.Combine(runPath, "result.txt"), "run complete");
 
         return runPath;
+    }
+
+    public IReadOnlyList<string> VerifyProjectStructure(ProjectModel project)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+
+        var errors = new List<string>();
+        if (!Directory.Exists(project.WorkspacePath))
+        {
+            errors.Add($"workspace missing: {project.WorkspacePath}");
+            return errors;
+        }
+
+        if (!File.Exists(project.ProjectFilePath))
+        {
+            errors.Add($"project file missing: {project.ProjectFilePath}");
+        }
+
+        foreach (var required in RequiredFolders)
+        {
+            var path = Path.Combine(project.WorkspacePath, required);
+            if (!Directory.Exists(path))
+            {
+                errors.Add($"required folder missing: {path}");
+            }
+        }
+
+        return errors;
+    }
+
+    private static void CreateRequiredFolders(string workspacePath)
+    {
+        foreach (var required in RequiredFolders)
+        {
+            Directory.CreateDirectory(Path.Combine(workspacePath, required));
+        }
+    }
+
+    private static string NormalizeProjectName(string? name, DateTimeOffset createdUtc)
+    {
+        var value = string.IsNullOrWhiteSpace(name) ? $"Project-{createdUtc:yyyyMMdd-HHmmssZ}" : name.Trim();
+        foreach (var invalid in Path.GetInvalidFileNameChars())
+        {
+            value = value.Replace(invalid, '-');
+        }
+
+        return value;
+    }
+
+    private static void EnsureValidWorkspacePath(string path)
+    {
+        if (path.Length > 240)
+        {
+            throw new PathTooLongException($"Workspace path exceeds supported length: {path.Length}");
+        }
+    }
+
+    private static string NextRunId(string workspacePath)
+    {
+        var counterPath = Path.Combine(workspacePath, RunCounterFileName);
+        var current = 0;
+        if (File.Exists(counterPath) && int.TryParse(File.ReadAllText(counterPath), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            current = parsed;
+        }
+
+        var next = current + 1;
+        File.WriteAllText(counterPath, next.ToString(CultureInfo.InvariantCulture));
+        return next.ToString("D6", CultureInfo.InvariantCulture);
     }
 }
