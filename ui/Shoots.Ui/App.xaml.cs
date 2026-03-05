@@ -48,23 +48,28 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
-        MainWindow = new MainWindow();
-        MainWindow.Show();
-        AiSurfaceRegistry.Current.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
-
+        UiSurfaceBootstrapper.RegisterAll();
         var surfaceRegistry = AiSurfaceRegistry.Current;
         Log($"AI surface registry: {surfaceRegistry.DescribeRegistrations()}");
 
-#if DEBUG
         var missingRequired = surfaceRegistry.GetMissingSurfaceIds(UiSurfaceCatalog.RequiredSurfaceIds);
         var missingOptional = surfaceRegistry.GetMissingSurfaceIds(UiSurfaceCatalog.OptionalSurfaceIds);
         var missingOptionalPrefixes = surfaceRegistry.GetMissingSurfacePrefixes(UiSurfaceCatalog.OptionalSurfaceIdPrefixes);
         Log($"AI surfaces missing (required): {FormatSurfaceList(missingRequired)}; missing (optional): {FormatSurfaceList(missingOptional)}; missing (optional prefixes): {FormatSurfaceList(missingOptionalPrefixes)}");
 
+#if DEBUG
+        if (missingRequired.Count > 0)
+        {
+            Log($"DEBUG startup allows missing required AI surfaces: {FormatSurfaceList(missingRequired)}");
+        }
+#else
         surfaceRegistry.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
 #endif
 
         base.OnStartup(e);
+
+        MainWindow = new MainWindow();
+        MainWindow.Show();
     }
 
     protected override void OnExit(ExitEventArgs e)

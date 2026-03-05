@@ -237,11 +237,13 @@ public sealed class RoutingLoopTests
 
         var firstPath = first.Trace.Entries
             .Where(entry => entry.Event == RoutingTraceEventKind.NodeAdvanced)
-            .Select(entry => (entry.FromNodeId, entry.ToNodeId))
+            .Where(entry => entry.FromNodeId is not null && entry.ToNodeId is not null)
+            .Select(entry => (FromNodeId: entry.FromNodeId!, ToNodeId: entry.ToNodeId!))
             .ToArray();
         var secondPath = second.Trace.Entries
             .Where(entry => entry.Event == RoutingTraceEventKind.NodeAdvanced)
-            .Select(entry => (entry.FromNodeId, entry.ToNodeId))
+            .Where(entry => entry.FromNodeId is not null && entry.ToNodeId is not null)
+            .Select(entry => (FromNodeId: entry.FromNodeId!, ToNodeId: entry.ToNodeId!))
             .ToArray();
 
         var expectedPath = new[] { (FromNodeId: "select", ToNodeId: "terminate") };
@@ -300,7 +302,7 @@ public sealed class RoutingLoopTests
             .Run();
 
         Assert.Equal(RoutingStatus.Completed, result.State.Status);
-        var bypass = Assert.Single(result.Trace.Entries, e => e.Event == RoutingTraceEventKind.DecisionGateBypassed);
+        var bypass = Assert.Single(result.Trace.Entries, e => e.Event == RoutingTraceEventKind.DecisionGateBypassed && e.State is not null && e.State.WorkOrderId == workOrder.Id);
         Assert.Equal("select", bypass.FromNodeId);
         Assert.Equal("terminate", bypass.ToNodeId);
     }

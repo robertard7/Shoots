@@ -38,7 +38,7 @@ internal sealed class TextNarrator : INarrator, IDisposable
             summary = Truncate(narrationEvent.Summary),
             details = Truncate(narrationEvent.Details),
             data = narrationEvent.Data.OrderBy(kvp => kvp.Key, StringComparer.Ordinal)
-                .ToDictionary(kvp => Truncate(kvp.Key), kvp => Truncate(kvp.Value), StringComparer.Ordinal)
+                 .ToDictionary(kvp => TruncateKey(kvp.Key), kvp => Truncate(kvp.Value), StringComparer.Ordinal)
         };
 
         var line = JsonSerializer.Serialize(payload);
@@ -54,6 +54,12 @@ internal sealed class TextNarrator : INarrator, IDisposable
     public void Dispose()
     {
         _writer.Dispose();
+    }
+
+    private static string TruncateKey(string value)
+    {
+        if (value.Length <= MaxFieldLength) return value;
+        return value[..MaxFieldLength];
     }
 
     private static string? Truncate(string? value)
