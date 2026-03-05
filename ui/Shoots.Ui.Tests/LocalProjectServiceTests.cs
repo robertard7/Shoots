@@ -23,6 +23,7 @@ public sealed class LocalProjectServiceTests
             Assert.True(Directory.Exists(Path.Combine(project.WorkspacePath, "runs")));
             Assert.True(Directory.Exists(Path.Combine(project.WorkspacePath, "artifacts")));
             Assert.True(Directory.Exists(Path.Combine(project.WorkspacePath, "notes")));
+            Assert.True(File.Exists(Path.Combine(project.WorkspacePath, ".shoots", "create.log")));
         }
         finally
         {
@@ -72,6 +73,9 @@ public sealed class LocalProjectServiceTests
             Assert.True(Directory.Exists(runPath));
             Assert.True(File.Exists(Path.Combine(project.WorkspacePath, "plans", "demo.mmd")));
             Assert.True(File.Exists(Path.Combine(runPath, "result.txt")));
+
+            var secondRun = service.RunDemoPlan(project);
+            Assert.EndsWith("000002", secondRun.Replace('\\', '/'));
         }
         finally
         {

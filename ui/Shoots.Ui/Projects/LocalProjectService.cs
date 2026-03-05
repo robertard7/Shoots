@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
@@ -47,11 +46,14 @@ public sealed class LocalProjectService
             }
 
             Directory.CreateDirectory(tempWorkspacePath);
+            AppendCreateLog(tempWorkspacePath, "BEGIN create project");
             CreateRequiredFolders(tempWorkspacePath);
+            AppendCreateLog(tempWorkspacePath, "created required folders");
 
             var tempProjectFilePath = Path.Combine(tempWorkspacePath, ProjectFileName);
             var model = new ProjectModel(projectId, safeName, createdUtc, finalWorkspacePath, Path.Combine(finalWorkspacePath, ProjectFileName));
             File.WriteAllText(tempProjectFilePath, JsonSerializer.Serialize(model, JsonOptions));
+            AppendCreateLog(tempWorkspacePath, $"wrote {ProjectFileName}");
 
             if (Directory.Exists(finalWorkspacePath))
             {
@@ -59,10 +61,12 @@ public sealed class LocalProjectService
             }
 
             Directory.Move(tempWorkspacePath, finalWorkspacePath);
+            AppendCreateLog(finalWorkspacePath, $"moved temp workspace to {finalWorkspacePath}");
             return model;
         }
-        catch
+        catch (Exception ex)
         {
+            AppendCreateLog(tempWorkspacePath, $"create failed: {ex.GetType().Name}: {ex.Message}");
             if (Directory.Exists(tempWorkspacePath))
             {
                 Directory.Delete(tempWorkspacePath, recursive: true);
@@ -108,35 +112,8 @@ public sealed class LocalProjectService
         Directory.CreateDirectory(runPath);
         File.WriteAllText(Path.Combine(runPath, "result.txt"), "run complete");
 
+        AppendCreateLog(project.WorkspacePath, $"run demo complete: run_id={runId} path={runPath}");
         return runPath;
-    }
-
-    public IReadOnlyList<string> VerifyProjectStructure(ProjectModel project)
-    {
-        ArgumentNullException.ThrowIfNull(project);
-
-        var errors = new List<string>();
-        if (!Directory.Exists(project.WorkspacePath))
-        {
-            errors.Add($"workspace missing: {project.WorkspacePath}");
-            return errors;
-        }
-
-        if (!File.Exists(project.ProjectFilePath))
-        {
-            errors.Add($"project file missing: {project.ProjectFilePath}");
-        }
-
-        foreach (var required in RequiredFolders)
-        {
-            var path = Path.Combine(project.WorkspacePath, required);
-            if (!Directory.Exists(path))
-            {
-                errors.Add($"required folder missing: {path}");
-            }
-        }
-
-        return errors;
     }
 
     private static void CreateRequiredFolders(string workspacePath)
@@ -178,5 +155,19 @@ public sealed class LocalProjectService
         var next = current + 1;
         File.WriteAllText(counterPath, next.ToString(CultureInfo.InvariantCulture));
         return next.ToString("D6", CultureInfo.InvariantCulture);
+    }
+
+    private static void AppendCreateLog(string workspacePath, string line)
+    {
+        if (string.IsNullOrWhiteSpace(workspacePath))
+        {
+            return;
+        }
+
+        var logDirectory = Path.Combine(workspacePath, ".shoots");
+        Directory.CreateDirectory(logDirectory);
+        var logPath = Path.Combine(logDirectory, "create.log");
+        var now = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+        File.AppendAllLines(logPath, new[] { $"{now} {line}" });
     }
 }

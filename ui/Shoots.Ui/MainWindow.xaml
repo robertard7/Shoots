@@ -38,6 +38,11 @@
               ToolTipService.ShowOnDisabled="True" />
 
       <TextBlock Margin="0,4,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding BusyOperation, StringFormat=Busy: {0}}"
+                 Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+      <TextBlock Margin="0,4,0,0"
                  Foreground="#FF2B6CB0"
                  Text="{Binding ProjectCreationStatus}" />
 
@@ -127,6 +132,11 @@
       <Button Margin="0,6,0,0"
               Content="Open Workspace Folder"
               Command="{Binding OpenCurrentWorkspaceFolderCommand}"
+              IsEnabled="{Binding HasProjectLoaded}" />
+
+      <Button Margin="0,6,0,0"
+              Content="Open project.json"
+              Command="{Binding OpenProjectFileCommand}"
               IsEnabled="{Binding HasProjectLoaded}" />
 
       <!-- TOOL TIER -->
@@ -236,6 +246,27 @@
             <ListBox Margin="0,8,0,0"
                      ItemsSource="{Binding ChatTranscript}"
                      Height="100" />
+
+            <TextBlock Margin="0,8,0,0" Text="Narration" FontWeight="SemiBold" />
+            <ListBox Margin="0,4,0,0"
+                     ItemsSource="{Binding Narration}"
+                     Height="120">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel>
+                    <TextBlock TextWrapping="Wrap"
+                               FontSize="11"
+                               Text="{Binding Utc, StringFormat={}{0:O}}" />
+                    <TextBlock TextWrapping="Wrap"
+                               FontSize="11"
+                               Text="{Binding Kind}" />
+                    <TextBlock TextWrapping="Wrap"
+                               FontSize="11"
+                               Text="{Binding Message}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
 
             <TextBlock Margin="0,8,0,0" Text="Intent" />
             <TextBox Text="{Binding IntakeIntent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

@@ -633,3 +633,41 @@ PYCHK
             artifacts/builder_loop/**
             .state/runs/**
           if-no-files-found: warn
+
+
+  ui-windows-smoke:
+    name: ui-windows-smoke
+    if: env.ENABLE_WINDOWS_CI == '1'
+    runs-on: [self-hosted, Windows, X64, Shoots]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dotnet info
+        shell: pwsh
+        run: dotnet --info
+
+      - name: Build UI (Debug)
+        shell: pwsh
+        run: dotnet build .\ui\Shoots.Ui\Shoots.Ui.csproj -c Debug
+
+      - name: Run UI smoke script
+        shell: pwsh
+        run: .\tools\smoke\windows\ui_smoke.ps1 -Configuration Debug
+
+      - name: Collect UI smoke artifacts
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path .\artifacts\ui-smoke -Force | Out-Null
+          $sentinel = Join-Path $env:LOCALAPPDATA "Shoots.UI\smoke\last.json"
+          $log = Join-Path $env:LOCALAPPDATA "Shoots.UI\ui.log"
+          if (Test-Path $sentinel) { Copy-Item $sentinel .\artifacts\ui-smoke\last.json -Force }
+          if (Test-Path $log) { Copy-Item $log .\artifacts\ui-smoke\ui.log -Force }
+
+      - name: Upload UI smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-windows-smoke
+          path: artifacts/ui-smoke/

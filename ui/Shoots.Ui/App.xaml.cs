@@ -1,6 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -54,6 +58,13 @@ public partial class App : Application
         base.OnStartup(e);
 
         MainWindow = new MainWindow();
+
+        if (TryHandleSmokeMode(e.Args, MainWindow.DataContext as ViewModels.MainWindowViewModel))
+        {
+            Shutdown();
+            return;
+        }
+
         MainWindow.Show();
 
         UiSurfaceBootstrapper.RegisterAll(MainWindow.DataContext as ViewModels.MainWindowViewModel);
@@ -165,6 +176,67 @@ public partial class App : Application
 
     private static void Log(string message) =>
         Trace.WriteLine($"[Shoots.UI] {message}");
+
+    private static bool TryHandleSmokeMode(string[] args, ViewModels.MainWindowViewModel? viewModel)
+    {
+        if (args.Length < 2 || !string.Equals(args[0], "--smoke", StringComparison.OrdinalIgnoreCase) || viewModel is null)
+        {
+            return false;
+        }
+
+        var action = args[1];
+        var payload = args.Length > 2 ? string.Join(" ", args.Skip(2)) : string.Empty;
+        var result = "ok";
+
+        try
+        {
+            switch (action)
+            {
+                case "create-project":
+                    viewModel.NewProjectCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    break;
+                case "run-demo":
+                    viewModel.NewProjectCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    viewModel.RunDemoPlanCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    break;
+                case "intent":
+                    viewModel.ChatInputText = payload;
+                    viewModel.SendChatIntentCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    break;
+                default:
+                    result = "unknown-smoke-action";
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            result = $"error:{ex.GetType().Name}";
+        }
+
+        var project = viewModel.CurrentProject;
+        var invariant = project is null
+            ? new Projects.ProjectInvariantResult(false, new[] { "project" }, Array.Empty<string>(), new[] { "no project loaded" })
+            : Projects.ProjectInvariants.Verify(project.WorkspacePath);
+
+        var smokeDir = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Shoots.UI", "smoke");
+        Directory.CreateDirectory(smokeDir);
+        var sentinelPath = Path.Combine(smokeDir, "last.json");
+        var sentinel = new
+        {
+            project_id = project?.ProjectId ?? string.Empty,
+            workspace_path = project?.WorkspacePath ?? string.Empty,
+            createdUtc = project?.CreatedUtc,
+            required_folders_present = invariant.Ok,
+            missing = invariant.Missing,
+            last_intent = payload,
+            outcome = result,
+            demo_run_id = project is null || string.IsNullOrWhiteSpace(viewModel.LastDemoRunPath) ? string.Empty : Path.GetFileName(viewModel.LastDemoRunPath)
+        };
+
+        File.WriteAllText(sentinelPath, JsonSerializer.Serialize(sentinel, new JsonSerializerOptions { WriteIndented = true }));
+        Trace.WriteLine($"[Shoots.UI] smoke.sentinel={sentinelPath}");
+        return true;
+    }
 
     private static string FormatSurfaceList(IReadOnlyList<string> surfaces)
         => surfaces.Count == 0 ? "none" : string.Join(", ", surfaces);

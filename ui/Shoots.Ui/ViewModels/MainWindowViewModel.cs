@@ -136,6 +136,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private bool _probeInFlight;
     private string _modelCatalogError = string.Empty;
     private ProjectModel? _currentProject;
+    private string? _lastDemoRunPath;
 
     private AiPresentationPolicy _aiPresentationPolicy =
         new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true, EnterpriseMode: false);
@@ -239,7 +240,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 	private string _chatInputText = string.Empty;
 	private string _projectCreationErrorMessage = string.Empty;
 	private bool _isCreatingProject;
+	private bool _isBusy;
+	private string _busyOperation = string.Empty;
 	private readonly ObservableCollection<string> _chatTranscript = new();
+    private readonly ObservableCollection<NarrationEvent> _narrationEvents = new();
     private readonly DeterministicIntentParser _intentParser = new();
 
 	private bool _isWorkOrderLocked;
@@ -264,6 +268,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 	}
 
     public ReadOnlyObservableCollection<string> ChatTranscript { get; private set; } = null!;
+    public ReadOnlyObservableCollection<NarrationEvent> Narration { get; private set; } = null!;
 
     public string ChatInputText
     {
@@ -307,7 +312,29 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     public bool HasProjectCreationError => !string.IsNullOrWhiteSpace(ProjectCreationErrorMessage);
     public string UiLogPath => Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Shoots.UI", "ui.log");
-    public bool CanStartNewProjectUi => !IsCreatingProject;
+    public bool CanStartNewProjectUi => !IsCreatingProject && !IsBusy;
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        private set
+        {
+            if (_isBusy == value) return;
+            _isBusy = value;
+            OnPropertyChanged(nameof(IsBusy));
+        }
+    }
+
+    public string BusyOperation
+    {
+        get => _busyOperation;
+        private set
+        {
+            if (_busyOperation == value) return;
+            _busyOperation = value;
+            OnPropertyChanged(nameof(BusyOperation));
+        }
+    }
 
 	public string IntakeTarget
 	{
@@ -427,6 +454,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public AsyncRelayCommand QuickStartCommand { get; private set; } = null!;
         public AsyncRelayCommand SendChatIntentCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenCurrentWorkspaceFolderCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenProjectFileCommand { get; private set; } = null!;
 
 	// Call this from your constructor AFTER other command setup
 	private void InitializeChatIntakeSurface()
@@ -444,6 +472,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         QuickStartCommand = new AsyncRelayCommand(QuickStartAsync);
         SendChatIntentCommand = new AsyncRelayCommand(SendChatIntentAsync, () => !string.IsNullOrWhiteSpace(ChatInputText));
         OpenCurrentWorkspaceFolderCommand = new AsyncRelayCommand(OpenCurrentWorkspaceFolderAsync, () => HasProjectLoaded);
+        OpenProjectFileCommand = new AsyncRelayCommand(OpenProjectFileAsync, () => HasProjectLoaded);
 
         RebuildJobSpecDigest();
     }
@@ -456,6 +485,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         return _workspaceShell.OpenFolderAsync(CurrentProject.WorkspacePath);
+    }
+
+    private Task OpenProjectFileAsync()
+    {
+        if (CurrentProject is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var projectDirectory = Path.GetDirectoryName(CurrentProject.ProjectFilePath);
+        if (string.IsNullOrWhiteSpace(projectDirectory))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _workspaceShell.OpenFolderAsync(projectDirectory);
     }
 
     private Task ResetModelCatalogAsync()
@@ -506,19 +551,30 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private void DispatchIntent(IntentModel intent)
     {
+        var handler = "none";
+        var result = "ok";
         Trace.WriteLine($"[Shoots.UI] BEGIN IntentDispatch id={intent.IntentId} kind={intent.Kind}");
+        AddNarration("step", "Intent dispatch begin", new Dictionary<string, string>
+        {
+            ["intent_id"] = intent.IntentId.ToString(),
+            ["kind"] = intent.Kind.ToString(),
+            ["normalized"] = intent.NormalizedText
+        });
 
         try
         {
             switch (intent.Kind)
             {
                 case IntentKind.CreateProject:
+                    handler = "StartNewProject";
                     _ = NewProjectAsync();
                     break;
                 case IntentKind.RunDemoPlan:
+                    handler = "RunDemoPlan";
                     _ = RunDemoPlanAsync();
                     break;
                 case IntentKind.OpenProject:
+                    handler = "OpenProject";
                     if (intent.Args.TryGetValue("path", out var path))
                     {
                         var fullPath = Path.GetFullPath(path);
@@ -526,31 +582,61 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                             ? Path.Combine(fullPath, "project.json")
                             : fullPath;
                         var project = LoadProject(projectFilePath);
+                        var invariantResult = ProjectInvariants.Verify(project.WorkspacePath);
+                        Trace.WriteLine($"[Shoots.UI] project.invariants {JsonSerializer.Serialize(invariantResult)}");
                         var workspace = new ProjectWorkspace(project.Name, project.WorkspacePath, DateTimeOffset.UtcNow, ProjectId: project.ProjectId, CreatedUtc: project.CreatedUtc);
                         _workspaceProvider.SetActiveWorkspace(workspace);
                         LoadWorkspaces();
                         SelectWorkspace(workspace);
                         _chatTranscript.Add($"System: Project opened at {project.WorkspacePath}.");
                     }
+                    else
+                    {
+                        result = "missing_path";
+                    }
                     break;
                 case IntentKind.BuildFromPlanFile:
+                    handler = "BuildFromPlanFile";
                     _chatTranscript.Add("System: BuildFromPlanFile is recognized but not yet connected.");
                     break;
                 case IntentKind.AddNote:
-                    _chatTranscript.Add("System: AddNote is recognized but not yet connected.");
+                    handler = "AddNote";
+                    if (CurrentProject is null)
+                    {
+                        result = "no_project";
+                        _chatTranscript.Add("System: No project loaded. Create or open one.");
+                    }
+                    else if (intent.Args.TryGetValue("note", out var noteText))
+                    {
+                        var notePath = Path.Combine(CurrentProject.WorkspacePath, "notes", "notes.txt");
+                        File.AppendAllLines(notePath, new[] { noteText });
+                        _chatTranscript.Add($"System: Note added to {notePath}.");
+                    }
+                    else
+                    {
+                        result = "missing_note";
+                    }
                     break;
                 case IntentKind.Unknown:
+                    handler = "Unknown";
+                    result = "unknown";
                     _chatTranscript.Add("System: Intent unknown. Try 'start new project' or 'run demo'.");
                     break;
             }
         }
         catch (Exception ex)
         {
+            result = $"error:{ex.GetType().Name}";
             _chatTranscript.Add($"System: Intent dispatch failed: {ex.Message}");
             Trace.WriteLine($"[Shoots.UI] Intent dispatch failed: {ex}");
+            AddNarration("error", "Intent dispatch failed", new Dictionary<string, string> { ["error"] = ex.Message });
         }
         finally
         {
+            var trace = new IntentTrace(intent.RawUserText, intent.NormalizedText, intent.Kind, intent.Args, handler, result);
+            var serialized = JsonSerializer.Serialize(trace);
+            Trace.WriteLine($"[Shoots.UI] intent.trace {serialized}");
+            AddNarration("result", "Intent dispatch end", new Dictionary<string, string> { ["trace"] = serialized });
             Trace.WriteLine($"[Shoots.UI] END IntentDispatch id={intent.IntentId} kind={intent.Kind}");
         }
     }
@@ -861,6 +947,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     public string CurrentWorkspacePath => CurrentProject?.WorkspacePath ?? "No project loaded";
     public bool HasProjectLoaded => CurrentProject is not null;
+    public string? LastDemoRunPath => _lastDemoRunPath;
     public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (trace-backed)" : "Mode: Live";
 
     public string ExecutionProviderSummary =>
@@ -1309,15 +1396,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     // ---- Startup flow ----
-    private bool CanStartNewProject() => !IsCreatingProject;
+    private bool CanStartNewProject() => !IsCreatingProject && !IsBusy;
     private bool CanStartAnotherProject() => string.IsNullOrWhiteSpace(GetStartAnotherProjectBlockerReason());
     private bool CanSelectEntryPath() => _startupFlow.State == StartupFlowState.EntryPathSelection && !_startupComplete;
     private bool CanSubmitStartupInput() => IsStartupInputActive && !_startupComplete && !string.IsNullOrWhiteSpace(StartupInput);
 
     private Task NewProjectAsync()
     {
+        if (IsBusy)
+        {
+            return Task.CompletedTask;
+        }
+
+        using var busy = EnterBusyScope("StartNewProject");
         var operationId = Guid.NewGuid().ToString("N");
         LogUiAction($"BEGIN StartNewProject run_id={operationId}");
+        AddNarration("step", "StartNewProject begin", new Dictionary<string, string> { ["run_id"] = operationId });
         var result = "ok";
         IsCreatingProject = true;
         ProjectCreationErrorMessage = string.Empty;
@@ -1326,12 +1420,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         {
             var model = _localProjectService.CreateNewProject();
             var loaded = LoadProject(model.ProjectFilePath);
-            var verificationErrors = _localProjectService.VerifyProjectStructure(loaded);
-            if (verificationErrors.Count > 0)
+            var invariantResult = ProjectInvariants.Verify(loaded.WorkspacePath);
+            Trace.WriteLine($"[Shoots.UI] project.invariants {JsonSerializer.Serialize(invariantResult)}");
+            if (!invariantResult.Ok)
             {
                 result = "verification_failed";
-                ProjectCreationErrorMessage = string.Join("; ", verificationErrors);
+                ProjectCreationErrorMessage = string.Join("; ", invariantResult.Missing.Concat(invariantResult.Errors));
                 AddStartupMessage($"System: Project verification failed. {ProjectCreationErrorMessage}");
+                AddNarration("error", "Project verification failed", new Dictionary<string, string> { ["details"] = ProjectCreationErrorMessage });
                 return Task.CompletedTask;
             }
 
@@ -1349,6 +1445,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             AddStartupMessage($"System: Project created at {loaded.WorkspacePath}.");
             AddStartupMessage($"System: Project file: {loaded.ProjectFilePath}.");
             AddStartupMessage($"System: ui.log path: {UiLogPath}.");
+            AddNarration("result", "Project created", new Dictionary<string, string>
+            {
+                ["project_id"] = loaded.ProjectId,
+                ["workspace_path"] = loaded.WorkspacePath,
+                ["project_file"] = loaded.ProjectFilePath
+            });
             return Task.CompletedTask;
         }
         catch (Exception ex)
@@ -1357,12 +1459,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             ProjectCreationErrorMessage = $"Start new project failed: {ex.Message}. See log: {UiLogPath}";
             Trace.WriteLine($"[Shoots.UI] StartNewProject failed: {ex}");
             AddStartupMessage($"System: Start new project failed: {ex.Message}");
+            AddNarration("error", "StartNewProject failed", new Dictionary<string, string> { ["error"] = ex.Message });
             return Task.CompletedTask;
         }
         finally
         {
             IsCreatingProject = false;
             LogUiAction($"END StartNewProject run_id={operationId} (result={result})");
+            AddNarration("result", "StartNewProject end", new Dictionary<string, string> { ["run_id"] = operationId, ["result"] = result });
         }
 
     }
@@ -1374,19 +1478,33 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         if (CurrentProject is null)
         {
             AddStartupMessage("System: No project loaded.");
+            AddNarration("warn", "RunDemoPlan blocked", new Dictionary<string, string> { ["reason"] = "no project loaded" });
+            return Task.CompletedTask;
+        }
+
+        var invariantResult = ProjectInvariants.Verify(CurrentProject.WorkspacePath);
+        Trace.WriteLine($"[Shoots.UI] project.invariants {JsonSerializer.Serialize(invariantResult)}");
+        if (!invariantResult.Ok)
+        {
+            var details = string.Join("; ", invariantResult.Missing.Concat(invariantResult.Errors));
+            AddStartupMessage($"System: Demo run blocked. Invariants failed: {details}");
+            AddNarration("error", "RunDemoPlan blocked by invariants", new Dictionary<string, string> { ["details"] = details });
             return Task.CompletedTask;
         }
 
         try
         {
             var runPath = _localProjectService.RunDemoPlan(CurrentProject);
+            _lastDemoRunPath = runPath;
             Trace.WriteLine($"[Shoots.UI] run complete. run_path={runPath}");
             AddStartupMessage($"System: Demo run complete at {runPath}.");
+            AddNarration("result", "Demo run complete", new Dictionary<string, string> { ["run_path"] = runPath });
         }
         catch (Exception ex)
         {
             Trace.WriteLine($"[Shoots.UI] RunDemoPlan failed: {ex}");
             AddStartupMessage($"System: Demo run failed: {ex.Message}");
+            AddNarration("error", "RunDemoPlan failed", new Dictionary<string, string> { ["error"] = ex.Message });
         }
 
         return Task.CompletedTask;
@@ -1800,10 +1918,57 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         Trace.WriteLine($"[Shoots.UI] action='{action}' ts_utc={now:O} thread_id={System.Environment.CurrentManagedThreadId} project_id={projectId} workspace_path={workspacePath}");
     }
 
+    private IDisposable EnterBusyScope(string operation)
+    {
+        IsBusy = true;
+        BusyOperation = operation;
+        return new BusyScope(this);
+    }
+
+    private void AddNarration(string kind, string message, IReadOnlyDictionary<string, string>? data = null)
+    {
+        _narrationEvents.Add(new NarrationEvent(DateTimeOffset.UtcNow, kind, message, data));
+    }
+
+    private sealed class BusyScope : IDisposable
+    {
+        private readonly MainWindowViewModel _owner;
+        private bool _disposed;
+
+        public BusyScope(MainWindowViewModel owner)
+        {
+            _owner = owner;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _owner.IsBusy = false;
+            _owner.BusyOperation = string.Empty;
+        }
+    }
+
     private ProjectModel LoadProject(string projectFilePath)
     {
         var project = _localProjectService.LoadProject(projectFilePath);
+        var invariantResult = ProjectInvariants.Verify(project.WorkspacePath);
+        Trace.WriteLine($"[Shoots.UI] project.invariants {JsonSerializer.Serialize(invariantResult)}");
+        if (!invariantResult.Ok)
+        {
+            ProjectCreationErrorMessage = $"Project invariants failed: {string.Join("; ", invariantResult.Missing.Concat(invariantResult.Errors))}";
+        }
+
         CurrentProject = project;
+        AddNarration("info", "Project loaded", new Dictionary<string, string>
+        {
+            ["project_id"] = project.ProjectId,
+            ["workspace_path"] = project.WorkspacePath
+        });
         return project;
     }
 
@@ -1893,6 +2058,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private void InitializeChatIntake()
     {
         ChatTranscript = new ReadOnlyObservableCollection<string>(_chatTranscript);
+        Narration = new ReadOnlyObservableCollection<NarrationEvent>(_narrationEvents);
     }
 
     // ---- Startup handlers ----
@@ -2288,6 +2454,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         RunIntakePlanCommand.RaiseCanExecuteChanged();
         SendChatIntentCommand.RaiseCanExecuteChanged();
         OpenCurrentWorkspaceFolderCommand.RaiseCanExecuteChanged();
+        OpenProjectFileCommand.RaiseCanExecuteChanged();
         RunDemoPlanCommand.RaiseCanExecuteChanged();
         NewProjectCommand.RaiseCanExecuteChanged();
 

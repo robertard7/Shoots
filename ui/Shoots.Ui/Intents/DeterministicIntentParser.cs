@@ -7,7 +7,10 @@ namespace Shoots.UI.Intents;
 public sealed class DeterministicIntentParser
 {
     private static readonly Regex MultiWhitespace = new("\\s+", RegexOptions.Compiled);
+    private static readonly Regex StartNewProject = new("^(start a new project|create new workspace)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex CreateProject = new("^create project called (?<name>.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex NamedProject = new("new project(?: called| named)? (?<name>.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex CreateProjectInPath = new("^make a project in (?<path>.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex OpenProject = new("open project (?<path>.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex BuildPlan = new("build plan (?<path>.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex AddNote = new("add note (?<note>.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -22,6 +25,20 @@ public sealed class DeterministicIntentParser
         if (normalized == "start new project" || normalized == "new project")
         {
             return Create(intentId, createdUtc, raw, normalized, IntentKind.CreateProject, 0.99, "exact keyword", new Dictionary<string, string>());
+        }
+
+        if (StartNewProject.IsMatch(normalized))
+        {
+            return Create(intentId, createdUtc, raw, normalized, IntentKind.CreateProject, 0.98, "start/create workspace keyword", new Dictionary<string, string>());
+        }
+
+        var createMatch = CreateProject.Match(normalized);
+        if (createMatch.Success)
+        {
+            return Create(intentId, createdUtc, raw, normalized, IntentKind.CreateProject, 0.95, "create project pattern", new Dictionary<string, string>
+            {
+                ["name"] = createMatch.Groups["name"].Value.Trim()
+            });
         }
 
         var namedMatch = NamedProject.Match(normalized);
@@ -39,6 +56,15 @@ public sealed class DeterministicIntentParser
             return Create(intentId, createdUtc, raw, normalized, IntentKind.OpenProject, 0.95, "open project pattern", new Dictionary<string, string>
             {
                 ["path"] = openMatch.Groups["path"].Value.Trim()
+            });
+        }
+
+        var createPathMatch = CreateProjectInPath.Match(normalized);
+        if (createPathMatch.Success)
+        {
+            return Create(intentId, createdUtc, raw, normalized, IntentKind.CreateProject, 0.9, "create project in path pattern", new Dictionary<string, string>
+            {
+                ["path"] = createPathMatch.Groups["path"].Value.Trim()
             });
         }
 
