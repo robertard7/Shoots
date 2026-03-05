@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace Shoots.UI.Builder;
@@ -12,20 +13,43 @@ public sealed class ToolRegistry
 
     public ToolRegistry(string catalogPath = "etc/ui.tools.catalog.json")
     {
+        CatalogPath = catalogPath;
+
         if (!File.Exists(catalogPath))
         {
             throw new FileNotFoundException("Tool catalog not found.", catalogPath);
         }
 
-        var payload = JsonSerializer.Deserialize<ToolCatalogPayload>(File.ReadAllText(catalogPath), new JsonSerializerOptions
+        var rawCatalog = File.ReadAllText(catalogPath);
+        CatalogHash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawCatalog))).ToLowerInvariant();
+
+        var payload = JsonSerializer.Deserialize<ToolCatalogPayload>(rawCatalog, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         }) ?? new ToolCatalogPayload(Array.Empty<ToolDefinition>());
 
-        _tools = payload.Tools
+        var normalized = payload.Tools
             .Where(static tool => !string.IsNullOrWhiteSpace(tool.Id))
-            .ToDictionary(static tool => tool.Id, StringComparer.Ordinal);
+            .OrderBy(static tool => tool.Id, StringComparer.Ordinal)
+            .ToList();
+
+        var duplicateIds = normalized
+            .GroupBy(static x => x.Id, StringComparer.Ordinal)
+            .Where(static group => group.Count() > 1)
+            .Select(static group => group.Key)
+            .ToArray();
+
+        if (duplicateIds.Length > 0)
+        {
+            throw new InvalidOperationException($"Duplicate tool ids in catalog: {string.Join(", ", duplicateIds)}");
+        }
+
+        _tools = normalized.ToDictionary(static tool => tool.Id, StringComparer.Ordinal);
     }
+
+    public string CatalogPath { get; }
+
+    public string CatalogHash { get; }
 
     public bool Contains(string toolId) => _tools.ContainsKey(toolId);
 

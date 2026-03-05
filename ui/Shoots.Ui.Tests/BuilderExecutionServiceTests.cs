@@ -22,15 +22,22 @@ public sealed class BuilderExecutionServiceTests
 
             var registry = new ToolRegistry("etc/ui.tools.catalog.json");
             var runtimeBridge = new RuntimeBridgeLocal(new ToolExecutionService(registry));
-            var service = new BuilderExecutionService(runtimeBridge, new ArtifactManager());
+            var service = new BuilderExecutionService(runtimeBridge, new ArtifactManager(), registry);
             var result = service.Execute(plan, project);
 
             Assert.Equal("completed", result.Run.Status);
+            Assert.Equal(registry.CatalogHash, result.Run.ToolCatalogHash);
+            Assert.False(string.IsNullOrWhiteSpace(result.Run.PlanHash));
             Assert.True(Directory.Exists(result.RunPath));
             Assert.True(File.Exists(result.RunJsonPath));
             Assert.True(File.Exists(result.ArtifactJsonPath));
             Assert.True(File.Exists(Path.Combine(result.RunPath, "narrator.jsonl")));
+            Assert.True(File.Exists(Path.Combine(result.RunPath, "artifacts", "manifest.json")));
             Assert.True(File.Exists(Path.Combine(project.WorkspacePath, "artifacts", "demo", "output.txt")));
+
+            var verify = new ArtifactManager().VerifyArtifacts(result.RunPath);
+            Assert.True(verify.Ok);
+            Assert.Empty(verify.Errors);
         }
         finally
         {

@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Shoots.UI.Diagnostics;
 using Shoots.UI.Projects;
@@ -12,19 +15,32 @@ public sealed class BuilderExecutionService
 {
     private readonly IRuntimeBridge _runtimeBridge;
     private readonly ArtifactManager _artifactManager;
+    private readonly ToolRegistry _toolRegistry;
 
-    public BuilderExecutionService(IRuntimeBridge runtimeBridge, ArtifactManager artifactManager)
+    public BuilderExecutionService(IRuntimeBridge runtimeBridge, ArtifactManager artifactManager, ToolRegistry toolRegistry)
     {
         _runtimeBridge = runtimeBridge;
         _artifactManager = artifactManager;
+        _toolRegistry = toolRegistry;
     }
 
     public BuilderExecutionResult Execute(PlanModel plan, ProjectModel project, Action<NarrationEvent>? narrate = null)
     {
+        _artifactManager.Reset();
+
         var runId = NextRunId(project.WorkspacePath);
         var runPath = Path.Combine(project.WorkspacePath, "runs", runId);
         Directory.CreateDirectory(runPath);
         var narratorPath = Path.Combine(runPath, "narrator.jsonl");
+
+        var planHash = ComputePlanHash(plan);
+        var toolCatalogHash = _toolRegistry.CatalogHash;
+        EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "info", "RUN_HEADER", new Dictionary<string, string>
+        {
+            ["run_id"] = runId,
+            ["plan_hash"] = planHash,
+            ["tool_catalog_hash"] = toolCatalogHash
+        }));
 
         var steps = new List<RunStep>();
         var status = "completed";
@@ -32,7 +48,8 @@ public sealed class BuilderExecutionService
         EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "step", "PLAN_STARTED", new Dictionary<string, string>
         {
             ["run_id"] = runId,
-            ["plan_id"] = plan.PlanId
+            ["plan_id"] = plan.PlanId,
+            ["plan_hash"] = planHash
         }));
 
         foreach (var step in plan.Steps)
@@ -71,15 +88,17 @@ public sealed class BuilderExecutionService
             break;
         }
 
-        var run = new RunModel(runId, project.ProjectId, plan.PlanId, DateTimeOffset.UtcNow, status, steps);
+        var run = new RunModel(runId, project.ProjectId, plan.PlanId, planHash, toolCatalogHash, DateTimeOffset.UtcNow, status, steps);
         var runJsonPath = Path.Combine(runPath, "run.json");
         File.WriteAllText(runJsonPath, JsonSerializer.Serialize(run, new JsonSerializerOptions { WriteIndented = true }));
-        var artifactJsonPath = _artifactManager.WriteMetadata(runPath);
+        var artifactJsonPath = _artifactManager.WriteMetadata(runPath, planHash, toolCatalogHash);
 
         EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "result", "RUN_COMPLETED", new Dictionary<string, string>
         {
             ["run_id"] = runId,
-            ["status"] = status
+            ["status"] = status,
+            ["plan_hash"] = planHash,
+            ["tool_catalog_hash"] = toolCatalogHash
         }));
 
         return new BuilderExecutionResult(run, runPath, runJsonPath, artifactJsonPath);
@@ -103,5 +122,23 @@ public sealed class BuilderExecutionService
         var next = current + 1;
         File.WriteAllText(counterPath, next.ToString(CultureInfo.InvariantCulture));
         return next.ToString("D6", CultureInfo.InvariantCulture);
+    }
+
+    private static string ComputePlanHash(PlanModel plan)
+    {
+        var canonical = new StringBuilder();
+        canonical.Append(plan.PlanId).Append('|').Append(plan.SourceType);
+
+        foreach (var step in plan.Steps)
+        {
+            canonical.Append('|').Append(step.StepId).Append('|').Append(step.ToolId).Append('|').Append(step.OutputPath);
+            foreach (var arg in step.Args.OrderBy(static kvp => kvp.Key, StringComparer.Ordinal))
+            {
+                canonical.Append('|').Append(arg.Key).Append('=').Append(arg.Value);
+            }
+        }
+
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()));
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

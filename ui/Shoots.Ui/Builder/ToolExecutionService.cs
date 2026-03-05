@@ -99,9 +99,7 @@ public sealed class ToolExecutionService
     }
 
     private static string ResolvePath(string workspacePath, string relativeOrAbsolute)
-        => Path.IsPathRooted(relativeOrAbsolute)
-            ? relativeOrAbsolute
-            : Path.Combine(workspacePath, relativeOrAbsolute);
+        => SafePath.ResolveUnderWorkspace(workspacePath, relativeOrAbsolute);
 
     private static string GetArg(IReadOnlyDictionary<string, string> args, string key, string fallback)
         => args.TryGetValue(key, out var value) ? value : fallback;

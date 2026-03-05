@@ -662,7 +662,17 @@ PYCHK
           New-Item -ItemType Directory -Path .\artifacts\ui-smoke -Force | Out-Null
           $sentinel = Join-Path $env:LOCALAPPDATA "Shoots.UI\smoke\last.json"
           $log = Join-Path $env:LOCALAPPDATA "Shoots.UI\ui.log"
-          if (Test-Path $sentinel) { Copy-Item $sentinel .\artifacts\ui-smoke\last.json -Force }
+          if (Test-Path $sentinel) {
+            Copy-Item $sentinel .\artifacts\ui-smoke\last.json -Force
+            $proof = Get-Content $sentinel -Raw | ConvertFrom-Json
+            if ($proof.workspace_path -and $proof.demo_run_id) {
+              $runPath = Join-Path $proof.workspace_path (Join-Path "runs" $proof.demo_run_id)
+              $narrator = Join-Path $runPath "narrator.jsonl"
+              $manifest = Join-Path $runPath "artifacts\manifest.json"
+              if (Test-Path $narrator) { Copy-Item $narrator .\artifacts\ui-smoke\narrator.jsonl -Force }
+              if (Test-Path $manifest) { Copy-Item $manifest .\artifacts\ui-smoke\manifest.json -Force }
+            }
+          }
           if (Test-Path $log) { Copy-Item $log .\artifacts\ui-smoke\ui.log -Force }
 
       - name: Upload UI smoke artifacts

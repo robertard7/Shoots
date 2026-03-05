@@ -15,6 +15,8 @@ public sealed record RunModel(
     string RunId,
     string ProjectId,
     string PlanId,
+    string PlanHash,
+    string ToolCatalogHash,
     DateTimeOffset CreatedUtc,
     string Status,
     IReadOnlyList<RunStep> Steps

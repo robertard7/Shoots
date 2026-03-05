@@ -816,7 +816,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _planner = new RuntimePlanner(new DemoPlanner());
         var toolRegistry = new ToolRegistry();
         var runtimeBridge = new RuntimeBridgeLocal(new ToolExecutionService(toolRegistry));
-        _builderExecutionService = new BuilderExecutionService(runtimeBridge, new ArtifactManager());
+        _builderExecutionService = new BuilderExecutionService(runtimeBridge, new ArtifactManager(), toolRegistry);
 
         _state = UiExecutionState.Idle;
         _lastEnvironmentResult = _environmentService.LastResult;

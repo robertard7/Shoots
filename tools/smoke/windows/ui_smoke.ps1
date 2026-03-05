@@ -34,11 +34,14 @@ $proof = Get-Content $sentinelPath -Raw | ConvertFrom-Json
 if (-not $proof.demo_run_id) { throw "Sentinel missing demo_run_id." }
 if (-not $proof.run_json_exists) { throw "Sentinel indicates run.json missing." }
 if (-not $proof.artifact_json_exists) { throw "Sentinel indicates artifact.json missing." }
+if (-not $proof.manifest_json_exists) { throw "Sentinel indicates manifest.json missing." }
 if (-not $proof.log_artifact_exists) { throw "Sentinel indicates no .log artifact captured." }
+if (-not $proof.artifact_verification_ok) { throw "Artifact verification failed: $($proof.artifact_verification_errors -join ", ")" }
 
 $runPath = Join-Path $proof.workspace_path (Join-Path "runs" $proof.demo_run_id)
 if (-not (Test-Path (Join-Path $runPath "run.json"))) { throw "run.json missing at $runPath" }
 if (-not (Test-Path (Join-Path $runPath "artifact.json"))) { throw "artifact.json missing at $runPath" }
+if (-not (Test-Path (Join-Path $runPath "artifacts\manifest.json"))) { throw "manifest.json missing at $runPath" }
 $logArtifacts = Get-ChildItem -Path (Join-Path $runPath "artifacts") -Filter *.log -Recurse -ErrorAction SilentlyContinue
 if (-not $logArtifacts -or $logArtifacts.Count -lt 1) { throw "Expected at least one log artifact under $runPath\artifacts" }
 
