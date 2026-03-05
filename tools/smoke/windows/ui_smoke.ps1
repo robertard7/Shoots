@@ -32,6 +32,8 @@ if (!(Test-Path $sentinelPath)) { throw "Missing smoke sentinel after run-demo."
 
 $proof = Get-Content $sentinelPath -Raw | ConvertFrom-Json
 if (-not $proof.demo_run_id) { throw "Sentinel missing demo_run_id." }
+if (-not $proof.run_json_exists) { throw "Sentinel indicates run.json missing." }
+if (-not $proof.artifact_json_exists) { throw "Sentinel indicates artifact.json missing." }
 
 dotnet run --project $uiProject -c $Configuration -- --smoke intent "start new project"
 if (!(Test-Path $sentinelPath)) { throw "Missing smoke sentinel after intent." }

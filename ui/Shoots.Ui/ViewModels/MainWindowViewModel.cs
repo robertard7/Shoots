@@ -15,6 +15,7 @@ using Shoots.Contracts.Core;
 using Shoots.Contracts.Core.AI;
 using Shoots.UI.AiHelp;
 using Shoots.UI.Blueprints;
+using Shoots.UI.Builder;
 using Shoots.UI.ExecutionEnvironments;
 using Shoots.UI.Environment;
 using Shoots.UI.Intents;
@@ -72,6 +73,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private readonly IBackendProbeService _backendProbeService;
     private readonly IOllamaClient _ollamaClient;
     private readonly LocalProjectService _localProjectService;
+    private readonly IPlanner _planner;
+    private readonly BuilderExecutionService _builderExecutionService;
 
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private readonly ObservableCollection<BlueprintEntryViewModel> _blueprints;
@@ -770,6 +773,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _backendProbeService = backendProbeService ?? throw new ArgumentNullException(nameof(backendProbeService));
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
         _localProjectService = new LocalProjectService();
+        _planner = new DemoPlanner();
+        _builderExecutionService = new BuilderExecutionService(new ToolExecutionService(), new ArtifactManager());
 
         _state = UiExecutionState.Idle;
         _lastEnvironmentResult = _environmentService.LastResult;
@@ -1494,11 +1499,25 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            var runPath = _localProjectService.RunDemoPlan(CurrentProject);
-            _lastDemoRunPath = runPath;
-            Trace.WriteLine($"[Shoots.UI] run complete. run_path={runPath}");
-            AddStartupMessage($"System: Demo run complete at {runPath}.");
-            AddNarration("result", "Demo run complete", new Dictionary<string, string> { ["run_path"] = runPath });
+            if (!_planner.TryBuildPlan(CurrentProject, out var plan))
+            {
+                AddStartupMessage("System: Demo planner could not build a plan.");
+                AddNarration("error", "Demo planner failed", null);
+                return Task.CompletedTask;
+            }
+
+            var execution = _builderExecutionService.Execute(plan, CurrentProject, narrate: evt => AddNarration(evt.Kind, evt.Message, evt.Data));
+            _lastDemoRunPath = execution.RunPath;
+
+            Trace.WriteLine($"[Shoots.UI] run complete. run_path={execution.RunPath}; run_json={execution.RunJsonPath}; artifact_json={execution.ArtifactJsonPath}");
+            AddStartupMessage($"System: Demo run complete at {execution.RunPath}.");
+            AddNarration("result", "Demo run complete", new Dictionary<string, string>
+            {
+                ["run_path"] = execution.RunPath,
+                ["run_json"] = execution.RunJsonPath,
+                ["artifact_json"] = execution.ArtifactJsonPath,
+                ["status"] = execution.Run.Status
+            });
         }
         catch (Exception ex)
         {

@@ -230,7 +230,9 @@ public partial class App : Application
             missing = invariant.Missing,
             last_intent = payload,
             outcome = result,
-            demo_run_id = project is null || string.IsNullOrWhiteSpace(viewModel.LastDemoRunPath) ? string.Empty : Path.GetFileName(viewModel.LastDemoRunPath)
+            demo_run_id = project is null || string.IsNullOrWhiteSpace(viewModel.LastDemoRunPath) ? string.Empty : Path.GetFileName(viewModel.LastDemoRunPath),
+            run_json_exists = project is not null && !string.IsNullOrWhiteSpace(viewModel.LastDemoRunPath) && File.Exists(Path.Combine(viewModel.LastDemoRunPath, "run.json")),
+            artifact_json_exists = project is not null && !string.IsNullOrWhiteSpace(viewModel.LastDemoRunPath) && File.Exists(Path.Combine(viewModel.LastDemoRunPath, "artifact.json"))
         };
 
         File.WriteAllText(sentinelPath, JsonSerializer.Serialize(sentinel, new JsonSerializerOptions { WriteIndented = true }));
