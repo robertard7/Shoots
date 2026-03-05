@@ -71,6 +71,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private readonly IAiHelpFacade _aiHelpFacade;
     private readonly IBackendProbeService _backendProbeService;
     private readonly IOllamaClient _ollamaClient;
+    private readonly LocalProjectService _localProjectService;
 
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private readonly ObservableCollection<BlueprintEntryViewModel> _blueprints;
@@ -134,6 +135,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private DateTimeOffset? _lastProbeUtc;
     private bool _probeInFlight;
     private string _modelCatalogError = string.Empty;
+    private ProjectModel? _currentProject;
 
     private AiPresentationPolicy _aiPresentationPolicy =
         new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true, EnterpriseMode: false);
@@ -549,6 +551,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
         _backendProbeService = backendProbeService ?? throw new ArgumentNullException(nameof(backendProbeService));
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
+        _localProjectService = new LocalProjectService();
 
         _state = UiExecutionState.Idle;
         _lastEnvironmentResult = _environmentService.LastResult;
@@ -583,6 +586,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ReplayPlanCommand = new AsyncRelayCommand(ReplayPlanAsync, CanReplayPlan);
         RefreshNarrationCommand = new AsyncRelayCommand(RefreshNarrationAsync);
         RefreshBackendStatusCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, CanRefreshBackends);
+        RunDemoPlanCommand = new AsyncRelayCommand(RunDemoPlanAsync, CanRunDemoPlan);
         InitializeChatIntake(); // partial if you have it
         InitializeChatIntakeSurface();
 
@@ -662,6 +666,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             ?? DatabaseIntents.FirstOrDefault();
 
         LoadEnvironmentScript();
+        TryLoadLastProjectFromRecents();
         LoadAiPolicy();
         RegisterAiSurfaces();
         _ = RefreshBackendStatusAsync();
@@ -703,6 +708,27 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     public bool IsReplayMode => State == UiExecutionState.Replaying;
+
+    public ProjectModel? CurrentProject
+    {
+        get => _currentProject;
+        private set
+        {
+            if (Equals(_currentProject, value))
+            {
+                return;
+            }
+
+            _currentProject = value;
+            OnPropertyChanged(nameof(CurrentProject));
+            OnPropertyChanged(nameof(CurrentWorkspacePath));
+            OnPropertyChanged(nameof(HasProjectLoaded));
+            RunDemoPlanCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    public string CurrentWorkspacePath => CurrentProject?.WorkspacePath ?? "No project loaded";
+    public bool HasProjectLoaded => CurrentProject is not null;
     public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (trace-backed)" : "Mode: Live";
 
     public string ExecutionProviderSummary =>
@@ -1128,6 +1154,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public AsyncRelayCommand ReplayPlanCommand { get; }
     public AsyncRelayCommand RefreshNarrationCommand { get; }
     public AsyncRelayCommand RefreshBackendStatusCommand { get; }
+    public AsyncRelayCommand RunDemoPlanCommand { get; }
 
     // ---- UI-safe plan setter ----
     public void SetPlanPreview(string? planId, string? providerId, ProviderKind providerKind, string? graphHash, string? nodeSetHash, string? edgeSetHash)
@@ -1150,39 +1177,72 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     // ---- Startup flow ----
-    private bool CanStartNewProject() => string.IsNullOrWhiteSpace(GetNewProjectBlockerReason());
+    private bool CanStartNewProject() => true;
     private bool CanStartAnotherProject() => string.IsNullOrWhiteSpace(GetStartAnotherProjectBlockerReason());
     private bool CanSelectEntryPath() => _startupFlow.State == StartupFlowState.EntryPathSelection && !_startupComplete;
     private bool CanSubmitStartupInput() => IsStartupInputActive && !_startupComplete && !string.IsNullOrWhiteSpace(StartupInput);
 
     private Task NewProjectAsync()
     {
-        LogUiAction("Start New Project click");
+        LogUiAction("BEGIN StartNewProject");
+        var result = "ok";
 
-        var previous = _startupFlow.State;
-        var blocker = GetNewProjectBlockerReason();
-        Trace.WriteLine($"[Shoots.UI] NewProject command invoked. state={_startupFlow.State}; hasWorkspace={HasActiveWorkspace}; startupComplete={_startupComplete}; blocker={blocker}");
-        if (!string.IsNullOrWhiteSpace(blocker))
+        try
         {
-            AddStartupMessage($"System: {blocker}");
+            var model = _localProjectService.CreateNewProject();
+            var loaded = LoadProject(model.ProjectFilePath);
+
+            var workspace = new ProjectWorkspace(
+                Name: loaded.Name,
+                RootPath: loaded.WorkspacePath,
+                LastOpenedUtc: DateTimeOffset.UtcNow,
+                ProjectId: loaded.ProjectId,
+                CreatedUtc: loaded.CreatedUtc);
+
+            _workspaceProvider.SetActiveWorkspace(workspace);
+            LoadWorkspaces();
+            SelectWorkspace(workspace);
+
+            AddStartupMessage($"System: Project created at {loaded.WorkspacePath}.");
+            AddStartupMessage($"System: Project file: {loaded.ProjectFilePath}.");
+            return Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            result = $"error:{ex.GetType().Name}";
+            Trace.WriteLine($"[Shoots.UI] StartNewProject failed: {ex}");
+            AddStartupMessage($"System: Start new project failed: {ex.Message}");
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            LogUiAction($"END StartNewProject (result={result})");
+        }
+
+    }
+
+    private bool CanRunDemoPlan() => CurrentProject is not null;
+
+    private Task RunDemoPlanAsync()
+    {
+        if (CurrentProject is null)
+        {
+            AddStartupMessage("System: No project loaded.");
             return Task.CompletedTask;
         }
 
-        if (!_startupFlow.TryBeginNewProject(out var error))
+        try
         {
-            var reason = string.IsNullOrWhiteSpace(error)
-                ? "startup.blocked: gate=startupFlowTransition; property=startup.state; action=reset startup flow and retry"
-                : $"startup.blocked: gate=startupFlowTransition; property=startup.state; action={error}";
-            AddStartupMessage($"System: {reason}");
-            Trace.WriteLine($"[Shoots.UI] NewProject transition blocked. reason={reason}");
-            return Task.CompletedTask;
+            var runPath = _localProjectService.RunDemoPlan(CurrentProject);
+            Trace.WriteLine($"[Shoots.UI] run complete. run_path={runPath}");
+            AddStartupMessage($"System: Demo run complete at {runPath}.");
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[Shoots.UI] RunDemoPlan failed: {ex}");
+            AddStartupMessage($"System: Demo run failed: {ex.Message}");
         }
 
-        LogStartupTransition(previous, _startupFlow.State, "Startup flow activated.");
-        Trace.WriteLine("[Shoots.UI] Provider = Ollama (default).");
-        AddStartupMessage("System: Provider = Ollama (default).");
-        AddStartupMessage("System: Startup flow activated. Choose an entry path. State remains: EntryPathSelection.");
-        NotifyStartupFlowChanged();
         return Task.CompletedTask;
     }
 
@@ -1209,19 +1269,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     private string GetNewProjectBlockerReason()
-    {
-        if (HasActiveWorkspace)
-        {
-            return "startup.blocked: gate=activeWorkspace; property=HasActiveWorkspace=true; action=click Start another project";
-        }
-
-        if (_startupFlow.State != StartupFlowState.Initial)
-        {
-            return $"startup.blocked: gate=startupFlowState; property=StartupState={_startupFlow.State}; action=complete current startup flow or reset";
-        }
-
-        return string.Empty;
-    }
+        => string.Empty;
 
     private string GetStartAnotherProjectBlockerReason()
     {
@@ -1604,6 +1652,37 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         var now = DateTimeOffset.UtcNow;
 
         Trace.WriteLine($"[Shoots.UI] action='{action}' ts_utc={now:O} thread_id={System.Environment.CurrentManagedThreadId} project_id={projectId} workspace_path={workspacePath}");
+    }
+
+    private ProjectModel LoadProject(string projectFilePath)
+    {
+        var project = _localProjectService.LoadProject(projectFilePath);
+        CurrentProject = project;
+        return project;
+    }
+
+    private void TryLoadLastProjectFromRecents()
+    {
+        var lastWorkspace = _workspaceProvider.GetRecentWorkspaces().FirstOrDefault();
+        if (lastWorkspace is null)
+        {
+            return;
+        }
+
+        var projectFilePath = Path.Combine(lastWorkspace.RootPath, "project.json");
+        if (!File.Exists(projectFilePath))
+        {
+            return;
+        }
+
+        try
+        {
+            _ = LoadProject(projectFilePath);
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[Shoots.UI] Failed to load recent project: {ex.Message}");
+        }
     }
 
 

@@ -92,6 +92,16 @@
       <TextBlock Margin="0,16,0,0"
                  Text="{Binding ActiveWorkspaceName}" />
 
+      <TextBlock Margin="0,6,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding CurrentWorkspacePath}"
+                 TextWrapping="Wrap" />
+
+      <Button Margin="0,6,0,0"
+              Content="Run Demo Plan"
+              Command="{Binding RunDemoPlanCommand}"
+              IsEnabled="{Binding HasProjectLoaded}" />
+
       <!-- TOOL TIER -->
       <GroupBox Margin="0,12,0,0" Header="Tool Tier">
         <StackPanel Margin="8">
