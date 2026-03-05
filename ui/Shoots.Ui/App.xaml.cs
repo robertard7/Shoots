@@ -48,7 +48,12 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
-        UiSurfaceBootstrapper.RegisterAll();
+        base.OnStartup(e);
+
+        MainWindow = new MainWindow();
+        MainWindow.Show();
+
+        UiSurfaceBootstrapper.RegisterAll(MainWindow.DataContext as ViewModels.MainWindowViewModel);
         var surfaceRegistry = AiSurfaceRegistry.Current;
         Log($"AI surface registry: {surfaceRegistry.DescribeRegistrations()}");
 
@@ -65,11 +70,6 @@ public partial class App : Application
 #else
         surfaceRegistry.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
 #endif
-
-        base.OnStartup(e);
-
-        MainWindow = new MainWindow();
-        MainWindow.Show();
     }
 
     protected override void OnExit(ExitEventArgs e)

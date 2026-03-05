@@ -1555,6 +1555,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CatalogHash));
     }
 
+
+	internal IReadOnlyList<IAiHelpSurface> GetAiHelpSurfacesForRegistration()
+	{
+		return BuildAiHelpSurfaces().ToList();
+	}
+
 	private void RegisterAiSurfaces()
 	{
 		// Build surfaces deterministically
