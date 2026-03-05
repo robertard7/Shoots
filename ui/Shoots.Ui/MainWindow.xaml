@@ -138,6 +138,18 @@
         </StackPanel>
       </GroupBox>
 
+      <Expander Margin="0,12,0,0"
+                Header="Action Log (Debug)"
+                Visibility="{Binding IsDebugBuild, Converter={StaticResource BooleanToVisibilityConverter}}"
+                IsExpanded="False">
+        <Border BorderBrush="#FFD1D5DB" BorderThickness="1" Padding="6">
+          <ListBox ItemsSource="{Binding ActionLogLines}"
+                   Height="180"
+                   FontFamily="Consolas"
+                   FontSize="11" />
+        </Border>
+      </Expander>
+
     </StackPanel>
 
     <!-- RIGHT: MAIN TABS -->

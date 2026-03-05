@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Shoots.UI.AiHelp;
+using Shoots.UI.Diagnostics;
 using Shoots.UI.Services;
 
 namespace Shoots.UI;
@@ -26,6 +27,8 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        UiActionTraceBuffer.EnsureInitialized();
+
         var createdNew = false;
         _singleInstanceMutex = new Mutex(true, MutexName, out createdNew);
         if (!createdNew)

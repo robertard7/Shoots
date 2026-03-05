@@ -20,6 +20,7 @@ using Shoots.UI.Environment;
 using Shoots.UI.Intents;
 using Shoots.UI.Projects;
 using Shoots.UI.Roles;
+using Shoots.UI.Diagnostics;
 using Shoots.UI.Services;
 using Shoots.UI.Services.Backends;
 using Shoots.UI.Settings;
@@ -77,6 +78,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private readonly StartupFlowStateMachine _startupFlow;
     private readonly ObservableCollection<string> _startupMessages;
     private readonly ObservableCollection<string> _narrationLines;
+    private readonly ObservableCollection<string> _actionLogLines;
     private readonly ObservableCollection<string> _availableModels;
 
     public ReadOnlyObservableCollection<ProjectWorkspace> RecentWorkspaces { get; }
@@ -84,6 +86,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ReadOnlyObservableCollection<UiRootFsDescriptor> RootFsCatalog { get; }
     public ReadOnlyObservableCollection<string> StartupMessages { get; }
     public ReadOnlyObservableCollection<string> NarrationLines { get; }
+    public ReadOnlyObservableCollection<string> ActionLogLines { get; }
     public ReadOnlyObservableCollection<string> AvailableModels { get; }
 
     private string _startupInput = string.Empty;
@@ -604,6 +607,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         StartupMessages = new ReadOnlyObservableCollection<string>(_startupMessages);
         _narrationLines = new ObservableCollection<string>();
         NarrationLines = new ReadOnlyObservableCollection<string>(_narrationLines);
+        _actionLogLines = new ObservableCollection<string>();
+        ActionLogLines = new ReadOnlyObservableCollection<string>(_actionLogLines);
+        foreach (var line in UiActionTraceBuffer.Snapshot())
+        {
+            AppendActionLogLine(line);
+        }
+
+        UiActionTraceBuffer.LineCaptured += OnTraceLineCaptured;
         _availableModels = new ObservableCollection<string>();
         AvailableModels = new ReadOnlyObservableCollection<string>(_availableModels);
 
@@ -679,6 +690,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     public string StateLabel => State.ToString();
+    public bool IsDebugBuild
+    {
+        get
+        {
+#if DEBUG
+            return true;
+#else
+            return false;
+#endif
+        }
+    }
+
     public bool IsReplayMode => State == UiExecutionState.Replaying;
     public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (trace-backed)" : "Mode: Live";
 
@@ -1134,6 +1157,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private Task NewProjectAsync()
     {
+        LogUiAction("Start New Project click");
+
         var previous = _startupFlow.State;
         var blocker = GetNewProjectBlockerReason();
         Trace.WriteLine($"[Shoots.UI] NewProject command invoked. state={_startupFlow.State}; hasWorkspace={HasActiveWorkspace}; startupComplete={_startupComplete}; blocker={blocker}");
@@ -1466,6 +1491,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task RefreshBackendStatusAsync()
     {
+        LogUiAction("Connect to Ollama / Refresh backends click");
+
         var blocker = GetRefreshBackendsDisabledReason();
         if (!string.IsNullOrWhiteSpace(blocker))
         {
@@ -1553,6 +1580,30 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(DefaultModelId));
         OnPropertyChanged(nameof(CatalogHash));
+    }
+
+    private void OnTraceLineCaptured(string line)
+        => AppendActionLogLine(line);
+
+    private void AppendActionLogLine(string line)
+    {
+        const int maxEntries = 200;
+
+        if (_actionLogLines.Count >= maxEntries)
+        {
+            _actionLogLines.RemoveAt(0);
+        }
+
+        _actionLogLines.Add(line);
+    }
+
+    private void LogUiAction(string action)
+    {
+        var projectId = ActiveWorkspace?.ProjectId ?? "none";
+        var workspacePath = ActiveWorkspace?.RootPath ?? "none";
+        var now = DateTimeOffset.UtcNow;
+
+        Trace.WriteLine($"[Shoots.UI] action='{action}' ts_utc={now:O} thread_id={System.Environment.CurrentManagedThreadId} project_id={projectId} workspace_path={workspacePath}");
     }
 
 
