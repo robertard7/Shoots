@@ -22,7 +22,15 @@ public sealed class DemoPlanner : IPlanner
                     ["path"] = "artifacts/demo/output.txt",
                     ["text"] = "demo output"
                 },
-                OutputPath: "artifacts/demo/output.txt")
+                OutputPath: "artifacts/demo/output.txt"),
+            new(
+                StepId: "step-003",
+                ToolId: "dotnet.build",
+                Args: new Dictionary<string, string>
+                {
+                    ["project"] = "DemoProject.csproj"
+                },
+                OutputPath: "artifacts/build-logs/dotnet-build.log")
         };
 
         plan = new PlanModel("demo-plan-v1", PlanSourceType.Demo, steps);

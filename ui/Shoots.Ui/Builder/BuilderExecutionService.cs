@@ -10,12 +10,12 @@ namespace Shoots.UI.Builder;
 
 public sealed class BuilderExecutionService
 {
-    private readonly ToolExecutionService _toolExecutionService;
+    private readonly IRuntimeBridge _runtimeBridge;
     private readonly ArtifactManager _artifactManager;
 
-    public BuilderExecutionService(ToolExecutionService toolExecutionService, ArtifactManager artifactManager)
+    public BuilderExecutionService(IRuntimeBridge runtimeBridge, ArtifactManager artifactManager)
     {
-        _toolExecutionService = toolExecutionService;
+        _runtimeBridge = runtimeBridge;
         _artifactManager = artifactManager;
     }
 
@@ -36,37 +36,38 @@ public sealed class BuilderExecutionService
 
         foreach (var step in plan.Steps)
         {
-            try
+            narrate?.Invoke(new NarrationEvent(DateTimeOffset.UtcNow, "step", "STEP_STARTED", new Dictionary<string, string>
             {
-                narrate?.Invoke(new NarrationEvent(DateTimeOffset.UtcNow, "step", "STEP_STARTED", new Dictionary<string, string>
+                ["step_id"] = step.StepId,
+                ["tool_id"] = step.ToolId
+            }));
+
+            var result = _runtimeBridge.ExecuteStep(step, project, narrate);
+            if (string.Equals(result.Status, "completed", StringComparison.Ordinal))
+            {
+                if (!string.IsNullOrWhiteSpace(result.OutputPath))
                 {
-                    ["step_id"] = step.StepId,
-                    ["tool_id"] = step.ToolId
-                }));
+                    _artifactManager.Capture(runPath, step.StepId, result.OutputPath);
+                }
 
-                var outputPath = _toolExecutionService.ExecuteStep(step, project.WorkspacePath);
-                _artifactManager.Capture(runPath, step.StepId, outputPath);
-                steps.Add(new RunStep(step.StepId, step.ToolId, "completed", outputPath, null));
-
+                steps.Add(new RunStep(step.StepId, step.ToolId, "completed", result.OutputPath, null));
                 narrate?.Invoke(new NarrationEvent(DateTimeOffset.UtcNow, "result", "STEP_COMPLETED", new Dictionary<string, string>
                 {
                     ["step_id"] = step.StepId,
-                    ["output_path"] = outputPath
+                    ["output_path"] = result.OutputPath ?? string.Empty
                 }));
+                continue;
             }
-            catch (Exception ex)
-            {
-                status = "failed";
-                steps.Add(new RunStep(step.StepId, step.ToolId, "failed", null, ex.Message));
-                File.WriteAllText(Path.Combine(runPath, "rollback.marker"), $"step={step.StepId}; error={ex.Message}");
 
-                narrate?.Invoke(new NarrationEvent(DateTimeOffset.UtcNow, "error", "STEP_FAILED", new Dictionary<string, string>
-                {
-                    ["step_id"] = step.StepId,
-                    ["error"] = ex.Message
-                }));
-                break;
-            }
+            status = "failed";
+            steps.Add(new RunStep(step.StepId, step.ToolId, "failed", null, result.Error));
+            File.WriteAllText(Path.Combine(runPath, "rollback.marker"), $"step={step.StepId}; error={result.Error}");
+            narrate?.Invoke(new NarrationEvent(DateTimeOffset.UtcNow, "error", "STEP_FAILED", new Dictionary<string, string>
+            {
+                ["step_id"] = step.StepId,
+                ["error"] = result.Error ?? "unknown"
+            }));
+            break;
         }
 
         var run = new RunModel(runId, project.ProjectId, plan.PlanId, DateTimeOffset.UtcNow, status, steps);

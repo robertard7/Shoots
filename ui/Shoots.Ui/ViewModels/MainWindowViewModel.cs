@@ -75,6 +75,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private readonly LocalProjectService _localProjectService;
     private readonly IPlanner _planner;
     private readonly BuilderExecutionService _builderExecutionService;
+    private readonly ObservableCollection<string> _runHistory;
+    private readonly ObservableCollection<string> _artifactFiles;
 
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private readonly ObservableCollection<BlueprintEntryViewModel> _blueprints;
@@ -92,6 +94,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ReadOnlyObservableCollection<string> NarrationLines { get; }
     public ReadOnlyObservableCollection<string> ActionLogLines { get; }
     public ReadOnlyObservableCollection<string> AvailableModels { get; }
+    public ReadOnlyObservableCollection<string> RunHistory { get; }
+    public ReadOnlyObservableCollection<string> ArtifactFiles { get; }
 
     private string _startupInput = string.Empty;
     private string _selectedModelId = string.Empty;
@@ -773,8 +777,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _backendProbeService = backendProbeService ?? throw new ArgumentNullException(nameof(backendProbeService));
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
         _localProjectService = new LocalProjectService();
-        _planner = new DemoPlanner();
-        _builderExecutionService = new BuilderExecutionService(new ToolExecutionService(), new ArtifactManager());
+        _planner = new RuntimePlanner(new DemoPlanner());
+        var toolRegistry = new ToolRegistry();
+        var runtimeBridge = new RuntimeBridgeLocal(new ToolExecutionService(toolRegistry));
+        _builderExecutionService = new BuilderExecutionService(runtimeBridge, new ArtifactManager());
 
         _state = UiExecutionState.Idle;
         _lastEnvironmentResult = _environmentService.LastResult;
@@ -836,6 +842,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         NarrationLines = new ReadOnlyObservableCollection<string>(_narrationLines);
         _actionLogLines = new ObservableCollection<string>();
         ActionLogLines = new ReadOnlyObservableCollection<string>(_actionLogLines);
+        _runHistory = new ObservableCollection<string>();
+        RunHistory = new ReadOnlyObservableCollection<string>(_runHistory);
+        _artifactFiles = new ObservableCollection<string>();
+        ArtifactFiles = new ReadOnlyObservableCollection<string>(_artifactFiles);
         foreach (var line in UiActionTraceBuffer.Snapshot())
         {
             AppendActionLogLine(line);
@@ -1508,6 +1518,21 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
             var execution = _builderExecutionService.Execute(plan, CurrentProject, narrate: evt => AddNarration(evt.Kind, evt.Message, evt.Data));
             _lastDemoRunPath = execution.RunPath;
+            _runHistory.Insert(0, execution.RunPath);
+            if (_runHistory.Count > 20)
+            {
+                _runHistory.RemoveAt(_runHistory.Count - 1);
+            }
+
+            _artifactFiles.Clear();
+            var artifactRoot = Path.Combine(execution.RunPath, "artifacts");
+            IEnumerable<string> artifactFiles = Directory.Exists(artifactRoot)
+                ? Directory.GetFiles(artifactRoot, "*", SearchOption.AllDirectories).OrderBy(static x => x, StringComparer.Ordinal)
+                : Array.Empty<string>();
+            foreach (var artifactFile in artifactFiles)
+            {
+                _artifactFiles.Add(artifactFile);
+            }
 
             Trace.WriteLine($"[Shoots.UI] run complete. run_path={execution.RunPath}; run_json={execution.RunJsonPath}; artifact_json={execution.ArtifactJsonPath}");
             AddStartupMessage($"System: Demo run complete at {execution.RunPath}.");

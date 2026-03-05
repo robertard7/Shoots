@@ -20,7 +20,9 @@ public sealed class BuilderExecutionServiceTests
             var planner = new DemoPlanner();
             Assert.True(planner.TryBuildPlan(project, out var plan));
 
-            var service = new BuilderExecutionService(new ToolExecutionService(), new ArtifactManager());
+            var registry = new ToolRegistry("etc/ui.tools.catalog.json");
+            var runtimeBridge = new RuntimeBridgeLocal(new ToolExecutionService(registry));
+            var service = new BuilderExecutionService(runtimeBridge, new ArtifactManager());
             var result = service.Execute(plan, project);
 
             Assert.Equal("completed", result.Run.Status);

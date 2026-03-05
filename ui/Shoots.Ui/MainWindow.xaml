@@ -139,6 +139,16 @@
               Command="{Binding OpenProjectFileCommand}"
               IsEnabled="{Binding HasProjectLoaded}" />
 
+      <TextBlock Margin="0,12,0,0" Text="Run History" FontWeight="SemiBold" />
+      <ListBox Margin="0,6,0,0"
+               Height="90"
+               ItemsSource="{Binding RunHistory}" />
+
+      <TextBlock Margin="0,8,0,0" Text="Artifacts" FontWeight="SemiBold" />
+      <ListBox Margin="0,6,0,0"
+               Height="90"
+               ItemsSource="{Binding ArtifactFiles}" />
+
       <!-- TOOL TIER -->
       <GroupBox Margin="0,12,0,0" Header="Tool Tier">
         <StackPanel Margin="8">
