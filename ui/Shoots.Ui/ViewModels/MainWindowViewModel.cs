@@ -540,23 +540,23 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
-    private Task SendChatIntentAsync()
+    private async Task SendChatIntentAsync()
     {
         var rawText = ChatInputText;
         if (string.IsNullOrWhiteSpace(rawText))
         {
-            return Task.CompletedTask;
+            return;
         }
 
         _chatTranscript.Add($"User: {rawText}");
         var intent = _intentParser.Parse(rawText);
         _chatTranscript.Add($"System: Intent recognized: {intent.Kind} (confidence={intent.Confidence:0.00}).");
-        DispatchIntent(intent);
+        var dispatchSummary = await DispatchIntentAsync(intent);
+        TryAppendChatTranscriptRecord(intent, dispatchSummary);
         ChatInputText = string.Empty;
-        return Task.CompletedTask;
     }
 
-    private void DispatchIntent(IntentModel intent)
+    private async Task<string> DispatchIntentAsync(IntentModel intent)
     {
         var handler = "none";
         var result = "ok";
@@ -574,11 +574,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             {
                 case IntentKind.CreateProject:
                     handler = "StartNewProject";
-                    _ = NewProjectAsync();
+                    await NewProjectAsync();
+                    result = CurrentProject is null ? "no_project" : "created_project";
                     break;
                 case IntentKind.RunDemoPlan:
                     handler = "RunDemoPlan";
-                    _ = RunDemoPlanAsync();
+                    await RunDemoPlanAsync();
+                    result = string.IsNullOrWhiteSpace(LastDemoRunPath) ? "no_run" : "run_completed";
                     break;
                 case IntentKind.OpenProject:
                     handler = "OpenProject";
@@ -596,6 +598,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                         LoadWorkspaces();
                         SelectWorkspace(workspace);
                         _chatTranscript.Add($"System: Project opened at {project.WorkspacePath}.");
+                        result = "opened";
                     }
                     else
                     {
@@ -604,6 +607,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                     break;
                 case IntentKind.BuildFromPlanFile:
                     handler = "BuildFromPlanFile";
+                    result = "not_implemented";
                     _chatTranscript.Add("System: BuildFromPlanFile is recognized but not yet connected.");
                     break;
                 case IntentKind.AddNote:
@@ -618,6 +622,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                         var notePath = Path.Combine(CurrentProject.WorkspacePath, "notes", "notes.txt");
                         File.AppendAllLines(notePath, new[] { noteText });
                         _chatTranscript.Add($"System: Note added to {notePath}.");
+                        result = "note_added";
                     }
                     else
                     {
@@ -645,6 +650,37 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             Trace.WriteLine($"[Shoots.UI] intent.trace {serialized}");
             AddNarration("result", "Intent dispatch end", new Dictionary<string, string> { ["trace"] = serialized });
             Trace.WriteLine($"[Shoots.UI] END IntentDispatch id={intent.IntentId} kind={intent.Kind}");
+        }
+
+        return $"{handler}:{result}";
+    }
+
+    private void TryAppendChatTranscriptRecord(IntentModel intent, string summary)
+    {
+        var workspacePath = CurrentProject?.WorkspacePath;
+        if (string.IsNullOrWhiteSpace(workspacePath))
+        {
+            return;
+        }
+
+        try
+        {
+            var notesPath = Path.Combine(workspacePath, "notes");
+            Directory.CreateDirectory(notesPath);
+            var transcriptPath = Path.Combine(notesPath, "chat_transcript.jsonl");
+            var entry = new
+            {
+                utc = DateTimeOffset.UtcNow,
+                kind = intent.Kind.ToString(),
+                raw = intent.RawUserText,
+                result = summary
+            };
+
+            File.AppendAllLines(transcriptPath, new[] { JsonSerializer.Serialize(entry) });
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[Shoots.UI] chat transcript append failed: {ex.Message}");
         }
     }
 

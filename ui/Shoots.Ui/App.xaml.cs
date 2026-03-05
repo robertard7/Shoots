@@ -221,6 +221,8 @@ public partial class App : Application
         var smokeDir = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Shoots.UI", "smoke");
         Directory.CreateDirectory(smokeDir);
         var sentinelPath = Path.Combine(smokeDir, "last.json");
+        var hasRunPath = project is not null && !string.IsNullOrWhiteSpace(viewModel.LastDemoRunPath);
+        var runPath = hasRunPath ? viewModel.LastDemoRunPath : string.Empty;
         var sentinel = new
         {
             project_id = project?.ProjectId ?? string.Empty,
@@ -230,9 +232,10 @@ public partial class App : Application
             missing = invariant.Missing,
             last_intent = payload,
             outcome = result,
-            demo_run_id = project is null || string.IsNullOrWhiteSpace(viewModel.LastDemoRunPath) ? string.Empty : Path.GetFileName(viewModel.LastDemoRunPath),
-            run_json_exists = project is not null && !string.IsNullOrWhiteSpace(viewModel.LastDemoRunPath) && File.Exists(Path.Combine(viewModel.LastDemoRunPath, "run.json")),
-            artifact_json_exists = project is not null && !string.IsNullOrWhiteSpace(viewModel.LastDemoRunPath) && File.Exists(Path.Combine(viewModel.LastDemoRunPath, "artifact.json"))
+            demo_run_id = hasRunPath ? Path.GetFileName(runPath) : string.Empty,
+            run_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "run.json")),
+            artifact_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "artifact.json")),
+            log_artifact_exists = hasRunPath && Directory.Exists(Path.Combine(runPath!, "artifacts")) && Directory.GetFiles(Path.Combine(runPath!, "artifacts"), "*.log", SearchOption.AllDirectories).Length > 0
         };
 
         File.WriteAllText(sentinelPath, JsonSerializer.Serialize(sentinel, new JsonSerializerOptions { WriteIndented = true }));

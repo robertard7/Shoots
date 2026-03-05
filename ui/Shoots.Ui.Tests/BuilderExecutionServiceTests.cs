@@ -29,6 +29,7 @@ public sealed class BuilderExecutionServiceTests
             Assert.True(Directory.Exists(result.RunPath));
             Assert.True(File.Exists(result.RunJsonPath));
             Assert.True(File.Exists(result.ArtifactJsonPath));
+            Assert.True(File.Exists(Path.Combine(result.RunPath, "narrator.jsonl")));
             Assert.True(File.Exists(Path.Combine(project.WorkspacePath, "artifacts", "demo", "output.txt")));
         }
         finally
