@@ -2044,6 +2044,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         CurrentProject = project;
+        var recoveredRuns = RunRecoveryService.MarkCrashedRunningRuns(project.WorkspacePath, evt => AddNarration(evt.Kind, evt.Message, evt.Data));
+        if (recoveredRuns.Count > 0)
+        {
+            Trace.WriteLine($"[Shoots.UI] recovered crashed runs: {string.Join(",", recoveredRuns)}");
+        }
+
         AddNarration("info", "Project loaded", new Dictionary<string, string>
         {
             ["project_id"] = project.ProjectId,

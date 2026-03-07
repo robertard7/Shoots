@@ -238,6 +238,7 @@ public partial class App : Application
             demo_run_id = hasRunPath ? Path.GetFileName(runPath) : string.Empty,
             run_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "run.json")),
             artifact_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "artifact.json")),
+            environment_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "environment.json")),
             manifest_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "artifacts", "manifest.json")),
             log_artifact_exists = hasRunPath && Directory.Exists(Path.Combine(runPath!, "artifacts")) && Directory.GetFiles(Path.Combine(runPath!, "artifacts"), "*.log", SearchOption.AllDirectories).Length > 0,
             artifact_verification_ok = hasRunPath && artifactVerification.Ok,

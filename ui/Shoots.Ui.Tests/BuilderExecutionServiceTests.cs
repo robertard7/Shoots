@@ -25,13 +25,14 @@ public sealed class BuilderExecutionServiceTests
             var service = new BuilderExecutionService(runtimeBridge, new ArtifactManager(), registry);
             var result = service.Execute(plan, project);
 
-            Assert.Equal("completed", result.Run.Status);
+            Assert.Equal(RunStates.Completed, result.Run.Status);
             Assert.Equal(registry.CatalogHash, result.Run.ToolCatalogHash);
             Assert.False(string.IsNullOrWhiteSpace(result.Run.PlanHash));
             Assert.True(Directory.Exists(result.RunPath));
             Assert.True(File.Exists(result.RunJsonPath));
             Assert.True(File.Exists(result.ArtifactJsonPath));
             Assert.True(File.Exists(Path.Combine(result.RunPath, "narrator.jsonl")));
+            Assert.True(File.Exists(Path.Combine(result.RunPath, "environment.json")));
             Assert.True(File.Exists(Path.Combine(result.RunPath, "artifacts", "manifest.json")));
             Assert.True(File.Exists(Path.Combine(project.WorkspacePath, "artifacts", "demo", "output.txt")));
 

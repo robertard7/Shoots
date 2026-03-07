@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -32,18 +33,29 @@ public sealed class BuilderExecutionService
         var runPath = Path.Combine(project.WorkspacePath, "runs", runId);
         Directory.CreateDirectory(runPath);
         var narratorPath = Path.Combine(runPath, "narrator.jsonl");
+        var runJsonPath = Path.Combine(runPath, "run.json");
 
         var planHash = ComputePlanHash(plan);
         var toolCatalogHash = _toolRegistry.CatalogHash;
+        var workspaceDescriptorHash = ComputeWorkspaceDescriptorHash(project);
+
         EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "info", "RUN_HEADER", new Dictionary<string, string>
         {
             ["run_id"] = runId,
             ["plan_hash"] = planHash,
-            ["tool_catalog_hash"] = toolCatalogHash
+            ["tool_catalog_hash"] = toolCatalogHash,
+            ["workspace_descriptor_hash"] = workspaceDescriptorHash
         }));
 
         var steps = new List<RunStep>();
-        var status = "completed";
+        PersistRun(RunStates.Pending);
+        PersistRun(RunStates.Running);
+
+        var environment = CaptureEnvironment(runPath);
+        EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "info", "ENV_CAPTURED", new Dictionary<string, string>
+        {
+            ["environment_hash"] = environment.Hash
+        }));
 
         EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "step", "PLAN_STARTED", new Dictionary<string, string>
         {
@@ -51,6 +63,8 @@ public sealed class BuilderExecutionService
             ["plan_id"] = plan.PlanId,
             ["plan_hash"] = planHash
         }));
+
+        var status = RunStates.Completed;
 
         foreach (var step in plan.Steps)
         {
@@ -61,14 +75,14 @@ public sealed class BuilderExecutionService
             }));
 
             var result = _runtimeBridge.ExecuteStep(step, project, narrate);
-            if (string.Equals(result.Status, "completed", StringComparison.Ordinal))
+            if (string.Equals(result.Status, RunStates.Completed, StringComparison.Ordinal))
             {
                 if (!string.IsNullOrWhiteSpace(result.OutputPath))
                 {
                     _artifactManager.Capture(runPath, step.StepId, result.OutputPath);
                 }
 
-                steps.Add(new RunStep(step.StepId, step.ToolId, "completed", result.OutputPath, null));
+                steps.Add(new RunStep(step.StepId, step.ToolId, RunStates.Completed, result.OutputPath, null));
                 EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "result", "STEP_COMPLETED", new Dictionary<string, string>
                 {
                     ["step_id"] = step.StepId,
@@ -77,8 +91,8 @@ public sealed class BuilderExecutionService
                 continue;
             }
 
-            status = "failed";
-            steps.Add(new RunStep(step.StepId, step.ToolId, "failed", null, result.Error));
+            status = RunStates.Failed;
+            steps.Add(new RunStep(step.StepId, step.ToolId, RunStates.Failed, null, result.Error));
             File.WriteAllText(Path.Combine(runPath, "rollback.marker"), $"step={step.StepId}; error={result.Error}");
             EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "error", "STEP_FAILED", new Dictionary<string, string>
             {
@@ -88,10 +102,8 @@ public sealed class BuilderExecutionService
             break;
         }
 
-        var run = new RunModel(runId, project.ProjectId, plan.PlanId, planHash, toolCatalogHash, DateTimeOffset.UtcNow, status, steps);
-        var runJsonPath = Path.Combine(runPath, "run.json");
-        File.WriteAllText(runJsonPath, JsonSerializer.Serialize(run, new JsonSerializerOptions { WriteIndented = true }));
         var artifactJsonPath = _artifactManager.WriteMetadata(runPath, planHash, toolCatalogHash);
+        var run = PersistRun(status);
 
         EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "result", "RUN_COMPLETED", new Dictionary<string, string>
         {
@@ -107,6 +119,22 @@ public sealed class BuilderExecutionService
         {
             narrate?.Invoke(evt);
             File.AppendAllLines(narratorPath, new[] { JsonSerializer.Serialize(evt) });
+        }
+
+        RunModel PersistRun(string runStatus)
+        {
+            var model = new RunModel(
+                runId,
+                project.ProjectId,
+                plan.PlanId,
+                planHash,
+                toolCatalogHash,
+                workspaceDescriptorHash,
+                DateTimeOffset.UtcNow,
+                runStatus,
+                steps);
+            File.WriteAllText(runJsonPath, JsonSerializer.Serialize(model, new JsonSerializerOptions { WriteIndented = true }));
+            return model;
         }
     }
 
@@ -141,4 +169,70 @@ public sealed class BuilderExecutionService
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()));
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
+
+    private static string ComputeWorkspaceDescriptorHash(ProjectModel project)
+    {
+        var canonical = $"{project.ProjectId}|{project.Name}|{project.WorkspacePath}|{project.CreatedUtc:O}";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static EnvironmentCapture CaptureEnvironment(string runPath)
+    {
+        var dotnetVersion = RunCommand("dotnet", "--version");
+        var gitVersion = RunCommand("git", "--version");
+        var snapshot = new EnvironmentSnapshot(
+            Environment.OSVersion.ToString(),
+            dotnetVersion,
+            gitVersion,
+            Environment.GetEnvironmentVariable("PATH") ?? string.Empty,
+            Environment.CurrentDirectory,
+            DateTimeOffset.UtcNow);
+
+        var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+        var environmentPath = Path.Combine(runPath, "environment.json");
+        File.WriteAllText(environmentPath, json);
+
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
+        return new EnvironmentCapture(hash, environmentPath);
+    }
+
+    private static string RunCommand(string fileName, string arguments)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+
+            if (process is null)
+            {
+                return string.Empty;
+            }
+
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            process.WaitForExit(5000);
+            return output;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private sealed record EnvironmentCapture(string Hash, string Path);
+
+    private sealed record EnvironmentSnapshot(
+        string OsVersion,
+        string DotnetSdkVersion,
+        string GitVersion,
+        string PathSnapshot,
+        string WorkingDirectory,
+        DateTimeOffset CapturedUtc);
 }
