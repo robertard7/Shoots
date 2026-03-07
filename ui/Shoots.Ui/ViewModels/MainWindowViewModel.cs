@@ -551,6 +551,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         _chatTranscript.Add($"User: {rawText}");
         var intent = _intentParser.Parse(rawText);
+        AddNarration("step", "INTENT_PARSED", new Dictionary<string, string>
+        {
+            ["kind"] = intent.Kind.ToString(),
+            ["normalized"] = intent.NormalizedText
+        });
         _chatTranscript.Add($"System: Intent recognized: {intent.Kind} (confidence={intent.Confidence:0.00}).");
         var dispatchSummary = await DispatchIntentAsync(intent);
         TryAppendChatTranscriptRecord(intent, dispatchSummary);
@@ -1001,6 +1006,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public bool HasProjectLoaded => CurrentProject is not null;
     public string? LastDemoRunPath => _lastDemoRunPath;
     public string LastRunVerificationState => _lastRunVerificationState;
+    public string SelectedRuntimeBridge => "RuntimeBridgeLocal";
+    public string SelectedProviderMode => "local";
+    public string SelectedHostTransport => "none";
     public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (trace-backed)" : "Mode: Live";
 
     public string ExecutionProviderSummary =>
@@ -1554,7 +1562,32 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 return Task.CompletedTask;
             }
 
-            var execution = _builderExecutionService.Execute(plan, CurrentProject, narrate: evt => AddNarration(evt.Kind, evt.Message, evt.Data));
+            AddNarration("step", "PLAN_CREATED", new Dictionary<string, string>
+            {
+                ["planner"] = _planner.GetType().Name,
+                ["plan_id"] = plan.PlanId
+            });
+            AddNarration("step", "RUNTIME_SUBMITTED", new Dictionary<string, string>
+            {
+                ["bridge"] = SelectedRuntimeBridge
+            });
+            AddNarration("step", "PROVIDER_SELECTED", new Dictionary<string, string>
+            {
+                ["provider"] = SelectedProviderMode
+            });
+            AddNarration("step", "HOST_REQUEST_SENT", new Dictionary<string, string>
+            {
+                ["host_transport"] = SelectedHostTransport
+            });
+
+            var execution = _builderExecutionService.Execute(
+                plan,
+                CurrentProject,
+                plannerSource: _planner.GetType().Name,
+                runtimeBridge: SelectedRuntimeBridge,
+                provider: SelectedProviderMode,
+                hostTransport: SelectedHostTransport,
+                narrate: evt => AddNarration(evt.Kind, evt.Message, evt.Data));
             _lastDemoRunPath = execution.RunPath;
             _runHistory.Insert(0, execution.RunPath);
             if (_runHistory.Count > 20)
@@ -1575,6 +1608,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             var verification = RunVerificationService.Verify(execution.RunPath);
             _lastRunVerificationState = verification.Valid ? "Verified" : "Invalid";
             OnPropertyChanged(nameof(LastRunVerificationState));
+            AddNarration("result", "RUN_VERIFIED", new Dictionary<string, string>
+            {
+                ["valid"] = verification.Valid.ToString(),
+                ["state"] = _lastRunVerificationState
+            });
 
             Trace.WriteLine($"[Shoots.UI] run complete. run_path={execution.RunPath}; run_json={execution.RunJsonPath}; artifact_json={execution.ArtifactJsonPath}; verified={verification.Valid}");
             AddStartupMessage($"System: Demo run complete at {execution.RunPath}. Verification={_lastRunVerificationState}.");

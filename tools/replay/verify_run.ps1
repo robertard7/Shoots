@@ -14,6 +14,7 @@ $manifestPath = Join-Path $RunPath "artifacts\manifest.json"
 $environmentPath = Join-Path $RunPath "environment.json"
 $narratorPath = Join-Path $RunPath "narrator.jsonl"
 $bundlePath = Join-Path $RunPath "evidence_bundle.json"
+$operatorFlowPath = Join-Path $RunPath "operator_flow.json"
 $reportPath = Join-Path $RunPath "verification_report.json"
 
 if (!(Test-Path $runJsonPath)) { throw "run.json missing: $runJsonPath" }
@@ -62,6 +63,14 @@ if ($run.transcriptHash) {
     $transcriptValid = Test-Hash $transcriptPath $run.transcriptHash "transcript"
 }
 
+$contractValid = $true
+if ($run.contractVersion) {
+    $contractValid = ($run.contractVersion -eq "ui-runtime-v1")
+    if (-not $contractValid) { $errors += "contract version mismatch" }
+}
+$operatorFlowValid = Test-Path $operatorFlowPath
+if (-not $operatorFlowValid) { $errors += "operator flow missing" }
+
 $catalogPath = "etc/ui.tools.catalog.json"
 if (Test-Path $catalogPath -and $run.toolCatalogHash) {
     $currentCatalogHash = (Get-FileHash -Path $catalogPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -70,7 +79,7 @@ if (Test-Path $catalogPath -and $run.toolCatalogHash) {
 }
 
 $report = [ordered]@{
-    valid = ($manifestValid -and $artifactsValid -and $environmentValid -and $narratorValid -and $bundleValid -and $catalogValid -and $transcriptValid)
+    valid = ($manifestValid -and $artifactsValid -and $environmentValid -and $narratorValid -and $bundleValid -and $catalogValid -and $transcriptValid -and $contractValid -and $operatorFlowValid)
     manifestValid = $manifestValid
     artifactsValid = $artifactsValid
     environmentValid = $environmentValid
@@ -78,6 +87,8 @@ $report = [ordered]@{
     bundleValid = $bundleValid
     catalogValid = $catalogValid
     transcriptValid = $transcriptValid
+    contractValid = $contractValid
+    operatorFlowValid = $operatorFlowValid
     errors = $errors
 }
 

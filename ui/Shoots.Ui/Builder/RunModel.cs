@@ -3,6 +3,11 @@ using System.Collections.Generic;
 
 namespace Shoots.UI.Builder;
 
+public static class ExecutionContract
+{
+    public const string Version = "ui-runtime-v1";
+}
+
 public static class RunStates
 {
     public const string Pending = "pending";
@@ -31,6 +36,11 @@ public sealed record RunModel(
     DateTimeOffset CreatedUtc,
     string Status,
     IReadOnlyList<RunStep> Steps,
+    string ContractVersion,
+    string PlannerSource,
+    string RuntimeBridge,
+    string Provider,
+    string HostTransport,
     string? EnvironmentHash = null,
     string? ManifestHash = null,
     string? NarratorHash = null,

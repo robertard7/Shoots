@@ -32,6 +32,11 @@ public static class RunVerificationService
             return new RunVerificationResult(false, false, false, false, false, false, false, false, errors);
         }
 
+        if (!string.Equals(run.ContractVersion, ExecutionContract.Version, StringComparison.Ordinal))
+        {
+            errors.Add($"contract version mismatch: run={run.ContractVersion}; expected={ExecutionContract.Version}");
+        }
+
         var manifestValid = File.Exists(manifestPath);
         if (!manifestValid)
         {
@@ -70,7 +75,7 @@ public static class RunVerificationService
             transcriptValid = HashMatches(transcriptPath, run.TranscriptHash, errors, "transcript");
         }
 
-        var valid = manifestValid && artifactsValid && environmentValid && narratorValid && bundleValid && catalogValid && transcriptValid;
+        var valid = manifestValid && artifactsValid && environmentValid && narratorValid && bundleValid && catalogValid && transcriptValid && errors.Count == 0;
         return new RunVerificationResult(valid, manifestValid, artifactsValid, environmentValid, narratorValid, bundleValid, catalogValid, transcriptValid, errors);
     }
 

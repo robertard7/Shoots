@@ -242,12 +242,30 @@ public partial class App : Application
             manifest_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "artifacts", "manifest.json")),
             evidence_bundle_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "evidence_bundle.json")),
             verification_report_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "verification_report.json")),
+            operator_flow_exists = hasRunPath,
             log_artifact_exists = hasRunPath && Directory.Exists(Path.Combine(runPath!, "artifacts")) && Directory.GetFiles(Path.Combine(runPath!, "artifacts"), "*.log", SearchOption.AllDirectories).Length > 0,
             artifact_verification_ok = hasRunPath && artifactVerification.Ok,
             artifact_verification_errors = artifactVerification.Errors
         };
 
         File.WriteAllText(sentinelPath, JsonSerializer.Serialize(sentinel, new JsonSerializerOptions { WriteIndented = true }));
+
+        if (hasRunPath)
+        {
+            var operatorFlowPath = Path.Combine(runPath!, "operator_flow.json");
+            var operatorFlow = new
+            {
+                intent = payload,
+                planner = "RuntimePlanner",
+                runtime_bridge = "RuntimeBridgeLocal",
+                provider = "local",
+                host_transport = "none",
+                verification_report_exists = File.Exists(Path.Combine(runPath!, "verification_report.json"))
+            };
+
+            File.WriteAllText(operatorFlowPath, JsonSerializer.Serialize(operatorFlow, new JsonSerializerOptions { WriteIndented = true }));
+        }
+
         Trace.WriteLine($"[Shoots.UI] smoke.sentinel={sentinelPath}");
         return true;
     }

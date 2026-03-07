@@ -25,7 +25,7 @@ public sealed class BuilderExecutionService
         _toolRegistry = toolRegistry;
     }
 
-    public BuilderExecutionResult Execute(PlanModel plan, ProjectModel project, Action<NarrationEvent>? narrate = null)
+    public BuilderExecutionResult Execute(PlanModel plan, ProjectModel project, string plannerSource = "runtime", string runtimeBridge = "RuntimeBridgeLocal", string provider = "local", string hostTransport = "none", Action<NarrationEvent>? narrate = null)
     {
         _artifactManager.Reset();
 
@@ -44,7 +44,12 @@ public sealed class BuilderExecutionService
             ["run_id"] = runId,
             ["plan_hash"] = planHash,
             ["tool_catalog_hash"] = toolCatalogHash,
-            ["workspace_descriptor_hash"] = workspaceDescriptorHash
+            ["workspace_descriptor_hash"] = workspaceDescriptorHash,
+            ["contract_version"] = ExecutionContract.Version,
+            ["planner_source"] = plannerSource,
+            ["runtime_bridge"] = runtimeBridge,
+            ["provider"] = provider,
+            ["host_transport"] = hostTransport
         }));
 
         var steps = new List<RunStep>();
@@ -131,7 +136,8 @@ public sealed class BuilderExecutionService
             ["run_id"] = runId,
             ["status"] = status,
             ["plan_hash"] = planHash,
-            ["tool_catalog_hash"] = toolCatalogHash
+            ["tool_catalog_hash"] = toolCatalogHash,
+            ["contract_version"] = ExecutionContract.Version
         }));
 
         var narratorHash = ComputeFileHash(narratorPath);
@@ -164,6 +170,11 @@ public sealed class BuilderExecutionService
                 DateTimeOffset.UtcNow,
                 runStatus,
                 steps,
+                ExecutionContract.Version,
+                plannerSource,
+                runtimeBridge,
+                provider,
+                hostTransport,
                 envHash,
                 manHash,
                 narrHash,
@@ -334,7 +345,12 @@ public sealed class BuilderExecutionService
             artifact_manifest_hash = manifestHash,
             narrator_hash = narratorHash,
             transcript_hash = transcriptHash,
-            repro_warning = run.ReproWarning
+            repro_warning = run.ReproWarning,
+            contract_version = run.ContractVersion,
+            planner_source = run.PlannerSource,
+            runtime_bridge = run.RuntimeBridge,
+            provider = run.Provider,
+            host_transport = run.HostTransport
         };
 
         File.WriteAllText(bundlePath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));

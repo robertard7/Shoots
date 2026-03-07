@@ -27,7 +27,12 @@ public sealed class RunRecoveryServiceTests
                 "workspacehash",
                 DateTimeOffset.UtcNow,
                 RunStates.Running,
-                new List<RunStep>());
+                new List<RunStep>(),
+                ExecutionContract.Version,
+                "RuntimePlanner",
+                "RuntimeBridgeLocal",
+                "local",
+                "none");
             File.WriteAllText(Path.Combine(runPath, "run.json"), JsonSerializer.Serialize(run, new JsonSerializerOptions { WriteIndented = true }));
 
             var recovered = RunRecoveryService.MarkCrashedRunningRuns(workspace);
