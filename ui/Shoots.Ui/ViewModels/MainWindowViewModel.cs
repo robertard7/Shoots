@@ -144,6 +144,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string _modelCatalogError = string.Empty;
     private ProjectModel? _currentProject;
     private string? _lastDemoRunPath;
+    private string _lastRunVerificationState = "Not verified";
 
     private AiPresentationPolicy _aiPresentationPolicy =
         new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true, EnterpriseMode: false);
@@ -999,6 +1000,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public string CurrentWorkspacePath => CurrentProject?.WorkspacePath ?? "No project loaded";
     public bool HasProjectLoaded => CurrentProject is not null;
     public string? LastDemoRunPath => _lastDemoRunPath;
+    public string LastRunVerificationState => _lastRunVerificationState;
     public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (trace-backed)" : "Mode: Live";
 
     public string ExecutionProviderSummary =>
@@ -1570,14 +1572,21 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 _artifactFiles.Add(artifactFile);
             }
 
-            Trace.WriteLine($"[Shoots.UI] run complete. run_path={execution.RunPath}; run_json={execution.RunJsonPath}; artifact_json={execution.ArtifactJsonPath}");
-            AddStartupMessage($"System: Demo run complete at {execution.RunPath}.");
+            var verification = RunVerificationService.Verify(execution.RunPath);
+            _lastRunVerificationState = verification.Valid ? "Verified" : "Invalid";
+            OnPropertyChanged(nameof(LastRunVerificationState));
+
+            Trace.WriteLine($"[Shoots.UI] run complete. run_path={execution.RunPath}; run_json={execution.RunJsonPath}; artifact_json={execution.ArtifactJsonPath}; verified={verification.Valid}");
+            AddStartupMessage($"System: Demo run complete at {execution.RunPath}. Verification={_lastRunVerificationState}.");
             AddNarration("result", "Demo run complete", new Dictionary<string, string>
             {
                 ["run_path"] = execution.RunPath,
                 ["run_json"] = execution.RunJsonPath,
                 ["artifact_json"] = execution.ArtifactJsonPath,
-                ["status"] = execution.Run.Status
+                ["status"] = execution.Run.Status,
+                ["verification"] = _lastRunVerificationState,
+                ["plan_hash"] = execution.Run.PlanHash,
+                ["run_id"] = execution.Run.RunId
             });
         }
         catch (Exception ex)

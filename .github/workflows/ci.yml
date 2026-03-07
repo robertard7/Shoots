@@ -671,10 +671,12 @@ PYCHK
               $manifest = Join-Path $runPath "artifacts\manifest.json"
               $environment = Join-Path $runPath "environment.json"
               $evidence = Join-Path $runPath "evidence_bundle.json"
+              $verification = Join-Path $runPath "verification_report.json"
               if (Test-Path $narrator) { Copy-Item $narrator .\artifacts\ui-smoke\narrator.jsonl -Force }
               if (Test-Path $manifest) { Copy-Item $manifest .\artifacts\ui-smoke\manifest.json -Force }
               if (Test-Path $environment) { Copy-Item $environment .\artifacts\ui-smoke\environment.json -Force }
               if (Test-Path $evidence) { Copy-Item $evidence .\artifacts\ui-smoke\evidence_bundle.json -Force }
+              if (Test-Path $verification) { Copy-Item $verification .\artifacts\ui-smoke\verification_report.json -Force }
             }
           }
           if (Test-Path $log) { Copy-Item $log .\artifacts\ui-smoke\ui.log -Force }

@@ -21,6 +21,8 @@ $files = @(
     "evidence_bundle.json",
     "narrator.jsonl",
     "artifacts\manifest.json",
+    "verification_report.json",
+    "drift_report.json",
     "metrics.json"
 )
 

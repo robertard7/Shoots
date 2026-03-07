@@ -115,6 +115,17 @@ public sealed class BuilderExecutionService
             }));
         }
 
+        var baselineDrift = EvaluateBaselinePolicy(project.WorkspacePath, planHash, manifestHash, toolCatalogHash);
+        if (!string.IsNullOrWhiteSpace(baselineDrift))
+        {
+            status = RunStates.FailedDrift;
+            EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "warn", "BASELINE_DRIFT", new Dictionary<string, string>
+            {
+                ["warning"] = baselineDrift
+            }));
+            warning = string.IsNullOrWhiteSpace(warning) ? baselineDrift : $"{warning}; {baselineDrift}";
+        }
+
         EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "result", "RUN_COMPLETED", new Dictionary<string, string>
         {
             ["run_id"] = runId,
@@ -128,6 +139,10 @@ public sealed class BuilderExecutionService
         var evidenceBundlePath = WriteEvidenceBundle(runPath, run, environment.Hash, manifestHash, narratorHash, transcriptHash);
         var evidenceBundleHash = ComputeFileHash(evidenceBundlePath);
         run = PersistRun(status, environment.Hash, manifestHash, narratorHash, transcriptHash, evidenceBundleHash, warning);
+
+        var verification = RunVerificationService.Verify(runPath);
+        var verificationReportPath = Path.Combine(runPath, "verification_report.json");
+        File.WriteAllText(verificationReportPath, JsonSerializer.Serialize(verification, new JsonSerializerOptions { WriteIndented = true }));
 
         return new BuilderExecutionResult(run, runPath, runJsonPath, artifactJsonPath);
 
@@ -263,6 +278,48 @@ public sealed class BuilderExecutionService
         }
 
         return $"catalog hash changed: previous={previous.ToolCatalogHash}; current={toolCatalogHash}";
+    }
+
+    private static string? EvaluateBaselinePolicy(string workspacePath, string planHash, string? manifestHash, string toolCatalogHash)
+    {
+        var baselinePath = Path.Combine(workspacePath, "baseline_policy.json");
+        if (!File.Exists(baselinePath))
+        {
+            return null;
+        }
+
+        BaselinePolicy? policy;
+        try
+        {
+            policy = JsonSerializer.Deserialize<BaselinePolicy>(File.ReadAllText(baselinePath));
+        }
+        catch (Exception ex)
+        {
+            return $"baseline policy unreadable: {ex.Message}";
+        }
+
+        if (policy is null)
+        {
+            return "baseline policy missing";
+        }
+
+        var drift = new List<string>();
+        if (!string.Equals(policy.PlanHash, planHash, StringComparison.OrdinalIgnoreCase))
+        {
+            drift.Add("plan_hash");
+        }
+
+        if (!string.Equals(policy.ExpectedManifestHash, manifestHash, StringComparison.OrdinalIgnoreCase))
+        {
+            drift.Add("manifest_hash");
+        }
+
+        if (!string.Equals(policy.CatalogHash, toolCatalogHash, StringComparison.OrdinalIgnoreCase))
+        {
+            drift.Add("catalog_hash");
+        }
+
+        return drift.Count == 0 ? null : $"baseline drift: {string.Join(",", drift)}";
     }
 
     private static string WriteEvidenceBundle(string runPath, RunModel run, string? environmentHash, string? manifestHash, string? narratorHash, string? transcriptHash)

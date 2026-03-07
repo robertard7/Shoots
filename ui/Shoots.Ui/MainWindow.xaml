@@ -140,6 +140,9 @@
               IsEnabled="{Binding HasProjectLoaded}" />
 
       <TextBlock Margin="0,12,0,0" Text="Run History" FontWeight="SemiBold" />
+      <TextBlock Margin="0,4,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding LastRunVerificationState, StringFormat=Verification: {0}}" />
       <ListBox Margin="0,6,0,0"
                Height="90"
                ItemsSource="{Binding RunHistory}" />

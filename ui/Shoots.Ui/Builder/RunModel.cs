@@ -10,6 +10,7 @@ public static class RunStates
     public const string Failed = "failed";
     public const string Completed = "completed";
     public const string FailedCrash = "failed_crash";
+    public const string FailedDrift = "failed_drift";
 }
 
 public sealed record RunStep(

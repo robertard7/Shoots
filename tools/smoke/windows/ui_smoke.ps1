@@ -37,6 +37,7 @@ if (-not $proof.artifact_json_exists) { throw "Sentinel indicates artifact.json 
 if (-not $proof.environment_json_exists) { throw "Sentinel indicates environment.json missing." }
 if (-not $proof.manifest_json_exists) { throw "Sentinel indicates manifest.json missing." }
 if (-not $proof.evidence_bundle_exists) { throw "Sentinel indicates evidence_bundle.json missing." }
+if (-not $proof.verification_report_exists) { throw "Sentinel indicates verification_report.json missing." }
 if (-not $proof.log_artifact_exists) { throw "Sentinel indicates no .log artifact captured." }
 if (-not $proof.artifact_verification_ok) { throw "Artifact verification failed: $($proof.artifact_verification_errors -join ", ")" }
 
@@ -46,7 +47,11 @@ if (-not (Test-Path (Join-Path $runPath "artifact.json"))) { throw "artifact.jso
 if (-not (Test-Path (Join-Path $runPath "environment.json"))) { throw "environment.json missing at $runPath" }
 if (-not (Test-Path (Join-Path $runPath "artifacts\manifest.json"))) { throw "manifest.json missing at $runPath" }
 if (-not (Test-Path (Join-Path $runPath "evidence_bundle.json"))) { throw "evidence_bundle.json missing at $runPath" }
+if (-not (Test-Path (Join-Path $runPath "verification_report.json"))) { throw "verification_report.json missing at $runPath" }
 $logArtifacts = Get-ChildItem -Path (Join-Path $runPath "artifacts") -Filter *.log -Recurse -ErrorAction SilentlyContinue
+$verificationReportPath = Join-Path $runPath "verification_report.json"
+$verificationReport = Get-Content $verificationReportPath -Raw | ConvertFrom-Json
+if (-not $verificationReport.valid) { throw "verification_report.json indicates invalid run evidence." }
 if (-not $logArtifacts -or $logArtifacts.Count -lt 1) { throw "Expected at least one log artifact under $runPath\artifacts" }
 
 dotnet run --project $uiProject -c $Configuration -- --smoke intent "start new project"
