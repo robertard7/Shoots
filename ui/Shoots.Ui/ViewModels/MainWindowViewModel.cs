@@ -145,6 +145,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private ProjectModel? _currentProject;
     private string? _lastDemoRunPath;
     private string _lastRunVerificationState = "Not verified";
+    private string _selectedProviderMode = "local";
+    private string _selectedHostTransport = "none";
 
     private AiPresentationPolicy _aiPresentationPolicy =
         new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true, EnterpriseMode: false);
@@ -1007,8 +1009,38 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public string? LastDemoRunPath => _lastDemoRunPath;
     public string LastRunVerificationState => _lastRunVerificationState;
     public string SelectedRuntimeBridge => "RuntimeBridgeLocal";
-    public string SelectedProviderMode => "local";
-    public string SelectedHostTransport => "none";
+
+    public string SelectedProviderMode
+    {
+        get => _selectedProviderMode;
+        set
+        {
+            var normalized = string.IsNullOrWhiteSpace(value) ? "local" : value.Trim();
+            if (string.Equals(_selectedProviderMode, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _selectedProviderMode = normalized;
+            OnPropertyChanged(nameof(SelectedProviderMode));
+        }
+    }
+
+    public string SelectedHostTransport
+    {
+        get => _selectedHostTransport;
+        set
+        {
+            var normalized = string.IsNullOrWhiteSpace(value) ? "none" : value.Trim();
+            if (string.Equals(_selectedHostTransport, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _selectedHostTransport = normalized;
+            OnPropertyChanged(nameof(SelectedHostTransport));
+        }
+    }
     public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (trace-backed)" : "Mode: Live";
 
     public string ExecutionProviderSummary =>

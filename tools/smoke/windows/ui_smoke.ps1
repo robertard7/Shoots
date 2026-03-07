@@ -56,6 +56,17 @@ $verificationReport = Get-Content $verificationReportPath -Raw | ConvertFrom-Jso
 if (-not $verificationReport.valid) { throw "verification_report.json indicates invalid run evidence." }
 pwsh -NoLogo -NoProfile -File .\tools\replay\verify_run.ps1 -RunPath $runPath
 if (-not $logArtifacts -or $logArtifacts.Count -lt 1) { throw "Expected at least one log artifact under $runPath\artifacts" }
+$operatorFlow = Get-Content (Join-Path $runPath "operator_flow.json") -Raw | ConvertFrom-Json
+if ($operatorFlow.host_transport -ne "none") { throw "operator_flow host transport mismatch for direct run." }
+
+dotnet run --project $uiProject -c $Configuration -- --smoke run-demo-host
+if (!(Test-Path $sentinelPath)) { throw "Missing smoke sentinel after run-demo-host." }
+
+$proof = Get-Content $sentinelPath -Raw | ConvertFrom-Json
+$hostRunPath = Join-Path $proof.workspace_path (Join-Path "runs" $proof.demo_run_id)
+$hostOperatorFlow = Get-Content (Join-Path $hostRunPath "operator_flow.json") -Raw | ConvertFrom-Json
+if ($hostOperatorFlow.host_transport -ne "host") { throw "operator_flow host transport mismatch for host run." }
+pwsh -NoLogo -NoProfile -File .\tools\replay\verify_run.ps1 -RunPath $hostRunPath
 
 dotnet run --project $uiProject -c $Configuration -- --smoke intent "start new project"
 if (!(Test-Path $sentinelPath)) { throw "Missing smoke sentinel after intent." }

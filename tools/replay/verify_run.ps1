@@ -89,6 +89,10 @@ $report = [ordered]@{
     transcriptValid = $transcriptValid
     contractValid = $contractValid
     operatorFlowValid = $operatorFlowValid
+    plannerSource = $run.plannerSource
+    runtimeBridge = $run.runtimeBridge
+    provider = $run.provider
+    hostTransport = $run.hostTransport
     errors = $errors
 }
 

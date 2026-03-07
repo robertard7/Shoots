@@ -197,6 +197,12 @@ public partial class App : Application
                     break;
                 case "run-demo":
                     viewModel.NewProjectCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    viewModel.SelectedHostTransport = "none";
+                    viewModel.RunDemoPlanCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    break;
+                case "run-demo-host":
+                    viewModel.NewProjectCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    viewModel.SelectedHostTransport = "host";
                     viewModel.RunDemoPlanCommand.ExecuteAsync().GetAwaiter().GetResult();
                     break;
                 case "intent":
@@ -257,9 +263,9 @@ public partial class App : Application
             {
                 intent = payload,
                 planner = "RuntimePlanner",
-                runtime_bridge = "RuntimeBridgeLocal",
-                provider = "local",
-                host_transport = "none",
+                runtime_bridge = viewModel.SelectedRuntimeBridge,
+                provider = viewModel.SelectedProviderMode,
+                host_transport = viewModel.SelectedHostTransport,
                 verification_report_exists = File.Exists(Path.Combine(runPath!, "verification_report.json"))
             };
 

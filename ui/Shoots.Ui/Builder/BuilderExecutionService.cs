@@ -38,6 +38,7 @@ public sealed class BuilderExecutionService
         var planHash = ComputePlanHash(plan);
         var toolCatalogHash = _toolRegistry.CatalogHash;
         var workspaceDescriptorHash = ComputeWorkspaceDescriptorHash(project);
+        var executionRequest = ExecutionContractAdapter.ToExecutionRequest(plan, project, plannerSource, runtimeBridge, provider, hostTransport, planHash);
 
         EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "info", "RUN_HEADER", new Dictionary<string, string>
         {
@@ -145,6 +146,12 @@ public sealed class BuilderExecutionService
         var evidenceBundlePath = WriteEvidenceBundle(runPath, run, environment.Hash, manifestHash, narratorHash, transcriptHash);
         var evidenceBundleHash = ComputeFileHash(evidenceBundlePath);
         run = PersistRun(status, environment.Hash, manifestHash, narratorHash, transcriptHash, evidenceBundleHash, warning);
+
+        var executionResult = ExecutionContractAdapter.ToExecutionResult(run);
+        if (!string.Equals(executionRequest.ContractVersion, executionResult.ContractVersion, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"execution contract drift: request={executionRequest.ContractVersion}; result={executionResult.ContractVersion}");
+        }
 
         var verification = RunVerificationService.Verify(runPath);
         var verificationReportPath = Path.Combine(runPath, "verification_report.json");
