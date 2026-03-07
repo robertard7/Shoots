@@ -28,11 +28,15 @@ public sealed class BuilderExecutionServiceTests
             Assert.Equal(RunStates.Completed, result.Run.Status);
             Assert.Equal(registry.CatalogHash, result.Run.ToolCatalogHash);
             Assert.False(string.IsNullOrWhiteSpace(result.Run.PlanHash));
+            Assert.False(string.IsNullOrWhiteSpace(result.Run.EnvironmentHash));
+            Assert.False(string.IsNullOrWhiteSpace(result.Run.ManifestHash));
+            Assert.False(string.IsNullOrWhiteSpace(result.Run.NarratorHash));
             Assert.True(Directory.Exists(result.RunPath));
             Assert.True(File.Exists(result.RunJsonPath));
             Assert.True(File.Exists(result.ArtifactJsonPath));
             Assert.True(File.Exists(Path.Combine(result.RunPath, "narrator.jsonl")));
             Assert.True(File.Exists(Path.Combine(result.RunPath, "environment.json")));
+            Assert.True(File.Exists(Path.Combine(result.RunPath, "evidence_bundle.json")));
             Assert.True(File.Exists(Path.Combine(result.RunPath, "artifacts", "manifest.json")));
             Assert.True(File.Exists(Path.Combine(project.WorkspacePath, "artifacts", "demo", "output.txt")));
 

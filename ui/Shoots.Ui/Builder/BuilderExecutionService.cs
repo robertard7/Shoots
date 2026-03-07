@@ -103,7 +103,17 @@ public sealed class BuilderExecutionService
         }
 
         var artifactJsonPath = _artifactManager.WriteMetadata(runPath, planHash, toolCatalogHash);
-        var run = PersistRun(status);
+        var manifestPath = Path.Combine(runPath, "artifacts", "manifest.json");
+        var manifestHash = ComputeFileHash(manifestPath);
+        var transcriptHash = ComputeFileHash(Path.Combine(project.WorkspacePath, "notes", "chat_transcript.jsonl"));
+        var warning = DetectCatalogDrift(project.WorkspacePath, runId, toolCatalogHash);
+        if (!string.IsNullOrWhiteSpace(warning))
+        {
+            EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "warn", "CATALOG_DRIFT", new Dictionary<string, string>
+            {
+                ["warning"] = warning
+            }));
+        }
 
         EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "result", "RUN_COMPLETED", new Dictionary<string, string>
         {
@@ -113,6 +123,12 @@ public sealed class BuilderExecutionService
             ["tool_catalog_hash"] = toolCatalogHash
         }));
 
+        var narratorHash = ComputeFileHash(narratorPath);
+        var run = PersistRun(status, environment.Hash, manifestHash, narratorHash, transcriptHash, null, warning);
+        var evidenceBundlePath = WriteEvidenceBundle(runPath, run, environment.Hash, manifestHash, narratorHash, transcriptHash);
+        var evidenceBundleHash = ComputeFileHash(evidenceBundlePath);
+        run = PersistRun(status, environment.Hash, manifestHash, narratorHash, transcriptHash, evidenceBundleHash, warning);
+
         return new BuilderExecutionResult(run, runPath, runJsonPath, artifactJsonPath);
 
         void EmitNarration(NarrationEvent evt)
@@ -121,7 +137,7 @@ public sealed class BuilderExecutionService
             File.AppendAllLines(narratorPath, new[] { JsonSerializer.Serialize(evt) });
         }
 
-        RunModel PersistRun(string runStatus)
+        RunModel PersistRun(string runStatus, string? envHash = null, string? manHash = null, string? narrHash = null, string? transHash = null, string? evidenceHash = null, string? reproWarning = null)
         {
             var model = new RunModel(
                 runId,
@@ -132,7 +148,13 @@ public sealed class BuilderExecutionService
                 workspaceDescriptorHash,
                 DateTimeOffset.UtcNow,
                 runStatus,
-                steps);
+                steps,
+                envHash,
+                manHash,
+                narrHash,
+                transHash,
+                evidenceHash,
+                reproWarning);
             File.WriteAllText(runJsonPath, JsonSerializer.Serialize(model, new JsonSerializerOptions { WriteIndented = true }));
             return model;
         }
@@ -195,6 +217,71 @@ public sealed class BuilderExecutionService
 
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
         return new EnvironmentCapture(hash, environmentPath);
+    }
+
+    private static string? ComputeFileHash(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        using var stream = File.OpenRead(path);
+        var hash = SHA256.HashData(stream);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static string? DetectCatalogDrift(string workspacePath, string currentRunId, string toolCatalogHash)
+    {
+        var runsPath = Path.Combine(workspacePath, "runs");
+        if (!Directory.Exists(runsPath))
+        {
+            return null;
+        }
+
+        var previousRun = Directory.GetDirectories(runsPath)
+            .Where(path => !string.Equals(Path.GetFileName(path), currentRunId, StringComparison.Ordinal))
+            .Select(path => Path.Combine(path, "run.json"))
+            .Where(File.Exists)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .LastOrDefault();
+
+        if (previousRun is null)
+        {
+            return null;
+        }
+
+        var previous = JsonSerializer.Deserialize<RunModel>(File.ReadAllText(previousRun));
+        if (previous is null)
+        {
+            return null;
+        }
+
+        if (string.Equals(previous.ToolCatalogHash, toolCatalogHash, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return $"catalog hash changed: previous={previous.ToolCatalogHash}; current={toolCatalogHash}";
+    }
+
+    private static string WriteEvidenceBundle(string runPath, RunModel run, string? environmentHash, string? manifestHash, string? narratorHash, string? transcriptHash)
+    {
+        var bundlePath = Path.Combine(runPath, "evidence_bundle.json");
+        var payload = new
+        {
+            run_state = run.Status,
+            plan_hash = run.PlanHash,
+            tool_catalog_hash = run.ToolCatalogHash,
+            environment_hash = environmentHash,
+            artifact_manifest_hash = manifestHash,
+            narrator_hash = narratorHash,
+            transcript_hash = transcriptHash,
+            repro_warning = run.ReproWarning
+        };
+
+        File.WriteAllText(bundlePath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        return bundlePath;
     }
 
     private static string RunCommand(string fileName, string arguments)

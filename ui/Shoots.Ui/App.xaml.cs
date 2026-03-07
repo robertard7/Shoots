@@ -240,6 +240,7 @@ public partial class App : Application
             artifact_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "artifact.json")),
             environment_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "environment.json")),
             manifest_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "artifacts", "manifest.json")),
+            evidence_bundle_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "evidence_bundle.json")),
             log_artifact_exists = hasRunPath && Directory.Exists(Path.Combine(runPath!, "artifacts")) && Directory.GetFiles(Path.Combine(runPath!, "artifacts"), "*.log", SearchOption.AllDirectories).Length > 0,
             artifact_verification_ok = hasRunPath && artifactVerification.Ok,
             artifact_verification_errors = artifactVerification.Errors

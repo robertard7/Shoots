@@ -29,7 +29,13 @@ public sealed record RunModel(
     string WorkspaceDescriptorHash,
     DateTimeOffset CreatedUtc,
     string Status,
-    IReadOnlyList<RunStep> Steps
+    IReadOnlyList<RunStep> Steps,
+    string? EnvironmentHash = null,
+    string? ManifestHash = null,
+    string? NarratorHash = null,
+    string? TranscriptHash = null,
+    string? EvidenceBundleHash = null,
+    string? ReproWarning = null
 );
 
 public sealed record BuilderExecutionResult(
