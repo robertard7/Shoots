@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
 using Shoots.Contracts.Core;
 using Shoots.Contracts.Core.AI;
 using Shoots.UI.AiHelp;
@@ -469,6 +470,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public AsyncRelayCommand OpenLastVerificationReportCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenLastOperatorFlowCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenLastTransportEquivalenceCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyLastRunFolderPathCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyLastVerificationReportPathCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyLastOperatorFlowPathCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyLastTransportEquivalencePathCommand { get; private set; } = null!;
 
 	// Call this from your constructor AFTER other command setup
 	private void InitializeChatIntakeSurface()
@@ -491,6 +496,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OpenLastVerificationReportCommand = new AsyncRelayCommand(OpenLastVerificationReportAsync, CanOpenLastVerificationReport);
         OpenLastOperatorFlowCommand = new AsyncRelayCommand(OpenLastOperatorFlowAsync, CanOpenLastOperatorFlow);
         OpenLastTransportEquivalenceCommand = new AsyncRelayCommand(OpenLastTransportEquivalenceAsync, CanOpenLastTransportEquivalence);
+        CopyLastRunFolderPathCommand = new AsyncRelayCommand(CopyLastRunFolderPathAsync, CanOpenLastRunFolder);
+        CopyLastVerificationReportPathCommand = new AsyncRelayCommand(CopyLastVerificationReportPathAsync, CanOpenLastVerificationReport);
+        CopyLastOperatorFlowPathCommand = new AsyncRelayCommand(CopyLastOperatorFlowPathAsync, CanOpenLastOperatorFlow);
+        CopyLastTransportEquivalencePathCommand = new AsyncRelayCommand(CopyLastTransportEquivalencePathAsync, CanOpenLastTransportEquivalence);
 
         RebuildJobSpecDigest();
     }
@@ -546,6 +555,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private Task OpenLastTransportEquivalenceAsync()
         => OpenPathIfExistsAsync(LastTransportEquivalencePath);
 
+    private Task CopyLastRunFolderPathAsync()
+        => CopyPathToClipboardAsync(LastRunFolderPath, isFile: false);
+
+    private Task CopyLastVerificationReportPathAsync()
+        => CopyPathToClipboardAsync(LastVerificationReportPath, isFile: true);
+
+    private Task CopyLastOperatorFlowPathAsync()
+        => CopyPathToClipboardAsync(LastOperatorFlowPath, isFile: true);
+
+    private Task CopyLastTransportEquivalencePathAsync()
+        => CopyPathToClipboardAsync(LastTransportEquivalencePath, isFile: true);
+
     private Task OpenFolderIfExistsAsync(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
@@ -564,6 +585,27 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         return _workspaceShell.OpenFolderAsync(path);
+    }
+
+    private Task CopyPathToClipboardAsync(string path, bool isFile)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (isFile && !File.Exists(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!isFile && !Directory.Exists(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        Clipboard.SetText(path);
+        return Task.CompletedTask;
     }
 
     private Task ResetModelCatalogAsync()
@@ -2820,6 +2862,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OpenLastVerificationReportCommand.RaiseCanExecuteChanged();
         OpenLastOperatorFlowCommand.RaiseCanExecuteChanged();
         OpenLastTransportEquivalenceCommand.RaiseCanExecuteChanged();
+        CopyLastRunFolderPathCommand.RaiseCanExecuteChanged();
+        CopyLastVerificationReportPathCommand.RaiseCanExecuteChanged();
+        CopyLastOperatorFlowPathCommand.RaiseCanExecuteChanged();
+        CopyLastTransportEquivalencePathCommand.RaiseCanExecuteChanged();
         RunDemoPlanCommand.RaiseCanExecuteChanged();
         NewProjectCommand.RaiseCanExecuteChanged();
 
