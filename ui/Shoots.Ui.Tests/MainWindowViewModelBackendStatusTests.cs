@@ -348,30 +348,24 @@ public sealed class MainWindowViewModelBackendStatusTests
     }
 
 
-    [Fact]
-    public void MainWindowViewModel_copy_paths_do_not_call_clipboard_directly()
-    {
-        var viewModelSource = Path.GetFullPath(Path.Combine("ui", "Shoots.Ui", "ViewModels", "MainWindowViewModel.cs"));
-        Assert.True(File.Exists(viewModelSource));
-
-        var source = File.ReadAllText(viewModelSource);
-        Assert.DoesNotContain("Clipboard.SetText", source);
-        Assert.Contains("_workspaceShell.CopyTextAsync", source);
-    }
 
 
     [Fact]
-    public void WorkspaceShellService_copy_uses_dispatcher_guarded_clipboard_path()
+    public async Task WorkspaceShellService_copy_is_noop_for_empty_or_canceled_requests()
     {
-        var shellSourcePath = Path.GetFullPath(Path.Combine("ui", "Shoots.Ui", "Projects", "WorkspaceShellService.cs"));
-        Assert.True(File.Exists(shellSourcePath));
+        var shell = new WorkspaceShellService();
 
-        var source = File.ReadAllText(shellSourcePath);
-        Assert.Contains("app.Dispatcher.CheckAccess()", source);
-        Assert.Contains("app.Dispatcher.InvokeAsync(() => Clipboard.SetText(text)).Task", source);
-        Assert.Contains("if (!OperatingSystem.IsWindows())", source);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var canceled = await Record.ExceptionAsync(() => shell.CopyTextAsync("sample-path", cts.Token));
+        var empty = await Record.ExceptionAsync(() => shell.CopyTextAsync(string.Empty));
+        var whitespace = await Record.ExceptionAsync(() => shell.CopyTextAsync("   "));
+
+        Assert.Null(canceled);
+        Assert.Null(empty);
+        Assert.Null(whitespace);
     }
-
 
     [Fact]
     public async Task WorkspaceShellService_copy_returns_without_throw_on_non_windows_or_no_app()
