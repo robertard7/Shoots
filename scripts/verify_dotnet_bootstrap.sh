@@ -11,6 +11,7 @@ if [ -z "$python_cmd" ]; then
 fi
 
 required_sdk="$($python_cmd - <<'PY'
+required_sdk="$(python - <<'PY'
 import json
 from pathlib import Path
 print(json.loads(Path('global.json').read_text())['sdk']['version'])

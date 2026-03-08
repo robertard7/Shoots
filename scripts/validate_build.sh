@@ -13,6 +13,7 @@ if [ -z "$python_cmd" ]; then
 fi
 
 required_sdk="$($python_cmd - <<'PY'
+required_sdk="$(python - <<'PY'
 import json
 from pathlib import Path
 print(json.loads(Path('global.json').read_text())['sdk']['version'])
@@ -88,6 +89,7 @@ run_step() {
 
 write_warning_reports() {
   $python_cmd - <<'PY'
+  python - <<'PY'
 from pathlib import Path
 import re
 from collections import Counter, defaultdict
