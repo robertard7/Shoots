@@ -259,6 +259,8 @@ public sealed class MainWindowViewModelBackendStatusTests
         public bool OpenFolder(string path) => true;
 
         public Task OpenFolderAsync(string path, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task CopyTextAsync(string text, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private sealed class InMemoryAiPolicyStore : IAiPolicyStore

@@ -11,7 +11,6 @@ using System.Security.Cryptography;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows;
 using Shoots.Contracts.Core;
 using Shoots.Contracts.Core.AI;
 using Shoots.UI.AiHelp;
@@ -604,8 +603,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         }
 
-        Clipboard.SetText(path);
-        return Task.CompletedTask;
+        return _workspaceShell.CopyTextAsync(path);
     }
 
     private Task ResetModelCatalogAsync()

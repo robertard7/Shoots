@@ -8,4 +8,5 @@ public interface IWorkspaceShellService
 {
     bool OpenFolder(string path);
     Task OpenFolderAsync(string path, CancellationToken ct = default);
+    Task CopyTextAsync(string text, CancellationToken ct = default);
 }
