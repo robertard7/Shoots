@@ -347,6 +347,18 @@ public sealed class MainWindowViewModelBackendStatusTests
         }
     }
 
+
+    [Fact]
+    public void MainWindowViewModel_copy_paths_do_not_call_clipboard_directly()
+    {
+        var viewModelSource = Path.GetFullPath(Path.Combine("ui", "Shoots.Ui", "ViewModels", "MainWindowViewModel.cs"));
+        Assert.True(File.Exists(viewModelSource));
+
+        var source = File.ReadAllText(viewModelSource);
+        Assert.DoesNotContain("Clipboard.SetText", source);
+        Assert.Contains("_workspaceShell.CopyTextAsync", source);
+    }
+
     [Fact]
     public void Constructor_does_not_throw_when_profiles_are_missing()
     {
