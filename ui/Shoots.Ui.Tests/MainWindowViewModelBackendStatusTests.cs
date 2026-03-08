@@ -195,6 +195,102 @@ public sealed class MainWindowViewModelBackendStatusTests
         }
     }
 
+
+    [Fact]
+    public async Task Open_artifact_commands_route_exact_expected_paths_through_workspace_shell_service()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"shoots-open-test-{System.Guid.NewGuid():N}");
+        var runPath = Path.Combine(tempRoot, "runs", "run-001");
+        Directory.CreateDirectory(runPath);
+        var verificationPath = Path.Combine(runPath, "verification_report.json");
+        var operatorFlowPath = Path.Combine(runPath, "operator_flow.json");
+        var transportPath = Path.Combine(runPath, "transport_equivalence.json");
+        File.WriteAllText(verificationPath, "{}\n");
+        File.WriteAllText(operatorFlowPath, "{}\n");
+        File.WriteAllText(transportPath, "{}\n");
+
+        try
+        {
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell);
+
+            var field = typeof(MainWindowViewModel).GetField("_lastDemoRunPath", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+            field!.SetValue(vm, runPath);
+
+            Assert.True(vm.OpenLastRunFolderCommand.CanExecute(null));
+            Assert.True(vm.OpenLastVerificationReportCommand.CanExecute(null));
+            Assert.True(vm.OpenLastOperatorFlowCommand.CanExecute(null));
+            Assert.True(vm.OpenLastTransportEquivalenceCommand.CanExecute(null));
+
+            await vm.OpenLastRunFolderCommand.ExecuteAsync();
+            await vm.OpenLastVerificationReportCommand.ExecuteAsync();
+            await vm.OpenLastOperatorFlowCommand.ExecuteAsync();
+            await vm.OpenLastTransportEquivalenceCommand.ExecuteAsync();
+
+            Assert.Equal(4, shell.OpenedPaths.Count);
+            Assert.Equal(runPath, shell.OpenedPaths[0]);
+            Assert.Equal(verificationPath, shell.OpenedPaths[1]);
+            Assert.Equal(operatorFlowPath, shell.OpenedPaths[2]);
+            Assert.Equal(transportPath, shell.OpenedPaths[3]);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Open_artifact_commands_are_disabled_when_targets_missing()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"shoots-open-missing-{System.Guid.NewGuid():N}");
+        var runPath = Path.Combine(tempRoot, "runs", "run-001");
+        Directory.CreateDirectory(runPath);
+
+        try
+        {
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell);
+
+            var field = typeof(MainWindowViewModel).GetField("_lastDemoRunPath", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+            field!.SetValue(vm, runPath);
+
+            Assert.True(vm.OpenLastRunFolderCommand.CanExecute(null));
+            Assert.False(vm.OpenLastVerificationReportCommand.CanExecute(null));
+            Assert.False(vm.OpenLastOperatorFlowCommand.CanExecute(null));
+            Assert.False(vm.OpenLastTransportEquivalenceCommand.CanExecute(null));
+
+            await vm.OpenLastRunFolderCommand.ExecuteAsync();
+            await vm.OpenLastVerificationReportCommand.ExecuteAsync();
+            await vm.OpenLastOperatorFlowCommand.ExecuteAsync();
+            await vm.OpenLastTransportEquivalenceCommand.ExecuteAsync();
+
+            Assert.Single(shell.OpenedPaths);
+            Assert.Equal(runPath, shell.OpenedPaths[0]);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public void Constructor_does_not_throw_when_profiles_are_missing()
     {
