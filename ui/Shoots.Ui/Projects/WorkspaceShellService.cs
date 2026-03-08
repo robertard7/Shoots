@@ -39,6 +39,7 @@ public sealed class WorkspaceShellService : IWorkspaceShellService
     }
 
 
+    // Clipboard is only supported for active Windows UI sessions.
     public Task CopyTextAsync(string text, CancellationToken ct = default)
     {
         if (ct.IsCancellationRequested || string.IsNullOrWhiteSpace(text))
