@@ -372,6 +372,15 @@ public sealed class MainWindowViewModelBackendStatusTests
         Assert.Contains("if (!OperatingSystem.IsWindows())", source);
     }
 
+
+    [Fact]
+    public async Task WorkspaceShellService_copy_returns_without_throw_on_non_windows_or_no_app()
+    {
+        var shell = new WorkspaceShellService();
+        var ex = await Record.ExceptionAsync(() => shell.CopyTextAsync("sample-path"));
+        Assert.Null(ex);
+    }
+
     [Fact]
     public void Constructor_does_not_throw_when_profiles_are_missing()
     {
