@@ -152,6 +152,18 @@
       <TextBlock Margin="0,2,0,0"
                  Foreground="#FF6B7280"
                  Text="{Binding SelectedHostTransport, StringFormat=Host: {0}}" />
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding LastRunFolderPath, StringFormat=Run Folder: {0}}"
+                 TextWrapping="Wrap" />
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding LastVerificationReportPath, StringFormat=Verification Report: {0}}"
+                 TextWrapping="Wrap" />
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding LastOperatorFlowPath, StringFormat=Operator Flow: {0}}"
+                 TextWrapping="Wrap" />
       <ListBox Margin="0,6,0,0"
                Height="90"
                ItemsSource="{Binding RunHistory}" />

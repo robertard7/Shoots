@@ -1041,6 +1041,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(SelectedHostTransport));
         }
     }
+    public string LastRunFolderPath => _lastDemoRunPath ?? string.Empty;
+    public string LastVerificationReportPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "verification_report.json");
+    public string LastOperatorFlowPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "operator_flow.json");
     public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (trace-backed)" : "Mode: Live";
 
     public string ExecutionProviderSummary =>
@@ -1587,6 +1590,17 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
+            if (string.Equals(SelectedProviderMode, "ollama", StringComparison.OrdinalIgnoreCase) && !OllamaStatus.IsAvailable)
+            {
+                AddNarration("error", "PROVIDER_UNREACHABLE", new Dictionary<string, string>
+                {
+                    ["provider"] = "ollama",
+                    ["error"] = OllamaStatus.ErrorCode ?? "ui.backend.ollama.unreachable"
+                });
+                AddStartupMessage("System: Provider unavailable (ollama). Run Refresh Backends.");
+                return Task.CompletedTask;
+            }
+
             if (!_planner.TryBuildPlan(CurrentProject, out var plan))
             {
                 AddStartupMessage("System: Demo planner could not build a plan.");
@@ -1621,6 +1635,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 hostTransport: SelectedHostTransport,
                 narrate: evt => AddNarration(evt.Kind, evt.Message, evt.Data));
             _lastDemoRunPath = execution.RunPath;
+            OnPropertyChanged(nameof(LastRunFolderPath));
+            OnPropertyChanged(nameof(LastVerificationReportPath));
+            OnPropertyChanged(nameof(LastOperatorFlowPath));
             _runHistory.Insert(0, execution.RunPath);
             if (_runHistory.Count > 20)
             {
@@ -1848,7 +1865,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         => Task.CompletedTask; // keep your real implementation elsewhere (partial)
 
     private void SelectWorkspace(ProjectWorkspace workspace)
-        => ActiveWorkspace = workspace;
+    {
+        ActiveWorkspace = workspace;
+        if (!string.IsNullOrWhiteSpace(workspace.SelectedProviderKind))
+        {
+            SelectedProviderMode = workspace.SelectedProviderKind.ToLowerInvariant();
+        }
+    }
 
     // ---- Tool tiers ----
     private bool CanToggleSystemTier() => HasActiveWorkspace;
