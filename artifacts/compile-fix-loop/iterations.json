@@ -1,0 +1,10 @@
+[
+  {
+    "iteration": 1,
+    "phase": "environment-sanity",
+    "command": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/verify/windows_compile_runtime_integrity.ps1",
+    "status": "failed",
+    "classification": "runtime launch failure",
+    "error": "bash: command not found: powershell"
+  }
+]
