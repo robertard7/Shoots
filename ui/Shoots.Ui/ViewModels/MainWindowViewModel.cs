@@ -465,6 +465,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public AsyncRelayCommand SendChatIntentCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenCurrentWorkspaceFolderCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenProjectFileCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenLastRunFolderCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenLastVerificationReportCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenLastOperatorFlowCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenLastTransportEquivalenceCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyLastRunFolderPathCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyLastVerificationReportPathCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyLastOperatorFlowPathCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyLastTransportEquivalencePathCommand { get; private set; } = null!;
 
 	// Call this from your constructor AFTER other command setup
 	private void InitializeChatIntakeSurface()
@@ -483,6 +491,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         SendChatIntentCommand = new AsyncRelayCommand(SendChatIntentAsync, () => !string.IsNullOrWhiteSpace(ChatInputText));
         OpenCurrentWorkspaceFolderCommand = new AsyncRelayCommand(OpenCurrentWorkspaceFolderAsync, () => HasProjectLoaded);
         OpenProjectFileCommand = new AsyncRelayCommand(OpenProjectFileAsync, () => HasProjectLoaded);
+        OpenLastRunFolderCommand = new AsyncRelayCommand(OpenLastRunFolderAsync, CanOpenLastRunFolder);
+        OpenLastVerificationReportCommand = new AsyncRelayCommand(OpenLastVerificationReportAsync, CanOpenLastVerificationReport);
+        OpenLastOperatorFlowCommand = new AsyncRelayCommand(OpenLastOperatorFlowAsync, CanOpenLastOperatorFlow);
+        OpenLastTransportEquivalenceCommand = new AsyncRelayCommand(OpenLastTransportEquivalenceAsync, CanOpenLastTransportEquivalence);
+        CopyLastRunFolderPathCommand = new AsyncRelayCommand(CopyLastRunFolderPathAsync, CanOpenLastRunFolder);
+        CopyLastVerificationReportPathCommand = new AsyncRelayCommand(CopyLastVerificationReportPathAsync, CanOpenLastVerificationReport);
+        CopyLastOperatorFlowPathCommand = new AsyncRelayCommand(CopyLastOperatorFlowPathAsync, CanOpenLastOperatorFlow);
+        CopyLastTransportEquivalencePathCommand = new AsyncRelayCommand(CopyLastTransportEquivalencePathAsync, CanOpenLastTransportEquivalence);
 
         RebuildJobSpecDigest();
     }
@@ -511,6 +527,83 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         return _workspaceShell.OpenFolderAsync(projectDirectory);
+    }
+
+
+    private bool CanOpenLastRunFolder()
+        => !string.IsNullOrWhiteSpace(LastRunFolderPath) && Directory.Exists(LastRunFolderPath);
+
+    private bool CanOpenLastVerificationReport()
+        => !string.IsNullOrWhiteSpace(LastVerificationReportPath) && File.Exists(LastVerificationReportPath);
+
+    private bool CanOpenLastOperatorFlow()
+        => !string.IsNullOrWhiteSpace(LastOperatorFlowPath) && File.Exists(LastOperatorFlowPath);
+
+    private bool CanOpenLastTransportEquivalence()
+        => !string.IsNullOrWhiteSpace(LastTransportEquivalencePath) && File.Exists(LastTransportEquivalencePath);
+
+    private Task OpenLastRunFolderAsync()
+        => OpenFolderIfExistsAsync(LastRunFolderPath);
+
+    private Task OpenLastVerificationReportAsync()
+        => OpenPathIfExistsAsync(LastVerificationReportPath);
+
+    private Task OpenLastOperatorFlowAsync()
+        => OpenPathIfExistsAsync(LastOperatorFlowPath);
+
+    private Task OpenLastTransportEquivalenceAsync()
+        => OpenPathIfExistsAsync(LastTransportEquivalencePath);
+
+    private Task CopyLastRunFolderPathAsync()
+        => CopyPathToClipboardAsync(LastRunFolderPath, isFile: false);
+
+    private Task CopyLastVerificationReportPathAsync()
+        => CopyPathToClipboardAsync(LastVerificationReportPath, isFile: true);
+
+    private Task CopyLastOperatorFlowPathAsync()
+        => CopyPathToClipboardAsync(LastOperatorFlowPath, isFile: true);
+
+    private Task CopyLastTransportEquivalencePathAsync()
+        => CopyPathToClipboardAsync(LastTransportEquivalencePath, isFile: true);
+
+    private Task OpenFolderIfExistsAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _workspaceShell.OpenFolderAsync(path);
+    }
+
+    private Task OpenPathIfExistsAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _workspaceShell.OpenFolderAsync(path);
+    }
+
+    private Task CopyPathToClipboardAsync(string path, bool isFile)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (isFile && !File.Exists(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!isFile && !Directory.Exists(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _workspaceShell.CopyTextAsync(path);
     }
 
     private Task ResetModelCatalogAsync()
@@ -1053,6 +1146,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public string LastRunFolderPath => _lastDemoRunPath ?? string.Empty;
     public string LastVerificationReportPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "verification_report.json");
     public string LastOperatorFlowPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "operator_flow.json");
+    public string LastTransportEquivalencePath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "transport_equivalence.json");
     public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (trace-backed)" : "Mode: Live";
 
     public string ExecutionProviderSummary =>
@@ -1682,6 +1776,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(LastRunFolderPath));
             OnPropertyChanged(nameof(LastVerificationReportPath));
             OnPropertyChanged(nameof(LastOperatorFlowPath));
+            OnPropertyChanged(nameof(LastTransportEquivalencePath));
             _runHistory.Insert(0, execution.RunPath);
             if (_runHistory.Count > 20)
             {
@@ -2761,6 +2856,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         SendChatIntentCommand.RaiseCanExecuteChanged();
         OpenCurrentWorkspaceFolderCommand.RaiseCanExecuteChanged();
         OpenProjectFileCommand.RaiseCanExecuteChanged();
+        OpenLastRunFolderCommand.RaiseCanExecuteChanged();
+        OpenLastVerificationReportCommand.RaiseCanExecuteChanged();
+        OpenLastOperatorFlowCommand.RaiseCanExecuteChanged();
+        OpenLastTransportEquivalenceCommand.RaiseCanExecuteChanged();
+        CopyLastRunFolderPathCommand.RaiseCanExecuteChanged();
+        CopyLastVerificationReportPathCommand.RaiseCanExecuteChanged();
+        CopyLastOperatorFlowPathCommand.RaiseCanExecuteChanged();
+        CopyLastTransportEquivalencePathCommand.RaiseCanExecuteChanged();
         RunDemoPlanCommand.RaiseCanExecuteChanged();
         NewProjectCommand.RaiseCanExecuteChanged();
 

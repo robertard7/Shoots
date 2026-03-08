@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace Shoots.UI.Projects;
 
@@ -35,6 +36,29 @@ public sealed class WorkspaceShellService : IWorkspaceShellService
 
         NativeMethods.ShellExecute(IntPtr.Zero, "open", full, null, null, 1);
         return Task.CompletedTask;
+    }
+
+
+    // Clipboard is only supported for active Windows UI sessions.
+    public Task CopyTextAsync(string text, CancellationToken ct = default)
+    {
+        if (ct.IsCancellationRequested || string.IsNullOrWhiteSpace(text))
+            return Task.CompletedTask;
+
+        if (!OperatingSystem.IsWindows())
+            return Task.CompletedTask;
+
+        var app = Application.Current;
+        if (app?.Dispatcher is null)
+            return Task.CompletedTask;
+
+        if (app.Dispatcher.CheckAccess())
+        {
+            Clipboard.SetText(text);
+            return Task.CompletedTask;
+        }
+
+        return app.Dispatcher.InvokeAsync(() => Clipboard.SetText(text)).Task;
     }
 
     private static class NativeMethods

@@ -182,6 +182,36 @@
                  Foreground="#FF6B7280"
                  Text="{Binding LastOperatorFlowPath, StringFormat=Operator Flow: {0}}"
                  TextWrapping="Wrap" />
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding LastTransportEquivalencePath, StringFormat=Transport Equivalence: {0}}"
+                 TextWrapping="Wrap" />
+      <WrapPanel Margin="0,6,0,0">
+        <Button Margin="0,0,6,6"
+                Content="Open Run Folder"
+                Command="{Binding OpenLastRunFolderCommand}" />
+        <Button Margin="0,0,6,6"
+                Content="Copy Run Folder"
+                Command="{Binding CopyLastRunFolderPathCommand}" />
+        <Button Margin="0,0,6,6"
+                Content="Open Verification Report"
+                Command="{Binding OpenLastVerificationReportCommand}" />
+        <Button Margin="0,0,6,6"
+                Content="Copy Verification Report"
+                Command="{Binding CopyLastVerificationReportPathCommand}" />
+        <Button Margin="0,0,6,6"
+                Content="Open Operator Flow"
+                Command="{Binding OpenLastOperatorFlowCommand}" />
+        <Button Margin="0,0,6,6"
+                Content="Copy Operator Flow"
+                Command="{Binding CopyLastOperatorFlowPathCommand}" />
+        <Button Margin="0,0,6,6"
+                Content="Open Transport Equivalence"
+                Command="{Binding OpenLastTransportEquivalenceCommand}" />
+        <Button Margin="0,0,6,6"
+                Content="Copy Transport Equivalence"
+                Command="{Binding CopyLastTransportEquivalencePathCommand}" />
+      </WrapPanel>
       <ListBox Margin="0,6,0,0"
                Height="90"
                ItemsSource="{Binding RunHistory}" />
