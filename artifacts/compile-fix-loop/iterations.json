@@ -1,10 +1,13 @@
-[
-  {
-    "iteration": 1,
-    "phase": "environment-sanity",
-    "command": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/verify/windows_compile_runtime_integrity.ps1",
-    "status": "failed",
-    "classification": "runtime launch failure",
-    "error": "bash: command not found: powershell"
-  }
-]
+{
+  "valid_iteration_count": 0,
+  "attempts": [
+    {
+      "attempt": 1,
+      "valid_iteration": false,
+      "phase": "environment-mismatch",
+      "command": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/verify/windows_compile_runtime_integrity.ps1",
+      "error": "bash: command not found: powershell",
+      "runner": "linux-bash"
+    }
+  ]
+}

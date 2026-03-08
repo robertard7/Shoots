@@ -1,29 +1,33 @@
 # Compile Fix Loop Summary
 
-- total_iterations: 1
+- valid_iteration_count: 0
 - outcome: blocked-before-windows-gate
 
-## Fixed Failures (in order)
+## Why blocked
 
-1. Established compile-fix-loop artifact tracking for first-failure and iteration evidence.
+The required Windows integrity gate command could not be executed because this environment is Linux/bash and has no `powershell`/`pwsh` binary.
 
-## Latest Failure
+## Environment evidence
 
-- phase: environment-sanity
-- command: `powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/verify/windows_compile_runtime_integrity.ps1`
-- error: `bash: command not found: powershell`
+- `uname -a`: Linux
+- shell: `/bin/bash`
+- `command -v pwsh || command -v powershell`: not found
 
-## Final Successful Commands
+## Required runner
 
-- none in this environment (Windows gate command unavailable).
+Use the Windows self-hosted runner:
 
-## Latest Run Folder
+- labels: `[self-hosted, Windows, X64, Shoots]`
 
-- unavailable
+Then run:
 
-## Expected artifact locations once gate runs on Windows
+```powershell
+powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/verify/windows_compile_runtime_integrity.ps1
+```
 
-- `<run-folder>/run.json`
-- `<run-folder>/verification_report.json`
-- `<run-folder>/operator_flow.json`
-- `<run-folder>/transport_equivalence.json`
+(or `pwsh -NoLogo -NoProfile -File tools/verify/windows_compile_runtime_integrity.ps1` on Windows PowerShell 7).
+
+## Current status
+
+- No valid compile-fix loop iteration has started yet.
+- No compile/test/smoke/replay phase failure has been captured from a Windows-capable execution.
