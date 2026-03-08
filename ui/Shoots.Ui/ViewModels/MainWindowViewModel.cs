@@ -487,10 +487,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         SendChatIntentCommand = new AsyncRelayCommand(SendChatIntentAsync, () => !string.IsNullOrWhiteSpace(ChatInputText));
         OpenCurrentWorkspaceFolderCommand = new AsyncRelayCommand(OpenCurrentWorkspaceFolderAsync, () => HasProjectLoaded);
         OpenProjectFileCommand = new AsyncRelayCommand(OpenProjectFileAsync, () => HasProjectLoaded);
-        OpenLastRunFolderCommand = new AsyncRelayCommand(OpenLastRunFolderAsync, () => !string.IsNullOrWhiteSpace(LastRunFolderPath));
-        OpenLastVerificationReportCommand = new AsyncRelayCommand(OpenLastVerificationReportAsync, () => !string.IsNullOrWhiteSpace(LastVerificationReportPath));
-        OpenLastOperatorFlowCommand = new AsyncRelayCommand(OpenLastOperatorFlowAsync, () => !string.IsNullOrWhiteSpace(LastOperatorFlowPath));
-        OpenLastTransportEquivalenceCommand = new AsyncRelayCommand(OpenLastTransportEquivalenceAsync, () => !string.IsNullOrWhiteSpace(LastTransportEquivalencePath));
+        OpenLastRunFolderCommand = new AsyncRelayCommand(OpenLastRunFolderAsync, CanOpenLastRunFolder);
+        OpenLastVerificationReportCommand = new AsyncRelayCommand(OpenLastVerificationReportAsync, CanOpenLastVerificationReport);
+        OpenLastOperatorFlowCommand = new AsyncRelayCommand(OpenLastOperatorFlowAsync, CanOpenLastOperatorFlow);
+        OpenLastTransportEquivalenceCommand = new AsyncRelayCommand(OpenLastTransportEquivalenceAsync, CanOpenLastTransportEquivalence);
 
         RebuildJobSpecDigest();
     }
@@ -521,17 +521,30 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         return _workspaceShell.OpenFolderAsync(projectDirectory);
     }
 
+
+    private bool CanOpenLastRunFolder()
+        => !string.IsNullOrWhiteSpace(LastRunFolderPath) && Directory.Exists(LastRunFolderPath);
+
+    private bool CanOpenLastVerificationReport()
+        => !string.IsNullOrWhiteSpace(LastVerificationReportPath) && File.Exists(LastVerificationReportPath);
+
+    private bool CanOpenLastOperatorFlow()
+        => !string.IsNullOrWhiteSpace(LastOperatorFlowPath) && File.Exists(LastOperatorFlowPath);
+
+    private bool CanOpenLastTransportEquivalence()
+        => !string.IsNullOrWhiteSpace(LastTransportEquivalencePath) && File.Exists(LastTransportEquivalencePath);
+
     private Task OpenLastRunFolderAsync()
         => OpenFolderIfExistsAsync(LastRunFolderPath);
 
     private Task OpenLastVerificationReportAsync()
-        => OpenFolderForFileIfExistsAsync(LastVerificationReportPath);
+        => OpenPathIfExistsAsync(LastVerificationReportPath);
 
     private Task OpenLastOperatorFlowAsync()
-        => OpenFolderForFileIfExistsAsync(LastOperatorFlowPath);
+        => OpenPathIfExistsAsync(LastOperatorFlowPath);
 
     private Task OpenLastTransportEquivalenceAsync()
-        => OpenFolderForFileIfExistsAsync(LastTransportEquivalencePath);
+        => OpenPathIfExistsAsync(LastTransportEquivalencePath);
 
     private Task OpenFolderIfExistsAsync(string path)
     {
@@ -543,20 +556,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         return _workspaceShell.OpenFolderAsync(path);
     }
 
-    private Task OpenFolderForFileIfExistsAsync(string path)
+    private Task OpenPathIfExistsAsync(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
             return Task.CompletedTask;
         }
 
-        var directory = Path.GetDirectoryName(path);
-        if (string.IsNullOrWhiteSpace(directory))
-        {
-            return Task.CompletedTask;
-        }
-
-        return _workspaceShell.OpenFolderAsync(directory);
+        return _workspaceShell.OpenFolderAsync(path);
     }
 
     private Task ResetModelCatalogAsync()
