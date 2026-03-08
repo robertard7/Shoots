@@ -151,6 +151,50 @@ public sealed class MainWindowViewModelBackendStatusTests
         }
     }
 
+
+    [Fact]
+    public async Task Copy_artifact_path_commands_are_disabled_when_targets_missing()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"shoots-copy-missing-{System.Guid.NewGuid():N}");
+        var runPath = Path.Combine(tempRoot, "runs", "run-001");
+        Directory.CreateDirectory(runPath);
+
+        try
+        {
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell);
+
+            var field = typeof(MainWindowViewModel).GetField("_lastDemoRunPath", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+            field!.SetValue(vm, runPath);
+
+            Assert.True(vm.CopyLastRunFolderPathCommand.CanExecute(null));
+            Assert.False(vm.CopyLastVerificationReportPathCommand.CanExecute(null));
+            Assert.False(vm.CopyLastOperatorFlowPathCommand.CanExecute(null));
+            Assert.False(vm.CopyLastTransportEquivalencePathCommand.CanExecute(null));
+
+            await vm.CopyLastRunFolderPathCommand.ExecuteAsync();
+            await vm.CopyLastVerificationReportPathCommand.ExecuteAsync();
+            await vm.CopyLastOperatorFlowPathCommand.ExecuteAsync();
+            await vm.CopyLastTransportEquivalencePathCommand.ExecuteAsync();
+
+            Assert.Single(shell.CopiedTexts);
+            Assert.Equal(runPath, shell.CopiedTexts[0]);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public void Constructor_does_not_throw_when_profiles_are_missing()
     {
