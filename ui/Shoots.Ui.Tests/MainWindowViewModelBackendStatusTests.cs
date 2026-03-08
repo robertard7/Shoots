@@ -359,6 +359,19 @@ public sealed class MainWindowViewModelBackendStatusTests
         Assert.Contains("_workspaceShell.CopyTextAsync", source);
     }
 
+
+    [Fact]
+    public void WorkspaceShellService_copy_uses_dispatcher_guarded_clipboard_path()
+    {
+        var shellSourcePath = Path.GetFullPath(Path.Combine("ui", "Shoots.Ui", "Projects", "WorkspaceShellService.cs"));
+        Assert.True(File.Exists(shellSourcePath));
+
+        var source = File.ReadAllText(shellSourcePath);
+        Assert.Contains("app.Dispatcher.CheckAccess()", source);
+        Assert.Contains("app.Dispatcher.InvokeAsync(() => Clipboard.SetText(text)).Task", source);
+        Assert.Contains("if (!OperatingSystem.IsWindows())", source);
+    }
+
     [Fact]
     public void Constructor_does_not_throw_when_profiles_are_missing()
     {
