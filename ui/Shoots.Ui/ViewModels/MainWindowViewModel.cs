@@ -465,6 +465,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public AsyncRelayCommand SendChatIntentCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenCurrentWorkspaceFolderCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenProjectFileCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenLastRunFolderCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenLastVerificationReportCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenLastOperatorFlowCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenLastTransportEquivalenceCommand { get; private set; } = null!;
 
 	// Call this from your constructor AFTER other command setup
 	private void InitializeChatIntakeSurface()
@@ -483,6 +487,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         SendChatIntentCommand = new AsyncRelayCommand(SendChatIntentAsync, () => !string.IsNullOrWhiteSpace(ChatInputText));
         OpenCurrentWorkspaceFolderCommand = new AsyncRelayCommand(OpenCurrentWorkspaceFolderAsync, () => HasProjectLoaded);
         OpenProjectFileCommand = new AsyncRelayCommand(OpenProjectFileAsync, () => HasProjectLoaded);
+        OpenLastRunFolderCommand = new AsyncRelayCommand(OpenLastRunFolderAsync, () => !string.IsNullOrWhiteSpace(LastRunFolderPath));
+        OpenLastVerificationReportCommand = new AsyncRelayCommand(OpenLastVerificationReportAsync, () => !string.IsNullOrWhiteSpace(LastVerificationReportPath));
+        OpenLastOperatorFlowCommand = new AsyncRelayCommand(OpenLastOperatorFlowAsync, () => !string.IsNullOrWhiteSpace(LastOperatorFlowPath));
+        OpenLastTransportEquivalenceCommand = new AsyncRelayCommand(OpenLastTransportEquivalenceAsync, () => !string.IsNullOrWhiteSpace(LastTransportEquivalencePath));
 
         RebuildJobSpecDigest();
     }
@@ -511,6 +519,44 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         return _workspaceShell.OpenFolderAsync(projectDirectory);
+    }
+
+    private Task OpenLastRunFolderAsync()
+        => OpenFolderIfExistsAsync(LastRunFolderPath);
+
+    private Task OpenLastVerificationReportAsync()
+        => OpenFolderForFileIfExistsAsync(LastVerificationReportPath);
+
+    private Task OpenLastOperatorFlowAsync()
+        => OpenFolderForFileIfExistsAsync(LastOperatorFlowPath);
+
+    private Task OpenLastTransportEquivalenceAsync()
+        => OpenFolderForFileIfExistsAsync(LastTransportEquivalencePath);
+
+    private Task OpenFolderIfExistsAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _workspaceShell.OpenFolderAsync(path);
+    }
+
+    private Task OpenFolderForFileIfExistsAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return Task.CompletedTask;
+        }
+
+        var directory = Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _workspaceShell.OpenFolderAsync(directory);
     }
 
     private Task ResetModelCatalogAsync()
@@ -1053,6 +1099,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public string LastRunFolderPath => _lastDemoRunPath ?? string.Empty;
     public string LastVerificationReportPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "verification_report.json");
     public string LastOperatorFlowPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "operator_flow.json");
+    public string LastTransportEquivalencePath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "transport_equivalence.json");
     public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (trace-backed)" : "Mode: Live";
 
     public string ExecutionProviderSummary =>
@@ -1682,6 +1729,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(LastRunFolderPath));
             OnPropertyChanged(nameof(LastVerificationReportPath));
             OnPropertyChanged(nameof(LastOperatorFlowPath));
+            OnPropertyChanged(nameof(LastTransportEquivalencePath));
             _runHistory.Insert(0, execution.RunPath);
             if (_runHistory.Count > 20)
             {
@@ -2761,6 +2809,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         SendChatIntentCommand.RaiseCanExecuteChanged();
         OpenCurrentWorkspaceFolderCommand.RaiseCanExecuteChanged();
         OpenProjectFileCommand.RaiseCanExecuteChanged();
+        OpenLastRunFolderCommand.RaiseCanExecuteChanged();
+        OpenLastVerificationReportCommand.RaiseCanExecuteChanged();
+        OpenLastOperatorFlowCommand.RaiseCanExecuteChanged();
+        OpenLastTransportEquivalenceCommand.RaiseCanExecuteChanged();
         RunDemoPlanCommand.RaiseCanExecuteChanged();
         NewProjectCommand.RaiseCanExecuteChanged();
 
