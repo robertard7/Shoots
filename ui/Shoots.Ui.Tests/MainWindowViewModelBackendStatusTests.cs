@@ -350,6 +350,89 @@ public sealed class MainWindowViewModelBackendStatusTests
 
 
 
+
+    [Fact]
+    public async Task Copy_commands_do_not_route_open_calls()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"shoots-copy-no-open-{System.Guid.NewGuid():N}");
+        var runPath = Path.Combine(tempRoot, "runs", "run-001");
+        Directory.CreateDirectory(runPath);
+        File.WriteAllText(Path.Combine(runPath, "verification_report.json"), "{}\n");
+        File.WriteAllText(Path.Combine(runPath, "operator_flow.json"), "{}\n");
+        File.WriteAllText(Path.Combine(runPath, "transport_equivalence.json"), "{}\n");
+
+        try
+        {
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell);
+
+            var field = typeof(MainWindowViewModel).GetField("_lastDemoRunPath", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+            field!.SetValue(vm, runPath);
+
+            await vm.CopyLastRunFolderPathCommand.ExecuteAsync();
+            await vm.CopyLastVerificationReportPathCommand.ExecuteAsync();
+            await vm.CopyLastOperatorFlowPathCommand.ExecuteAsync();
+            await vm.CopyLastTransportEquivalencePathCommand.ExecuteAsync();
+
+            Assert.Equal(4, shell.CopiedTexts.Count);
+            Assert.Empty(shell.OpenedPaths);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Open_commands_do_not_route_copy_calls()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"shoots-open-no-copy-{System.Guid.NewGuid():N}");
+        var runPath = Path.Combine(tempRoot, "runs", "run-001");
+        Directory.CreateDirectory(runPath);
+        File.WriteAllText(Path.Combine(runPath, "verification_report.json"), "{}\n");
+        File.WriteAllText(Path.Combine(runPath, "operator_flow.json"), "{}\n");
+        File.WriteAllText(Path.Combine(runPath, "transport_equivalence.json"), "{}\n");
+
+        try
+        {
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell);
+
+            var field = typeof(MainWindowViewModel).GetField("_lastDemoRunPath", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+            field!.SetValue(vm, runPath);
+
+            await vm.OpenLastRunFolderCommand.ExecuteAsync();
+            await vm.OpenLastVerificationReportCommand.ExecuteAsync();
+            await vm.OpenLastOperatorFlowCommand.ExecuteAsync();
+            await vm.OpenLastTransportEquivalenceCommand.ExecuteAsync();
+
+            Assert.Equal(4, shell.OpenedPaths.Count);
+            Assert.Empty(shell.CopiedTexts);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public async Task WorkspaceShellService_copy_is_noop_for_empty_or_canceled_requests()
     {
