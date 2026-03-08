@@ -107,10 +107,7 @@ public sealed class MainWindowViewModelBackendStatusTests
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), $"shoots-copy-test-{System.Guid.NewGuid():N}");
         var runPath = Path.Combine(tempRoot, "runs", "run-001");
-        Directory.CreateDirectory(runPath);
-        File.WriteAllText(Path.Combine(runPath, "verification_report.json"), "{}\n");
-        File.WriteAllText(Path.Combine(runPath, "operator_flow.json"), "{}\n");
-        File.WriteAllText(Path.Combine(runPath, "transport_equivalence.json"), "{}\n");
+        CreateRunArtifacts(runPath);
 
         try
         {
@@ -356,10 +353,7 @@ public sealed class MainWindowViewModelBackendStatusTests
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), $"shoots-copy-no-open-{System.Guid.NewGuid():N}");
         var runPath = Path.Combine(tempRoot, "runs", "run-001");
-        Directory.CreateDirectory(runPath);
-        File.WriteAllText(Path.Combine(runPath, "verification_report.json"), "{}\n");
-        File.WriteAllText(Path.Combine(runPath, "operator_flow.json"), "{}\n");
-        File.WriteAllText(Path.Combine(runPath, "transport_equivalence.json"), "{}\n");
+        CreateRunArtifacts(runPath);
 
         try
         {
@@ -529,6 +523,15 @@ public sealed class MainWindowViewModelBackendStatusTests
             ollamaClient);
     }
 
+
+
+    private static void CreateRunArtifacts(string runPath)
+    {
+        Directory.CreateDirectory(runPath);
+        File.WriteAllText(Path.Combine(runPath, "verification_report.json"), "{}\n");
+        File.WriteAllText(Path.Combine(runPath, "operator_flow.json"), "{}\n");
+        File.WriteAllText(Path.Combine(runPath, "transport_equivalence.json"), "{}\n");
+    }
 
     private sealed class DeterministicEnvironmentProfileService : IEnvironmentProfileService
     {
