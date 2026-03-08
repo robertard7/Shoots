@@ -1,0 +1,11 @@
+{
+  "tools": [
+    { "id": "write_text", "requiredArgs": ["path"] },
+    { "id": "create_directory", "requiredArgs": ["path"] },
+    { "id": "copy_file", "requiredArgs": ["source", "destination"] },
+    { "id": "git.clone", "requiredArgs": ["repo", "destination"] },
+    { "id": "dotnet.build", "requiredArgs": ["project"] },
+    { "id": "cmake.configure", "requiredArgs": ["source", "buildDir"] },
+    { "id": "cmake.build", "requiredArgs": ["buildDir"] }
+  ]
+}

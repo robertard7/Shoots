@@ -33,8 +33,35 @@
       <Button Margin="0,8,0,0"
               Content="New Project"
               Command="{Binding NewProjectCommand}"
+              IsEnabled="{Binding CanStartNewProjectUi}"
               ToolTip="{Binding StartupButtonTooltip}"
               ToolTipService.ShowOnDisabled="True" />
+
+      <TextBlock Margin="0,4,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding BusyOperation, StringFormat=Busy: {0}}"
+                 Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+      <TextBlock Margin="0,4,0,0"
+                 Foreground="#FF2B6CB0"
+                 Text="{Binding ProjectCreationStatus}" />
+
+      <Border Margin="0,4,0,0"
+              Background="#FFFEE2E2"
+              BorderBrush="#FFFCA5A5"
+              BorderThickness="1"
+              Padding="6"
+              Visibility="{Binding HasProjectCreationError, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <StackPanel>
+          <TextBlock Foreground="#FFB91C1C"
+                     Text="{Binding ProjectCreationErrorMessage}"
+                     TextWrapping="Wrap" />
+          <TextBlock Margin="0,4,0,0"
+                     FontFamily="Consolas"
+                     FontSize="11"
+                     Text="{Binding UiLogPath}" />
+        </StackPanel>
+      </Border>
 
       <!-- If startup is locked, you typically *can't* start another project. -->
       <Button Margin="0,6,0,0"
@@ -92,6 +119,78 @@
       <TextBlock Margin="0,16,0,0"
                  Text="{Binding ActiveWorkspaceName}" />
 
+      <TextBlock Margin="0,6,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding CurrentWorkspacePath}"
+                 TextWrapping="Wrap" />
+
+      <Button Margin="0,6,0,0"
+              Content="Run Demo Plan"
+              Command="{Binding RunDemoPlanCommand}"
+              IsEnabled="{Binding HasProjectLoaded}" />
+
+      <Button Margin="0,6,0,0"
+              Content="Open Workspace Folder"
+              Command="{Binding OpenCurrentWorkspaceFolderCommand}"
+              IsEnabled="{Binding HasProjectLoaded}" />
+
+      <Button Margin="0,6,0,0"
+              Content="Open project.json"
+              Command="{Binding OpenProjectFileCommand}"
+              IsEnabled="{Binding HasProjectLoaded}" />
+
+      <TextBlock Margin="0,12,0,0" Text="Run History" FontWeight="SemiBold" />
+      <TextBlock Margin="0,4,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding LastRunVerificationState, StringFormat=Verification: {0}}" />
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding SelectedRuntimeBridge, StringFormat=Runtime: {0}}" />
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding SelectedProviderMode, StringFormat=Provider: {0}}" />
+      <ComboBox Margin="0,4,0,0"
+                SelectedValuePath="Content"
+                SelectedValue="{Binding SelectedProviderMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+        <ComboBoxItem Content="local" />
+        <ComboBoxItem Content="null" />
+        <ComboBoxItem Content="ollama" />
+        <ComboBoxItem Content="bridge" />
+      </ComboBox>
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FFB45309"
+                 Text="{Binding ProviderAvailabilityWarning}"
+                 TextWrapping="Wrap" />
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding SelectedHostTransport, StringFormat=Host: {0}}" />
+      <ComboBox Margin="0,4,0,0"
+                SelectedValuePath="Content"
+                SelectedValue="{Binding SelectedHostTransport, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+        <ComboBoxItem Content="none" />
+        <ComboBoxItem Content="host" />
+      </ComboBox>
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding LastRunFolderPath, StringFormat=Run Folder: {0}}"
+                 TextWrapping="Wrap" />
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding LastVerificationReportPath, StringFormat=Verification Report: {0}}"
+                 TextWrapping="Wrap" />
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FF6B7280"
+                 Text="{Binding LastOperatorFlowPath, StringFormat=Operator Flow: {0}}"
+                 TextWrapping="Wrap" />
+      <ListBox Margin="0,6,0,0"
+               Height="90"
+               ItemsSource="{Binding RunHistory}" />
+
+      <TextBlock Margin="0,8,0,0" Text="Artifacts" FontWeight="SemiBold" />
+      <ListBox Margin="0,6,0,0"
+               Height="90"
+               ItemsSource="{Binding ArtifactFiles}" />
+
       <!-- TOOL TIER -->
       <GroupBox Margin="0,12,0,0" Header="Tool Tier">
         <StackPanel Margin="8">
@@ -138,6 +237,18 @@
         </StackPanel>
       </GroupBox>
 
+      <Expander Margin="0,12,0,0"
+                Header="Action Log (Debug)"
+                Visibility="{Binding IsDebugBuild, Converter={StaticResource BooleanToVisibilityConverter}}"
+                IsExpanded="False">
+        <Border BorderBrush="#FFD1D5DB" BorderThickness="1" Padding="6">
+          <ListBox ItemsSource="{Binding ActionLogLines}"
+                   Height="180"
+                   FontFamily="Consolas"
+                   FontSize="11" />
+        </Border>
+      </Expander>
+
     </StackPanel>
 
     <!-- RIGHT: MAIN TABS -->
@@ -177,6 +288,37 @@
           <!-- Intake -->
           <StackPanel Grid.Column="1" Margin="0,0,10,0">
             <TextBlock Text="Chat / Intake" FontWeight="SemiBold" />
+
+            <TextBlock Margin="0,8,0,0" Text="Chat Input" />
+            <TextBox Text="{Binding ChatInputText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Margin="0,6,0,0"
+                    Content="Send"
+                    Command="{Binding SendChatIntentCommand}" />
+
+            <ListBox Margin="0,8,0,0"
+                     ItemsSource="{Binding ChatTranscript}"
+                     Height="100" />
+
+            <TextBlock Margin="0,8,0,0" Text="Narration" FontWeight="SemiBold" />
+            <ListBox Margin="0,4,0,0"
+                     ItemsSource="{Binding Narration}"
+                     Height="120">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel>
+                    <TextBlock TextWrapping="Wrap"
+                               FontSize="11"
+                               Text="{Binding Utc, StringFormat={}{0:O}}" />
+                    <TextBlock TextWrapping="Wrap"
+                               FontSize="11"
+                               Text="{Binding Kind}" />
+                    <TextBlock TextWrapping="Wrap"
+                               FontSize="11"
+                               Text="{Binding Message}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
 
             <TextBlock Margin="0,8,0,0" Text="Intent" />
             <TextBox Text="{Binding IntakeIntent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

@@ -10,13 +10,15 @@ namespace Shoots.UI.Projects;
 public sealed class ProjectWorkspaceStore : IProjectWorkspaceStore
 {
     public const int MaxRecentWorkspaces = 10;
-    public const string FileName = "projects.json";
+    public const string FileName = "recent-projects.json";
 
     private readonly string _storePath;
 
     public ProjectWorkspaceStore(string? baseDirectory = null)
     {
-        var root = baseDirectory ?? Path.GetFullPath(Path.Combine(".state", "ui"));
+        var root = baseDirectory ?? Path.Combine(
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+            "Shoots.UI");
 
         _storePath = Path.Combine(root, FileName);
     }

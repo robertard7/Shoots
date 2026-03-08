@@ -1,12 +1,18 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Shoots.UI.AiHelp;
+using Shoots.UI.Builder;
+using Shoots.UI.Diagnostics;
 using Shoots.UI.Services;
 
 namespace Shoots.UI;
@@ -26,6 +32,8 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        UiActionTraceBuffer.EnsureInitialized();
+
         var createdNew = false;
         _singleInstanceMutex = new Mutex(true, MutexName, out createdNew);
         if (!createdNew)
@@ -48,23 +56,35 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
-        MainWindow = new MainWindow();
-        MainWindow.Show();
-        AiSurfaceRegistry.Current.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
+        base.OnStartup(e);
 
+        MainWindow = new MainWindow();
+
+        if (TryHandleSmokeMode(e.Args, MainWindow.DataContext as ViewModels.MainWindowViewModel))
+        {
+            Shutdown();
+            return;
+        }
+
+        MainWindow.Show();
+
+        UiSurfaceBootstrapper.RegisterAll(MainWindow.DataContext as ViewModels.MainWindowViewModel);
         var surfaceRegistry = AiSurfaceRegistry.Current;
         Log($"AI surface registry: {surfaceRegistry.DescribeRegistrations()}");
 
-#if DEBUG
         var missingRequired = surfaceRegistry.GetMissingSurfaceIds(UiSurfaceCatalog.RequiredSurfaceIds);
         var missingOptional = surfaceRegistry.GetMissingSurfaceIds(UiSurfaceCatalog.OptionalSurfaceIds);
         var missingOptionalPrefixes = surfaceRegistry.GetMissingSurfacePrefixes(UiSurfaceCatalog.OptionalSurfaceIdPrefixes);
         Log($"AI surfaces missing (required): {FormatSurfaceList(missingRequired)}; missing (optional): {FormatSurfaceList(missingOptional)}; missing (optional prefixes): {FormatSurfaceList(missingOptionalPrefixes)}");
 
+#if DEBUG
+        if (missingRequired.Count > 0)
+        {
+            Log($"DEBUG startup allows missing required AI surfaces: {FormatSurfaceList(missingRequired)}");
+        }
+#else
         surfaceRegistry.AssertRequiredSurfacesRegistered(UiSurfaceCatalog.RequiredSurfaceIds);
 #endif
-
-        base.OnStartup(e);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -157,6 +177,123 @@ public partial class App : Application
 
     private static void Log(string message) =>
         Trace.WriteLine($"[Shoots.UI] {message}");
+
+    private static bool TryHandleSmokeMode(string[] args, ViewModels.MainWindowViewModel? viewModel)
+    {
+        if (args.Length < 2 || !string.Equals(args[0], "--smoke", StringComparison.OrdinalIgnoreCase) || viewModel is null)
+        {
+            return false;
+        }
+
+        var action = args[1];
+        var payload = args.Length > 2 ? string.Join(" ", args.Skip(2)) : string.Empty;
+        var result = "ok";
+
+        try
+        {
+            switch (action)
+            {
+                case "create-project":
+                    viewModel.NewProjectCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    break;
+                case "run-demo":
+                    viewModel.NewProjectCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    viewModel.SelectedHostTransport = "none";
+                    viewModel.RunDemoPlanCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    break;
+                case "run-demo-host":
+                    viewModel.NewProjectCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    viewModel.SelectedHostTransport = "host";
+                    viewModel.RunDemoPlanCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    break;
+                case "intent":
+                    viewModel.ChatInputText = payload;
+                    viewModel.SendChatIntentCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    break;
+                default:
+                    result = "unknown-smoke-action";
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            result = $"error:{ex.GetType().Name}";
+        }
+
+        var project = viewModel.CurrentProject;
+        var invariant = project is null
+            ? new Projects.ProjectInvariantResult(false, new[] { "project" }, Array.Empty<string>(), new[] { "no project loaded" })
+            : Projects.ProjectInvariants.Verify(project.WorkspacePath);
+
+        var smokeDir = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Shoots.UI", "smoke");
+        Directory.CreateDirectory(smokeDir);
+        var sentinelPath = Path.Combine(smokeDir, "last.json");
+        var hasRunPath = project is not null && !string.IsNullOrWhiteSpace(viewModel.LastDemoRunPath);
+        var runPath = hasRunPath ? viewModel.LastDemoRunPath : string.Empty;
+        var artifactVerification = hasRunPath
+            ? new Builder.ArtifactManager().VerifyArtifacts(runPath!)
+            : new Builder.ArtifactVerificationResult(false, Array.Empty<string>());
+        RunModel? run = null;
+        if (hasRunPath)
+        {
+            var runJsonPath = Path.Combine(runPath!, "run.json");
+            run = File.Exists(runJsonPath)
+                ? JsonSerializer.Deserialize<RunModel>(File.ReadAllText(runJsonPath))
+                : null;
+
+            if (string.Equals(action, "run-demo-host", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(run?.HostResponseOutcome) && string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                result = "error:missing-host-response";
+            }
+
+            var operatorFlowPath = Path.Combine(runPath!, "operator_flow.json");
+            var operatorFlow = new
+            {
+                intent = payload,
+                planner = run?.PlannerSource ?? "RuntimePlanner",
+                runtime_bridge = run?.RuntimeBridge ?? viewModel.SelectedRuntimeBridge,
+                provider = run?.Provider ?? viewModel.SelectedProviderMode,
+                host_transport = run?.HostTransport ?? viewModel.SelectedHostTransport,
+                verification_report_exists = File.Exists(Path.Combine(runPath!, "verification_report.json")),
+                host_response_outcome = run?.HostResponseOutcome,
+                host_response_work_order_id = run?.HostResponseWorkOrderId,
+                host_response_plan_id = run?.HostResponsePlanId,
+                host_response_plan_hash = run?.HostResponsePlanHash,
+                host_response_message = run?.HostResponseMessage,
+                host_response_error_code = run?.HostResponseErrorCode
+            };
+
+            File.WriteAllText(operatorFlowPath, JsonSerializer.Serialize(operatorFlow, new JsonSerializerOptions { WriteIndented = true }));
+        }
+
+        var sentinel = new
+        {
+            project_id = project?.ProjectId ?? string.Empty,
+            workspace_path = project?.WorkspacePath ?? string.Empty,
+            createdUtc = project?.CreatedUtc,
+            required_folders_present = invariant.Ok,
+            missing = invariant.Missing,
+            last_intent = payload,
+            outcome = result,
+            demo_run_id = hasRunPath ? Path.GetFileName(runPath) : string.Empty,
+            run_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "run.json")),
+            artifact_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "artifact.json")),
+            environment_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "environment.json")),
+            manifest_json_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "artifacts", "manifest.json")),
+            evidence_bundle_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "evidence_bundle.json")),
+            verification_report_exists = hasRunPath && File.Exists(Path.Combine(runPath!, "verification_report.json")),
+            operator_flow_exists = hasRunPath,
+            log_artifact_exists = hasRunPath && Directory.Exists(Path.Combine(runPath!, "artifacts")) && Directory.GetFiles(Path.Combine(runPath!, "artifacts"), "*.log", SearchOption.AllDirectories).Length > 0,
+            artifact_verification_ok = hasRunPath && artifactVerification.Ok,
+            artifact_verification_errors = artifactVerification.Errors,
+            host_response_metadata_exists = hasRunPath && !string.IsNullOrWhiteSpace(run?.HostResponseOutcome)
+        };
+
+        File.WriteAllText(sentinelPath, JsonSerializer.Serialize(sentinel, new JsonSerializerOptions { WriteIndented = true }));
+
+        Trace.WriteLine($"[Shoots.UI] smoke.sentinel={sentinelPath}");
+        return true;
+    }
 
     private static string FormatSurfaceList(IReadOnlyList<string> surfaces)
         => surfaces.Count == 0 ? "none" : string.Join(", ", surfaces);
