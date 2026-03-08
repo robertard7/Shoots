@@ -149,9 +149,27 @@
       <TextBlock Margin="0,2,0,0"
                  Foreground="#FF6B7280"
                  Text="{Binding SelectedProviderMode, StringFormat=Provider: {0}}" />
+      <ComboBox Margin="0,4,0,0"
+                SelectedValuePath="Content"
+                SelectedValue="{Binding SelectedProviderMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+        <ComboBoxItem Content="local" />
+        <ComboBoxItem Content="null" />
+        <ComboBoxItem Content="ollama" />
+        <ComboBoxItem Content="bridge" />
+      </ComboBox>
+      <TextBlock Margin="0,2,0,0"
+                 Foreground="#FFB45309"
+                 Text="{Binding ProviderAvailabilityWarning}"
+                 TextWrapping="Wrap" />
       <TextBlock Margin="0,2,0,0"
                  Foreground="#FF6B7280"
                  Text="{Binding SelectedHostTransport, StringFormat=Host: {0}}" />
+      <ComboBox Margin="0,4,0,0"
+                SelectedValuePath="Content"
+                SelectedValue="{Binding SelectedHostTransport, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+        <ComboBoxItem Content="none" />
+        <ComboBoxItem Content="host" />
+      </ComboBox>
       <TextBlock Margin="0,2,0,0"
                  Foreground="#FF6B7280"
                  Text="{Binding LastRunFolderPath, StringFormat=Run Folder: {0}}"

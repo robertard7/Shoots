@@ -71,6 +71,12 @@ if ($run.contractVersion) {
 $operatorFlowValid = Test-Path $operatorFlowPath
 if (-not $operatorFlowValid) { $errors += "operator flow missing" }
 
+$hostResponseValid = $true
+if ($run.hostTransport -eq "host") {
+    $hostResponseValid = -not [string]::IsNullOrWhiteSpace($run.hostResponseOutcome)
+    if (-not $hostResponseValid) { $errors += "host response metadata missing" }
+}
+
 $catalogPath = "etc/ui.tools.catalog.json"
 if (Test-Path $catalogPath -and $run.toolCatalogHash) {
     $currentCatalogHash = (Get-FileHash -Path $catalogPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -79,7 +85,7 @@ if (Test-Path $catalogPath -and $run.toolCatalogHash) {
 }
 
 $report = [ordered]@{
-    valid = ($manifestValid -and $artifactsValid -and $environmentValid -and $narratorValid -and $bundleValid -and $catalogValid -and $transcriptValid -and $contractValid -and $operatorFlowValid)
+    valid = ($manifestValid -and $artifactsValid -and $environmentValid -and $narratorValid -and $bundleValid -and $catalogValid -and $transcriptValid -and $contractValid -and $operatorFlowValid -and $hostResponseValid)
     manifestValid = $manifestValid
     artifactsValid = $artifactsValid
     environmentValid = $environmentValid
@@ -89,6 +95,7 @@ $report = [ordered]@{
     transcriptValid = $transcriptValid
     contractValid = $contractValid
     operatorFlowValid = $operatorFlowValid
+    hostResponseValid = $hostResponseValid
     plannerSource = $run.plannerSource
     runtimeBridge = $run.runtimeBridge
     provider = $run.provider

@@ -11,6 +11,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Shoots.UI.AiHelp;
+using Shoots.UI.Builder;
 using Shoots.UI.Diagnostics;
 using Shoots.UI.Services;
 
@@ -232,6 +233,39 @@ public partial class App : Application
         var artifactVerification = hasRunPath
             ? new Builder.ArtifactManager().VerifyArtifacts(runPath!)
             : new Builder.ArtifactVerificationResult(false, Array.Empty<string>());
+        RunModel? run = null;
+        if (hasRunPath)
+        {
+            var runJsonPath = Path.Combine(runPath!, "run.json");
+            run = File.Exists(runJsonPath)
+                ? JsonSerializer.Deserialize<RunModel>(File.ReadAllText(runJsonPath))
+                : null;
+
+            if (string.Equals(action, "run-demo-host", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(run?.HostResponseOutcome) && string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                result = "error:missing-host-response";
+            }
+
+            var operatorFlowPath = Path.Combine(runPath!, "operator_flow.json");
+            var operatorFlow = new
+            {
+                intent = payload,
+                planner = run?.PlannerSource ?? "RuntimePlanner",
+                runtime_bridge = run?.RuntimeBridge ?? viewModel.SelectedRuntimeBridge,
+                provider = run?.Provider ?? viewModel.SelectedProviderMode,
+                host_transport = run?.HostTransport ?? viewModel.SelectedHostTransport,
+                verification_report_exists = File.Exists(Path.Combine(runPath!, "verification_report.json")),
+                host_response_outcome = run?.HostResponseOutcome,
+                host_response_work_order_id = run?.HostResponseWorkOrderId,
+                host_response_plan_id = run?.HostResponsePlanId,
+                host_response_plan_hash = run?.HostResponsePlanHash,
+                host_response_message = run?.HostResponseMessage,
+                host_response_error_code = run?.HostResponseErrorCode
+            };
+
+            File.WriteAllText(operatorFlowPath, JsonSerializer.Serialize(operatorFlow, new JsonSerializerOptions { WriteIndented = true }));
+        }
+
         var sentinel = new
         {
             project_id = project?.ProjectId ?? string.Empty,
@@ -251,26 +285,11 @@ public partial class App : Application
             operator_flow_exists = hasRunPath,
             log_artifact_exists = hasRunPath && Directory.Exists(Path.Combine(runPath!, "artifacts")) && Directory.GetFiles(Path.Combine(runPath!, "artifacts"), "*.log", SearchOption.AllDirectories).Length > 0,
             artifact_verification_ok = hasRunPath && artifactVerification.Ok,
-            artifact_verification_errors = artifactVerification.Errors
+            artifact_verification_errors = artifactVerification.Errors,
+            host_response_metadata_exists = hasRunPath && !string.IsNullOrWhiteSpace(run?.HostResponseOutcome)
         };
 
         File.WriteAllText(sentinelPath, JsonSerializer.Serialize(sentinel, new JsonSerializerOptions { WriteIndented = true }));
-
-        if (hasRunPath)
-        {
-            var operatorFlowPath = Path.Combine(runPath!, "operator_flow.json");
-            var operatorFlow = new
-            {
-                intent = payload,
-                planner = "RuntimePlanner",
-                runtime_bridge = viewModel.SelectedRuntimeBridge,
-                provider = viewModel.SelectedProviderMode,
-                host_transport = viewModel.SelectedHostTransport,
-                verification_report_exists = File.Exists(Path.Combine(runPath!, "verification_report.json"))
-            };
-
-            File.WriteAllText(operatorFlowPath, JsonSerializer.Serialize(operatorFlow, new JsonSerializerOptions { WriteIndented = true }));
-        }
 
         Trace.WriteLine($"[Shoots.UI] smoke.sentinel={sentinelPath}");
         return true;

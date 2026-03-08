@@ -75,6 +75,11 @@ public static class RunVerificationService
             transcriptValid = HashMatches(transcriptPath, run.TranscriptHash, errors, "transcript");
         }
 
+        if (string.Equals(run.HostTransport, "host", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(run.HostResponseOutcome))
+        {
+            errors.Add("host response metadata missing for host transport run");
+        }
+
         var valid = manifestValid && artifactsValid && environmentValid && narratorValid && bundleValid && catalogValid && transcriptValid && errors.Count == 0;
         return new RunVerificationResult(valid, manifestValid, artifactsValid, environmentValid, narratorValid, bundleValid, catalogValid, transcriptValid, errors);
     }

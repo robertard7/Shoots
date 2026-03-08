@@ -25,7 +25,7 @@ public sealed class BuilderExecutionService
         _toolRegistry = toolRegistry;
     }
 
-    public BuilderExecutionResult Execute(PlanModel plan, ProjectModel project, string plannerSource = "runtime", string runtimeBridge = "RuntimeBridgeLocal", string provider = "local", string hostTransport = "none", Action<NarrationEvent>? narrate = null)
+    public BuilderExecutionResult Execute(PlanModel plan, ProjectModel project, string plannerSource = "runtime", string runtimeBridge = "RuntimeBridgeLocal", string provider = "local", string hostTransport = "none", string? hostResponseOutcome = null, string? hostResponseWorkOrderId = null, string? hostResponsePlanId = null, string? hostResponsePlanHash = null, string? hostResponseMessage = null, string? hostResponseErrorCode = null, Action<NarrationEvent>? narrate = null)
     {
         _artifactManager.Reset();
 
@@ -187,7 +187,13 @@ public sealed class BuilderExecutionService
                 narrHash,
                 transHash,
                 evidenceHash,
-                reproWarning);
+                reproWarning,
+                hostResponseOutcome,
+                hostResponseWorkOrderId,
+                hostResponsePlanId,
+                hostResponsePlanHash,
+                hostResponseMessage,
+                hostResponseErrorCode);
             File.WriteAllText(runJsonPath, JsonSerializer.Serialize(model, new JsonSerializerOptions { WriteIndented = true }));
             return model;
         }
@@ -357,7 +363,13 @@ public sealed class BuilderExecutionService
             planner_source = run.PlannerSource,
             runtime_bridge = run.RuntimeBridge,
             provider = run.Provider,
-            host_transport = run.HostTransport
+            host_transport = run.HostTransport,
+            host_response_outcome = run.HostResponseOutcome,
+            host_response_work_order_id = run.HostResponseWorkOrderId,
+            host_response_plan_id = run.HostResponsePlanId,
+            host_response_plan_hash = run.HostResponsePlanHash,
+            host_response_message = run.HostResponseMessage,
+            host_response_error_code = run.HostResponseErrorCode
         };
 
         File.WriteAllText(bundlePath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));

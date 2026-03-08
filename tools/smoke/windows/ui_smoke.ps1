@@ -66,7 +66,27 @@ $proof = Get-Content $sentinelPath -Raw | ConvertFrom-Json
 $hostRunPath = Join-Path $proof.workspace_path (Join-Path "runs" $proof.demo_run_id)
 $hostOperatorFlow = Get-Content (Join-Path $hostRunPath "operator_flow.json") -Raw | ConvertFrom-Json
 if ($hostOperatorFlow.host_transport -ne "host") { throw "operator_flow host transport mismatch for host run." }
+if (-not $proof.host_response_metadata_exists) { throw "Sentinel indicates missing host response metadata for host run." }
+if (-not $hostOperatorFlow.host_response_outcome) { throw "operator_flow missing host response outcome for host run." }
 pwsh -NoLogo -NoProfile -File .\tools\replay\verify_run.ps1 -RunPath $hostRunPath
+
+$directRun = Get-Content (Join-Path $runPath "run.json") -Raw | ConvertFrom-Json
+$hostRun = Get-Content (Join-Path $hostRunPath "run.json") -Raw | ConvertFrom-Json
+$equivalence = [ordered]@{
+    contract_marker_match = ($directRun.contractVersion -eq $hostRun.contractVersion)
+    planner_source_match = ($directRun.plannerSource -eq $hostRun.plannerSource)
+    plan_hash_match = ($directRun.planHash -eq $hostRun.planHash)
+    provider_match = ($directRun.provider -eq $hostRun.provider)
+    step_count_match = (($directRun.steps | Measure-Object).Count -eq ($hostRun.steps | Measure-Object).Count)
+    step_ids_match = ((($directRun.steps | ForEach-Object { $_.stepId }) -join ',') -eq (($hostRun.steps | ForEach-Object { $_.stepId }) -join ','))
+    step_status_match = ((($directRun.steps | ForEach-Object { $_.status }) -join ',') -eq (($hostRun.steps | ForEach-Object { $_.status }) -join ','))
+    status_match = ($directRun.status -eq $hostRun.status)
+    host_response_outcome = $hostRun.hostResponseOutcome
+}
+$equivalence.valid = $equivalence.contract_marker_match -and $equivalence.planner_source_match -and $equivalence.plan_hash_match -and $equivalence.provider_match -and $equivalence.step_count_match -and $equivalence.step_ids_match -and $equivalence.step_status_match -and $equivalence.status_match
+$equivalencePath = Join-Path $hostRunPath "transport_equivalence.json"
+$equivalence | ConvertTo-Json -Depth 10 | Set-Content $equivalencePath
+if (-not $equivalence.valid) { throw "transport equivalence check failed. See $equivalencePath" }
 
 dotnet run --project $uiProject -c $Configuration -- --smoke intent "start new project"
 if (!(Test-Path $sentinelPath)) { throw "Missing smoke sentinel after intent." }

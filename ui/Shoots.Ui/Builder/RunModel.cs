@@ -46,7 +46,13 @@ public sealed record RunModel(
     string? NarratorHash = null,
     string? TranscriptHash = null,
     string? EvidenceBundleHash = null,
-    string? ReproWarning = null
+    string? ReproWarning = null,
+    string? HostResponseOutcome = null,
+    string? HostResponseWorkOrderId = null,
+    string? HostResponsePlanId = null,
+    string? HostResponsePlanHash = null,
+    string? HostResponseMessage = null,
+    string? HostResponseErrorCode = null
 );
 
 public sealed record BuilderExecutionResult(

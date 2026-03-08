@@ -1023,6 +1023,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
             _selectedProviderMode = normalized;
             OnPropertyChanged(nameof(SelectedProviderMode));
+            OnPropertyChanged(nameof(ProviderAvailabilityWarning));
+            PersistExecutionSelection();
         }
     }
 
@@ -1039,8 +1041,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
             _selectedHostTransport = normalized;
             OnPropertyChanged(nameof(SelectedHostTransport));
+            PersistExecutionSelection();
         }
     }
+
+    public string ProviderAvailabilityWarning
+        => string.Equals(SelectedProviderMode, "ollama", StringComparison.OrdinalIgnoreCase) && !OllamaStatus.IsAvailable
+            ? $"Provider unavailable: ollama ({OllamaStatus.ErrorCode ?? "ui.backend.ollama.unreachable"})"
+            : string.Empty;
+
     public string LastRunFolderPath => _lastDemoRunPath ?? string.Empty;
     public string LastVerificationReportPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "verification_report.json");
     public string LastOperatorFlowPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "operator_flow.json");
@@ -1621,10 +1630,39 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             {
                 ["provider"] = SelectedProviderMode
             });
-            AddNarration("step", "HOST_REQUEST_SENT", new Dictionary<string, string>
+            HostExecutionResult? hostResponse = null;
+            if (string.Equals(SelectedHostTransport, "host", StringComparison.OrdinalIgnoreCase))
             {
-                ["host_transport"] = SelectedHostTransport
-            });
+                var hostPlan = BuildHostPlan(plan, CurrentProject, SelectedProviderMode);
+                AddNarration("step", "HOST_REQUEST_SENT", new Dictionary<string, string>
+                {
+                    ["host_transport"] = SelectedHostTransport,
+                    ["host_plan_id"] = hostPlan.PlanId
+                });
+
+                hostResponse = _hostExecutionService.RunAsync(hostPlan, new HostRunOptions(HostRunMode.Normal, MaxTicks: 2048, RecordTrace: true, Deterministic: true)).GetAwaiter().GetResult();
+
+                AddNarration("result", "HOST_RESPONSE_RECEIVED", new Dictionary<string, string>
+                {
+                    ["host_outcome"] = hostResponse.Outcome.ToString(),
+                    ["host_work_order_id"] = hostResponse.WorkOrderId ?? string.Empty,
+                    ["host_plan_id"] = hostResponse.PlanId ?? string.Empty,
+                    ["host_plan_hash"] = hostResponse.PlanHash ?? string.Empty
+                });
+
+                if (hostResponse.Outcome is HostExecutionOutcome.Failed or HostExecutionOutcome.Unknown)
+                {
+                    AddStartupMessage($"System: Host execution failed: {hostResponse.ErrorCode ?? hostResponse.Message ?? "unknown"}.");
+                    return Task.CompletedTask;
+                }
+            }
+            else
+            {
+                AddNarration("step", "HOST_REQUEST_SENT", new Dictionary<string, string>
+                {
+                    ["host_transport"] = SelectedHostTransport
+                });
+            }
 
             var execution = _builderExecutionService.Execute(
                 plan,
@@ -1633,6 +1671,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 runtimeBridge: SelectedRuntimeBridge,
                 provider: SelectedProviderMode,
                 hostTransport: SelectedHostTransport,
+                hostResponseOutcome: hostResponse?.Outcome.ToString(),
+                hostResponseWorkOrderId: hostResponse?.WorkOrderId,
+                hostResponsePlanId: hostResponse?.PlanId,
+                hostResponsePlanHash: hostResponse?.PlanHash,
+                hostResponseMessage: hostResponse?.Message,
+                hostResponseErrorCode: hostResponse?.ErrorCode,
                 narrate: evt => AddNarration(evt.Kind, evt.Message, evt.Data));
             _lastDemoRunPath = execution.RunPath;
             OnPropertyChanged(nameof(LastRunFolderPath));
@@ -1684,6 +1728,62 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         return Task.CompletedTask;
+    }
+
+    private BuildPlan BuildHostPlan(PlanModel plan, ProjectModel project, string providerMode)
+    {
+        var workOrder = _hostExecutionService.CreateWorkOrder(
+            originalRequest: "ui-demo-run",
+            intent: "execute-demo-plan",
+            constraints: Array.Empty<string>(),
+            requestedArtifacts: new[] { "run.json", "artifact.json" });
+
+        var request = new BuildRequest(
+            workOrder,
+            CommandId: "ui.demo.run",
+            Args: new Dictionary<string, object?>
+            {
+                ["project_id"] = project.ProjectId,
+                ["workspace_path"] = project.WorkspacePath,
+                ["provider"] = providerMode
+            },
+            RouteRules: Array.Empty<RouteRule>());
+
+        var authority = new DelegationAuthority(
+            new ProviderId(providerMode),
+            ResolveProviderKind(providerMode),
+            "ui-demo-policy",
+            AllowsDelegation: true);
+
+        var steps = plan.Steps
+            .Select(static step => (BuildStep)new ToolBuildStep(
+                step.StepId,
+                $"Execute {step.ToolId}",
+                new ToolId(step.ToolId),
+                step.Args.ToDictionary(static kvp => kvp.Key, static kvp => (object?)kvp.Value, StringComparer.Ordinal),
+                new[] { new ToolOutputSpec("output", "file", step.OutputPath) }))
+            .ToArray();
+
+        var artifacts = plan.Steps
+            .Select(static step => new BuildArtifact(step.StepId, step.OutputPath))
+            .ToArray();
+
+        return new BuildPlan(plan.PlanId, request, authority, steps, artifacts);
+    }
+
+    private static ProviderKind ResolveProviderKind(string providerMode)
+    {
+        if (string.Equals(providerMode, "bridge", StringComparison.OrdinalIgnoreCase))
+        {
+            return ProviderKind.Delegated;
+        }
+
+        if (string.Equals(providerMode, "ollama", StringComparison.OrdinalIgnoreCase))
+        {
+            return ProviderKind.Remote;
+        }
+
+        return ProviderKind.Local;
     }
 
     private Task StartAnotherProjectAsync()
@@ -1978,6 +2078,23 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    private void PersistExecutionSelection()
+    {
+        if (ActiveWorkspace is null)
+        {
+            return;
+        }
+
+        var providerKind = char.ToUpperInvariant(_selectedProviderMode[0]) + _selectedProviderMode[1..].ToLowerInvariant();
+        var updated = ActiveWorkspace with
+        {
+            SelectedProviderKind = providerKind
+        };
+
+        ActiveWorkspace = updated;
+        _workspaceProvider.UpdateWorkspace(updated);
+    }
+
     private bool CanRefreshBackends() => string.IsNullOrWhiteSpace(GetRefreshBackendsDisabledReason());
 
     private string GetRefreshBackendsDisabledReason()
@@ -2009,6 +2126,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(OllamaEndpoint));
             OnPropertyChanged(nameof(QdrantEndpoint));
             OnPropertyChanged(nameof(AiProviderStatus));
+            OnPropertyChanged(nameof(ProviderAvailabilityWarning));
             OnPropertyChanged(nameof(BackendDisabledReason));
             OnPropertyChanged(nameof(RunIntakePlanDisabledReason));
 
