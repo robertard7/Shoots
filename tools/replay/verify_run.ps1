@@ -1,23 +1,48 @@
 Param(
-    [Parameter(Mandatory = $true)]
     [string]$RunPath
 )
 
 $ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
 
-if (!(Test-Path $RunPath)) {
+trap {
+    Write-Error ("[FAIL] {0}" -f $_.Exception.Message)
+    exit 1
+}
+
+if ([string]::IsNullOrWhiteSpace($RunPath)) {
+    $RunPath = $env:SHOOTS_VERIFY_RUN_PATH
+}
+
+if ([string]::IsNullOrWhiteSpace($RunPath)) {
+    throw "RunPath argument missing. Provide -RunPath or set SHOOTS_VERIFY_RUN_PATH."
+}
+
+if (-not (Test-Path $RunPath)) {
     throw "RunPath not found: $RunPath"
 }
 
-$runJsonPath = Join-Path $RunPath "run.json"
-$manifestPath = Join-Path $RunPath "artifacts\manifest.json"
-$environmentPath = Join-Path $RunPath "environment.json"
-$narratorPath = Join-Path $RunPath "narrator.jsonl"
-$bundlePath = Join-Path $RunPath "evidence_bundle.json"
-$operatorFlowPath = Join-Path $RunPath "operator_flow.json"
-$reportPath = Join-Path $RunPath "verification_report.json"
+$resolvedRunPath = (Resolve-Path -LiteralPath $RunPath).ProviderPath
 
-if (!(Test-Path $runJsonPath)) { throw "run.json missing: $runJsonPath" }
+function Resolve-RunRelativePath {
+    param([Parameter(Mandatory = $true)] [string]$Value)
+
+    if ([System.IO.Path]::IsPathRooted($Value)) {
+        return $Value
+    }
+
+    return (Join-Path $resolvedRunPath $Value)
+}
+
+$runJsonPath = Join-Path $resolvedRunPath "run.json"
+$manifestPath = Join-Path $resolvedRunPath "artifacts\manifest.json"
+$environmentPath = Join-Path $resolvedRunPath "environment.json"
+$narratorPath = Join-Path $resolvedRunPath "narrator.jsonl"
+$bundlePath = Join-Path $resolvedRunPath "evidence_bundle.json"
+$operatorFlowPath = Join-Path $resolvedRunPath "operator_flow.json"
+$reportPath = Join-Path $resolvedRunPath "verification_report.json"
+
+if (-not (Test-Path $runJsonPath)) { throw "run.json missing: $runJsonPath" }
 
 $run = Get-Content $runJsonPath -Raw | ConvertFrom-Json
 $errors = @()
@@ -35,9 +60,10 @@ if (-not $manifestValid) {
     $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
     $artifactErrors = @()
     foreach ($entry in $manifest.files) {
-        if (!(Test-Path $entry.path)) { $artifactErrors += "missing:$($entry.path)"; continue }
-        $h = (Get-FileHash -Path $entry.path -Algorithm SHA256).Hash.ToLowerInvariant()
-        $b = (Get-Item $entry.path).Length
+        $entryPath = Resolve-RunRelativePath -Value $entry.path
+        if (-not (Test-Path $entryPath)) { $artifactErrors += "missing:$($entry.path)"; continue }
+        $h = (Get-FileHash -Path $entryPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $b = (Get-Item $entryPath).Length
         if ($h -ne $entry.sha256.ToLowerInvariant()) { $artifactErrors += "hash:$($entry.path)" }
         if ($b -ne [int64]$entry.bytes) { $artifactErrors += "size:$($entry.path)" }
     }
@@ -45,22 +71,28 @@ if (-not $manifestValid) {
     if (-not $artifactsValid) { $errors += $artifactErrors }
 }
 
-function Test-Hash([string]$path, [string]$expected, [string]$name) {
-    if (-not $expected) { $script:errors += "$name hash missing"; return $false }
-    if (!(Test-Path $path)) { $script:errors += "$name file missing"; return $false }
-    $h = (Get-FileHash -Path $path -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($h -ne $expected.ToLowerInvariant()) { $script:errors += "$name hash mismatch"; return $false }
+function Test-Hash {
+    param(
+        [string]$Path,
+        [string]$Expected,
+        [string]$Name
+    )
+
+    if (-not $Expected) { $script:errors += "$Name hash missing"; return $false }
+    if (-not (Test-Path $Path)) { $script:errors += "$Name file missing"; return $false }
+    $h = (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($h -ne $Expected.ToLowerInvariant()) { $script:errors += "$Name hash mismatch"; return $false }
     return $true
 }
 
-$environmentValid = Test-Hash $environmentPath $run.environmentHash "environment"
-$narratorValid = Test-Hash $narratorPath $run.narratorHash "narrator"
-$bundleValid = Test-Hash $bundlePath $run.evidenceBundleHash "bundle"
+$environmentValid = Test-Hash -Path $environmentPath -Expected $run.environmentHash -Name "environment"
+$narratorValid = Test-Hash -Path $narratorPath -Expected $run.narratorHash -Name "narrator"
+$bundleValid = Test-Hash -Path $bundlePath -Expected $run.evidenceBundleHash -Name "bundle"
 
 if ($run.transcriptHash) {
-    $workspacePath = Split-Path (Split-Path $RunPath -Parent) -Parent
+    $workspacePath = Split-Path (Split-Path $resolvedRunPath -Parent) -Parent
     $transcriptPath = Join-Path $workspacePath "notes\chat_transcript.jsonl"
-    $transcriptValid = Test-Hash $transcriptPath $run.transcriptHash "transcript"
+    $transcriptValid = Test-Hash -Path $transcriptPath -Expected $run.transcriptHash -Name "transcript"
 }
 
 $contractValid = $true
@@ -78,7 +110,7 @@ if ($run.hostTransport -eq "host") {
 }
 
 $catalogPath = "etc/ui.tools.catalog.json"
-if (Test-Path $catalogPath -and $run.toolCatalogHash) {
+if ((Test-Path $catalogPath) -and $run.toolCatalogHash) {
     $currentCatalogHash = (Get-FileHash -Path $catalogPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $catalogValid = ($currentCatalogHash -eq $run.toolCatalogHash.ToLowerInvariant())
     if (-not $catalogValid) { $errors += "catalog drift" }

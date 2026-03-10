@@ -28,6 +28,8 @@ using Shoots.UI.Settings;
 using Shoots.UI.Startup;
 using Shoots.Runtime.Ui.Abstractions;
 using Shoots.UI.Services.AiHelp;
+using System.Windows;
+using System.Windows.Threading;
 
 namespace Shoots.UI.ViewModels;
 
@@ -75,8 +77,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private readonly LocalProjectService _localProjectService;
     private readonly IPlanner _planner;
     private readonly BuilderExecutionService _builderExecutionService;
-    private readonly ObservableCollection<string> _runHistory;
+    private readonly ObservableCollection<RunHistoryRow> _runHistory;
     private readonly ObservableCollection<string> _artifactFiles;
+    private readonly ObservableCollection<ProofArtifactRow> _proofArtifacts;
+    private readonly Dispatcher _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+    private readonly bool _autoRefreshBackends;
 
     private readonly ObservableCollection<ProjectWorkspace> _recentWorkspaces;
     private readonly ObservableCollection<BlueprintEntryViewModel> _blueprints;
@@ -94,13 +99,24 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ReadOnlyObservableCollection<string> NarrationLines { get; }
     public ReadOnlyObservableCollection<string> ActionLogLines { get; }
     public ReadOnlyObservableCollection<string> AvailableModels { get; }
-    public ReadOnlyObservableCollection<string> RunHistory { get; }
+    public ReadOnlyObservableCollection<RunHistoryRow> RunHistory { get; }
     public ReadOnlyObservableCollection<string> ArtifactFiles { get; }
+    public ReadOnlyObservableCollection<ProofArtifactRow> ProofArtifacts { get; }
 
     private string _startupInput = string.Empty;
     private string _selectedModelId = string.Empty;
+    private string _lastKnownModelId = string.Empty;
     private string _selectedNarrationPhase = "all";
     private readonly ReadOnlyCollection<ProviderCapabilityMatrixRow> _providerCapabilityMatrix;
+    private static readonly ProofArtifactDescriptor[] ProofArtifactDescriptors =
+    {
+        new("run.json", "run.json"),
+        new("verification_report.json", "verification_report.json"),
+        new("operator_flow.json", "operator_flow.json"),
+        new("transport_equivalence.json", "transport_equivalence.json"),
+        new("manifest.json", Path.Combine("artifacts", "manifest.json")),
+        new("narrator.jsonl", "narrator.jsonl")
+    };
 
     private UiExecutionState _state;
     private IEnvironmentProfile? _selectedProfile;
@@ -145,8 +161,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private ProjectModel? _currentProject;
     private string? _lastDemoRunPath;
     private string _lastRunVerificationState = "Not verified";
+    private string? _proofRunPath;
+    private string _proofRunVerificationState = "No run selected";
+    private string _proofRunLabel = "No run selected";
+    private string? _proofRunId;
+    private RunHistoryRow? _selectedRunHistory;
     private string _selectedProviderMode = "local";
     private string _selectedHostTransport = "none";
+    private FailureDetails? _lastFailure;
 
     private AiPresentationPolicy _aiPresentationPolicy =
         new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true, EnterpriseMode: false);
@@ -161,6 +183,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string? _graphHash;
     private string? _nodeSetHash;
     private string? _edgeSetHash;
+
+    private sealed record FailureDetails(
+        string Phase,
+        string Reason,
+        string? ProofPath,
+        string? NextAction,
+        DateTimeOffset OccurredUtc);
 
 	private IReadOnlyList<IAiHelpSurface> BuildAiHelpSurfaces()
 	{
@@ -252,6 +281,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 	private bool _isCreatingProject;
 	private bool _isBusy;
 	private string _busyOperation = string.Empty;
+    private readonly ObservableCollection<OperationProgressStepRow> _operationProgressSteps = new();
+    private readonly ObservableCollection<string> _operationNarrationFeed = new();
+    private string _operationStatusLine = "Idle";
+    private string _operationStatusDetail = "No active operation.";
+    private string _operationLatestEvent = string.Empty;
+    private DateTimeOffset? _operationStartedUtc;
+    private bool _isOperationActive;
+    private bool _isOperationVisible;
+    private DateTimeOffset? _operationDisplayUntilUtc;
+    private DispatcherTimer? _operationProgressTimer;
 	private readonly ObservableCollection<string> _chatTranscript = new();
     private readonly ObservableCollection<NarrationEvent> _narrationEvents = new();
     private readonly DeterministicIntentParser _intentParser = new();
@@ -303,6 +342,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(ProjectCreationStatus));
             OnPropertyChanged(nameof(CanStartNewProjectUi));
             NewProjectCommand.RaiseCanExecuteChanged();
+            QuickDemoCommand?.RaiseCanExecuteChanged();
         }
     }
 
@@ -322,7 +362,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     public bool HasProjectCreationError => !string.IsNullOrWhiteSpace(ProjectCreationErrorMessage);
     public string UiLogPath => Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Shoots.UI", "ui.log");
-    public bool CanStartNewProjectUi => !IsCreatingProject && !IsBusy;
+    public bool CanStartNewProjectUi => !IsCreatingProject && !IsBusy && !IsOperationActive;
 
     public bool IsBusy
     {
@@ -332,6 +372,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (_isBusy == value) return;
             _isBusy = value;
             OnPropertyChanged(nameof(IsBusy));
+            OnPropertyChanged(nameof(CanStartNewProjectUi));
+            OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
+            OnPropertyChanged(nameof(QuickDemoDisabledReason));
+            RaiseCommandCanExecute();
         }
     }
 
@@ -345,6 +389,33 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(BusyOperation));
         }
     }
+
+    public ReadOnlyObservableCollection<OperationProgressStepRow> OperationProgressSteps { get; private set; } = null!;
+    public ReadOnlyObservableCollection<string> OperationNarrationFeed { get; private set; } = null!;
+    public string OperationStatusLine => _operationStatusLine;
+    public string OperationStatusDetail => _operationStatusDetail;
+    public string OperationLatestEvent => _operationLatestEvent;
+    public bool IsOperationActive => _isOperationActive;
+    public bool IsOperationVisible => _isOperationVisible;
+    public bool HasOperationSteps => _operationProgressSteps.Count > 0;
+    public bool HasOperationNarration => _operationNarrationFeed.Count > 0;
+    public string OperationElapsedLabel => BuildOperationElapsedLabel();
+    public string CurrentOperation => OperationStatusLine;
+    public string CurrentOperationStage => OperationStatusLine;
+    public DateTimeOffset? CurrentOperationStartedAt => _operationStartedUtc;
+    public string CurrentOperationStatus => _isOperationActive ? "active" : OperationStatusLine switch
+    {
+        "Completed successfully" => "completed",
+        "Failed" => "failed",
+        _ => "idle"
+    };
+    public string CurrentOperationDetail => OperationStatusDetail;
+    public bool IsOperationBusyIndicatorVisible => IsOperationActive;
+    public bool IsOperationCompletionHoldActive =>
+        !_isOperationActive && _isOperationVisible && !string.Equals(_operationStatusLine, "Idle", StringComparison.Ordinal);
+    public string RunDemoPlanDisabledReason => GetRunDemoPlanDisabledReason();
+    public string QuickDemoDisabledReason => GetQuickDemoDisabledReason();
+    public TimeSpan OperationCompletionHoldDuration { get; set; } = TimeSpan.FromSeconds(4);
 
 	public string IntakeTarget
 	{
@@ -473,6 +544,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public AsyncRelayCommand CopyLastVerificationReportPathCommand { get; private set; } = null!;
         public AsyncRelayCommand CopyLastOperatorFlowPathCommand { get; private set; } = null!;
         public AsyncRelayCommand CopyLastTransportEquivalencePathCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyLastFailureSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand<ProofArtifactRow> OpenProofArtifactCommand { get; private set; } = null!;
+        public AsyncRelayCommand<ProofArtifactRow> CopyProofArtifactPathCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenProofRunFolderCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyProofRunFolderPathCommand { get; private set; } = null!;
 
 	// Call this from your constructor AFTER other command setup
 	private void InitializeChatIntakeSurface()
@@ -499,6 +575,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         CopyLastVerificationReportPathCommand = new AsyncRelayCommand(CopyLastVerificationReportPathAsync, CanOpenLastVerificationReport);
         CopyLastOperatorFlowPathCommand = new AsyncRelayCommand(CopyLastOperatorFlowPathAsync, CanOpenLastOperatorFlow);
         CopyLastTransportEquivalencePathCommand = new AsyncRelayCommand(CopyLastTransportEquivalencePathAsync, CanOpenLastTransportEquivalence);
+        CopyLastFailureSummaryCommand = new AsyncRelayCommand(CopyLastFailureSummaryAsync, () => HasLastFailure);
+        OpenProofArtifactCommand = new AsyncRelayCommand<ProofArtifactRow>(OpenProofArtifactAsync, artifact => artifact is { Exists: true });
+        CopyProofArtifactPathCommand = new AsyncRelayCommand<ProofArtifactRow>(CopyProofArtifactPathAsync, artifact => artifact is { Exists: true });
+        OpenProofRunFolderCommand = new AsyncRelayCommand(OpenProofRunFolderAsync, () => HasProofRun);
+        CopyProofRunFolderPathCommand = new AsyncRelayCommand(CopyProofRunFolderPathAsync, () => HasProofRun);
 
         RebuildJobSpecDigest();
     }
@@ -566,6 +647,28 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private Task CopyLastTransportEquivalencePathAsync()
         => CopyPathToClipboardAsync(LastTransportEquivalencePath, isFile: true);
 
+    private Task CopyLastFailureSummaryAsync()
+    {
+        if (!HasLastFailure)
+        {
+            return Task.CompletedTask;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine($"Phase: {LastFailurePhase}");
+        builder.AppendLine($"Reason: {LastFailureReason}");
+        if (!string.IsNullOrWhiteSpace(LastFailureProofPath))
+        {
+            builder.AppendLine($"Proof: {LastFailureProofPath}");
+        }
+        if (!string.IsNullOrWhiteSpace(LastFailureNextAction))
+        {
+            builder.AppendLine($"Next: {LastFailureNextAction}");
+        }
+        builder.AppendLine($"Recorded: {_lastFailure?.OccurredUtc:O}");
+        return _workspaceShell.CopyTextAsync(builder.ToString());
+    }
+
     private Task OpenFolderIfExistsAsync(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
@@ -606,9 +709,111 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         return _workspaceShell.CopyTextAsync(path);
     }
 
+    private Task OpenProofArtifactAsync(ProofArtifactRow? artifact)
+    {
+        if (artifact is null || !artifact.Exists || string.IsNullOrWhiteSpace(artifact.AbsolutePath))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _workspaceShell.OpenFolderAsync(artifact.AbsolutePath);
+    }
+
+    private Task CopyProofArtifactPathAsync(ProofArtifactRow? artifact)
+    {
+        if (artifact is null || !artifact.Exists || string.IsNullOrWhiteSpace(artifact.AbsolutePath))
+        {
+            return Task.CompletedTask;
+        }
+
+        return _workspaceShell.CopyTextAsync(artifact.AbsolutePath);
+    }
+
+    private Task OpenProofRunFolderAsync()
+        => OpenFolderIfExistsAsync(_proofRunPath ?? string.Empty);
+
+    private Task CopyProofRunFolderPathAsync()
+        => CopyPathToClipboardAsync(_proofRunPath ?? string.Empty, isFile: false);
+
+    private void RefreshProofArtifacts()
+    {
+        foreach (var artifact in _proofArtifacts)
+        {
+            artifact.Update(_proofRunPath);
+        }
+
+        OnPropertyChanged(nameof(ProofArtifacts));
+        OpenProofArtifactCommand.NotifyCanExecuteChanged();
+        CopyProofArtifactPathCommand.NotifyCanExecuteChanged();
+    }
+
+    private void RecordFailure(string phase, string reason, string? proofPath, string? suggestedNextAction)
+    {
+        _lastFailure = new FailureDetails(
+            phase,
+            reason,
+            string.IsNullOrWhiteSpace(proofPath) ? UiLogPath : proofPath,
+            suggestedNextAction,
+            DateTimeOffset.UtcNow);
+
+        OnPropertyChanged(nameof(HasLastFailure));
+        OnPropertyChanged(nameof(LastFailurePhase));
+        OnPropertyChanged(nameof(LastFailureReason));
+        OnPropertyChanged(nameof(LastFailureProofPath));
+        OnPropertyChanged(nameof(LastFailureNextAction));
+        OnPropertyChanged(nameof(LastFailureSummary));
+        CopyLastFailureSummaryCommand?.RaiseCanExecuteChanged();
+    }
+
+    private void SetProofRun(RunHistoryRow? row)
+    {
+        if (row is null)
+        {
+            _proofRunPath = null;
+            _proofRunId = null;
+            _proofRunVerificationState = "No run selected";
+            _proofRunLabel = "No run selected";
+        }
+        else
+        {
+            _proofRunPath = row.RunPath;
+            _proofRunId = row.RunId;
+            _proofRunVerificationState = row.VerificationResult;
+            _proofRunLabel = $"Inspecting {row.RunId} ({row.State})";
+        }
+
+        OnPropertyChanged(nameof(ProofRunFolderPath));
+        OnPropertyChanged(nameof(ProofRunVerificationState));
+        OnPropertyChanged(nameof(ProofRunLabel));
+        OnPropertyChanged(nameof(HasProofRun));
+        UpdateArtifactFiles(_proofRunPath);
+        OpenProofRunFolderCommand.RaiseCanExecuteChanged();
+        CopyProofRunFolderPathCommand.RaiseCanExecuteChanged();
+        RefreshProofArtifacts();
+    }
+
+    private void UpdateArtifactFiles(string? runPath)
+    {
+        _artifactFiles.Clear();
+        if (string.IsNullOrWhiteSpace(runPath))
+        {
+            return;
+        }
+
+        var artifactRoot = Path.Combine(runPath, "artifacts");
+        if (!Directory.Exists(artifactRoot))
+        {
+            return;
+        }
+
+        foreach (var artifactFile in Directory.GetFiles(artifactRoot, "*", SearchOption.AllDirectories).OrderBy(static x => x, StringComparer.Ordinal))
+        {
+            _artifactFiles.Add(artifactFile);
+        }
+    }
+
     private Task ResetModelCatalogAsync()
     {
-        _availableModels.Clear();
         SelectedModelId = string.Empty;
         ModelCatalogError = string.Empty;
         OnPropertyChanged(nameof(DefaultModelId));
@@ -818,6 +1023,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
 	private bool CanRunIntakePlan()
 	{
+		if (IsOperationActive) return false;
 		if (!HasActiveWorkspace) return false;
 		if (string.IsNullOrWhiteSpace(IntakeIntent)) return false;
 		if (!string.IsNullOrWhiteSpace(BuildBackendDisabledReason())) return false;
@@ -828,6 +1034,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private string GetRunIntakePlanDisabledReason()
     {
+        var busyReason = BuildOperationBusyReason();
+        if (!string.IsNullOrWhiteSpace(busyReason)) return busyReason;
         if (!HasActiveWorkspace) return "ui.workspace.missing: select a workspace first.";
         if (string.IsNullOrWhiteSpace(IntakeIntent)) return "ui.intake.intent.missing: provide an intake intent.";
         var backendReason = BuildBackendDisabledReason();
@@ -890,7 +1098,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         AiPanelVisibilityService aiPanelVisibilityService,
         IAiHelpFacade aiHelpFacade,
         IBackendProbeService backendProbeService,
-        IOllamaClient ollamaClient)
+        IOllamaClient ollamaClient,
+        LocalProjectService? localProjectService = null,
+        IPlanner? planner = null,
+        BuilderExecutionService? builderExecutionService = null,
+        bool autoRefreshBackends = true)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
         _hostExecutionService = new HostExecutionService(_commandService);
@@ -913,11 +1125,19 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _aiHelpFacade = aiHelpFacade ?? throw new ArgumentNullException(nameof(aiHelpFacade));
         _backendProbeService = backendProbeService ?? throw new ArgumentNullException(nameof(backendProbeService));
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
-        _localProjectService = new LocalProjectService();
-        _planner = new RuntimePlanner(new DemoPlanner());
-        var toolRegistry = new ToolRegistry();
-        var runtimeBridge = new RuntimeBridgeLocal(new ToolExecutionService(toolRegistry));
-        _builderExecutionService = new BuilderExecutionService(runtimeBridge, new ArtifactManager(), toolRegistry);
+        _localProjectService = localProjectService ?? new LocalProjectService();
+        _planner = planner ?? new RuntimePlanner(new DemoPlanner());
+        _autoRefreshBackends = autoRefreshBackends;
+        if (builderExecutionService is not null)
+        {
+            _builderExecutionService = builderExecutionService;
+        }
+        else
+        {
+            var toolRegistry = new ToolRegistry();
+            var runtimeBridge = new RuntimeBridgeLocal(new ToolExecutionService(toolRegistry));
+            _builderExecutionService = new BuilderExecutionService(runtimeBridge, new ArtifactManager(), toolRegistry);
+        }
 
         _state = UiExecutionState.Idle;
         _lastEnvironmentResult = _environmentService.LastResult;
@@ -952,7 +1172,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ReplayPlanCommand = new AsyncRelayCommand(ReplayPlanAsync, CanReplayPlan);
         RefreshNarrationCommand = new AsyncRelayCommand(RefreshNarrationAsync);
         RefreshBackendStatusCommand = new AsyncRelayCommand(RefreshBackendStatusAsync, CanRefreshBackends);
-        RunDemoPlanCommand = new AsyncRelayCommand(RunDemoPlanAsync, CanRunDemoPlan);
+        RunDemoPlanCommand = new AsyncRelayCommand(() => RunDemoPlanAsync(), CanRunDemoPlan);
+        QuickDemoCommand = new AsyncRelayCommand(QuickDemoAsync, CanRunQuickDemo);
         InitializeChatIntake(); // partial if you have it
         InitializeChatIntakeSurface();
 
@@ -979,16 +1200,26 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         NarrationLines = new ReadOnlyObservableCollection<string>(_narrationLines);
         _actionLogLines = new ObservableCollection<string>();
         ActionLogLines = new ReadOnlyObservableCollection<string>(_actionLogLines);
-        _runHistory = new ObservableCollection<string>();
-        RunHistory = new ReadOnlyObservableCollection<string>(_runHistory);
+        _runHistory = new ObservableCollection<RunHistoryRow>();
+        RunHistory = new ReadOnlyObservableCollection<RunHistoryRow>(_runHistory);
         _artifactFiles = new ObservableCollection<string>();
         ArtifactFiles = new ReadOnlyObservableCollection<string>(_artifactFiles);
+        _proofArtifacts = new ObservableCollection<ProofArtifactRow>(
+            ProofArtifactDescriptors.Select(descriptor => new ProofArtifactRow(descriptor.DisplayName, descriptor.RelativePath)));
+        ProofArtifacts = new ReadOnlyObservableCollection<ProofArtifactRow>(_proofArtifacts);
+        OperationProgressSteps = new ReadOnlyObservableCollection<OperationProgressStepRow>(_operationProgressSteps);
+        OperationNarrationFeed = new ReadOnlyObservableCollection<string>(_operationNarrationFeed);
         foreach (var line in UiActionTraceBuffer.Snapshot())
         {
             AppendActionLogLine(line);
         }
 
         UiActionTraceBuffer.LineCaptured += OnTraceLineCaptured;
+        _operationProgressTimer = new DispatcherTimer(
+            TimeSpan.FromSeconds(1),
+            DispatcherPriority.Background,
+            (_, _) => HandleOperationProgressTimerTick(),
+            _dispatcher);
         _availableModels = new ObservableCollection<string>();
         AvailableModels = new ReadOnlyObservableCollection<string>(_availableModels);
 
@@ -998,6 +1229,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             ProviderCapabilityMatrixRow.FromKind(ProviderKind.Remote),
             ProviderCapabilityMatrixRow.FromKind(ProviderKind.Delegated)
         });
+
+        RefreshProofArtifacts();
 
         _sessionMode = GetSessionMode();
         _startupComplete = HasActiveWorkspace;
@@ -1039,7 +1272,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         TryLoadLastProjectFromRecents();
         LoadAiPolicy();
         RegisterAiSurfaces();
-        _ = RefreshBackendStatusAsync();
+        if (_autoRefreshBackends)
+        {
+            _ = RefreshBackendStatusAsync();
+        }
         _ = RefreshAiHelpAsync();
     }
 
@@ -1093,15 +1329,30 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(CurrentProject));
             OnPropertyChanged(nameof(CurrentWorkspacePath));
             OnPropertyChanged(nameof(HasProjectLoaded));
+            OnPropertyChanged(nameof(HasNoProjectLoaded));
             RunDemoPlanCommand.RaiseCanExecuteChanged();
         }
     }
 
     public string CurrentWorkspacePath => CurrentProject?.WorkspacePath ?? "No project loaded";
     public bool HasProjectLoaded => CurrentProject is not null;
+    public bool HasNoProjectLoaded => !HasProjectLoaded;
     public string? LastDemoRunPath => _lastDemoRunPath;
     public string LastRunVerificationState => _lastRunVerificationState;
     public string SelectedRuntimeBridge => "RuntimeBridgeLocal";
+    public bool HasProofRun => !string.IsNullOrWhiteSpace(_proofRunPath);
+    public string ProofRunFolderPath => _proofRunPath ?? string.Empty;
+    public string ProofRunVerificationState => _proofRunVerificationState;
+    public string ProofRunLabel => _proofRunLabel;
+    public bool HasLastFailure => _lastFailure is not null;
+    public string LastFailurePhase => _lastFailure?.Phase ?? "None";
+    public string LastFailureReason => _lastFailure?.Reason ?? "No failures recorded.";
+    public string LastFailureProofPath => _lastFailure?.ProofPath ?? string.Empty;
+    public string LastFailureNextAction => _lastFailure?.NextAction ?? string.Empty;
+    public string LastFailureSummary =>
+        _lastFailure is null
+            ? "No failures recorded."
+            : $"{_lastFailure.OccurredUtc:O} | {_lastFailure.Phase}: {_lastFailure.Reason} (Proof: {_lastFailure.ProofPath ?? "n/a"})";
 
     public string SelectedProviderMode
     {
@@ -1118,6 +1369,21 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(SelectedProviderMode));
             OnPropertyChanged(nameof(ProviderAvailabilityWarning));
             PersistExecutionSelection();
+        }
+    }
+
+    public RunHistoryRow? SelectedRunHistory
+    {
+        get => _selectedRunHistory;
+        set
+        {
+            if (ReferenceEquals(_selectedRunHistory, value)) return;
+            _selectedRunHistory = value;
+            OnPropertyChanged(nameof(SelectedRunHistory));
+            if (value is not null)
+            {
+                SetProofRun(value);
+            }
         }
     }
 
@@ -1144,6 +1410,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             : string.Empty;
 
     public string LastRunFolderPath => _lastDemoRunPath ?? string.Empty;
+    public bool HasLatestRun => !string.IsNullOrWhiteSpace(_lastDemoRunPath);
     public string LastVerificationReportPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "verification_report.json");
     public string LastOperatorFlowPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "operator_flow.json");
     public string LastTransportEquivalencePath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "transport_equivalence.json");
@@ -1444,15 +1711,21 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public bool ProbeInFlight
     {
         get => _probeInFlight;
-        private set
-        {
-            if (_probeInFlight == value) return;
-            _probeInFlight = value;
-            OnPropertyChanged(nameof(ProbeInFlight));
-            OnPropertyChanged(nameof(RefreshBackendsDisabledReason));
-            RefreshBackendStatusCommand.RaiseCanExecuteChanged();
-            RefreshModelCatalogCommand.RaiseCanExecuteChanged();
-        }
+        private set => RunOnUiThread(() => SetProbeInFlight(value));
+    }
+
+    private void SetProbeInFlight(bool value)
+    {
+        if (_probeInFlight == value) return;
+        _probeInFlight = value;
+        OnPropertyChanged(nameof(ProbeInFlight));
+        OnPropertyChanged(nameof(RefreshBackendsDisabledReason));
+        OnPropertyChanged(nameof(CanStartNewProjectUi));
+        OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
+        OnPropertyChanged(nameof(QuickDemoDisabledReason));
+        RefreshBackendStatusCommand.RaiseCanExecuteChanged();
+        RefreshModelCatalogCommand.RaiseCanExecuteChanged();
+        RaiseCommandCanExecute();
     }
 
     public string OllamaEndpoint => _ollamaStatus.Endpoint ?? EndpointResolver.ResolveOllamaEndpoint();
@@ -1573,6 +1846,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public AsyncRelayCommand RefreshNarrationCommand { get; }
     public AsyncRelayCommand RefreshBackendStatusCommand { get; }
     public AsyncRelayCommand RunDemoPlanCommand { get; }
+    public AsyncRelayCommand QuickDemoCommand { get; }
 
     // ---- UI-safe plan setter ----
     public void SetPlanPreview(string? planId, string? providerId, ProviderKind providerKind, string? graphHash, string? nodeSetHash, string? edgeSetHash)
@@ -1595,7 +1869,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
 
     // ---- Startup flow ----
-    private bool CanStartNewProject() => !IsCreatingProject && !IsBusy;
+    private bool CanStartNewProject() => !IsCreatingProject && !IsBusy && !IsOperationActive;
     private bool CanStartAnotherProject() => string.IsNullOrWhiteSpace(GetStartAnotherProjectBlockerReason());
     private bool CanSelectEntryPath() => _startupFlow.State == StartupFlowState.EntryPathSelection && !_startupComplete;
     private bool CanSubmitStartupInput() => IsStartupInputActive && !_startupComplete && !string.IsNullOrWhiteSpace(StartupInput);
@@ -1607,6 +1881,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         }
 
+        BeginOperationProgress(
+            "Creating project",
+            "Preparing workspace scaffolding.",
+            "Create workspace",
+            "Verify project layout",
+            "Load workspace");
         using var busy = EnterBusyScope("StartNewProject");
         var operationId = Guid.NewGuid().ToString("N");
         LogUiAction($"BEGIN StartNewProject run_id={operationId}");
@@ -1617,30 +1897,27 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            var model = _localProjectService.CreateNewProject();
-            var loaded = LoadProject(model.ProjectFilePath);
-            var invariantResult = ProjectInvariants.Verify(loaded.WorkspacePath);
-            Trace.WriteLine($"[Shoots.UI] project.invariants {JsonSerializer.Serialize(invariantResult)}");
-            if (!invariantResult.Ok)
+            SetOperationStepState("Create workspace", "active", "Creating project workspace on disk.");
+            if (!TryCreateProjectWorkspace(out var workspace, out var loaded, out var failureReason) || workspace is null || loaded is null)
             {
                 result = "verification_failed";
-                ProjectCreationErrorMessage = string.Join("; ", invariantResult.Missing.Concat(invariantResult.Errors));
+                ProjectCreationErrorMessage = failureReason ?? "Project creation failed.";
                 AddStartupMessage($"System: Project verification failed. {ProjectCreationErrorMessage}");
                 AddNarration("error", "Project verification failed", new Dictionary<string, string> { ["details"] = ProjectCreationErrorMessage });
+                SetOperationStepState("Create workspace", "failed", ProjectCreationErrorMessage);
+                SetOperationStepState("Verify project layout", "failed", "Workspace invariants did not pass.");
+                CompleteOperationProgress(false, $"Project creation failed: {ProjectCreationErrorMessage}");
+                RecordFailure(
+                    "Start New Project",
+                    ProjectCreationErrorMessage,
+                    loaded?.WorkspacePath ?? UiLogPath,
+                    "Inspect the generated workspace, resolve missing files, then retry Start New Project.");
                 return Task.CompletedTask;
             }
 
-            var workspace = new ProjectWorkspace(
-                Name: loaded.Name,
-                RootPath: loaded.WorkspacePath,
-                LastOpenedUtc: DateTimeOffset.UtcNow,
-                ProjectId: loaded.ProjectId,
-                CreatedUtc: loaded.CreatedUtc);
-
-            _workspaceProvider.SetActiveWorkspace(workspace);
-            LoadWorkspaces();
-            SelectWorkspace(workspace);
-
+            SetOperationStepState("Create workspace", "completed", "Workspace was created.");
+            SetOperationStepState("Verify project layout", "completed", "Workspace invariants passed.");
+            SetOperationStepState("Load workspace", "completed", "Workspace loaded into the UI.");
             AddStartupMessage($"System: Project created at {loaded.WorkspacePath}.");
             AddStartupMessage($"System: Project file: {loaded.ProjectFilePath}.");
             AddStartupMessage($"System: ui.log path: {UiLogPath}.");
@@ -1650,6 +1927,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 ["workspace_path"] = loaded.WorkspacePath,
                 ["project_file"] = loaded.ProjectFilePath
             });
+            AddNarration("success", "StartNewProject succeeded", new Dictionary<string, string>
+            {
+                ["project_id"] = loaded.ProjectId,
+                ["workspace_path"] = loaded.WorkspacePath
+            });
+            CompleteOperationProgress(true, $"Project created at {loaded.WorkspacePath}.");
             return Task.CompletedTask;
         }
         catch (Exception ex)
@@ -1659,6 +1942,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             Trace.WriteLine($"[Shoots.UI] StartNewProject failed: {ex}");
             AddStartupMessage($"System: Start new project failed: {ex.Message}");
             AddNarration("error", "StartNewProject failed", new Dictionary<string, string> { ["error"] = ex.Message });
+            SetOperationStepState("Create workspace", "failed", ex.Message);
+            CompleteOperationProgress(false, $"Project creation failed: {ex.Message}");
+            RecordFailure(
+                "Start New Project",
+                ex.Message,
+                UiLogPath,
+                "Open ui.log for details, fix the issue, then retry Start New Project.");
             return Task.CompletedTask;
         }
         finally
@@ -1667,17 +1957,65 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             LogUiAction($"END StartNewProject run_id={operationId} (result={result})");
             AddNarration("result", "StartNewProject end", new Dictionary<string, string> { ["run_id"] = operationId, ["result"] = result });
         }
-
     }
 
-    private bool CanRunDemoPlan() => CurrentProject is not null;
-
-    private Task RunDemoPlanAsync()
+    private bool TryCreateProjectWorkspace(out ProjectWorkspace? workspace, out ProjectModel? loadedProject, out string? failureReason)
     {
+        workspace = null;
+        loadedProject = null;
+        failureReason = null;
+
+        var model = _localProjectService.CreateNewProject();
+        var loaded = LoadProject(model.ProjectFilePath);
+        loadedProject = loaded;
+        var invariantResult = ProjectInvariants.Verify(loaded.WorkspacePath);
+        Trace.WriteLine($"[Shoots.UI] project.invariants {JsonSerializer.Serialize(invariantResult)}");
+        if (!invariantResult.Ok)
+        {
+            failureReason = string.Join("; ", invariantResult.Missing.Concat(invariantResult.Errors));
+            return false;
+        }
+
+        workspace = new ProjectWorkspace(
+            Name: loaded.Name,
+            RootPath: loaded.WorkspacePath,
+            LastOpenedUtc: DateTimeOffset.UtcNow,
+            ProjectId: loaded.ProjectId,
+            CreatedUtc: loaded.CreatedUtc);
+
+        _workspaceProvider.SetActiveWorkspace(workspace);
+        LoadWorkspaces();
+        SelectWorkspace(workspace);
+        return true;
+    }
+
+
+    private bool CanRunDemoPlan() => string.IsNullOrWhiteSpace(GetRunDemoPlanDisabledReason());
+    private bool CanRunQuickDemo() => string.IsNullOrWhiteSpace(GetQuickDemoDisabledReason());
+
+    private Task RunDemoPlanAsync(bool manageOperationProgress = true, Action<RunDemoProgressEvent>? progress = null)
+    {
+        ReportRunDemoProgress(progress, "Planning run", "Preparing deterministic demo plan.", "Plan run", "active");
+        if (manageOperationProgress)
+        {
+            BeginOperationProgress(
+                "Planning run",
+                "Preparing deterministic demo plan.",
+                "Create plan",
+                "Run tools",
+                "Verify run");
+        }
+
         if (CurrentProject is null)
         {
             AddStartupMessage("System: No project loaded.");
             AddNarration("warn", "RunDemoPlan blocked", new Dictionary<string, string> { ["reason"] = "no project loaded" });
+            ReportRunDemoProgress(progress, "Failed", "Run Demo failed: no project loaded.", "Plan run", "failed");
+            if (manageOperationProgress)
+            {
+                SetOperationStepState("Create plan", "failed", "No project loaded.");
+                CompleteOperationProgress(false, "Run Demo failed: no project loaded.");
+            }
             return Task.CompletedTask;
         }
 
@@ -1688,6 +2026,17 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             var details = string.Join("; ", invariantResult.Missing.Concat(invariantResult.Errors));
             AddStartupMessage($"System: Demo run blocked. Invariants failed: {details}");
             AddNarration("error", "RunDemoPlan blocked by invariants", new Dictionary<string, string> { ["details"] = details });
+            ReportRunDemoProgress(progress, "Failed", $"Run Demo blocked: {details}", "Plan run", "failed");
+            if (manageOperationProgress)
+            {
+                SetOperationStepState("Create plan", "failed", details);
+                CompleteOperationProgress(false, $"Run Demo blocked: {details}");
+            }
+            RecordFailure(
+                "Run Demo",
+                $"Workspace invariants failed: {details}",
+                CurrentProject.WorkspacePath,
+                "Repair the workspace structure (project.json, plan/, env/) and rerun Run Demo.");
             return Task.CompletedTask;
         }
 
@@ -1695,12 +2044,26 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         {
             if (string.Equals(SelectedProviderMode, "ollama", StringComparison.OrdinalIgnoreCase) && !OllamaStatus.IsAvailable)
             {
-                AddNarration("error", "PROVIDER_UNREACHABLE", new Dictionary<string, string>
+                var providerError = OllamaStatus.ErrorCode ?? "ui.backend.ollama.unreachable";
+                var providerMessage = $"Provider '{SelectedProviderMode}' is unavailable ({providerError}).";
+                AddNarration("error", "Provider unavailable", new Dictionary<string, string>
                 {
-                    ["provider"] = "ollama",
-                    ["error"] = OllamaStatus.ErrorCode ?? "ui.backend.ollama.unreachable"
+                    ["provider"] = SelectedProviderMode,
+                    ["error_code"] = providerError
                 });
-                AddStartupMessage("System: Provider unavailable (ollama). Run Refresh Backends.");
+                AddStartupMessage($"System: {providerMessage} Refresh backend status or choose the Local provider.");
+                ReportRunDemoProgress(progress, "Waiting on provider", providerMessage, "Plan run", "failed");
+                if (manageOperationProgress)
+                {
+                    SetOperationStatus("Waiting on provider", providerMessage);
+                    SetOperationStepState("Create plan", "failed", providerMessage);
+                    CompleteOperationProgress(false, providerMessage);
+                }
+                RecordFailure(
+                    "Run Demo (Provider)",
+                    providerMessage,
+                    UiLogPath,
+                    "Refresh backend status or switch to the Local provider, then retry Run Demo.");
                 return Task.CompletedTask;
             }
 
@@ -1708,6 +2071,17 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             {
                 AddStartupMessage("System: Demo planner could not build a plan.");
                 AddNarration("error", "Demo planner failed", null);
+                ReportRunDemoProgress(progress, "Failed", "Planner could not build a deterministic plan.", "Plan run", "failed");
+                if (manageOperationProgress)
+                {
+                    SetOperationStepState("Create plan", "failed", "Planner could not build a deterministic plan.");
+                    CompleteOperationProgress(false, "Run Demo failed: planner could not build a plan.");
+                }
+                RecordFailure(
+                    "Run Demo",
+                    "Planner could not build a deterministic plan.",
+                    CurrentProject.WorkspacePath,
+                    "Check planner inputs in the workspace and retry Run Demo.");
                 return Task.CompletedTask;
             }
 
@@ -1716,6 +2090,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 ["planner"] = _planner.GetType().Name,
                 ["plan_id"] = plan.PlanId
             });
+            ReportRunDemoProgress(progress, "Planning run", $"Plan {plan.PlanId} created.", "Plan run", "completed");
+            if (manageOperationProgress)
+            {
+                SetOperationStatus("Planning run", "Plan generated, preparing execution.");
+                SetOperationStepState("Create plan", "completed", $"Plan {plan.PlanId} created.");
+            }
             AddNarration("step", "RUNTIME_SUBMITTED", new Dictionary<string, string>
             {
                 ["bridge"] = SelectedRuntimeBridge
@@ -1733,6 +2113,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                     ["host_transport"] = SelectedHostTransport,
                     ["host_plan_id"] = hostPlan.PlanId
                 });
+                if (manageOperationProgress)
+                {
+                    SetOperationStatus("Waiting on host", "Host transport is processing the request.");
+                }
+                ReportRunDemoProgress(progress, "Waiting on host", "Host transport is processing the request.", "Host run", "active");
 
                 hostResponse = _hostExecutionService.RunAsync(hostPlan, new HostRunOptions(HostRunMode.Normal, MaxTicks: 2048, RecordTrace: true, Deterministic: true)).GetAwaiter().GetResult();
 
@@ -1746,9 +2131,39 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
                 if (hostResponse.Outcome is HostExecutionOutcome.Failed or HostExecutionOutcome.Unknown)
                 {
-                    AddStartupMessage($"System: Host execution failed: {hostResponse.ErrorCode ?? hostResponse.Message ?? "unknown"}.");
+                    var hostError = hostResponse.ErrorCode ?? hostResponse.Message ?? "unknown";
+                    AddStartupMessage($"System: Host execution failed: {hostError}. See host response metadata for details.");
+                    AddNarration("error", "Host transport failed", new Dictionary<string, string>
+                    {
+                        ["host_transport"] = SelectedHostTransport,
+                        ["outcome"] = hostResponse.Outcome.ToString(),
+                        ["error"] = hostError
+                    });
+                    ReportRunDemoProgress(progress, "Failed", $"Host transport failed: {hostError}", "Host run", "failed");
+                    if (manageOperationProgress)
+                    {
+                        SetOperationStepState("Run tools", "failed", hostError);
+                        CompleteOperationProgress(false, $"Host transport failed: {hostError}");
+                    }
+                    RecordFailure(
+                        "Host transport run",
+                        $"Host execution failed: {hostError}",
+                        UiLogPath,
+                        "Inspect host response metadata, resolve the host issue, then retry Run Demo.");
                     return Task.CompletedTask;
                 }
+
+                AddNarration("success", "HOST_TRANSPORT_SUCCESS", new Dictionary<string, string>
+                {
+                    ["host_transport"] = SelectedHostTransport,
+                    ["host_outcome"] = hostResponse.Outcome.ToString(),
+                    ["host_plan_id"] = hostResponse.PlanId ?? string.Empty
+                });
+                if (manageOperationProgress)
+                {
+                    SetOperationStatus("Running tools", "Host accepted request; running execution tools.");
+                }
+                ReportRunDemoProgress(progress, "Running tools", "Host transport accepted the request.", "Host run", "completed");
             }
             else
             {
@@ -1756,8 +2171,17 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 {
                     ["host_transport"] = SelectedHostTransport
                 });
+                if (manageOperationProgress)
+                {
+                    SetOperationStatus("Running tools", "Executing demo plan locally.");
+                }
+
+                ReportRunDemoProgress(progress, "Running tools", "Host transport not requested for this run.", "Host run", "completed");
             }
 
+            var shouldAutoSelectProof = !HasProofRun || string.Equals(_proofRunPath, _lastDemoRunPath, StringComparison.OrdinalIgnoreCase);
+
+            ReportRunDemoProgress(progress, "Running tools", "Executing deterministic plan.", "Execute tools", "active");
             var execution = _builderExecutionService.Execute(
                 plan,
                 CurrentProject,
@@ -1772,27 +2196,19 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 hostResponseMessage: hostResponse?.Message,
                 hostResponseErrorCode: hostResponse?.ErrorCode,
                 narrate: evt => AddNarration(evt.Kind, evt.Message, evt.Data));
+            ReportRunDemoProgress(progress, "Running tools", "Tool execution finished.", "Execute tools", "completed");
+            ReportRunDemoProgress(progress, "Verifying run", "Validating run artifacts.", "Verification", "active");
+            if (manageOperationProgress)
+            {
+                SetOperationStepState("Run tools", "completed", "Tool execution finished.");
+                SetOperationStatus("Verifying run", "Validating run artifacts.");
+            }
             _lastDemoRunPath = execution.RunPath;
             OnPropertyChanged(nameof(LastRunFolderPath));
             OnPropertyChanged(nameof(LastVerificationReportPath));
             OnPropertyChanged(nameof(LastOperatorFlowPath));
             OnPropertyChanged(nameof(LastTransportEquivalencePath));
-            _runHistory.Insert(0, execution.RunPath);
-            if (_runHistory.Count > 20)
-            {
-                _runHistory.RemoveAt(_runHistory.Count - 1);
-            }
-
-            _artifactFiles.Clear();
-            var artifactRoot = Path.Combine(execution.RunPath, "artifacts");
-            IEnumerable<string> artifactFiles = Directory.Exists(artifactRoot)
-                ? Directory.GetFiles(artifactRoot, "*", SearchOption.AllDirectories).OrderBy(static x => x, StringComparer.Ordinal)
-                : Array.Empty<string>();
-            foreach (var artifactFile in artifactFiles)
-            {
-                _artifactFiles.Add(artifactFile);
-            }
-
+            OnPropertyChanged(nameof(HasLatestRun));
             var verification = RunVerificationService.Verify(execution.RunPath);
             _lastRunVerificationState = verification.Valid ? "Verified" : "Invalid";
             OnPropertyChanged(nameof(LastRunVerificationState));
@@ -1801,6 +2217,30 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 ["valid"] = verification.Valid.ToString(),
                 ["state"] = _lastRunVerificationState
             });
+            if (manageOperationProgress)
+            {
+                if (verification.Valid)
+                {
+                    ReportRunDemoProgress(progress, "Completed successfully", _lastRunVerificationState, "Verification", "completed");
+                    SetOperationStepState("Verify run", "completed", _lastRunVerificationState);
+                    CompleteOperationProgress(true, $"Run completed and {_lastRunVerificationState.ToLowerInvariant()}.");
+                }
+                else
+                {
+                    ReportRunDemoProgress(progress, "Failed", _lastRunVerificationState, "Verification", "failed");
+                    SetOperationStepState("Verify run", "failed", _lastRunVerificationState);
+                    CompleteOperationProgress(false, "Run completed but verification is invalid.");
+                }
+            }
+            else
+            {
+                ReportRunDemoProgress(
+                    progress,
+                    verification.Valid ? "Completed successfully" : "Failed",
+                    verification.Valid ? _lastRunVerificationState : "Run completed but verification is invalid.",
+                    "Verification",
+                    verification.Valid ? "completed" : "failed");
+            }
 
             Trace.WriteLine($"[Shoots.UI] run complete. run_path={execution.RunPath}; run_json={execution.RunJsonPath}; artifact_json={execution.ArtifactJsonPath}; verified={verification.Valid}");
             AddStartupMessage($"System: Demo run complete at {execution.RunPath}. Verification={_lastRunVerificationState}.");
@@ -1814,15 +2254,220 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 ["plan_hash"] = execution.Run.PlanHash,
                 ["run_id"] = execution.Run.RunId
             });
+            AddNarration("success", "RunDemoPlan succeeded", new Dictionary<string, string>
+            {
+                ["run_path"] = execution.RunPath,
+                ["verification"] = _lastRunVerificationState
+            });
+
+            var historyRow = new RunHistoryRow(
+                execution.Run.RunId,
+                execution.RunPath,
+                execution.Run.CreatedUtc,
+                execution.Run.Status,
+                execution.Run.Provider,
+                execution.Run.HostTransport,
+                _lastRunVerificationState);
+            _runHistory.Insert(0, historyRow);
+            if (_runHistory.Count > 20)
+            {
+                _runHistory.RemoveAt(_runHistory.Count - 1);
+            }
+
+            if (shouldAutoSelectProof)
+            {
+                SelectedRunHistory = historyRow;
+            }
         }
         catch (Exception ex)
         {
             Trace.WriteLine($"[Shoots.UI] RunDemoPlan failed: {ex}");
             AddStartupMessage($"System: Demo run failed: {ex.Message}");
             AddNarration("error", "RunDemoPlan failed", new Dictionary<string, string> { ["error"] = ex.Message });
+            if (manageOperationProgress)
+            {
+                SetOperationStepState("Run tools", "failed", ex.Message);
+                CompleteOperationProgress(false, $"Run Demo failed: {ex.Message}");
+            }
+            ReportRunDemoProgress(progress, "Failed", $"Run Demo failed: {ex.Message}", "Execute tools", "failed");
+            RecordFailure(
+                "Run Demo",
+                ex.Message,
+                _lastDemoRunPath ?? UiLogPath,
+                "Inspect ui.log or the partial run folder, resolve the issue, then rerun Run Demo.");
         }
 
         return Task.CompletedTask;
+    }
+    private async Task QuickDemoAsync()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        BeginOperationProgress(
+            "Creating project",
+            "Quick Demo is preparing a new workspace.",
+            "Create project",
+            "Plan run",
+            "Execute tools",
+            "Host run",
+            "Verification",
+            "Completed");
+        using var busy = EnterBusyScope("QuickDemo");
+        var operationId = Guid.NewGuid().ToString("N");
+        LogUiAction($"BEGIN QuickDemo run_id={operationId}");
+        AddNarration("step", "QuickDemo begin", new Dictionary<string, string> { ["run_id"] = operationId });
+        var result = "ok";
+
+        try
+        {
+            AddStartupMessage("Quick Demo: creating a new workspace...");
+            AddNarration("info", "QuickDemo stage", new Dictionary<string, string> { ["stage"] = "create_project" });
+            SetOperationStatus("Creating project", "Quick Demo is creating a new workspace.");
+            SetOperationStepState("Create project", "active", "Scaffolding workspace files.");
+
+            ProjectCreationErrorMessage = string.Empty;
+            IsCreatingProject = true;
+            if (!TryCreateProjectWorkspace(out var workspace, out var loaded, out var failureReason) || workspace is null || loaded is null)
+            {
+                result = "project_failed";
+                var message = failureReason ?? "Project creation failed.";
+                ProjectCreationErrorMessage = message;
+                AddStartupMessage($"Quick Demo failed while creating a project: {message}");
+                AddNarration("error", "QuickDemo project failed", new Dictionary<string, string> { ["reason"] = message });
+                SetOperationStepState("Create project", "failed", message);
+                CompleteOperationProgress(false, $"Quick Demo failed while creating a project: {message}");
+                RecordFailure(
+                    "Quick Demo (Create Project)",
+                    message,
+                    loaded?.WorkspacePath ?? UiLogPath,
+                    "Open ui.log or the partial workspace, resolve the issue, then rerun Quick Demo.");
+                return;
+            }
+
+            AddStartupMessage($"Quick Demo: project ready at {loaded.WorkspacePath}.");
+            AddNarration("success", "QuickDemo project created", new Dictionary<string, string>
+            {
+                ["project_id"] = loaded.ProjectId,
+                ["workspace_path"] = loaded.WorkspacePath
+            });
+            SetOperationStepState("Create project", "completed", "Project workspace is ready.");
+
+            IsCreatingProject = false;
+
+            AddStartupMessage("Quick Demo: running demo plan...");
+            AddNarration("info", "QuickDemo stage", new Dictionary<string, string> { ["stage"] = "run_demo" });
+            SetOperationStatus("Planning run", "Quick Demo is preparing the run plan.");
+            SetOperationStepState("Plan run", "active", "Preparing deterministic run plan.");
+            SetOperationStepState("Execute tools", "pending", string.Empty);
+            SetOperationStepState("Host run", "pending", string.Empty);
+            SetOperationStepState("Verification", "pending", string.Empty);
+            await RunDemoPlanAsync(
+                    manageOperationProgress: false,
+                    progress: update =>
+                    {
+                        SetOperationStatus(update.Stage, update.Detail);
+                        if (!string.IsNullOrWhiteSpace(update.StepName))
+                        {
+                            SetOperationStepState(update.StepName!, update.StepState ?? "pending", update.Detail);
+                        }
+                    })
+                .ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(_lastDemoRunPath) || !HasLatestRun)
+            {
+                result = "demo_failed";
+                var message = "Demo run did not produce artifacts.";
+                AddStartupMessage($"Quick Demo failed: {message}");
+                AddNarration("error", "QuickDemo demo failed", new Dictionary<string, string> { ["reason"] = message });
+                SetOperationStepState("Plan run", "failed", message);
+                SetOperationStepState("Completed", "failed", message);
+                CompleteOperationProgress(false, $"Quick Demo failed: {message}");
+                RecordFailure(
+                    "Quick Demo (Run Demo)",
+                    message,
+                    UiLogPath,
+                    "Review ui.log for the run failure, then retry Quick Demo.");
+                return;
+            }
+
+            AddStartupMessage($"Quick Demo: verification state {_lastRunVerificationState}.");
+            AddNarration("info", "QuickDemo stage", new Dictionary<string, string>
+            {
+                ["stage"] = "verify",
+                ["verification"] = _lastRunVerificationState
+            });
+            SetOperationStatus("Verifying run", "Checking verification artifacts.");
+            SetOperationStepState(
+                "Verification",
+                string.Equals(_lastRunVerificationState, "Verified", StringComparison.OrdinalIgnoreCase) ? "completed" : "failed",
+                _lastRunVerificationState);
+
+            if (_runHistory.Count > 0)
+            {
+                SelectedRunHistory = _runHistory[0];
+            }
+
+            AddStartupMessage("Quick Demo: proof artifacts are focused on the latest run.");
+            AddNarration("success", "QuickDemo proof artifacts ready", new Dictionary<string, string>
+            {
+                ["run_path"] = _lastDemoRunPath ?? string.Empty
+            });
+            SetOperationStatus("Completed successfully", "Quick Demo is focusing proof artifacts.");
+            SetOperationStepState("Completed", "completed", "Proof artifacts panel updated.");
+
+            AddStartupMessage($"Quick Demo complete. Run folder: {_lastDemoRunPath}");
+            AddNarration("success", "QuickDemo completed", new Dictionary<string, string>
+            {
+                ["run_path"] = _lastDemoRunPath ?? string.Empty,
+                ["verification"] = _lastRunVerificationState
+            });
+            CompleteOperationProgress(true, $"Quick Demo completed. Verification: {_lastRunVerificationState}.");
+        }
+        catch (Exception ex)
+        {
+            result = "exception";
+            Trace.WriteLine($"[Shoots.UI] QuickDemo failed: {ex}");
+            AddStartupMessage($"Quick Demo failed: {ex.Message}");
+            AddNarration("error", "QuickDemo failed", new Dictionary<string, string> { ["error"] = ex.Message });
+            SetOperationStepState("Plan run", "failed", ex.Message);
+            SetOperationStepState("Completed", "failed", ex.Message);
+            CompleteOperationProgress(false, $"Quick Demo failed: {ex.Message}");
+            RecordFailure(
+                "Quick Demo",
+                ex.Message,
+                UiLogPath,
+                "Review ui.log for the underlying issue, resolve it, then rerun Quick Demo.");
+        }
+        finally
+        {
+            IsCreatingProject = false;
+            LogUiAction($"END QuickDemo run_id={operationId} (result={result})");
+            AddNarration("result", "QuickDemo end", new Dictionary<string, string>
+            {
+                ["run_id"] = operationId,
+                ["result"] = result
+            });
+            QuickDemoCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+
+    private static void ReportRunDemoProgress(
+        Action<RunDemoProgressEvent>? reporter,
+        string stage,
+        string detail,
+        string? stepName = null,
+        string? stepState = null)
+    {
+        if (reporter is null)
+        {
+            return;
+        }
+
+        reporter(new RunDemoProgressEvent(stage, detail, stepName, stepState));
     }
 
     private BuildPlan BuildHostPlan(PlanModel plan, ProjectModel project, string providerMode)
@@ -2193,7 +2838,20 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private bool CanRefreshBackends() => string.IsNullOrWhiteSpace(GetRefreshBackendsDisabledReason());
 
     private string GetRefreshBackendsDisabledReason()
-        => ProbeInFlight ? "ui.backends.refresh.in_progress: wait for backend probe completion." : string.Empty;
+    {
+        if (ProbeInFlight)
+        {
+            return "ui.backends.refresh.in_progress: wait for backend probe completion.";
+        }
+
+        var busyReason = BuildOperationBusyReason();
+        if (!string.IsNullOrWhiteSpace(busyReason))
+        {
+            return busyReason;
+        }
+
+        return string.Empty;
+    }
 
     private async Task RefreshBackendStatusAsync()
     {
@@ -2206,11 +2864,23 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
+        BeginOperationProgress(
+            "Refreshing backend status",
+            "Probing backend health and model catalog.",
+            "Probe Ollama",
+            "Probe Qdrant",
+            "Refresh model catalog");
         ProbeInFlight = true;
         try
         {
-            var ollama = await _backendProbeService.ProbeOllamaAsync(default).ConfigureAwait(false);
-            var qdrant = await _backendProbeService.ProbeQdrantAsync(default).ConfigureAwait(false);
+            SetOperationStatus("Refreshing backend status", "Checking Ollama endpoint.");
+            SetOperationStepState("Probe Ollama", "active", "Checking Ollama endpoint.");
+            var ollama = await _backendProbeService.ProbeOllamaAsync(default);
+            SetOperationStepState("Probe Ollama", ollama.IsAvailable ? "completed" : "failed", ollama.Summary ?? ollama.Detail);
+            SetOperationStatus("Refreshing backend status", "Checking vector memory endpoint.");
+            SetOperationStepState("Probe Qdrant", "active", "Checking vector memory endpoint.");
+            var qdrant = await _backendProbeService.ProbeQdrantAsync(default);
+            SetOperationStepState("Probe Qdrant", qdrant.IsAvailable ? "completed" : "failed", qdrant.Summary ?? qdrant.Detail);
             _ollamaStatus = ollama.WithBounds();
             _qdrantStatus = qdrant.WithBounds();
             _lastProbeUtc = DateTimeOffset.UtcNow;
@@ -2225,7 +2895,25 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(BackendDisabledReason));
             OnPropertyChanged(nameof(RunIntakePlanDisabledReason));
 
-            await RefreshModelCatalogFromBackendAsync().ConfigureAwait(false);
+            SetOperationStatus("Refreshing backend status", "Loading model catalog.");
+            SetOperationStepState("Refresh model catalog", "active", "Loading models from backend.");
+            await RefreshModelCatalogFromBackendAsync();
+            if (HasModelCatalogError)
+            {
+                SetOperationStepState("Refresh model catalog", "failed", ModelCatalogError);
+                CompleteOperationProgress(false, $"Backend refresh completed with model error: {ModelCatalogError}");
+            }
+            else
+            {
+                SetOperationStepState("Refresh model catalog", "completed", $"Loaded {_availableModels.Count} models.");
+                CompleteOperationProgress(true, "Backend refresh completed.");
+            }
+        }
+        catch (Exception ex)
+        {
+            SetOperationStepState("Refresh model catalog", "failed", ex.Message);
+            CompleteOperationProgress(false, $"Backend refresh failed: {ex.Message}");
+            throw;
         }
         finally
         {
@@ -2239,54 +2927,81 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         {
             _availableModels.Clear();
             SelectedModelId = string.Empty;
+            _lastKnownModelId = string.Empty;
             ModelCatalogError = _ollamaStatus.ErrorCode ?? "ui.ollama.unreachable";
             OnPropertyChanged(nameof(DefaultModelId));
             OnPropertyChanged(nameof(CatalogHash));
             return;
         }
 
-        var tags = await _ollamaClient.GetTagsAsync(default).ConfigureAwait(false);
-        _availableModels.Clear();
+        var tags = await _ollamaClient.GetTagsAsync(default);
 
         if (!tags.IsSuccess)
         {
+            _availableModels.Clear();
             ModelCatalogError = tags.ErrorCode ?? "ui.ollama.bad_json";
             SelectedModelId = string.Empty;
+            _lastKnownModelId = string.Empty;
             OnPropertyChanged(nameof(DefaultModelId));
             OnPropertyChanged(nameof(CatalogHash));
             return;
         }
 
-        foreach (var model in tags.ModelNames.OrderBy(static x => x, StringComparer.Ordinal))
+        var orderedModels = tags.ModelNames
+            .Where(static model => !string.IsNullOrWhiteSpace(model))
+            .OrderBy(static model => model, StringComparer.Ordinal)
+            .ToList();
+
+        var preferred = System.Environment.GetEnvironmentVariable("SHOOTS_PREFERRED_MODEL_ID")?.Trim();
+
+        if (orderedModels.Count == 0)
+        {
+            _availableModels.Clear();
+            ModelCatalogError = "ui.ollama.empty_catalog";
+            ApplyModelSelection(preferred);
+            OnPropertyChanged(nameof(DefaultModelId));
+            OnPropertyChanged(nameof(CatalogHash));
+            return;
+        }
+
+        _availableModels.Clear();
+        foreach (var model in orderedModels)
         {
             _availableModels.Add(model);
         }
 
         ModelCatalogError = string.Empty;
 
-        if (_availableModels.Count > 0)
-        {
-            var preferred = System.Environment.GetEnvironmentVariable("SHOOTS_PREFERRED_MODEL_ID")?.Trim();
-            if (_availableModels.Contains(_selectedModelId, StringComparer.Ordinal))
-            {
-                // keep selection
-            }
-            else if (!string.IsNullOrWhiteSpace(preferred) && _availableModels.Contains(preferred, StringComparer.Ordinal))
-            {
-                SelectedModelId = preferred;
-            }
-            else
-            {
-                SelectedModelId = _availableModels[0];
-            }
-        }
-        else
-        {
-            SelectedModelId = string.Empty;
-        }
+        ApplyModelSelection(preferred);
 
         OnPropertyChanged(nameof(DefaultModelId));
         OnPropertyChanged(nameof(CatalogHash));
+    }
+
+    private void ApplyModelSelection(string? preferredModelId)
+    {
+        if (_availableModels.Count == 0)
+        {
+            SelectedModelId = string.Empty;
+            _lastKnownModelId = string.Empty;
+            return;
+        }
+
+        if (_availableModels.Contains(_selectedModelId, StringComparer.Ordinal))
+        {
+            _lastKnownModelId = _selectedModelId;
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(preferredModelId) && _availableModels.Contains(preferredModelId, StringComparer.Ordinal))
+        {
+            SelectedModelId = preferredModelId;
+            _lastKnownModelId = SelectedModelId;
+            return;
+        }
+
+        SelectedModelId = _availableModels[0];
+        _lastKnownModelId = SelectedModelId;
     }
 
     private void OnTraceLineCaptured(string line)
@@ -2313,6 +3028,266 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         Trace.WriteLine($"[Shoots.UI] action='{action}' ts_utc={now:O} thread_id={System.Environment.CurrentManagedThreadId} project_id={projectId} workspace_path={workspacePath}");
     }
 
+    private void BeginOperationProgress(string statusLine, string detail, params string[] steps)
+    {
+        RunOnUiThread(() =>
+        {
+            _operationStatusLine = statusLine;
+            _operationStatusDetail = detail;
+            _operationLatestEvent = detail;
+            _operationStartedUtc = DateTimeOffset.UtcNow;
+            _isOperationActive = true;
+            _isOperationVisible = true;
+            _operationDisplayUntilUtc = null;
+            _operationProgressSteps.Clear();
+            _operationNarrationFeed.Clear();
+            foreach (var step in steps)
+            {
+                _operationProgressSteps.Add(new OperationProgressStepRow(step));
+            }
+
+            OnPropertyChanged(nameof(OperationStatusLine));
+            OnPropertyChanged(nameof(OperationStatusDetail));
+            OnPropertyChanged(nameof(OperationLatestEvent));
+            OnPropertyChanged(nameof(IsOperationActive));
+            OnPropertyChanged(nameof(IsOperationVisible));
+            OnPropertyChanged(nameof(HasOperationSteps));
+            OnPropertyChanged(nameof(HasOperationNarration));
+            OnPropertyChanged(nameof(OperationElapsedLabel));
+            OnPropertyChanged(nameof(CurrentOperation));
+            OnPropertyChanged(nameof(CurrentOperationStage));
+            OnPropertyChanged(nameof(CurrentOperationStartedAt));
+            OnPropertyChanged(nameof(CurrentOperationStatus));
+            OnPropertyChanged(nameof(CurrentOperationDetail));
+            OnPropertyChanged(nameof(IsOperationBusyIndicatorVisible));
+            OnPropertyChanged(nameof(IsOperationCompletionHoldActive));
+            OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
+            OnPropertyChanged(nameof(QuickDemoDisabledReason));
+            RaiseCommandCanExecute();
+
+            _operationProgressTimer?.Start();
+        });
+    }
+
+    private void SetOperationStatus(string statusLine, string? detail = null)
+    {
+        RunOnUiThread(() =>
+        {
+            _operationStatusLine = statusLine;
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                _operationStatusDetail = detail;
+                _operationLatestEvent = detail;
+                OnPropertyChanged(nameof(OperationLatestEvent));
+                AppendOperationNarrationLine(detail);
+            }
+
+            OnPropertyChanged(nameof(OperationStatusLine));
+            OnPropertyChanged(nameof(OperationStatusDetail));
+            OnPropertyChanged(nameof(CurrentOperation));
+            OnPropertyChanged(nameof(CurrentOperationStage));
+            OnPropertyChanged(nameof(CurrentOperationStatus));
+            OnPropertyChanged(nameof(CurrentOperationDetail));
+            OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
+            OnPropertyChanged(nameof(QuickDemoDisabledReason));
+        });
+    }
+
+    private void SetOperationLatestEvent(string latestEvent)
+    {
+        RunOnUiThread(() =>
+        {
+            _operationLatestEvent = latestEvent;
+            OnPropertyChanged(nameof(OperationLatestEvent));
+            AppendOperationNarrationLine(latestEvent);
+        });
+    }
+
+    private void AppendOperationNarrationLine(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        _operationNarrationFeed.Add(message.Trim());
+        while (_operationNarrationFeed.Count > 20)
+        {
+            _operationNarrationFeed.RemoveAt(0);
+        }
+
+        OnPropertyChanged(nameof(HasOperationNarration));
+    }
+
+    private void SetOperationStepState(string stepName, string state, string? detail = null)
+    {
+        RunOnUiThread(() =>
+        {
+            var step = _operationProgressSteps.FirstOrDefault(candidate => string.Equals(candidate.Name, stepName, StringComparison.Ordinal));
+            if (step is null)
+            {
+                step = new OperationProgressStepRow(stepName);
+                _operationProgressSteps.Add(step);
+                OnPropertyChanged(nameof(HasOperationSteps));
+            }
+
+            step.SetState(state, detail);
+        });
+    }
+
+    private void CompleteOperationProgress(bool success, string detail)
+    {
+        RunOnUiThread(() =>
+        {
+            _operationStatusLine = success ? "Completed successfully" : "Failed";
+            _operationStatusDetail = detail;
+            _operationLatestEvent = detail;
+            _isOperationActive = false;
+            _isOperationVisible = true;
+            _operationDisplayUntilUtc = DateTimeOffset.UtcNow.Add(OperationCompletionHoldDuration);
+
+            OnPropertyChanged(nameof(OperationStatusLine));
+            OnPropertyChanged(nameof(OperationStatusDetail));
+            OnPropertyChanged(nameof(OperationLatestEvent));
+            OnPropertyChanged(nameof(IsOperationActive));
+            OnPropertyChanged(nameof(IsOperationVisible));
+            OnPropertyChanged(nameof(OperationElapsedLabel));
+            OnPropertyChanged(nameof(CurrentOperation));
+            OnPropertyChanged(nameof(CurrentOperationStage));
+            OnPropertyChanged(nameof(CurrentOperationStatus));
+            OnPropertyChanged(nameof(CurrentOperationDetail));
+            OnPropertyChanged(nameof(IsOperationBusyIndicatorVisible));
+            OnPropertyChanged(nameof(IsOperationCompletionHoldActive));
+            OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
+            OnPropertyChanged(nameof(QuickDemoDisabledReason));
+            RaiseCommandCanExecute();
+
+            _operationProgressTimer?.Start();
+        });
+    }
+
+    private void ResetOperationProgressToIdle()
+    {
+        _operationStatusLine = "Idle";
+        _operationStatusDetail = "No active operation.";
+        _operationLatestEvent = string.Empty;
+        _isOperationActive = false;
+        _isOperationVisible = false;
+        _operationDisplayUntilUtc = null;
+        _operationStartedUtc = null;
+        _operationProgressSteps.Clear();
+        _operationNarrationFeed.Clear();
+
+        OnPropertyChanged(nameof(OperationStatusLine));
+        OnPropertyChanged(nameof(OperationStatusDetail));
+        OnPropertyChanged(nameof(OperationLatestEvent));
+        OnPropertyChanged(nameof(IsOperationActive));
+        OnPropertyChanged(nameof(IsOperationVisible));
+        OnPropertyChanged(nameof(HasOperationSteps));
+        OnPropertyChanged(nameof(HasOperationNarration));
+        OnPropertyChanged(nameof(OperationElapsedLabel));
+        OnPropertyChanged(nameof(CurrentOperation));
+        OnPropertyChanged(nameof(CurrentOperationStage));
+        OnPropertyChanged(nameof(CurrentOperationStartedAt));
+        OnPropertyChanged(nameof(CurrentOperationStatus));
+        OnPropertyChanged(nameof(CurrentOperationDetail));
+        OnPropertyChanged(nameof(IsOperationBusyIndicatorVisible));
+        OnPropertyChanged(nameof(IsOperationCompletionHoldActive));
+        OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
+        OnPropertyChanged(nameof(QuickDemoDisabledReason));
+        RaiseCommandCanExecute();
+    }
+
+    private void HandleOperationProgressTimerTick()
+    {
+        OnPropertyChanged(nameof(OperationElapsedLabel));
+        OnPropertyChanged(nameof(CurrentOperationStartedAt));
+
+        if (_isOperationActive)
+        {
+            return;
+        }
+
+        if (_operationDisplayUntilUtc is null || DateTimeOffset.UtcNow < _operationDisplayUntilUtc.Value)
+        {
+            return;
+        }
+
+        ResetOperationProgressToIdle();
+        _operationProgressTimer?.Stop();
+    }
+
+    private string BuildOperationElapsedLabel()
+    {
+        if (_operationStartedUtc is null)
+        {
+            return string.Empty;
+        }
+
+        var end = _isOperationActive ? DateTimeOffset.UtcNow : (_operationDisplayUntilUtc ?? DateTimeOffset.UtcNow);
+        var elapsed = end - _operationStartedUtc.Value;
+        if (elapsed < TimeSpan.Zero)
+        {
+            elapsed = TimeSpan.Zero;
+        }
+
+        return $"Elapsed: {elapsed:mm\\:ss}";
+    }
+
+    private string BuildOperationBusyReason()
+    {
+        if (!_isOperationActive)
+        {
+            return string.Empty;
+        }
+
+        return $"Run disabled while {OperationStatusLine.ToLowerInvariant()} is in progress.";
+    }
+
+    private string GetRunDemoPlanDisabledReason()
+    {
+        if (CurrentProject is null)
+        {
+            return "Load a project before running the demo plan.";
+        }
+
+        var busyReason = BuildOperationBusyReason();
+        if (!string.IsNullOrWhiteSpace(busyReason))
+        {
+            return busyReason;
+        }
+
+        return string.Empty;
+    }
+
+    private string GetQuickDemoDisabledReason()
+    {
+        if (IsCreatingProject)
+        {
+            return "Quick Demo is disabled while project creation is already active.";
+        }
+
+        var busyReason = BuildOperationBusyReason();
+        if (!string.IsNullOrWhiteSpace(busyReason))
+        {
+            return busyReason;
+        }
+
+        return string.Empty;
+    }
+
+    private void RunOnUiThread(Action action)
+    {
+        if (_dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        _dispatcher.Invoke(action);
+    }
+
+
     private IDisposable EnterBusyScope(string operation)
     {
         IsBusy = true;
@@ -2322,7 +3297,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private void AddNarration(string kind, string message, IReadOnlyDictionary<string, string>? data = null)
     {
-        _narrationEvents.Add(new NarrationEvent(DateTimeOffset.UtcNow, kind, message, data));
+        RunOnUiThread(() =>
+        {
+            _narrationEvents.Add(new NarrationEvent(DateTimeOffset.UtcNow, kind, message, data));
+            if (_isOperationVisible)
+            {
+                _operationLatestEvent = message;
+                OnPropertyChanged(nameof(OperationLatestEvent));
+                AppendOperationNarrationLine(message);
+            }
+        });
     }
 
     private sealed class BusyScope : IDisposable
@@ -2864,7 +3848,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         CopyLastVerificationReportPathCommand.RaiseCanExecuteChanged();
         CopyLastOperatorFlowPathCommand.RaiseCanExecuteChanged();
         CopyLastTransportEquivalencePathCommand.RaiseCanExecuteChanged();
+        CopyLastFailureSummaryCommand?.RaiseCanExecuteChanged();
+        OpenProofArtifactCommand.NotifyCanExecuteChanged();
+        CopyProofArtifactPathCommand.NotifyCanExecuteChanged();
+        OpenProofRunFolderCommand.RaiseCanExecuteChanged();
+        CopyProofRunFolderPathCommand.RaiseCanExecuteChanged();
         RunDemoPlanCommand.RaiseCanExecuteChanged();
+        QuickDemoCommand.RaiseCanExecuteChanged();
         NewProjectCommand.RaiseCanExecuteChanged();
 
         OnPropertyChanged(nameof(StartDisabledReason));
@@ -2874,6 +3864,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(SystemTierActionLabel));
         OnPropertyChanged(nameof(ExecutionDisabledReason));
         OnPropertyChanged(nameof(RunIntakePlanDisabledReason));
+        OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
+        OnPropertyChanged(nameof(QuickDemoDisabledReason));
+        OnPropertyChanged(nameof(CanStartNewProjectUi));
     }
 
     private void OnBlueprintDraftChanged()
@@ -3202,6 +4195,158 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return null;
         }
     }
+
+    private sealed record ProofArtifactDescriptor(string DisplayName, string RelativePath);
+
+    public sealed class ProofArtifactRow : INotifyPropertyChanged
+    {
+        public ProofArtifactRow(string displayName, string relativePath)
+        {
+            DisplayName = displayName;
+            RelativePath = relativePath;
+            _lastModifiedLabel = "—";
+        }
+
+        public string DisplayName { get; }
+        public string RelativePath { get; }
+
+        private string _absolutePath = string.Empty;
+        public string AbsolutePath
+        {
+            get => _absolutePath;
+            private set
+            {
+                if (_absolutePath == value) return;
+                _absolutePath = value;
+                OnPropertyChanged(nameof(AbsolutePath));
+            }
+        }
+
+        private bool _exists;
+        public bool Exists
+        {
+            get => _exists;
+            private set
+            {
+                if (_exists == value) return;
+                _exists = value;
+                OnPropertyChanged(nameof(Exists));
+                OnPropertyChanged(nameof(StatusLabel));
+            }
+        }
+
+        private string _lastModifiedLabel;
+        public string LastModifiedLabel
+        {
+            get => _lastModifiedLabel;
+            private set
+            {
+                if (_lastModifiedLabel == value) return;
+                _lastModifiedLabel = value;
+                OnPropertyChanged(nameof(LastModifiedLabel));
+            }
+        }
+
+        public string StatusLabel => Exists ? "Available" : "Missing";
+
+        public void Update(string? runPath)
+        {
+            if (string.IsNullOrWhiteSpace(runPath))
+            {
+                AbsolutePath = string.Empty;
+                Exists = false;
+                LastModifiedLabel = "—";
+                return;
+            }
+
+            var fullPath = Path.Combine(runPath, RelativePath);
+            AbsolutePath = fullPath;
+            if (File.Exists(fullPath))
+            {
+                Exists = true;
+                var lastWrite = File.GetLastWriteTime(fullPath);
+                LastModifiedLabel = lastWrite == DateTime.MinValue
+                    ? "Unknown"
+                    : lastWrite.ToString("g");
+            }
+            else
+            {
+                Exists = false;
+                LastModifiedLabel = "Missing";
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged(string propertyName)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    public sealed class RunHistoryRow
+    {
+        public RunHistoryRow(string runId, string runPath, DateTimeOffset createdUtc, string state, string provider, string hostTransport, string verificationResult)
+        {
+            RunId = runId;
+            RunPath = runPath;
+            CreatedUtc = createdUtc;
+            State = state;
+            Provider = provider;
+            HostTransport = hostTransport;
+            VerificationResult = verificationResult;
+        }
+
+        public string RunId { get; }
+        public string RunPath { get; }
+        public DateTimeOffset CreatedUtc { get; }
+        public string State { get; }
+        public string Provider { get; }
+        public string HostTransport { get; }
+        public string VerificationResult { get; }
+        public string CreatedLabel => CreatedUtc.ToLocalTime().ToString("g");
+    }
+
+    private sealed record RunDemoProgressEvent(
+        string Stage,
+        string Detail,
+        string? StepName,
+        string? StepState);
+
+    public sealed class OperationProgressStepRow : INotifyPropertyChanged
+    {
+        private string _state = "pending";
+        private string _detail = string.Empty;
+
+        public OperationProgressStepRow(string name)
+        {
+            Name = name;
+        }
+
+        public string Name { get; }
+        public string State => _state;
+        public string Detail => _detail;
+
+        public void SetState(string state, string? detail = null)
+        {
+            var normalized = string.IsNullOrWhiteSpace(state) ? "pending" : state.Trim().ToLowerInvariant();
+            if (_state != normalized)
+            {
+                _state = normalized;
+                OnPropertyChanged(nameof(State));
+            }
+
+            var nextDetail = detail ?? string.Empty;
+            if (_detail != nextDetail)
+            {
+                _detail = nextDetail;
+                OnPropertyChanged(nameof(Detail));
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        private void OnPropertyChanged(string propertyName)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
     private void OnPropertyChanged(string propertyName)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }

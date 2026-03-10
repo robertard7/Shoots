@@ -198,13 +198,15 @@ public partial class App : Application
                     break;
                 case "run-demo":
                     viewModel.NewProjectCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    viewModel.SelectedProviderMode = "local";
                     viewModel.SelectedHostTransport = "none";
-                    viewModel.RunDemoPlanCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    InvokeViewModelTask(viewModel, "RunDemoPlanAsync", true, null);
                     break;
                 case "run-demo-host":
                     viewModel.NewProjectCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    viewModel.SelectedProviderMode = "local";
                     viewModel.SelectedHostTransport = "host";
-                    viewModel.RunDemoPlanCommand.ExecuteAsync().GetAwaiter().GetResult();
+                    InvokeViewModelTask(viewModel, "RunDemoPlanAsync", true, null);
                     break;
                 case "intent":
                     viewModel.ChatInputText = payload;
@@ -286,13 +288,35 @@ public partial class App : Application
             log_artifact_exists = hasRunPath && Directory.Exists(Path.Combine(runPath!, "artifacts")) && Directory.GetFiles(Path.Combine(runPath!, "artifacts"), "*.log", SearchOption.AllDirectories).Length > 0,
             artifact_verification_ok = hasRunPath && artifactVerification.Ok,
             artifact_verification_errors = artifactVerification.Errors,
-            host_response_metadata_exists = hasRunPath && !string.IsNullOrWhiteSpace(run?.HostResponseOutcome)
+            host_response_metadata_exists = hasRunPath && !string.IsNullOrWhiteSpace(run?.HostResponseOutcome),
+            run_demo_disabled_reason = viewModel.RunDemoPlanDisabledReason,
+            last_failure_phase = viewModel.LastFailurePhase,
+            last_failure_reason = viewModel.LastFailureReason,
+            last_failure_proof_path = viewModel.LastFailureProofPath
         };
 
         File.WriteAllText(sentinelPath, JsonSerializer.Serialize(sentinel, new JsonSerializerOptions { WriteIndented = true }));
 
         Trace.WriteLine($"[Shoots.UI] smoke.sentinel={sentinelPath}");
         return true;
+    }
+
+    private static void InvokeViewModelTask(ViewModels.MainWindowViewModel viewModel, string methodName, params object?[] args)
+    {
+        var method = typeof(ViewModels.MainWindowViewModel).GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        if (method is null)
+        {
+            throw new InvalidOperationException($"Missing view-model method: {methodName}");
+        }
+
+        if (method.Invoke(viewModel, args) is not Task task)
+        {
+            throw new InvalidOperationException($"View-model method did not return Task: {methodName}");
+        }
+
+        task.GetAwaiter().GetResult();
     }
 
     private static string FormatSurfaceList(IReadOnlyList<string> surfaces)

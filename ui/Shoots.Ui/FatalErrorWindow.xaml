@@ -12,8 +12,23 @@
     </Grid.RowDefinitions>
     <TextBlock Text="A fatal UI error occurred." FontWeight="SemiBold" />
     <StackPanel Grid.Row="1" Margin="0,12,0,0">
-      <TextBlock Text="Log path:" FontWeight="SemiBold" />
+      <TextBlock Text="Exception:" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding ExceptionType}" TextWrapping="Wrap" />
+      <TextBlock Margin="0,2,0,0"
+                 Text="{Binding ExceptionMessage}"
+                 TextWrapping="Wrap" />
+      <TextBlock Margin="0,8,0,0"
+                 Text="Primary stack frame:"
+                 FontWeight="SemiBold" />
+      <TextBlock Text="{Binding PrimaryStackFrame}" TextWrapping="Wrap" />
+      <TextBlock Margin="0,8,0,0"
+                 Text="Fatal log path:"
+                 FontWeight="SemiBold" />
       <TextBlock Text="{Binding LogPath}" TextWrapping="Wrap" />
+      <TextBlock Margin="0,8,0,0"
+                 Text="UI log path:"
+                 FontWeight="SemiBold" />
+      <TextBlock Text="{Binding UiLogPath}" TextWrapping="Wrap" />
     </StackPanel>
     <TextBox Grid.Row="2"
              Margin="0,12,0,0"

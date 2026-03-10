@@ -1,5 +1,7 @@
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace Shoots.UI.ViewModels;
 
@@ -8,6 +10,7 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
     private readonly Func<object?, Task> _executeAsync;
     private readonly Func<bool>? _canExecute;
     private bool _isExecuting;
+    private readonly Dispatcher _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
 
     public AsyncRelayCommand(Func<Task> executeAsync, Func<bool>? canExecute = null)
         : this(_ => executeAsync(), canExecute)
@@ -62,7 +65,18 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
 
     public bool IsExecuting => _isExecuting;
 
-    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    public void RaiseCanExecuteChanged()
+    {
+        void Raise() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+
+        if (_dispatcher.CheckAccess())
+        {
+            Raise();
+            return;
+        }
+
+        _dispatcher.BeginInvoke((Action)Raise, DispatcherPriority.Normal);
+    }
 
     private void OnPropertyChanged(string propertyName) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

@@ -18,7 +18,7 @@ public sealed class ExecutionContractAdapterTests
             {
                 new PlanStep("step-1", "write_text", new Dictionary<string, string> { ["path"] = "a.txt" }, "a.txt")
             });
-        var project = new ProjectModel("p1", "demo", "c:/workspace/demo", DateTimeOffset.Parse("2026-01-01T00:00:00+00:00"));
+        var project = new ProjectModel("p1", "demo", DateTimeOffset.Parse("2026-01-01T00:00:00+00:00"), "c:/workspace/demo", "c:/workspace/demo/project.json");
 
         var request = ExecutionContractAdapter.ToExecutionRequest(plan, project, "RuntimePlanner", "RuntimeBridgeLocal", "local", "none", "hash-plan");
 

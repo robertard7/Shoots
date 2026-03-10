@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -72,9 +73,9 @@ public sealed class MainWindowViewModelBackendStatusTests
     public void Apply_environment_has_stable_blocker_reason_without_profile()
     {
         var vm = BuildViewModel(
-            new FixedBackendProbeService(
-                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
-                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
             new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
             includeProfile: false);
 
@@ -99,8 +100,6 @@ public sealed class MainWindowViewModelBackendStatusTests
         probeService.Release();
         await refreshTask;
     }
-
-
 
     [Fact]
     public async Task Copy_artifact_path_commands_route_through_workspace_shell_service()
@@ -475,7 +474,8 @@ public sealed class MainWindowViewModelBackendStatusTests
             new SequenceOllamaClient(
                 new OllamaTagsResult(true, new[] { "model-a", "model-b" }, null, "ok"),
                 new OllamaTagsResult(true, new[] { "model-a", "model-b" }, null, "ok"),
-                new OllamaTagsResult(true, new[] { "model-c", "model-d" }, null, "ok")));
+                new OllamaTagsResult(true, new[] { "model-c", "model-d" }, null, "ok"),
+                new OllamaTagsResult(true, new[] { "model-c", "model-e" }, null, "ok")));
 
         try
         {
@@ -498,11 +498,161 @@ public sealed class MainWindowViewModelBackendStatusTests
             System.Environment.SetEnvironmentVariable("SHOOTS_PREFERRED_MODEL_ID", null);
         }
     }
+
+    [Fact]
+    public void Refresh_stage_busy_state_disables_conflicting_actions()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(
+            vm,
+            "BeginOperationProgress",
+            "Refreshing backend status",
+            "Probing backend health and model catalog.",
+            new[] { "Probe Ollama", "Probe Qdrant", "Refresh model catalog" });
+
+        Assert.True(vm.IsOperationActive);
+        Assert.Equal("active", vm.CurrentOperationStatus);
+        Assert.True(vm.IsOperationBusyIndicatorVisible);
+        Assert.False(vm.QuickDemoCommand.CanExecute(null));
+        Assert.Contains("refreshing backend status", vm.QuickDemoDisabledReason, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Completion_state_holds_then_returns_to_idle()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        vm.OperationCompletionHoldDuration = System.TimeSpan.FromMilliseconds(100);
+        await vm.RefreshBackendStatusCommand.ExecuteAsync();
+
+        Assert.Equal("completed", vm.CurrentOperationStatus);
+        Assert.True(vm.IsOperationCompletionHoldActive);
+
+        await Task.Delay(130);
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+
+        Assert.Equal("idle", vm.CurrentOperationStatus);
+        Assert.False(vm.IsOperationVisible);
+        Assert.Equal("Idle", vm.OperationStatusLine);
+    }
+
+    [Fact]
+    public async Task Quick_demo_exposes_required_timeline_steps()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        await vm.QuickDemoCommand.ExecuteAsync();
+
+        Assert.Equal("completed", vm.CurrentOperationStatus);
+        Assert.Equal(
+            new[] { "Create project", "Plan run", "Execute tools", "Host run", "Verification", "Completed" },
+            vm.OperationProgressSteps.Select(step => step.Name).ToArray());
+        Assert.Equal("completed", vm.OperationProgressSteps.Single(step => step.Name == "Completed").State);
+        Assert.NotEmpty(vm.OperationNarrationFeed);
+    }
+
+    [Fact]
+    public async Task Quick_demo_failure_marks_failed_state_then_resets_to_idle()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            planner: new FailingPlanner());
+
+        vm.OperationCompletionHoldDuration = System.TimeSpan.FromMilliseconds(100);
+        await vm.QuickDemoCommand.ExecuteAsync();
+
+        Assert.Equal("failed", vm.CurrentOperationStatus);
+        Assert.Contains(vm.OperationProgressSteps, step => step.State == "failed");
+
+        await Task.Delay(130);
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+        Assert.Equal("idle", vm.CurrentOperationStatus);
+    }
+
+    [Fact]
+    public void Operation_narration_feed_is_bounded_to_latest_entries()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Planning run", "Preparing", new[] { "Plan run" });
+        for (var index = 1; index <= 25; index++)
+        {
+            InvokePrivate(vm, "SetOperationLatestEvent", $"event-{index}");
+        }
+
+        Assert.Equal(20, vm.OperationNarrationFeed.Count);
+        Assert.Equal("event-25", vm.OperationNarrationFeed[^1]);
+    }
+
+    [Fact]
+    public async Task Async_relay_command_can_invalidate_from_background_thread()
+    {
+        var command = new AsyncRelayCommand(() => Task.CompletedTask);
+        var ex = await Record.ExceptionAsync(() => Task.Run(command.RaiseCanExecuteChanged));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void App_smoke_mode_sentinel_diagnostics_fields_are_declared()
+    {
+        var root = FindRepoRoot();
+        var appSourcePath = Path.Combine(root, "ui", "Shoots.Ui", "App.xaml.cs");
+        var appSource = File.ReadAllText(appSourcePath);
+
+        Assert.Contains("run_demo_disabled_reason", appSource, System.StringComparison.Ordinal);
+        Assert.Contains("last_failure_phase", appSource, System.StringComparison.Ordinal);
+        Assert.Contains("last_failure_reason", appSource, System.StringComparison.Ordinal);
+    }
+
+    private static object? InvokePrivate(object target, string methodName, params object?[] args)
+    {
+        var method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return method!.Invoke(target, args);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            if (File.Exists(Path.Combine(current, "Shoots.sln")))
+            {
+                return current;
+            }
+
+            current = Path.GetDirectoryName(current);
+        }
+
+        throw new DirectoryNotFoundException("Could not locate Shoots.sln from test base directory.");
+    }
+
     private static MainWindowViewModel BuildViewModel(
         IBackendProbeService probeService,
         IOllamaClient ollamaClient,
         bool includeProfile = true,
-        IWorkspaceShellService? workspaceShell = null)
+        IWorkspaceShellService? workspaceShell = null,
+        Shoots.UI.Builder.IPlanner? planner = null)
     {
         return new MainWindowViewModel(
             new NullExecutionCommandService(),
@@ -512,7 +662,7 @@ public sealed class MainWindowViewModelBackendStatusTests
             new EnvironmentScriptLoader(),
             new DeterministicWorkspaceProvider(),
             workspaceShell ?? new NullWorkspaceShellService(),
-            new DatabaseIntentStore(),
+            new InMemoryDatabaseIntentStore(),
             new ToolTierPrompt(),
             new SystemBlueprintStore(),
             new ExecutionEnvironmentSettingsStore(),
@@ -520,7 +670,9 @@ public sealed class MainWindowViewModelBackendStatusTests
             new AiPanelVisibilityService(),
             new NullAiHelpFacade(),
             probeService,
-            ollamaClient);
+            ollamaClient,
+            planner: planner,
+            autoRefreshBackends: false);
     }
 
 
@@ -734,6 +886,15 @@ public sealed class MainWindowViewModelBackendStatusTests
             }
 
             return Task.FromResult(_results.Dequeue());
+        }
+    }
+
+    private sealed class FailingPlanner : Shoots.UI.Builder.IPlanner
+    {
+        public bool TryBuildPlan(ProjectModel project, out Shoots.UI.Builder.PlanModel plan)
+        {
+            plan = new Shoots.UI.Builder.PlanModel("none", Shoots.UI.Builder.PlanSourceType.Demo, new List<Shoots.UI.Builder.PlanStep>());
+            return false;
         }
     }
 }

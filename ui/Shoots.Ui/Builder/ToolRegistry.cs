@@ -13,14 +13,14 @@ public sealed class ToolRegistry
 
     public ToolRegistry(string catalogPath = "etc/ui.tools.catalog.json")
     {
-        CatalogPath = catalogPath;
+        CatalogPath = ResolveCatalogPath(catalogPath);
 
-        if (!File.Exists(catalogPath))
+        if (!File.Exists(CatalogPath))
         {
-            throw new FileNotFoundException("Tool catalog not found.", catalogPath);
+            throw new FileNotFoundException("Tool catalog not found.", CatalogPath);
         }
 
-        var rawCatalog = File.ReadAllText(catalogPath);
+        var rawCatalog = File.ReadAllText(CatalogPath);
         CatalogHash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawCatalog))).ToLowerInvariant();
 
         var payload = JsonSerializer.Deserialize<ToolCatalogPayload>(rawCatalog, new JsonSerializerOptions
@@ -63,7 +63,36 @@ public sealed class ToolRegistry
         throw new InvalidOperationException($"Tool '{toolId}' is not registered in ui.tools.catalog.json");
     }
 
+    private static string ResolveCatalogPath(string catalogPath)
+    {
+        if (Path.IsPathRooted(catalogPath))
+        {
+            return catalogPath;
+        }
+
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(current))
+        {
+            var candidate = Path.Combine(current, catalogPath);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            var parent = Directory.GetParent(current);
+            if (parent is null)
+            {
+                break;
+            }
+
+            current = parent.FullName;
+        }
+
+        return Path.GetFullPath(catalogPath);
+    }
+
     private sealed record ToolCatalogPayload(IReadOnlyList<ToolDefinition> Tools);
 }
 
 public sealed record ToolDefinition(string Id, IReadOnlyList<string> RequiredArgs);
+

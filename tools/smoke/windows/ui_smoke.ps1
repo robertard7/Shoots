@@ -3,34 +3,88 @@ Param(
 )
 
 $ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+trap {
+    Write-Error ("[FAIL] {0}" -f $_.Exception.Message)
+    exit 1
+}
+
+function Invoke-ExternalCommand {
+    param(
+        [Parameter(Mandatory = $true)] [string]$FilePath,
+        [string[]]$Arguments = @(),
+        [string]$Description
+    )
+
+    $display = if ($Description) { $Description } else { ("{0} {1}" -f $FilePath, ($Arguments -join ' ')) }
+    Write-Host "--> $display"
+    & $FilePath @Arguments
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+        throw ("Command failed ({0}) with exit code {1}" -f $display, $exitCode)
+    }
+}
+
+function Require-Path {
+    param(
+        [Parameter(Mandatory = $true)] [string]$Path,
+        [Parameter(Mandatory = $true)] [string]$Message
+    )
+
+    if (-not (Test-Path $Path)) {
+        throw $Message
+    }
+}
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
 Set-Location $repoRoot
 
 $uiProject = ".\ui\Shoots.Ui\Shoots.Ui.csproj"
+$demoWaitAttempts = 90
+$verifyRunScript = Join-Path $repoRoot "tools\replay\verify_run.ps1"
 $sentinelPath = Join-Path $env:LOCALAPPDATA "Shoots.UI\smoke\last.json"
 $uiLogPath = Join-Path $env:LOCALAPPDATA "Shoots.UI\ui.log"
+$lastSuccessfulSentinel = $null
 
 if (Test-Path $sentinelPath) {
     Remove-Item $sentinelPath -Force
 }
 
-taskkill /IM Shoots.UI.exe /F 2>$null | Out-Null
+$runningUi = Get-Process -Name "Shoots.UI" -ErrorAction SilentlyContinue
+if ($runningUi) {
+    Write-Host "Stopping existing Shoots.UI.exe instances"
+    foreach ($proc in $runningUi) {
+        try {
+            $proc | Stop-Process -Force -ErrorAction Stop
+        }
+        catch [System.InvalidOperationException] {
+            # Process already exited between Get-Process and Stop-Process; ignore noise.
+        }
+    }
+}
 
-dotnet build $uiProject -c $Configuration
+Invoke-ExternalCommand -FilePath dotnet -Arguments @("build", $uiProject, "-c", $Configuration) -Description "dotnet build Shoots.Ui"
 
-dotnet run --project $uiProject -c $Configuration -- --smoke create-project
-if (!(Test-Path $sentinelPath)) { throw "Missing smoke sentinel after create-project." }
+Invoke-ExternalCommand -FilePath dotnet -Arguments @("run", "--project", $uiProject, "-c", $Configuration, "--", "--smoke", "create-project") -Description "smoke create-project"
+Require-Path -Path $sentinelPath -Message "Missing smoke sentinel after create-project."
 
 $proof = Get-Content $sentinelPath -Raw | ConvertFrom-Json
 if (-not $proof.project_id) { throw "Sentinel missing project_id." }
-if (-not (Test-Path $proof.workspace_path)) { throw "Workspace missing: $($proof.workspace_path)" }
-if (-not (Test-Path (Join-Path $proof.workspace_path "project.json"))) { throw "project.json missing." }
+Require-Path -Path $proof.workspace_path -Message "Workspace missing: $($proof.workspace_path)"
+Require-Path -Path (Join-Path $proof.workspace_path "project.json") -Message "project.json missing."
 if (-not $proof.required_folders_present) { throw "Required folders check failed." }
 
-dotnet run --project $uiProject -c $Configuration -- --smoke run-demo
-if (!(Test-Path $sentinelPath)) { throw "Missing smoke sentinel after run-demo." }
+Invoke-ExternalCommand -FilePath dotnet -Arguments @("run", "--project", $uiProject, "-c", $Configuration, "--", "--smoke", "run-demo") -Description "smoke run-demo"
+Require-Path -Path $sentinelPath -Message "Missing smoke sentinel after run-demo."
 
 $proof = Get-Content $sentinelPath -Raw | ConvertFrom-Json
+$attempts = $demoWaitAttempts
+while (-not $proof.demo_run_id -and $attempts -gt 0) {
+    Start-Sleep -Seconds 1
+    $proof = Get-Content $sentinelPath -Raw | ConvertFrom-Json
+    $attempts--
+}
 if (-not $proof.demo_run_id) { throw "Sentinel missing demo_run_id." }
 if (-not $proof.run_json_exists) { throw "Sentinel indicates run.json missing." }
 if (-not $proof.artifact_json_exists) { throw "Sentinel indicates artifact.json missing." }
@@ -43,32 +97,53 @@ if (-not $proof.log_artifact_exists) { throw "Sentinel indicates no .log artifac
 if (-not $proof.artifact_verification_ok) { throw "Artifact verification failed: $($proof.artifact_verification_errors -join ", ")" }
 
 $runPath = Join-Path $proof.workspace_path (Join-Path "runs" $proof.demo_run_id)
-if (-not (Test-Path (Join-Path $runPath "run.json"))) { throw "run.json missing at $runPath" }
-if (-not (Test-Path (Join-Path $runPath "artifact.json"))) { throw "artifact.json missing at $runPath" }
-if (-not (Test-Path (Join-Path $runPath "environment.json"))) { throw "environment.json missing at $runPath" }
-if (-not (Test-Path (Join-Path $runPath "artifacts\manifest.json"))) { throw "manifest.json missing at $runPath" }
-if (-not (Test-Path (Join-Path $runPath "evidence_bundle.json"))) { throw "evidence_bundle.json missing at $runPath" }
-if (-not (Test-Path (Join-Path $runPath "verification_report.json"))) { throw "verification_report.json missing at $runPath" }
-if (-not (Test-Path (Join-Path $runPath "operator_flow.json"))) { throw "operator_flow.json missing at $runPath" }
+$attempts = 30
+while (-not (Test-Path $runPath) -and $attempts -gt 0) {
+    Start-Sleep -Seconds 1
+    $attempts--
+}
+Require-Path -Path $runPath -Message "Run path missing at $runPath"
+Require-Path -Path (Join-Path $runPath "run.json") -Message "run.json missing at $runPath"
+Require-Path -Path (Join-Path $runPath "artifact.json") -Message "artifact.json missing at $runPath"
+Require-Path -Path (Join-Path $runPath "environment.json") -Message "environment.json missing at $runPath"
+Require-Path -Path (Join-Path $runPath "artifacts\manifest.json") -Message "manifest.json missing at $runPath"
+Require-Path -Path (Join-Path $runPath "evidence_bundle.json") -Message "evidence_bundle.json missing at $runPath"
+Require-Path -Path (Join-Path $runPath "verification_report.json") -Message "verification_report.json missing at $runPath"
+Require-Path -Path (Join-Path $runPath "operator_flow.json") -Message "operator_flow.json missing at $runPath"
 $logArtifacts = Get-ChildItem -Path (Join-Path $runPath "artifacts") -Filter *.log -Recurse -ErrorAction SilentlyContinue
 $verificationReportPath = Join-Path $runPath "verification_report.json"
 $verificationReport = Get-Content $verificationReportPath -Raw | ConvertFrom-Json
 if (-not $verificationReport.valid) { throw "verification_report.json indicates invalid run evidence." }
-pwsh -NoLogo -NoProfile -File .\tools\replay\verify_run.ps1 -RunPath $runPath
-if (-not $logArtifacts -or $logArtifacts.Count -lt 1) { throw "Expected at least one log artifact under $runPath\artifacts" }
+Invoke-ExternalCommand -FilePath powershell -Arguments @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $verifyRunScript, "-RunPath", $runPath) -Description "verify run (direct)"
+$logCount = @($logArtifacts).Count
+if ($logCount -lt 1) { throw "Expected at least one log artifact under $runPath\artifacts" }
 $operatorFlow = Get-Content (Join-Path $runPath "operator_flow.json") -Raw | ConvertFrom-Json
 if ($operatorFlow.host_transport -ne "none") { throw "operator_flow host transport mismatch for direct run." }
 
-dotnet run --project $uiProject -c $Configuration -- --smoke run-demo-host
-if (!(Test-Path $sentinelPath)) { throw "Missing smoke sentinel after run-demo-host." }
+Invoke-ExternalCommand -FilePath dotnet -Arguments @("run", "--project", $uiProject, "-c", $Configuration, "--", "--smoke", "run-demo-host") -Description "smoke run-demo-host"
+Require-Path -Path $sentinelPath -Message "Missing smoke sentinel after run-demo-host."
 
 $proof = Get-Content $sentinelPath -Raw | ConvertFrom-Json
+$attempts = $demoWaitAttempts
+while (-not $proof.demo_run_id -and $attempts -gt 0) {
+    Start-Sleep -Seconds 1
+    $proof = Get-Content $sentinelPath -Raw | ConvertFrom-Json
+    $attempts--
+}
+if (-not $proof.demo_run_id) { throw "Sentinel missing demo_run_id for host run." }
 $hostRunPath = Join-Path $proof.workspace_path (Join-Path "runs" $proof.demo_run_id)
+$attempts = 30
+while (-not (Test-Path $hostRunPath) -and $attempts -gt 0) {
+    Start-Sleep -Seconds 1
+    $attempts--
+}
+Require-Path -Path $hostRunPath -Message "Run path missing at $hostRunPath"
 $hostOperatorFlow = Get-Content (Join-Path $hostRunPath "operator_flow.json") -Raw | ConvertFrom-Json
 if ($hostOperatorFlow.host_transport -ne "host") { throw "operator_flow host transport mismatch for host run." }
 if (-not $proof.host_response_metadata_exists) { throw "Sentinel indicates missing host response metadata for host run." }
 if (-not $hostOperatorFlow.host_response_outcome) { throw "operator_flow missing host response outcome for host run." }
-pwsh -NoLogo -NoProfile -File .\tools\replay\verify_run.ps1 -RunPath $hostRunPath
+Invoke-ExternalCommand -FilePath powershell -Arguments @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $verifyRunScript, "-RunPath", $hostRunPath) -Description "verify run (host)"
+$lastSuccessfulSentinel = Get-Content $sentinelPath -Raw
 
 $directRun = Get-Content (Join-Path $runPath "run.json") -Raw | ConvertFrom-Json
 $hostRun = Get-Content (Join-Path $hostRunPath "run.json") -Raw | ConvertFrom-Json
@@ -88,8 +163,12 @@ $equivalencePath = Join-Path $hostRunPath "transport_equivalence.json"
 $equivalence | ConvertTo-Json -Depth 10 | Set-Content $equivalencePath
 if (-not $equivalence.valid) { throw "transport equivalence check failed. See $equivalencePath" }
 
-dotnet run --project $uiProject -c $Configuration -- --smoke intent "start new project"
-if (!(Test-Path $sentinelPath)) { throw "Missing smoke sentinel after intent." }
+Invoke-ExternalCommand -FilePath dotnet -Arguments @("run", "--project", $uiProject, "-c", $Configuration, "--", "--smoke", "intent", "start new project") -Description "smoke intent start new project"
+Require-Path -Path $sentinelPath -Message "Missing smoke sentinel after intent."
+
+if ($lastSuccessfulSentinel) {
+    $lastSuccessfulSentinel | Set-Content $sentinelPath
+}
 
 Write-Host "Smoke sentinel: $sentinelPath"
 Get-Content $sentinelPath

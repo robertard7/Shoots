@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -240,14 +240,14 @@ public sealed class BuilderExecutionService
 
     private static EnvironmentCapture CaptureEnvironment(string runPath)
     {
-        var dotnetVersion = RunCommand("dotnet", "--version");
-        var gitVersion = RunCommand("git", "--version");
+        var dotnetVersion = GetDotnetVersion();
+        var gitVersion = GetGitVersion();
         var snapshot = new EnvironmentSnapshot(
-            Environment.OSVersion.ToString(),
+            System.Environment.OSVersion.ToString(),
             dotnetVersion,
             gitVersion,
-            Environment.GetEnvironmentVariable("PATH") ?? string.Empty,
-            Environment.CurrentDirectory,
+            System.Environment.GetEnvironmentVariable("PATH") ?? string.Empty,
+            System.Environment.CurrentDirectory,
             DateTimeOffset.UtcNow);
 
         var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
@@ -376,33 +376,33 @@ public sealed class BuilderExecutionService
         return bundlePath;
     }
 
-    private static string RunCommand(string fileName, string arguments)
+    private static string GetDotnetVersion()
     {
-        try
+        var framework = RuntimeInformation.FrameworkDescription;
+        var runtimeVersion = System.Environment.Version.ToString();
+        if (!string.IsNullOrWhiteSpace(framework))
         {
-            using var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = fileName,
-                Arguments = arguments,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
-
-            if (process is null)
-            {
-                return string.Empty;
-            }
-
-            var output = process.StandardOutput.ReadToEnd().Trim();
-            process.WaitForExit(5000);
-            return output;
+            return $"{framework} ({runtimeVersion})";
         }
-        catch
+
+        return runtimeVersion;
+    }
+
+    private static string GetGitVersion()
+    {
+        var gitVersion = System.Environment.GetEnvironmentVariable("GIT_VERSION");
+        if (!string.IsNullOrWhiteSpace(gitVersion))
         {
-            return string.Empty;
+            return gitVersion;
         }
+
+        var gitExecPath = System.Environment.GetEnvironmentVariable("GIT_EXEC_PATH");
+        if (!string.IsNullOrWhiteSpace(gitExecPath))
+        {
+            return gitExecPath;
+        }
+
+        return "unavailable";
     }
 
     private sealed record EnvironmentCapture(string Hash, string Path);

@@ -30,6 +30,34 @@
                  Text="{Binding SessionStatusLabel}"
                  TextWrapping="Wrap" />
 
+      <Border Margin="0,12,0,0"
+              Background="#FFEFF6FF"
+              BorderBrush="#FFBFDBFE"
+              BorderThickness="1"
+              Padding="10">
+        <StackPanel>
+          <TextBlock Text="Startup Status" FontWeight="SemiBold" />
+          <UniformGrid Columns="2" Margin="0,8,0,0">
+            <StackPanel Margin="0,0,12,0">
+              <TextBlock FontSize="11" Foreground="#FF6B7280" Text="Provider" />
+              <TextBlock FontWeight="SemiBold" Text="{Binding SelectedProviderMode}" />
+            </StackPanel>
+            <StackPanel>
+              <TextBlock FontSize="11" Foreground="#FF6B7280" Text="Host Transport" />
+              <TextBlock FontWeight="SemiBold" Text="{Binding SelectedHostTransport}" />
+            </StackPanel>
+            <StackPanel Margin="0,8,12,0">
+              <TextBlock FontSize="11" Foreground="#FF6B7280" Text="Workspace" />
+              <TextBlock Text="{Binding CurrentWorkspacePath}" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Margin="0,8,0,0">
+              <TextBlock FontSize="11" Foreground="#FF6B7280" Text="Last Verification" />
+              <TextBlock Text="{Binding LastRunVerificationState}" />
+            </StackPanel>
+          </UniformGrid>
+        </StackPanel>
+      </Border>
+
       <Button Margin="0,8,0,0"
               Content="New Project"
               Command="{Binding NewProjectCommand}"
@@ -37,10 +65,157 @@
               ToolTip="{Binding StartupButtonTooltip}"
               ToolTipService.ShowOnDisabled="True" />
 
+      <Border Margin="0,8,0,0"
+              Background="#FFFDF2F8"
+              BorderBrush="#FFFBCFE8"
+              BorderThickness="1"
+              Padding="8">
+        <Border.Style>
+          <Style TargetType="Border">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding HasNoProjectLoaded}" Value="True">
+                <Setter Property="Visibility" Value="Visible" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Border.Style>
+        <StackPanel>
+          <TextBlock Text="No project loaded yet." FontWeight="SemiBold" />
+          <TextBlock Margin="0,4,0,0"
+                     Foreground="#FF6B7280"
+                     Text="Create a new project or choose a recent workspace to unlock demo runs and evidence capture."
+                     TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border Margin="0,8,0,0"
+              Background="#FFFFF1F2"
+              BorderBrush="#FFFECACA"
+              BorderThickness="1"
+              Padding="10">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Text="Last Failure" FontWeight="SemiBold" />
+            <Button Margin="8,0,0,0"
+                    Content="Copy failure summary"
+                    Command="{Binding CopyLastFailureSummaryCommand}"
+                    IsEnabled="{Binding HasLastFailure}" />
+          </StackPanel>
+          <TextBlock Margin="0,6,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding LastFailurePhase, StringFormat=Phase: {0}}"
+                     TextWrapping="Wrap" />
+          <TextBlock Margin="0,2,0,0"
+                     Text="{Binding LastFailureReason}"
+                     TextWrapping="Wrap" />
+          <StackPanel Margin="0,6,0,0">
+            <TextBlock FontSize="11"
+                       Foreground="#FF6B7280"
+                       Text="Proof file path" />
+            <TextBlock FontFamily="Consolas"
+                       FontSize="11"
+                       Text="{Binding LastFailureProofPath}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <TextBlock Margin="0,6,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding LastFailureNextAction, StringFormat=Suggested next action: {0}}"
+                     TextWrapping="Wrap"
+                     Visibility="{Binding HasLastFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
+        </StackPanel>
+      </Border>
+
       <TextBlock Margin="0,4,0,0"
                  Foreground="#FF6B7280"
                  Text="{Binding BusyOperation, StringFormat=Busy: {0}}"
                  Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+      <Border Margin="0,8,0,0"
+              BorderThickness="1"
+              Padding="10"
+              Visibility="{Binding IsOperationVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Border.Style>
+          <Style TargetType="Border">
+            <Setter Property="Background" Value="#FFF8FAFC" />
+            <Setter Property="BorderBrush" Value="#FFCBD5E1" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding CurrentOperationStatus}" Value="active">
+                <Setter Property="Background" Value="#FFEFF6FF" />
+                <Setter Property="BorderBrush" Value="#FF93C5FD" />
+              </DataTrigger>
+              <DataTrigger Binding="{Binding CurrentOperationStatus}" Value="completed">
+                <Setter Property="Background" Value="#FFF0FDF4" />
+                <Setter Property="BorderBrush" Value="#FF86EFAC" />
+              </DataTrigger>
+              <DataTrigger Binding="{Binding CurrentOperationStatus}" Value="failed">
+                <Setter Property="Background" Value="#FFFEF2F2" />
+                <Setter Property="BorderBrush" Value="#FFFCA5A5" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Border.Style>
+        <StackPanel>
+          <TextBlock Text="Working Now" FontWeight="SemiBold" />
+          <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <TextBlock VerticalAlignment="Center"
+                       FontSize="16"
+                       Text="⟳"
+                       Visibility="{Binding IsOperationBusyIndicatorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <ProgressBar Width="100"
+                          Height="10"
+                         Margin="8,0,0,0"
+                         IsIndeterminate="True"
+                          Visibility="{Binding IsOperationActive, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <TextBlock Margin="8,0,0,0"
+                       VerticalAlignment="Center"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Text="{Binding OperationStatusLine}" />
+          </StackPanel>
+          <TextBlock Margin="0,6,0,0"
+                     Text="{Binding OperationStatusDetail}"
+                     TextWrapping="Wrap" />
+          <TextBlock Margin="0,2,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding OperationElapsedLabel}" />
+          <TextBlock Margin="0,8,0,0"
+                     FontWeight="SemiBold"
+                     Text="Live Event" />
+          <TextBlock Margin="0,2,0,0"
+                      Text="{Binding OperationLatestEvent}"
+                      TextWrapping="Wrap" />
+          <TextBlock Margin="0,8,0,0"
+                     FontWeight="SemiBold"
+                     Text="Live Narration Feed" />
+          <ItemsControl Margin="0,2,0,0" ItemsSource="{Binding OperationNarrationFeed}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <TextBlock FontSize="11"
+                           Foreground="#FF374151"
+                           Text="{Binding}"
+                           TextWrapping="Wrap" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding OperationProgressSteps}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Margin="0,2,0,0">
+                  <TextBlock FontWeight="SemiBold"
+                             Text="{Binding Name}" />
+                  <TextBlock FontSize="11"
+                             Foreground="#FF6B7280"
+                             Text="{Binding State, StringFormat=State: {0}}" />
+                  <TextBlock FontSize="11"
+                             Text="{Binding Detail}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
 
       <TextBlock Margin="0,4,0,0"
                  Foreground="#FF2B6CB0"
@@ -127,7 +302,15 @@
       <Button Margin="0,6,0,0"
               Content="Run Demo Plan"
               Command="{Binding RunDemoPlanCommand}"
-              IsEnabled="{Binding HasProjectLoaded}" />
+              IsEnabled="{Binding HasProjectLoaded}"
+              ToolTip="{Binding RunDemoPlanDisabledReason}"
+              ToolTipService.ShowOnDisabled="True" />
+
+      <Button Margin="0,6,0,0"
+              Content="Quick Demo"
+              Command="{Binding QuickDemoCommand}"
+              ToolTip="{Binding QuickDemoDisabledReason}"
+              ToolTipService.ShowOnDisabled="True" />
 
       <Button Margin="0,6,0,0"
               Content="Open Workspace Folder"
@@ -170,56 +353,217 @@
         <ComboBoxItem Content="none" />
         <ComboBoxItem Content="host" />
       </ComboBox>
-      <TextBlock Margin="0,2,0,0"
-                 Foreground="#FF6B7280"
-                 Text="{Binding LastRunFolderPath, StringFormat=Run Folder: {0}}"
-                 TextWrapping="Wrap" />
-      <TextBlock Margin="0,2,0,0"
-                 Foreground="#FF6B7280"
-                 Text="{Binding LastVerificationReportPath, StringFormat=Verification Report: {0}}"
-                 TextWrapping="Wrap" />
-      <TextBlock Margin="0,2,0,0"
-                 Foreground="#FF6B7280"
-                 Text="{Binding LastOperatorFlowPath, StringFormat=Operator Flow: {0}}"
-                 TextWrapping="Wrap" />
-      <TextBlock Margin="0,2,0,0"
-                 Foreground="#FF6B7280"
-                 Text="{Binding LastTransportEquivalencePath, StringFormat=Transport Equivalence: {0}}"
-                 TextWrapping="Wrap" />
-      <WrapPanel Margin="0,6,0,0">
-        <Button Margin="0,0,6,6"
-                Content="Open Run Folder"
-                Command="{Binding OpenLastRunFolderCommand}" />
-        <Button Margin="0,0,6,6"
-                Content="Copy Run Folder"
-                Command="{Binding CopyLastRunFolderPathCommand}" />
-        <Button Margin="0,0,6,6"
-                Content="Open Verification Report"
-                Command="{Binding OpenLastVerificationReportCommand}" />
-        <Button Margin="0,0,6,6"
-                Content="Copy Verification Report"
-                Command="{Binding CopyLastVerificationReportPathCommand}" />
-        <Button Margin="0,0,6,6"
-                Content="Open Operator Flow"
-                Command="{Binding OpenLastOperatorFlowCommand}" />
-        <Button Margin="0,0,6,6"
-                Content="Copy Operator Flow"
-                Command="{Binding CopyLastOperatorFlowPathCommand}" />
-        <Button Margin="0,0,6,6"
-                Content="Open Transport Equivalence"
-                Command="{Binding OpenLastTransportEquivalenceCommand}" />
-        <Button Margin="0,0,6,6"
-                Content="Copy Transport Equivalence"
-                Command="{Binding CopyLastTransportEquivalencePathCommand}" />
-      </WrapPanel>
-      <ListBox Margin="0,6,0,0"
-               Height="90"
-               ItemsSource="{Binding RunHistory}" />
 
-      <TextBlock Margin="0,8,0,0" Text="Artifacts" FontWeight="SemiBold" />
-      <ListBox Margin="0,6,0,0"
-               Height="90"
-               ItemsSource="{Binding ArtifactFiles}" />
+      <Border Margin="0,8,0,0"
+              Background="#FFF8FAFC"
+              BorderBrush="#FFD1FAE5"
+              BorderThickness="1"
+              Padding="10">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Text="Latest Run Folder" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Margin="12,0,0,0">
+              <Button Content="Open"
+                      Width="70"
+                      Command="{Binding OpenLastRunFolderCommand}"
+                      IsEnabled="{Binding HasLatestRun}" />
+              <Button Margin="8,0,0,0"
+                      Width="80"
+                      Content="Copy Path"
+                      Command="{Binding CopyLastRunFolderPathCommand}"
+                      IsEnabled="{Binding HasLatestRun}" />
+            </StackPanel>
+          </StackPanel>
+
+          <TextBlock Margin="0,6,0,0"
+                     FontFamily="Consolas"
+                     FontSize="11"
+                     Text="{Binding LastRunFolderPath}"
+                     TextWrapping="Wrap">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding HasLatestRun}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+
+          <TextBlock Margin="0,6,0,0"
+                     Foreground="#FF6B7280"
+                     Text="No runs captured yet. Run Demo or the Quick Demo flow to produce artifacts."
+                     TextWrapping="Wrap">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding HasLatestRun}" Value="False">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+
+          <StackPanel Margin="0,8,0,0">
+            <TextBlock FontSize="11"
+                       Foreground="#FF6B7280"
+                       Text="Verification report"
+                       Visibility="{Binding HasLatestRun, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <TextBlock FontFamily="Consolas"
+                       FontSize="11"
+                       Text="{Binding LastVerificationReportPath}"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding HasLatestRun, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          </StackPanel>
+          <StackPanel Margin="0,4,0,0">
+            <TextBlock FontSize="11"
+                       Foreground="#FF6B7280"
+                       Text="Operator flow"
+                       Visibility="{Binding HasLatestRun, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <TextBlock FontFamily="Consolas"
+                       FontSize="11"
+                       Text="{Binding LastOperatorFlowPath}"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding HasLatestRun, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          </StackPanel>
+          <StackPanel Margin="0,4,0,0">
+            <TextBlock FontSize="11"
+                       Foreground="#FF6B7280"
+                       Text="Transport equivalence"
+                       Visibility="{Binding HasLatestRun, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <TextBlock FontFamily="Consolas"
+                       FontSize="11"
+                       Text="{Binding LastTransportEquivalencePath}"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding HasLatestRun, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <ListView Margin="0,6,0,0"
+                Height="140"
+                ItemsSource="{Binding RunHistory}"
+                SelectedItem="{Binding SelectedRunHistory, Mode=TwoWay}">
+        <ListView.View>
+          <GridView>
+            <GridViewColumn Header="Run" DisplayMemberBinding="{Binding RunId}" Width="60" />
+            <GridViewColumn Header="State" DisplayMemberBinding="{Binding State}" Width="70" />
+            <GridViewColumn Header="Provider" DisplayMemberBinding="{Binding Provider}" Width="80" />
+            <GridViewColumn Header="Host" DisplayMemberBinding="{Binding HostTransport}" Width="70" />
+            <GridViewColumn Header="Verification" DisplayMemberBinding="{Binding VerificationResult}" Width="100" />
+            <GridViewColumn Header="Created" DisplayMemberBinding="{Binding CreatedLabel}" Width="120" />
+          </GridView>
+        </ListView.View>
+      </ListView>
+
+      <Border Margin="0,8,0,0"
+              Background="#FFF5F3FF"
+              BorderBrush="#FFDDD6FE"
+              BorderThickness="1"
+              Padding="10">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Text="{Binding ProofRunLabel}" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Margin="8,0,0,0">
+              <Button Width="80"
+                      Content="Open Run"
+                      Command="{Binding OpenProofRunFolderCommand}"
+                      IsEnabled="{Binding HasProofRun}" />
+              <Button Width="90"
+                      Margin="8,0,0,0"
+                      Content="Copy Run Path"
+                      Command="{Binding CopyProofRunFolderPathCommand}"
+                      IsEnabled="{Binding HasProofRun}" />
+            </StackPanel>
+          </StackPanel>
+          <TextBlock Margin="0,4,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding ProofRunVerificationState, StringFormat=Verification: {0}}" />
+          <TextBlock Margin="0,2,0,0"
+                     FontFamily="Consolas"
+                     FontSize="11"
+                     Text="{Binding ProofRunFolderPath}"
+                     TextWrapping="Wrap"
+                     Visibility="{Binding HasProofRun, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          <TextBlock Margin="0,2,0,0"
+                     Foreground="#FF6B7280"
+                     Text="Select a run from history to inspect its artifacts.">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding HasProofRun}" Value="False">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+          <TextBlock Text="Proof Artifacts" FontWeight="SemiBold" Margin="0,6,0,0" />
+          <ItemsControl Margin="0,6,0,0"
+                        ItemsSource="{Binding ProofArtifacts}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border BorderBrush="#FFE5E7EB"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="6"
+                        Margin="0,4,0,0">
+                  <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                      <Border Margin="8,0,0,0"
+                              Padding="4,1"
+                              CornerRadius="3">
+                        <Border.Style>
+                          <Style TargetType="Border">
+                            <Setter Property="Background" Value="#FFFEE2E2" />
+                            <Setter Property="BorderBrush" Value="#FFFDA4AF" />
+                            <Setter Property="BorderThickness" Value="1" />
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding Exists}" Value="True">
+                                <Setter Property="Background" Value="#FFD1FAE5" />
+                                <Setter Property="BorderBrush" Value="#FF6EE7B7" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Border.Style>
+                        <TextBlock Text="{Binding StatusLabel}" FontSize="11" />
+                      </Border>
+                    </StackPanel>
+                    <TextBlock Margin="0,4,0,0"
+                               FontSize="11"
+                               Foreground="#FF6B7280"
+                               Text="{Binding LastModifiedLabel, StringFormat=Last modified: {0}}" />
+                    <TextBlock Margin="0,2,0,0"
+                               FontFamily="Consolas"
+                               FontSize="11"
+                               Text="{Binding AbsolutePath}"
+                               TextWrapping="Wrap" />
+                    <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                      <Button Width="60"
+                              Content="Open"
+                              Command="{Binding DataContext.OpenProofArtifactCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                              CommandParameter="{Binding}"
+                              IsEnabled="{Binding Exists}" />
+                      <Button Width="60"
+                              Margin="8,0,0,0"
+                              Content="Copy"
+                              Command="{Binding DataContext.CopyProofArtifactPathCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                              CommandParameter="{Binding}"
+                              IsEnabled="{Binding Exists}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
 
       <!-- TOOL TIER -->
       <GroupBox Margin="0,12,0,0" Header="Tool Tier">

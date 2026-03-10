@@ -16,7 +16,7 @@ public sealed class ExecutionContractSnapshotTests
             "plan-1",
             PlanSourceType.Demo,
             new[] { new PlanStep("step-1", "write_text", new Dictionary<string, string> { ["path"] = "a.txt" }, "a.txt") });
-        var project = new ProjectModel("p1", "demo", "C:/workspace/demo", DateTimeOffset.Parse("2026-01-01T00:00:00+00:00"));
+        var project = new ProjectModel("p1", "demo", DateTimeOffset.Parse("2026-01-01T00:00:00+00:00"), "C:/workspace/demo", "C:/workspace/demo/project.json");
 
         var request = ExecutionContractAdapter.ToExecutionRequest(plan, project, "RuntimePlanner", "RuntimeBridgeLocal", "local", "none", "hash-plan");
         var actual = ToSnapshot(request);

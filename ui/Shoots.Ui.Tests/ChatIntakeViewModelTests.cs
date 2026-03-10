@@ -127,7 +127,7 @@ public sealed class ChatIntakeViewModelTests
         var workspaceStore = new ProjectWorkspaceStore();
         var workspaceProvider = new ProjectWorkspaceProvider(workspaceStore);
         var workspaceShell = new WorkspaceShellService();
-        var databaseIntentStore = new DatabaseIntentStore();
+        var databaseIntentStore = new InMemoryDatabaseIntentStore();
         var blueprintStore = new SystemBlueprintStore();
         var executionEnvironmentStore = new ExecutionEnvironmentSettingsStore();
         var aiPolicyStore = new AiPolicyStore();

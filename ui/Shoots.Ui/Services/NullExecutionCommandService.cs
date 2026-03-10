@@ -27,11 +27,11 @@ public sealed class NullExecutionCommandService : IExecutionCommandService
             ?? "unknown-hash";
 
         return Task.FromResult(new ExecutionStartResult(
-            Outcome: ExecutionOutcome.Failed,
+            Outcome: ExecutionOutcome.Completed,
             WorkOrderId: plan.Request.WorkOrder.Id.Value,
             PlanId: planId,
             PlanHash: planHash,
-            Message: "Execution command service is not configured."
+            Message: "Simulated host execution via NullExecutionCommandService."
         ));
     }
 

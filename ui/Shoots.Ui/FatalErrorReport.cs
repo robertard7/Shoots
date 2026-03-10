@@ -13,7 +13,7 @@ internal static class FatalErrorReport
         {
             var basePath = Path.Combine(
                 System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
-                "Shoots");
+                "Shoots.UI");
 
             Directory.CreateDirectory(basePath);
 
