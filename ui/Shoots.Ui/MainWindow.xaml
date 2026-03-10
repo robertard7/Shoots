@@ -233,6 +233,11 @@
                      Text="{Binding ActionDisableReason, StringFormat=Action gate: {0}}"
                      TextWrapping="Wrap" />
           <TextBlock Margin="0,2,0,0"
+                     Foreground="#FFB45309"
+                     Text="{Binding OperationWaitHint}"
+                     TextWrapping="Wrap"
+                     Visibility="{Binding IsOperationWaiting, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          <TextBlock Margin="0,2,0,0"
                      Foreground="#FF6B7280"
                      Text="{Binding OperationElapsedLabel}" />
           <TextBlock Margin="0,8,0,0"
@@ -254,7 +259,10 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding OperationProgressSteps}">
+          <CheckBox Margin="0,8,0,0"
+                    Content="Show full timeline"
+                    IsChecked="{Binding ShowFullTimeline, Mode=TwoWay}" />
+          <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding VisibleOperationProgressSteps}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Border Margin="0,2,0,0" Style="{StaticResource OperationStepStateStyle}">
@@ -275,6 +283,44 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+
+          <TextBlock Margin="0,8,0,0"
+                     FontWeight="SemiBold"
+                     Text="Latest Run Artifact" />
+          <TextBlock Margin="0,2,0,0"
+                     FontFamily="Consolas"
+                     FontSize="11"
+                     Text="{Binding LatestRunPath}"
+                     TextWrapping="Wrap" />
+          <Button Margin="0,4,0,0"
+                  Content="Open Latest Run Folder"
+                  Command="{Binding OpenLastRunFolderCommand}"
+                  IsEnabled="{Binding HasLatestRunPath}" />
+
+          <TextBlock Margin="0,8,0,0"
+                     FontWeight="SemiBold"
+                     Text="Failure Diagnostics"
+                     Visibility="{Binding HasLastFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          <TextBlock Margin="0,2,0,0"
+                     FontSize="11"
+                     Foreground="#FF6B7280"
+                     Text="{Binding LastFailureExceptionType, StringFormat=Exception: {0}}"
+                     Visibility="{Binding HasLastFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          <TextBlock Margin="0,2,0,0"
+                     FontSize="11"
+                     Text="{Binding LastFailureFirstStackFrame}"
+                     TextWrapping="Wrap"
+                     Visibility="{Binding HasLastFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          <TextBlock Margin="0,2,0,0"
+                     FontSize="11"
+                     Foreground="#FF6B7280"
+                     Text="{Binding FatalLogPath, StringFormat=Fatal log: {0}}"
+                     Visibility="{Binding HasLastFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          <TextBlock Margin="0,2,0,0"
+                     FontSize="11"
+                     Foreground="#FF6B7280"
+                     Text="{Binding UiLogPath, StringFormat=UI log: {0}}"
+                     Visibility="{Binding HasLastFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </StackPanel>
       </Border>
 
