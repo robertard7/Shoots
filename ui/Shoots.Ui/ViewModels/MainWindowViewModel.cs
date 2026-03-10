@@ -1391,7 +1391,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public bool HasLastFailure => _lastFailure is not null;
     public string LastFailurePhase => _lastFailure?.Phase ?? "None";
     public string LastFailureReason => _lastFailure?.Reason ?? "No failures recorded.";
-    public string LastFailureMessage => LastFailureReason;
+    public string LastFailureMessage => ExtractFailureMessage(LastFailureReason);
     public string LastFailureProofPath => _lastFailure?.ProofPath ?? string.Empty;
     public string LastFailureNextAction => _lastFailure?.NextAction ?? string.Empty;
     public string LastFailureSummary =>
@@ -3425,6 +3425,33 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         return string.Empty;
+    }
+
+    private static string ExtractFailureMessage(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return string.Empty;
+        }
+
+        var lines = reason.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (lines.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var firstLine = lines[0];
+        var separator = firstLine.IndexOf(':');
+        if (separator > 0)
+        {
+            var prefix = firstLine[..separator].Trim();
+            if (prefix.EndsWith("Exception", StringComparison.Ordinal) || prefix.EndsWith("Error", StringComparison.Ordinal))
+            {
+                return firstLine[(separator + 1)..].Trim();
+            }
+        }
+
+        return firstLine;
     }
 
     private string GetRunDemoPlanDisabledReason()

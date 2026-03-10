@@ -850,15 +850,18 @@ public sealed class MainWindowViewModelBackendStatusTests
         InvokePrivate(vm, "RecordFailure", "Run Demo", "", vm.UiLogPath, "retry");
         Assert.Equal("Unknown", vm.LastFailureExceptionType);
         Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
+        Assert.Equal(string.Empty, vm.LastFailureMessage);
 
         InvokePrivate(vm, "RecordFailure", "Run Demo", "something bad happened", vm.UiLogPath, "retry");
         Assert.Equal("Unknown", vm.LastFailureExceptionType);
         Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
+        Assert.Equal("something bad happened", vm.LastFailureMessage);
 
         var multiline = "InvalidOperationException: boom\nat Demo.Run() in Demo.cs:line 42\nat Main()";
         InvokePrivate(vm, "RecordFailure", "Run Demo", multiline, vm.UiLogPath, "retry");
         Assert.Equal("InvalidOperationException", vm.LastFailureExceptionType);
         Assert.StartsWith("at Demo.Run()", vm.LastFailureFirstStackFrame, System.StringComparison.Ordinal);
+        Assert.Equal("boom", vm.LastFailureMessage);
         Assert.EndsWith("fatal-error.log", vm.FatalLogPath, System.StringComparison.OrdinalIgnoreCase);
     }
 
