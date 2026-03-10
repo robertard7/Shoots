@@ -8,11 +8,22 @@
 - Validation report/manual checklist artifacts for runner verification.
 
 ## Validation Status
-- Build/Test: produced by runner validation workflow and report script output.
-- Smoke/Integrity: runner-stage gates tracked in validation report.
+- Build/Test: reported by runner workflow (or `scripts/validate_build.ps1` when run in runner context).
+- Smoke/Integrity: runner-stage gates recorded in `.codex/validation/phase9_validation.md`.
 
 ## Known Limitations
 - Final gate truth is Windows self-hosted runner output.
+
+## Runner Command Pack
+```powershell
+dotnet build .\ui\Shoots.Ui\Shoots.Ui.csproj -c Debug -v minimal
+
+dotnet test .\ui\Shoots.Ui.Tests\Shoots.Ui.Tests.csproj -c Debug -v minimal
+
+powershell -File .\tools\smoke\windows\ui_smoke.ps1
+
+powershell -File .\tools\verify\windows_compile_runtime_integrity.ps1
+```
 
 ## Phase 9 Files Touched
 - `ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs`

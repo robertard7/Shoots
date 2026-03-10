@@ -857,11 +857,21 @@ public sealed class MainWindowViewModelBackendStatusTests
         Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
         Assert.Equal("something bad happened", vm.LastFailureMessage);
 
+        var multilinePlain = "plain headline\nadditional detail line";
+        InvokePrivate(vm, "RecordFailure", "Run Demo", multilinePlain, vm.UiLogPath, "retry");
+        Assert.Equal("Unknown", vm.LastFailureExceptionType);
+        Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
+        Assert.Equal("plain headline", vm.LastFailureMessage);
+
         var multiline = "InvalidOperationException: boom\nat Demo.Run() in Demo.cs:line 42\nat Main()";
         InvokePrivate(vm, "RecordFailure", "Run Demo", multiline, vm.UiLogPath, "retry");
         Assert.Equal("InvalidOperationException", vm.LastFailureExceptionType);
         Assert.StartsWith("at Demo.Run()", vm.LastFailureFirstStackFrame, System.StringComparison.Ordinal);
         Assert.Equal("boom", vm.LastFailureMessage);
+
+        var extraColon = "InvalidOperationException: could not parse: missing token";
+        InvokePrivate(vm, "RecordFailure", "Run Demo", extraColon, vm.UiLogPath, "retry");
+        Assert.Equal("could not parse: missing token", vm.LastFailureMessage);
         Assert.EndsWith("fatal-error.log", vm.FatalLogPath, System.StringComparison.OrdinalIgnoreCase);
     }
 
