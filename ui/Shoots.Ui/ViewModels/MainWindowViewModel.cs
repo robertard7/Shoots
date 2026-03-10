@@ -372,7 +372,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (_isBusy == value) return;
             _isBusy = value;
             OnPropertyChanged(nameof(IsBusy));
+            OnPropertyChanged(nameof(BusyState));
             OnPropertyChanged(nameof(CanStartNewProjectUi));
+            OnPropertyChanged(nameof(ActionDisableReason));
             OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
             OnPropertyChanged(nameof(QuickDemoDisabledReason));
             RaiseCommandCanExecute();
@@ -392,6 +394,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     public ReadOnlyObservableCollection<OperationProgressStepRow> OperationProgressSteps { get; private set; } = null!;
     public ReadOnlyObservableCollection<string> OperationNarrationFeed { get; private set; } = null!;
+    public ReadOnlyObservableCollection<string> NarrationFeed => OperationNarrationFeed;
     public string OperationStatusLine => _operationStatusLine;
     public string OperationStatusDetail => _operationStatusDetail;
     public string OperationLatestEvent => _operationLatestEvent;
@@ -405,17 +408,20 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public DateTimeOffset? CurrentOperationStartedAt => _operationStartedUtc;
     public string CurrentOperationStatus => _isOperationActive ? "active" : OperationStatusLine switch
     {
-        "Completed successfully" => "completed",
+        "Completed" => "completed",
         "Failed" => "failed",
         _ => "idle"
     };
     public string CurrentOperationDetail => OperationStatusDetail;
+    public string BusyState => IsOperationActive || IsBusy ? "busy" : "idle";
     public bool IsOperationBusyIndicatorVisible => IsOperationActive;
     public bool IsOperationCompletionHoldActive =>
         !_isOperationActive && _isOperationVisible && !string.Equals(_operationStatusLine, "Idle", StringComparison.Ordinal);
     public string RunDemoPlanDisabledReason => GetRunDemoPlanDisabledReason();
     public string QuickDemoDisabledReason => GetQuickDemoDisabledReason();
     public TimeSpan OperationCompletionHoldDuration { get; set; } = TimeSpan.FromSeconds(4);
+    public bool CompletionHold => IsOperationCompletionHoldActive;
+    public string ActionDisableReason => BuildOperationBusyReason();
 
 	public string IntakeTarget
 	{
@@ -2221,7 +2227,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             {
                 if (verification.Valid)
                 {
-                    ReportRunDemoProgress(progress, "Completed successfully", _lastRunVerificationState, "Verification", "completed");
+                    ReportRunDemoProgress(progress, "Completed", _lastRunVerificationState, "Verification", "completed");
                     SetOperationStepState("Verify run", "completed", _lastRunVerificationState);
                     CompleteOperationProgress(true, $"Run completed and {_lastRunVerificationState.ToLowerInvariant()}.");
                 }
@@ -2236,7 +2242,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             {
                 ReportRunDemoProgress(
                     progress,
-                    verification.Valid ? "Completed successfully" : "Failed",
+                    verification.Valid ? "Completed" : "Failed",
                     verification.Valid ? _lastRunVerificationState : "Run completed but verification is invalid.",
                     "Verification",
                     verification.Valid ? "completed" : "failed");
@@ -2415,7 +2421,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             {
                 ["run_path"] = _lastDemoRunPath ?? string.Empty
             });
-            SetOperationStatus("Completed successfully", "Quick Demo is focusing proof artifacts.");
+            SetOperationStatus("Completed", "Quick Demo is focusing proof artifacts.");
             SetOperationStepState("Completed", "completed", "Proof artifacts panel updated.");
 
             AddStartupMessage($"Quick Demo complete. Run folder: {_lastDemoRunPath}");
@@ -2865,7 +2871,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
 
         BeginOperationProgress(
-            "Refreshing backend status",
+            "Refreshing backend",
             "Probing backend health and model catalog.",
             "Probe Ollama",
             "Probe Qdrant",
@@ -2873,11 +2879,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ProbeInFlight = true;
         try
         {
-            SetOperationStatus("Refreshing backend status", "Checking Ollama endpoint.");
+            SetOperationStatus("Refreshing backend", "Checking Ollama endpoint.");
             SetOperationStepState("Probe Ollama", "active", "Checking Ollama endpoint.");
             var ollama = await _backendProbeService.ProbeOllamaAsync(default);
             SetOperationStepState("Probe Ollama", ollama.IsAvailable ? "completed" : "failed", ollama.Summary ?? ollama.Detail);
-            SetOperationStatus("Refreshing backend status", "Checking vector memory endpoint.");
+            SetOperationStatus("Refreshing backend", "Checking vector memory endpoint.");
             SetOperationStepState("Probe Qdrant", "active", "Checking vector memory endpoint.");
             var qdrant = await _backendProbeService.ProbeQdrantAsync(default);
             SetOperationStepState("Probe Qdrant", qdrant.IsAvailable ? "completed" : "failed", qdrant.Summary ?? qdrant.Detail);
@@ -2895,7 +2901,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(BackendDisabledReason));
             OnPropertyChanged(nameof(RunIntakePlanDisabledReason));
 
-            SetOperationStatus("Refreshing backend status", "Loading model catalog.");
+            SetOperationStatus("Refreshing backend", "Loading model catalog.");
             SetOperationStepState("Refresh model catalog", "active", "Loading models from backend.");
             await RefreshModelCatalogFromBackendAsync();
             if (HasModelCatalogError)
@@ -3059,8 +3065,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(CurrentOperationStartedAt));
             OnPropertyChanged(nameof(CurrentOperationStatus));
             OnPropertyChanged(nameof(CurrentOperationDetail));
+            OnPropertyChanged(nameof(BusyState));
             OnPropertyChanged(nameof(IsOperationBusyIndicatorVisible));
             OnPropertyChanged(nameof(IsOperationCompletionHoldActive));
+            OnPropertyChanged(nameof(CompletionHold));
+            OnPropertyChanged(nameof(ActionDisableReason));
             OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
             OnPropertyChanged(nameof(QuickDemoDisabledReason));
             RaiseCommandCanExecute();
@@ -3088,6 +3097,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(CurrentOperationStage));
             OnPropertyChanged(nameof(CurrentOperationStatus));
             OnPropertyChanged(nameof(CurrentOperationDetail));
+            OnPropertyChanged(nameof(ActionDisableReason));
             OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
             OnPropertyChanged(nameof(QuickDemoDisabledReason));
         });
@@ -3139,7 +3149,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     {
         RunOnUiThread(() =>
         {
-            _operationStatusLine = success ? "Completed successfully" : "Failed";
+            _operationStatusLine = success ? "Completed" : "Failed";
             _operationStatusDetail = detail;
             _operationLatestEvent = detail;
             _isOperationActive = false;
@@ -3156,8 +3166,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(CurrentOperationStage));
             OnPropertyChanged(nameof(CurrentOperationStatus));
             OnPropertyChanged(nameof(CurrentOperationDetail));
+            OnPropertyChanged(nameof(BusyState));
             OnPropertyChanged(nameof(IsOperationBusyIndicatorVisible));
             OnPropertyChanged(nameof(IsOperationCompletionHoldActive));
+            OnPropertyChanged(nameof(CompletionHold));
+            OnPropertyChanged(nameof(ActionDisableReason));
             OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
             OnPropertyChanged(nameof(QuickDemoDisabledReason));
             RaiseCommandCanExecute();
@@ -3191,8 +3204,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(CurrentOperationStartedAt));
         OnPropertyChanged(nameof(CurrentOperationStatus));
         OnPropertyChanged(nameof(CurrentOperationDetail));
+        OnPropertyChanged(nameof(BusyState));
         OnPropertyChanged(nameof(IsOperationBusyIndicatorVisible));
         OnPropertyChanged(nameof(IsOperationCompletionHoldActive));
+        OnPropertyChanged(nameof(CompletionHold));
+        OnPropertyChanged(nameof(ActionDisableReason));
         OnPropertyChanged(nameof(RunDemoPlanDisabledReason));
         OnPropertyChanged(nameof(QuickDemoDisabledReason));
         RaiseCommandCanExecute();

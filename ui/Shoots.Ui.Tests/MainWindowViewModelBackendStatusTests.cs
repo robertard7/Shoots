@@ -585,6 +585,45 @@ public sealed class MainWindowViewModelBackendStatusTests
         Assert.Equal("idle", vm.CurrentOperationStatus);
     }
 
+
+    [Fact]
+    public void Busy_state_and_action_disable_reason_follow_operation_state()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Verification", "Validating outputs.", new[] { "Verification" });
+
+        Assert.Equal("busy", vm.BusyState);
+        Assert.Contains("verification", vm.ActionDisableReason, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Same(vm.OperationNarrationFeed, vm.NarrationFeed);
+
+        InvokePrivate(vm, "CompleteOperationProgress", true, "Done");
+        vm.OperationCompletionHoldDuration = System.TimeSpan.Zero;
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+
+        Assert.Equal("idle", vm.BusyState);
+        Assert.True(string.IsNullOrWhiteSpace(vm.ActionDisableReason));
+    }
+
+    [Fact]
+    public async Task Refresh_stage_uses_required_working_now_labels()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        await vm.RefreshBackendStatusCommand.ExecuteAsync();
+
+        Assert.Equal("Completed", vm.CurrentOperation);
+        Assert.Equal("completed", vm.CurrentOperationStatus);
+    }
+
     [Fact]
     public void Operation_narration_feed_is_bounded_to_latest_entries()
     {
