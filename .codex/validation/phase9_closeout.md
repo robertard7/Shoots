@@ -16,13 +16,13 @@
 
 ## Runner Command Pack
 ```powershell
-dotnet build .\ui\Shoots.Ui\Shoots.Ui.csproj -c Debug -v minimal
+dotnet build ./ui/Shoots.Ui/Shoots.Ui.csproj -c Debug -v minimal
 
-dotnet test .\ui\Shoots.Ui.Tests\Shoots.Ui.Tests.csproj -c Debug -v minimal
+dotnet test ./ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -c Debug -v minimal
 
-powershell -File .\tools\smoke\windows\ui_smoke.ps1
+powershell -File ./tools/smoke/windows/ui_smoke.ps1
 
-powershell -File .\tools\verify\windows_compile_runtime_integrity.ps1
+powershell -File ./tools/verify/windows_compile_runtime_integrity.ps1
 ```
 
 ## Phase 9 Files Touched

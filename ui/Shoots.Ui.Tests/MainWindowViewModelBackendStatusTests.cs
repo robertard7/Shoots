@@ -852,6 +852,11 @@ public sealed class MainWindowViewModelBackendStatusTests
         Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
         Assert.Equal(string.Empty, vm.LastFailureMessage);
 
+        InvokePrivate(vm, "RecordFailure", "Run Demo", "   \t  ", vm.UiLogPath, "retry");
+        Assert.Equal("Unknown", vm.LastFailureExceptionType);
+        Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
+        Assert.Equal(string.Empty, vm.LastFailureMessage);
+
         InvokePrivate(vm, "RecordFailure", "Run Demo", "something bad happened", vm.UiLogPath, "retry");
         Assert.Equal("Unknown", vm.LastFailureExceptionType);
         Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
