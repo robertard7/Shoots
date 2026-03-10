@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,7 +32,11 @@ public sealed class OllamaClient : IOllamaClient
             using var response = await _httpClient.GetAsync("/api/tags", cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                return new OllamaTagsResult(false, Array.Empty<string>(), $"ui.ollama.bad_status.{(int)response.StatusCode}", "Ollama returned non-success status.");
+                return new OllamaTagsResult(
+                    false,
+                    Array.Empty<string>(),
+                    $"ui.ollama.bad_status.{(int)response.StatusCode}",
+                    $"Ollama returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase ?? "unknown"}).");
             }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -57,9 +62,21 @@ public sealed class OllamaClient : IOllamaClient
                 return new OllamaTagsResult(false, Array.Empty<string>(), "ui.ollama.bad_json", "Ollama response could not be parsed.");
             }
         }
-        catch (TaskCanceledException)
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return new OllamaTagsResult(false, Array.Empty<string>(), "ui.ollama.timeout", "Ollama request timed out.");
+        }
+        catch (TaskCanceledException)
+        {
+            return new OllamaTagsResult(false, Array.Empty<string>(), "ui.ollama.cancelled", "Ollama request was cancelled.");
+        }
+        catch (HttpRequestException ex) when (ex.InnerException is SocketException socket && socket.SocketErrorCode == SocketError.ConnectionRefused)
+        {
+            return new OllamaTagsResult(false, Array.Empty<string>(), "ui.ollama.connection_refused", "Could not reach Ollama endpoint: connection refused.");
+        }
+        catch (HttpRequestException ex) when (ex.InnerException is SocketException socket && socket.SocketErrorCode == SocketError.HostNotFound)
+        {
+            return new OllamaTagsResult(false, Array.Empty<string>(), "ui.ollama.host_not_found", "Could not reach Ollama endpoint: host not found.");
         }
         catch (HttpRequestException)
         {

@@ -169,6 +169,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string _selectedProviderMode = "local";
     private string _selectedHostTransport = "none";
     private FailureDetails? _lastFailure;
+    private string _replaySourcePath = string.Empty;
+    private string _replaySummary = "No replay loaded.";
+    private string _replayMismatchSummary = string.Empty;
 
     private AiPresentationPolicy _aiPresentationPolicy =
         new(AiVisibilityMode.Visible, AllowAiPanelToggle: true, AllowCopyExport: true, EnterpriseMode: false);
@@ -452,6 +455,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public string TimelineToggleLabel => ShowFullTimeline ? "Show active + recent" : "Show full timeline";
     public string LatestRunPath => LastRunFolderPath;
     public bool HasLatestRunPath => !string.IsNullOrWhiteSpace(LatestRunPath) && Directory.Exists(LatestRunPath);
+    public string ReplaySourcePath => _replaySourcePath;
+    public bool HasReplaySourcePath => !string.IsNullOrWhiteSpace(_replaySourcePath);
+    public string ReplaySummary => _replaySummary;
+    public string ReplayMismatchSummary => _replayMismatchSummary;
+    public bool HasReplayMismatch => !string.IsNullOrWhiteSpace(_replayMismatchSummary);
     public string LastFailureExceptionType => ExtractFailureExceptionType(LastFailureReason);
     public string LastFailureFirstStackFrame => ExtractFailureFirstStackFrame(LastFailureReason);
     public string FatalLogPath => Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Shoots.UI", "fatal-error.log");
@@ -588,6 +596,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public AsyncRelayCommand<ProofArtifactRow> CopyProofArtifactPathCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenProofRunFolderCommand { get; private set; } = null!;
         public AsyncRelayCommand CopyProofRunFolderPathCommand { get; private set; } = null!;
+        public AsyncRelayCommand ReplayLatestRunCommand { get; private set; } = null!;
+        public AsyncRelayCommand ReplaySelectedRunCommand { get; private set; } = null!;
 
 	// Call this from your constructor AFTER other command setup
 	private void InitializeChatIntakeSurface()
@@ -621,6 +631,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         CopyProofRunFolderPathCommand = new AsyncRelayCommand(CopyProofRunFolderPathAsync, () => HasProofRun);
 
         RebuildJobSpecDigest();
+    }
+
+    private void InitializeReplaySurface()
+    {
+        ReplayLatestRunCommand = new AsyncRelayCommand(ReplayLatestRunAsync, CanReplayLatestRun);
+        ReplaySelectedRunCommand = new AsyncRelayCommand(ReplaySelectedRunAsync, CanReplaySelectedRun);
     }
 
     private Task OpenCurrentWorkspaceFolderAsync()
@@ -1219,6 +1235,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         QuickDemoCommand = new AsyncRelayCommand(QuickDemoAsync, CanRunQuickDemo);
         InitializeChatIntake(); // partial if you have it
         InitializeChatIntakeSurface();
+        InitializeReplaySurface();
 
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
@@ -1429,6 +1446,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             {
                 SetProofRun(value);
             }
+
+            RaiseReplayCommandCanExecuteChanged();
         }
     }
 
@@ -1451,7 +1470,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     public string ProviderAvailabilityWarning
         => string.Equals(SelectedProviderMode, "ollama", StringComparison.OrdinalIgnoreCase) && !OllamaStatus.IsAvailable
-            ? $"Provider unavailable: ollama ({OllamaStatus.ErrorCode ?? "ui.backend.ollama.unreachable"})"
+            ? $"Provider unavailable: ollama ({ResolveOllamaUnavailableCode()})"
             : string.Empty;
 
     public string LastRunFolderPath => _lastDemoRunPath ?? string.Empty;
@@ -1459,7 +1478,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public string LastVerificationReportPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "verification_report.json");
     public string LastOperatorFlowPath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "operator_flow.json");
     public string LastTransportEquivalencePath => string.IsNullOrWhiteSpace(_lastDemoRunPath) ? string.Empty : Path.Combine(_lastDemoRunPath, "transport_equivalence.json");
-    public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (trace-backed)" : "Mode: Live";
+    public string ExecutionModeSummary => IsReplayMode ? "Mode: Replay (artifact-backed, read-only)" : "Mode: Live";
 
     public string ExecutionProviderSummary =>
         string.IsNullOrWhiteSpace(_providerId) ? "Provider: none" : $"Provider: {_providerId} ({_providerKind})";
@@ -2038,7 +2057,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private bool CanRunDemoPlan() => string.IsNullOrWhiteSpace(GetRunDemoPlanDisabledReason());
     private bool CanRunQuickDemo() => string.IsNullOrWhiteSpace(GetQuickDemoDisabledReason());
 
-    private Task RunDemoPlanAsync(bool manageOperationProgress = true, Action<RunDemoProgressEvent>? progress = null)
+    private async Task RunDemoPlanAsync(bool manageOperationProgress = true, Action<RunDemoProgressEvent>? progress = null)
     {
         ReportRunDemoProgress(progress, "Planning run", "Preparing deterministic demo plan.", "Plan run", "active");
         if (manageOperationProgress)
@@ -2062,7 +2081,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 SetOperationStepState("Plan run", "failed", "No project loaded.");
                 CompleteOperationProgress(false, "Run Demo failed: no project loaded.");
             }
-            return Task.CompletedTask;
+            return;
         }
 
         var invariantResult = ProjectInvariants.Verify(CurrentProject.WorkspacePath);
@@ -2083,35 +2102,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 $"Workspace invariants failed: {details}",
                 CurrentProject.WorkspacePath,
                 "Repair the workspace structure (project.json, plan/, env/) and rerun Run Demo.");
-            return Task.CompletedTask;
+            return;
         }
 
         try
         {
-            if (string.Equals(SelectedProviderMode, "ollama", StringComparison.OrdinalIgnoreCase) && !OllamaStatus.IsAvailable)
-            {
-                var providerError = OllamaStatus.ErrorCode ?? "ui.backend.ollama.unreachable";
-                var providerMessage = $"Provider '{SelectedProviderMode}' is unavailable ({providerError}).";
-                AddNarration("error", "Provider unavailable", new Dictionary<string, string>
-                {
-                    ["provider"] = SelectedProviderMode,
-                    ["error_code"] = providerError
-                });
-                AddStartupMessage($"System: {providerMessage} Refresh backend status or choose the Local provider.");
-                ReportRunDemoProgress(progress, "Waiting on provider", providerMessage, "Plan run", "failed");
-                if (manageOperationProgress)
-                {
-                    SetOperationStatus("Waiting on provider", providerMessage);
-                    SetOperationStepState("Plan run", "failed", providerMessage);
-                    CompleteOperationProgress(false, providerMessage);
-                }
-                RecordFailure(
-                    "Run Demo (Provider)",
-                    providerMessage,
-                    UiLogPath,
-                    "Refresh backend status or switch to the Local provider, then retry Run Demo.");
-                return Task.CompletedTask;
-            }
+            if (!await EnsureSelectedProviderReadyAsync(manageOperationProgress, progress).ConfigureAwait(false))
+                return;
 
             if (!_planner.TryBuildPlan(CurrentProject, out var plan))
             {
@@ -2128,7 +2125,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                     "Planner could not build a deterministic plan.",
                     CurrentProject.WorkspacePath,
                     "Check planner inputs in the workspace and retry Run Demo.");
-                return Task.CompletedTask;
+                return;
             }
 
             AddNarration("step", "PLAN_CREATED", new Dictionary<string, string>
@@ -2196,7 +2193,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                         $"Host execution failed: {hostError}",
                         UiLogPath,
                         "Inspect host response metadata, resolve the host issue, then retry Run Demo.");
-                    return Task.CompletedTask;
+                    return;
                 }
 
                 AddNarration("success", "HOST_TRANSPORT_SUCCESS", new Dictionary<string, string>
@@ -2257,6 +2254,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(LastOperatorFlowPath));
             OnPropertyChanged(nameof(LastTransportEquivalencePath));
             OnPropertyChanged(nameof(HasLatestRun));
+            RaiseReplayCommandCanExecuteChanged();
             var verification = RunVerificationService.Verify(execution.RunPath);
             _lastRunVerificationState = verification.Valid ? "Verified" : "Invalid";
             OnPropertyChanged(nameof(LastRunVerificationState));
@@ -2345,7 +2343,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 "Inspect ui.log or the partial run folder, resolve the issue, then rerun Run Demo.");
         }
 
-        return Task.CompletedTask;
+        return;
     }
     private async Task QuickDemoAsync()
     {
@@ -2818,9 +2816,108 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private Task ExplainExecutionAsync()
         => Task.CompletedTask; // keep your real implementation elsewhere (partial)
 
-    private bool CanReplayPlan() => !string.IsNullOrWhiteSpace(_planId);
+    private bool CanReplayPlan() => CanReplaySelectedRun() || CanReplayLatestRun() || !string.IsNullOrWhiteSpace(_planId);
     private Task ReplayPlanAsync()
-        => Task.CompletedTask; // keep your real implementation elsewhere (partial)
+        => CanReplaySelectedRun() ? ReplaySelectedRunAsync() : ReplayLatestRunAsync();
+
+    private bool CanReplayLatestRun()
+        => HasReplayArtifacts(LastRunFolderPath);
+
+    private bool CanReplaySelectedRun()
+        => SelectedRunHistory is not null && HasReplayArtifacts(SelectedRunHistory.RunPath);
+
+    private Task ReplayLatestRunAsync()
+        => ReplayFromRunPathAsync(LastRunFolderPath);
+
+    private Task ReplaySelectedRunAsync()
+        => ReplayFromRunPathAsync(SelectedRunHistory?.RunPath ?? string.Empty);
+
+    private async Task ReplayFromRunPathAsync(string runPath)
+    {
+        if (!HasReplayArtifacts(runPath))
+            return;
+
+        BeginOperationProgress(
+            "Replaying run",
+            $"Loading replay artifacts from {runPath}.",
+            "Load metadata",
+            "Validate stage flow",
+            "Complete replay");
+
+        try
+        {
+            SetOperationStepState("Load metadata", "active", "Reading saved run metadata.");
+            var replay = RunReplayService.ReplayFromRunPath(runPath);
+            _replaySourcePath = replay.SourceRunPath;
+            _replaySummary = replay.Summary;
+            _replayMismatchSummary = replay.IsMatch ? string.Empty : string.Join(System.Environment.NewLine, replay.Mismatches);
+            State = UiExecutionState.Replaying;
+
+            OnPropertyChanged(nameof(ReplaySourcePath));
+            OnPropertyChanged(nameof(HasReplaySourcePath));
+            OnPropertyChanged(nameof(ReplaySummary));
+            OnPropertyChanged(nameof(ReplayMismatchSummary));
+            OnPropertyChanged(nameof(HasReplayMismatch));
+
+            SetOperationStepState("Load metadata", "completed", Path.Combine(runPath, RunReplayService.MetadataFileName));
+            SetOperationStepState("Validate stage flow", replay.IsMatch ? "completed" : "failed", replay.Summary);
+            SetOperationStatus("Replaying run", replay.Summary);
+            SetOperationLatestEvent(replay.IsMatch
+                ? $"Replay loaded from {runPath}."
+                : $"Replay mismatch detected for {runPath}.");
+            SetOperationStepState("Complete replay", replay.IsMatch ? "completed" : "failed", replay.Summary);
+            CompleteOperationProgress(replay.IsMatch, replay.Summary);
+
+            AddNarration("info", "REPLAY_LOADED", new Dictionary<string, string>
+            {
+                ["run_path"] = runPath,
+                ["match"] = replay.IsMatch.ToString(),
+                ["mismatch_count"] = replay.Mismatches.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            });
+
+            if (SelectedRunHistory is not null &&
+                string.Equals(SelectedRunHistory.RunPath, runPath, StringComparison.OrdinalIgnoreCase))
+            {
+                SetProofRun(SelectedRunHistory);
+            }
+
+            await Task.CompletedTask.ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _replaySourcePath = runPath;
+            _replaySummary = $"Replay failed: {ex.Message}";
+            _replayMismatchSummary = string.Empty;
+            OnPropertyChanged(nameof(ReplaySourcePath));
+            OnPropertyChanged(nameof(HasReplaySourcePath));
+            OnPropertyChanged(nameof(ReplaySummary));
+            OnPropertyChanged(nameof(ReplayMismatchSummary));
+            OnPropertyChanged(nameof(HasReplayMismatch));
+            SetOperationStepState("Load metadata", "failed", ex.Message);
+            CompleteOperationProgress(false, $"Replay failed: {ex.Message}");
+            RecordFailure(
+                "Replay",
+                ex.ToString(),
+                runPath,
+                "Inspect run_metadata.json and timeline.json in the run folder, then retry replay.");
+            State = UiExecutionState.Halted;
+        }
+    }
+
+    private static bool HasReplayArtifacts(string? runPath)
+    {
+        if (string.IsNullOrWhiteSpace(runPath) || !Directory.Exists(runPath))
+            return false;
+
+        return File.Exists(RunReplayService.MetadataPath(runPath));
+    }
+
+    private void RaiseReplayCommandCanExecuteChanged()
+    {
+        ReplayPlanCommand?.RaiseCanExecuteChanged();
+        ReplayLatestRunCommand?.RaiseCanExecuteChanged();
+        ReplaySelectedRunCommand?.RaiseCanExecuteChanged();
+    }
 
     private static string WithNarrationHeading(string line)
     {
@@ -3318,7 +3415,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         if (_isOperationActive && !_isOperationWaiting && _operationLastProgressUtc is { } lastProgressUtc && DateTimeOffset.UtcNow - lastProgressUtc >= TimeSpan.FromSeconds(20))
         {
             _isOperationWaiting = true;
-            _operationWaitHint = "No recent progress updates. Waiting for host or provider response.";
+            _operationWaitHint = BuildOperationWaitHint();
             OnPropertyChanged(nameof(IsOperationWaiting));
             OnPropertyChanged(nameof(OperationWaitHint));
         }
@@ -3342,6 +3439,23 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         ResetOperationProgressToIdle();
         _operationProgressTimer?.Stop();
+    }
+
+    private string BuildOperationWaitHint()
+    {
+        if (_operationStatusLine.Contains("provider", StringComparison.OrdinalIgnoreCase) ||
+            _operationStatusDetail.Contains("provider", StringComparison.OrdinalIgnoreCase) ||
+            _operationStatusDetail.Contains("ollama", StringComparison.OrdinalIgnoreCase))
+        {
+            return "No recent progress updates. Waiting for provider response.";
+        }
+
+        if (_operationStatusDetail.Contains("host", StringComparison.OrdinalIgnoreCase))
+        {
+            return "No recent progress updates. Waiting for host response.";
+        }
+
+        return "No recent progress updates. Waiting for host or provider response.";
     }
 
     private string BuildOperationElapsedLabel()
@@ -4066,6 +4180,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         ExplainExecutionCommand.RaiseCanExecuteChanged();
         ReplayPlanCommand.RaiseCanExecuteChanged();
+        RaiseReplayCommandCanExecuteChanged();
         RefreshNarrationCommand.RaiseCanExecuteChanged();
         RunIntakePlanCommand.RaiseCanExecuteChanged();
         SendChatIntentCommand.RaiseCanExecuteChanged();
@@ -4302,6 +4417,98 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     }
     private string GetApplyScriptDisabledReason() => string.Empty;
     private string GetAiHelpDisabledReason() => BuildBackendDisabledReason();
+
+    private string ResolveOllamaUnavailableCode()
+    {
+        if (!string.IsNullOrWhiteSpace(OllamaStatus.ErrorCode))
+            return OllamaStatus.ErrorCode!;
+
+        if (!string.IsNullOrWhiteSpace(ModelCatalogError))
+            return ModelCatalogError;
+
+        return "ui.backend.ollama.unreachable";
+    }
+
+    private async Task<bool> EnsureSelectedProviderReadyAsync(
+        bool manageOperationProgress,
+        Action<RunDemoProgressEvent>? progress)
+    {
+        if (!string.Equals(SelectedProviderMode, "ollama", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        const int maxAttempts = 2;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            if (OllamaStatus.IsAvailable)
+            {
+                if (attempt > 1)
+                {
+                    var recoveredMessage = $"Provider '{SelectedProviderMode}' recovered on attempt {attempt}/{maxAttempts}.";
+                    AddNarration("info", "PROVIDER_RECOVERED", new Dictionary<string, string>
+                    {
+                        ["provider"] = SelectedProviderMode,
+                        ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        ["max_attempts"] = maxAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    });
+                    ReportRunDemoProgress(progress, "Planning run", recoveredMessage, "Plan run", "active");
+                    if (manageOperationProgress)
+                        SetOperationStatus("Planning run", recoveredMessage);
+                }
+
+                return true;
+            }
+
+            var attemptMessage = $"Checking provider '{SelectedProviderMode}' (attempt {attempt}/{maxAttempts}).";
+            AddNarration("info", "PROVIDER_CHECK", new Dictionary<string, string>
+            {
+                ["provider"] = SelectedProviderMode,
+                ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["max_attempts"] = maxAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            });
+            ReportRunDemoProgress(progress, "Waiting on provider", attemptMessage, "Plan run", "active");
+            if (manageOperationProgress)
+            {
+                SetOperationStatus("Waiting on provider", attemptMessage);
+                SetOperationStepState("Plan run", "active", attemptMessage);
+            }
+
+            _ollamaStatus = (await _backendProbeService.ProbeOllamaAsync(default).ConfigureAwait(false)).WithBounds();
+            OnPropertyChanged(nameof(OllamaStatus));
+            OnPropertyChanged(nameof(ProviderAvailabilityWarning));
+            OnPropertyChanged(nameof(BackendDisabledReason));
+            OnPropertyChanged(nameof(RunIntakePlanDisabledReason));
+
+            if (OllamaStatus.IsAvailable)
+                return true;
+
+            if (attempt >= maxAttempts)
+                break;
+        }
+
+        var providerError = ResolveOllamaUnavailableCode();
+        var providerMessage = $"Provider '{SelectedProviderMode}' is unavailable ({providerError}).";
+        AddNarration("error", "Provider unavailable", new Dictionary<string, string>
+        {
+            ["provider"] = SelectedProviderMode,
+            ["error_code"] = providerError,
+            ["attempts"] = "2"
+        });
+        AddStartupMessage($"System: {providerMessage} Refresh backend status or choose the Local provider.");
+        ReportRunDemoProgress(progress, "Waiting on provider", providerMessage, "Plan run", "failed");
+        if (manageOperationProgress)
+        {
+            SetOperationStatus("Waiting on provider", providerMessage);
+            SetOperationStepState("Plan run", "failed", providerMessage);
+            CompleteOperationProgress(false, providerMessage);
+        }
+
+        RecordFailure(
+            "Run Demo (Provider)",
+            providerMessage,
+            UiLogPath,
+            "Refresh backend status or switch to the Local provider, then retry Run Demo.");
+        return false;
+    }
 
     private string BuildBackendDisabledReason()
     {

@@ -361,7 +361,10 @@ public sealed class RoutingLoopTests
         Assert.Equal(RoutingStatus.Halted, result.State.Status);
         Assert.Equal("select", result.State.CurrentNodeId);
         Assert.Empty(result.ToolResults);
-        Assert.Single(result.Trace.Entries, entry => entry.Event == RoutingTraceEventKind.Halted);
+        Assert.Contains(result.Trace.Entries, entry =>
+            entry.Event == RoutingTraceEventKind.Halted &&
+            entry.State is not null &&
+            entry.State.WorkOrderId == workOrder.Id);
     }
 	[Fact]
 	public void Routing_advances_without_provider_on_non_select_steps()

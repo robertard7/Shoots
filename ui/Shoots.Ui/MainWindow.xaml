@@ -296,6 +296,32 @@
                   Content="Open Latest Run Folder"
                   Command="{Binding OpenLastRunFolderCommand}"
                   IsEnabled="{Binding HasLatestRunPath}" />
+          <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <Button Content="Replay Latest Run"
+                    Command="{Binding ReplayLatestRunCommand}"
+                    IsEnabled="{Binding HasLatestRunPath}" />
+            <Button Margin="8,0,0,0"
+                    Content="Replay Selected Run"
+                    Command="{Binding ReplaySelectedRunCommand}" />
+          </StackPanel>
+          <TextBlock Margin="0,8,0,0"
+                     FontWeight="SemiBold"
+                     Text="Replay Source"
+                     Visibility="{Binding HasReplaySourcePath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          <TextBlock Margin="0,2,0,0"
+                     FontFamily="Consolas"
+                     FontSize="11"
+                     Text="{Binding ReplaySourcePath}"
+                     TextWrapping="Wrap"
+                     Visibility="{Binding HasReplaySourcePath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          <TextBlock Margin="0,2,0,0"
+                     Text="{Binding ReplaySummary}"
+                     TextWrapping="Wrap" />
+          <TextBlock Margin="0,2,0,0"
+                     Foreground="#FFB91C1C"
+                     Text="{Binding ReplayMismatchSummary}"
+                     TextWrapping="Wrap"
+                     Visibility="{Binding HasReplayMismatch, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
           <TextBlock Margin="0,8,0,0"
                      FontWeight="SemiBold"
@@ -589,6 +615,10 @@
                       Content="Copy Run Path"
                       Command="{Binding CopyProofRunFolderPathCommand}"
                       IsEnabled="{Binding HasProofRun}" />
+              <Button Width="90"
+                      Margin="8,0,0,0"
+                      Content="Replay Run"
+                      Command="{Binding ReplaySelectedRunCommand}" />
             </StackPanel>
           </StackPanel>
           <TextBlock Margin="0,4,0,0"

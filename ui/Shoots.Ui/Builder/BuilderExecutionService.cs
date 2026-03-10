@@ -54,110 +54,182 @@ public sealed class BuilderExecutionService
         }));
 
         var steps = new List<RunStep>();
+        var stageFlow = new List<RunStageRecord>();
+        var providerAttempts = new List<ProviderAttemptRecord>();
+        var artifactPaths = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["run.json"] = runJsonPath,
+            ["narrator.jsonl"] = narratorPath,
+            ["run_metadata.json"] = RunReplayService.MetadataPath(runPath),
+            ["timeline.json"] = RunReplayService.TimelinePath(runPath)
+        };
         PersistRun(RunStates.Pending);
         PersistRun(RunStates.Running);
 
-        var environment = CaptureEnvironment(runPath);
-        EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "info", "ENV_CAPTURED", new Dictionary<string, string>
+        try
         {
-            ["environment_hash"] = environment.Hash
-        }));
-
-        EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "step", "PLAN_STARTED", new Dictionary<string, string>
-        {
-            ["run_id"] = runId,
-            ["plan_id"] = plan.PlanId,
-            ["plan_hash"] = planHash
-        }));
-
-        var status = RunStates.Completed;
-
-        foreach (var step in plan.Steps)
-        {
-            EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "step", "STEP_STARTED", new Dictionary<string, string>
+            var environmentStage = BeginStage("environment", "Capturing deterministic environment snapshot.");
+            var environment = CaptureEnvironment(runPath);
+            artifactPaths["environment.json"] = environment.Path;
+            EndStage(environmentStage, "completed", $"Environment hash {environment.Hash}.");
+            EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "info", "ENV_CAPTURED", new Dictionary<string, string>
             {
-                ["step_id"] = step.StepId,
-                ["tool_id"] = step.ToolId
+                ["environment_hash"] = environment.Hash
             }));
 
-            var result = _runtimeBridge.ExecuteStep(step, project, narrate);
-            if (string.Equals(result.Status, RunStates.Completed, StringComparison.Ordinal))
-            {
-                if (!string.IsNullOrWhiteSpace(result.OutputPath))
-                {
-                    _artifactManager.Capture(runPath, step.StepId, result.OutputPath);
-                }
+            var providerStage = BeginStage("provider", $"Resolving provider '{provider}'.");
+            var providerAttemptStartedUtc = DateTimeOffset.UtcNow;
+            var providerOutcome = string.IsNullOrWhiteSpace(hostResponseErrorCode) ? "ready" : "degraded";
+            var providerReason = string.IsNullOrWhiteSpace(hostResponseErrorCode) ? null : hostResponseErrorCode;
+            var providerDetail = string.IsNullOrWhiteSpace(hostResponseMessage)
+                ? $"Provider '{provider}' ready for deterministic execution."
+                : hostResponseMessage;
+            providerAttempts.Add(new ProviderAttemptRecord(
+                1,
+                1,
+                providerOutcome,
+                providerReason,
+                providerDetail,
+                providerAttemptStartedUtc,
+                DateTimeOffset.UtcNow));
+            EndStage(providerStage, string.Equals(providerOutcome, "ready", StringComparison.Ordinal) ? "completed" : "failed", providerDetail);
 
-                steps.Add(new RunStep(step.StepId, step.ToolId, RunStates.Completed, result.OutputPath, null));
-                EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "result", "STEP_COMPLETED", new Dictionary<string, string>
+            var planningStage = BeginStage("plan", "Preparing deterministic plan execution.");
+            EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "step", "PLAN_STARTED", new Dictionary<string, string>
+            {
+                ["run_id"] = runId,
+                ["plan_id"] = plan.PlanId,
+                ["plan_hash"] = planHash
+            }));
+            EndStage(planningStage, "completed", $"Plan {plan.PlanId} prepared.");
+
+            var status = RunStates.Completed;
+            var executeStage = BeginStage("execute", $"Executing {plan.Steps.Count} deterministic step(s).");
+
+            foreach (var step in plan.Steps)
+            {
+                var stepStage = BeginStage(step.StepId, $"Running tool '{step.ToolId}'.");
+                EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "step", "STEP_STARTED", new Dictionary<string, string>
                 {
                     ["step_id"] = step.StepId,
-                    ["output_path"] = result.OutputPath ?? string.Empty
+                    ["tool_id"] = step.ToolId
                 }));
-                continue;
+
+                var result = _runtimeBridge.ExecuteStep(step, project, narrate);
+                if (string.Equals(result.Status, RunStates.Completed, StringComparison.Ordinal))
+                {
+                    if (!string.IsNullOrWhiteSpace(result.OutputPath))
+                    {
+                        _artifactManager.Capture(runPath, step.StepId, result.OutputPath);
+                        artifactPaths[$"output:{step.StepId}"] = result.OutputPath;
+                    }
+
+                    steps.Add(new RunStep(step.StepId, step.ToolId, RunStates.Completed, result.OutputPath, null));
+                    EndStage(stepStage, "completed", string.IsNullOrWhiteSpace(result.OutputPath) ? "Step completed." : result.OutputPath);
+                    EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "result", "STEP_COMPLETED", new Dictionary<string, string>
+                    {
+                        ["step_id"] = step.StepId,
+                        ["output_path"] = result.OutputPath ?? string.Empty
+                    }));
+                    continue;
+                }
+
+                status = RunStates.Failed;
+                steps.Add(new RunStep(step.StepId, step.ToolId, RunStates.Failed, null, result.Error));
+                var rollbackMarkerPath = Path.Combine(runPath, "rollback.marker");
+                File.WriteAllText(rollbackMarkerPath, $"step={step.StepId}; error={result.Error}");
+                artifactPaths["rollback.marker"] = rollbackMarkerPath;
+                EndStage(stepStage, "failed", result.Error ?? "unknown");
+                EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "error", "STEP_FAILED", new Dictionary<string, string>
+                {
+                    ["step_id"] = step.StepId,
+                    ["error"] = result.Error ?? "unknown"
+                }));
+                break;
             }
 
-            status = RunStates.Failed;
-            steps.Add(new RunStep(step.StepId, step.ToolId, RunStates.Failed, null, result.Error));
-            File.WriteAllText(Path.Combine(runPath, "rollback.marker"), $"step={step.StepId}; error={result.Error}");
-            EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "error", "STEP_FAILED", new Dictionary<string, string>
+            EndStage(executeStage, string.Equals(status, RunStates.Completed, StringComparison.Ordinal) ? "completed" : "failed", $"Execution {status}.");
+
+            var artifactJsonPath = _artifactManager.WriteMetadata(runPath, planHash, toolCatalogHash);
+            artifactPaths["artifact.json"] = artifactJsonPath;
+            var manifestPath = Path.Combine(runPath, "artifacts", "manifest.json");
+            artifactPaths["manifest.json"] = manifestPath;
+            var manifestHash = ComputeFileHash(manifestPath);
+            var transcriptPath = Path.Combine(project.WorkspacePath, "notes", "chat_transcript.jsonl");
+            if (File.Exists(transcriptPath))
+                artifactPaths["chat_transcript.jsonl"] = transcriptPath;
+            var transcriptHash = ComputeFileHash(transcriptPath);
+            var warning = DetectCatalogDrift(project.WorkspacePath, runId, toolCatalogHash);
+            if (!string.IsNullOrWhiteSpace(warning))
             {
-                ["step_id"] = step.StepId,
-                ["error"] = result.Error ?? "unknown"
-            }));
-            break;
-        }
+                EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "warn", "CATALOG_DRIFT", new Dictionary<string, string>
+                {
+                    ["warning"] = warning
+                }));
+            }
 
-        var artifactJsonPath = _artifactManager.WriteMetadata(runPath, planHash, toolCatalogHash);
-        var manifestPath = Path.Combine(runPath, "artifacts", "manifest.json");
-        var manifestHash = ComputeFileHash(manifestPath);
-        var transcriptHash = ComputeFileHash(Path.Combine(project.WorkspacePath, "notes", "chat_transcript.jsonl"));
-        var warning = DetectCatalogDrift(project.WorkspacePath, runId, toolCatalogHash);
-        if (!string.IsNullOrWhiteSpace(warning))
-        {
-            EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "warn", "CATALOG_DRIFT", new Dictionary<string, string>
+            var baselineDrift = EvaluateBaselinePolicy(project.WorkspacePath, planHash, manifestHash, toolCatalogHash);
+            if (!string.IsNullOrWhiteSpace(baselineDrift))
             {
-                ["warning"] = warning
-            }));
-        }
+                status = RunStates.FailedDrift;
+                EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "warn", "BASELINE_DRIFT", new Dictionary<string, string>
+                {
+                    ["warning"] = baselineDrift
+                }));
+                warning = string.IsNullOrWhiteSpace(warning) ? baselineDrift : $"{warning}; {baselineDrift}";
+            }
 
-        var baselineDrift = EvaluateBaselinePolicy(project.WorkspacePath, planHash, manifestHash, toolCatalogHash);
-        if (!string.IsNullOrWhiteSpace(baselineDrift))
-        {
-            status = RunStates.FailedDrift;
-            EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "warn", "BASELINE_DRIFT", new Dictionary<string, string>
+            EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "result", "RUN_COMPLETED", new Dictionary<string, string>
             {
-                ["warning"] = baselineDrift
+                ["run_id"] = runId,
+                ["status"] = status,
+                ["plan_hash"] = planHash,
+                ["tool_catalog_hash"] = toolCatalogHash,
+                ["contract_version"] = ExecutionContract.Version
             }));
-            warning = string.IsNullOrWhiteSpace(warning) ? baselineDrift : $"{warning}; {baselineDrift}";
+
+            var narratorHash = ComputeFileHash(narratorPath);
+            var run = PersistRun(status, environment.Hash, manifestHash, narratorHash, transcriptHash, null, warning);
+            var evidenceBundlePath = WriteEvidenceBundle(runPath, run, environment.Hash, manifestHash, narratorHash, transcriptHash);
+            artifactPaths["evidence_bundle.json"] = evidenceBundlePath;
+            var evidenceBundleHash = ComputeFileHash(evidenceBundlePath);
+            run = PersistRun(status, environment.Hash, manifestHash, narratorHash, transcriptHash, evidenceBundleHash, warning);
+
+            var executionResult = ExecutionContractAdapter.ToExecutionResult(run);
+            if (!string.Equals(executionRequest.ContractVersion, executionResult.ContractVersion, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"execution contract drift: request={executionRequest.ContractVersion}; result={executionResult.ContractVersion}");
+            }
+
+            var verificationStage = BeginStage("verification", "Validating saved run artifacts.");
+            var verification = RunVerificationService.Verify(runPath);
+            var verificationReportPath = Path.Combine(runPath, "verification_report.json");
+            File.WriteAllText(verificationReportPath, JsonSerializer.Serialize(verification, new JsonSerializerOptions { WriteIndented = true }));
+            artifactPaths["verification_report.json"] = verificationReportPath;
+            EndStage(verificationStage, verification.Valid ? "completed" : "failed", verification.Valid ? "Verification passed." : string.Join("; ", verification.Errors));
+
+            var failure = BuildFailureFromRun(run, artifactPaths);
+            if (failure is not null)
+            {
+                artifactPaths["failure-fingerprint.json"] = RunReplayService.FailureFingerprintPath(runPath);
+                File.WriteAllText(
+                    RunReplayService.FailureFingerprintPath(runPath),
+                    JsonSerializer.Serialize(failure, new JsonSerializerOptions { WriteIndented = true }));
+            }
+
+            WriteReplayArtifacts(runPath, run, stageFlow, providerAttempts, artifactPaths, failure);
+            return new BuilderExecutionResult(run, runPath, runJsonPath, artifactJsonPath);
         }
-
-        EmitNarration(new NarrationEvent(DateTimeOffset.UtcNow, "result", "RUN_COMPLETED", new Dictionary<string, string>
+        catch (Exception ex)
         {
-            ["run_id"] = runId,
-            ["status"] = status,
-            ["plan_hash"] = planHash,
-            ["tool_catalog_hash"] = toolCatalogHash,
-            ["contract_version"] = ExecutionContract.Version
-        }));
-
-        var narratorHash = ComputeFileHash(narratorPath);
-        var run = PersistRun(status, environment.Hash, manifestHash, narratorHash, transcriptHash, null, warning);
-        var evidenceBundlePath = WriteEvidenceBundle(runPath, run, environment.Hash, manifestHash, narratorHash, transcriptHash);
-        var evidenceBundleHash = ComputeFileHash(evidenceBundlePath);
-        run = PersistRun(status, environment.Hash, manifestHash, narratorHash, transcriptHash, evidenceBundleHash, warning);
-
-        var executionResult = ExecutionContractAdapter.ToExecutionResult(run);
-        if (!string.Equals(executionRequest.ContractVersion, executionResult.ContractVersion, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException($"execution contract drift: request={executionRequest.ContractVersion}; result={executionResult.ContractVersion}");
+            var failure = CreateFailureRecord(ex, artifactPaths);
+            artifactPaths["failure-fingerprint.json"] = RunReplayService.FailureFingerprintPath(runPath);
+            WriteReplayArtifacts(runPath, null, stageFlow, providerAttempts, artifactPaths, failure);
+            File.WriteAllText(
+                RunReplayService.FailureFingerprintPath(runPath),
+                JsonSerializer.Serialize(failure, new JsonSerializerOptions { WriteIndented = true }));
+            throw;
         }
-
-        var verification = RunVerificationService.Verify(runPath);
-        var verificationReportPath = Path.Combine(runPath, "verification_report.json");
-        File.WriteAllText(verificationReportPath, JsonSerializer.Serialize(verification, new JsonSerializerOptions { WriteIndented = true }));
-
-        return new BuilderExecutionResult(run, runPath, runJsonPath, artifactJsonPath);
 
         void EmitNarration(NarrationEvent evt)
         {
@@ -197,6 +269,109 @@ public sealed class BuilderExecutionService
             File.WriteAllText(runJsonPath, JsonSerializer.Serialize(model, new JsonSerializerOptions { WriteIndented = true }));
             return model;
         }
+
+        RunStageBuilder BeginStage(string stageName, string detail)
+            => new(stageName, detail, DateTimeOffset.UtcNow);
+
+        void EndStage(RunStageBuilder builder, string status, string detail)
+        {
+            stageFlow.Add(new RunStageRecord(
+                builder.StageName,
+                status,
+                detail,
+                builder.StartedUtc,
+                DateTimeOffset.UtcNow));
+        }
+    }
+
+    private static void WriteReplayArtifacts(
+        string runPath,
+        RunModel? run,
+        IReadOnlyList<RunStageRecord> stageFlow,
+        IReadOnlyList<ProviderAttemptRecord> providerAttempts,
+        IReadOnlyDictionary<string, string> artifactPaths,
+        RunFailureRecord? failure)
+    {
+        var effectiveRunId = run?.RunId ?? Path.GetFileName(runPath);
+        var effectiveProvider = run?.Provider ?? "unknown";
+        var effectiveHostTransport = run?.HostTransport ?? "none";
+        var effectiveStatus = run?.Status ?? RunStates.FailedCrash;
+        var effectiveCreatedUtc = run?.CreatedUtc ?? DateTimeOffset.UtcNow;
+        var metadata = new PersistedRunMetadata(
+            effectiveRunId,
+            runPath,
+            effectiveProvider,
+            effectiveHostTransport,
+            effectiveStatus,
+            effectiveCreatedUtc,
+            stageFlow.ToArray(),
+            providerAttempts.ToArray(),
+            failure,
+            new Dictionary<string, string>(artifactPaths, StringComparer.Ordinal));
+
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        File.WriteAllText(RunReplayService.MetadataPath(runPath), JsonSerializer.Serialize(metadata, options));
+        File.WriteAllText(RunReplayService.TimelinePath(runPath), JsonSerializer.Serialize(stageFlow, options));
+    }
+
+    private static RunFailureRecord CreateFailureRecord(Exception ex, IReadOnlyDictionary<string, string> artifactPaths)
+    {
+        var exceptionType = ex.GetType().FullName ?? ex.GetType().Name;
+        var message = ex.Message ?? string.Empty;
+        var firstStackFrame = ex.StackTrace?
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(static line => line.Trim())
+            .FirstOrDefault(static line => line.StartsWith("at ", StringComparison.Ordinal))
+            ?? string.Empty;
+
+        var relevantPaths = artifactPaths.Values
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new RunFailureRecord(exceptionType, message, firstStackFrame, relevantPaths);
+    }
+
+    private static RunFailureRecord? BuildFailureFromRun(RunModel run, IReadOnlyDictionary<string, string> artifactPaths)
+    {
+        if (run.Steps is null || run.Steps.Count == 0)
+            return null;
+
+        var failedStep = run.Steps.FirstOrDefault(step => string.Equals(step.Status, RunStates.Failed, StringComparison.Ordinal));
+        if (failedStep is null && string.Equals(run.Status, RunStates.FailedDrift, StringComparison.Ordinal))
+        {
+            var driftPaths = artifactPaths.Values
+                .Where(static path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return new RunFailureRecord("BaselineDrift", run.ReproWarning ?? "Baseline drift detected.", string.Empty, driftPaths);
+        }
+
+        if (failedStep is null || string.IsNullOrWhiteSpace(failedStep.Error))
+            return null;
+
+        var firstStackFrame = failedStep.Error
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(static line => line.Trim())
+            .FirstOrDefault(static line => line.StartsWith("at ", StringComparison.Ordinal))
+            ?? string.Empty;
+        var headline = failedStep.Error
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()
+            ?? failedStep.Error;
+        var paths = artifactPaths.Values
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new RunFailureRecord(
+            "RunStepFailure",
+            headline,
+            firstStackFrame,
+            paths);
     }
 
     private static string NextRunId(string workspacePath)
@@ -407,6 +582,8 @@ public sealed class BuilderExecutionService
 
     private sealed record EnvironmentCapture(string Hash, string Path);
 
+    private sealed record RunStageBuilder(string StageName, string Detail, DateTimeOffset StartedUtc);
+
     private sealed record EnvironmentSnapshot(
         string OsVersion,
         string DotnetSdkVersion,
@@ -414,4 +591,134 @@ public sealed class BuilderExecutionService
         string PathSnapshot,
         string WorkingDirectory,
         DateTimeOffset CapturedUtc);
+}
+
+public sealed record RunStageRecord(
+    string StageName,
+    string Status,
+    string Detail,
+    DateTimeOffset StartedUtc,
+    DateTimeOffset EndedUtc);
+
+public sealed record ProviderAttemptRecord(
+    int Attempt,
+    int MaxAttempts,
+    string Outcome,
+    string? ReasonCode,
+    string Detail,
+    DateTimeOffset StartedUtc,
+    DateTimeOffset EndedUtc);
+
+public sealed record RunFailureRecord(
+    string ExceptionType,
+    string Message,
+    string FirstStackFrame,
+    IReadOnlyList<string> ArtifactPaths);
+
+public sealed record PersistedRunMetadata(
+    string RunId,
+    string RunPath,
+    string Provider,
+    string HostTransport,
+    string TerminalStatus,
+    DateTimeOffset CreatedUtc,
+    IReadOnlyList<RunStageRecord> StageFlow,
+    IReadOnlyList<ProviderAttemptRecord> ProviderAttempts,
+    RunFailureRecord? Failure,
+    IReadOnlyDictionary<string, string> ArtifactPaths);
+
+public sealed record ReplayInspectionResult(
+    string SourceRunPath,
+    bool IsMatch,
+    string Summary,
+    IReadOnlyList<string> Mismatches,
+    PersistedRunMetadata Metadata,
+    RunModel Run);
+
+public static class RunReplayService
+{
+    public const string MetadataFileName = "run_metadata.json";
+    public const string TimelineFileName = "timeline.json";
+    public const string FailureFingerprintFileName = "failure-fingerprint.json";
+
+    public static string MetadataPath(string runPath) => Path.Combine(runPath, MetadataFileName);
+
+    public static string TimelinePath(string runPath) => Path.Combine(runPath, TimelineFileName);
+
+    public static string FailureFingerprintPath(string runPath) => Path.Combine(runPath, FailureFingerprintFileName);
+
+    public static ReplayInspectionResult ReplayFromRunPath(string runPath)
+    {
+        if (string.IsNullOrWhiteSpace(runPath))
+            throw new ArgumentException("run path is required", nameof(runPath));
+        if (!Directory.Exists(runPath))
+            throw new DirectoryNotFoundException($"Run path not found: {runPath}");
+
+        var metadataPath = MetadataPath(runPath);
+        var runJsonPath = Path.Combine(runPath, "run.json");
+
+        if (!File.Exists(metadataPath))
+            throw new FileNotFoundException("Run metadata file is missing.", metadataPath);
+        if (!File.Exists(runJsonPath))
+            throw new FileNotFoundException("run.json is missing.", runJsonPath);
+
+        var metadata = JsonSerializer.Deserialize<PersistedRunMetadata>(File.ReadAllText(metadataPath));
+        var run = JsonSerializer.Deserialize<RunModel>(File.ReadAllText(runJsonPath));
+
+        if (metadata is null)
+            throw new InvalidDataException("Run metadata could not be parsed.");
+        if (run is null)
+            throw new InvalidDataException("run.json could not be parsed.");
+
+        var mismatches = new List<string>();
+
+        if (!string.Equals(metadata.RunId, run.RunId, StringComparison.Ordinal))
+            mismatches.Add($"run_id mismatch: metadata={metadata.RunId}; run={run.RunId}");
+
+        if (!string.Equals(metadata.Provider, run.Provider, StringComparison.Ordinal))
+            mismatches.Add($"provider mismatch: metadata={metadata.Provider}; run={run.Provider}");
+
+        if (!string.Equals(metadata.TerminalStatus, run.Status, StringComparison.Ordinal))
+            mismatches.Add($"terminal status mismatch: metadata={metadata.TerminalStatus}; run={run.Status}");
+
+        var metadataStages = metadata.StageFlow.Select(stage => $"{stage.StageName}:{stage.Status}").ToArray();
+        var runStages = run.Steps.Select(step => $"{step.StepId}:{step.Status}").ToArray();
+
+        if (metadataStages.Length == 0)
+        {
+            mismatches.Add("metadata stage flow is empty");
+        }
+        else if (!ContainsOrderedRunSteps(metadataStages, runStages))
+        {
+            mismatches.Add(
+                $"stage flow diverged: metadata={string.Join(",", metadataStages)}; run={string.Join(",", runStages)}");
+        }
+
+        foreach (var artifact in metadata.ArtifactPaths.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            if (!string.IsNullOrWhiteSpace(artifact.Value) && !File.Exists(artifact.Value) && !Directory.Exists(artifact.Value))
+                mismatches.Add($"artifact missing: {artifact.Key}={artifact.Value}");
+        }
+
+        var summary = mismatches.Count == 0
+            ? "Replay matches saved run metadata."
+            : $"Replay diverged from saved run metadata ({mismatches.Count} mismatch{(mismatches.Count == 1 ? string.Empty : "es")}).";
+
+        return new ReplayInspectionResult(runPath, mismatches.Count == 0, summary, mismatches, metadata, run);
+    }
+
+    private static bool ContainsOrderedRunSteps(IReadOnlyList<string> metadataStages, IReadOnlyList<string> runStages)
+    {
+        if (runStages.Count == 0)
+            return true;
+
+        var runIndex = 0;
+        for (var i = 0; i < metadataStages.Count && runIndex < runStages.Count; i++)
+        {
+            if (string.Equals(metadataStages[i], runStages[runIndex], StringComparison.Ordinal))
+                runIndex++;
+        }
+
+        return runIndex == runStages.Count;
+    }
 }

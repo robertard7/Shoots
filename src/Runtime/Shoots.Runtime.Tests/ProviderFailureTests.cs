@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using System.Threading.Tasks;
 using Shoots.Runtime.Abstractions;
 using Xunit;
 
@@ -21,6 +22,14 @@ public sealed class ProviderFailureTests
         var failure = ProviderFailure.FromException(new HttpRequestException("down"));
 
         Assert.Equal(ProviderFailureKind.Transport, failure.Kind);
+    }
+
+    [Fact]
+    public void Maps_task_canceled_failures_as_timeout()
+    {
+        var failure = ProviderFailure.FromException(new TaskCanceledException("timeout"));
+
+        Assert.Equal(ProviderFailureKind.Timeout, failure.Kind);
     }
 
     [Fact]

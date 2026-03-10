@@ -1,6 +1,7 @@
 using System;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace Shoots.Runtime.Abstractions;
 
@@ -35,7 +36,7 @@ public sealed record ProviderFailure(
 
     private static ProviderFailureKind ResolveKind(Exception exception)
     {
-        if (exception is TimeoutException)
+        if (exception is TimeoutException or TaskCanceledException)
             return ProviderFailureKind.Timeout;
         if (exception is HttpRequestException)
             return ProviderFailureKind.Transport;

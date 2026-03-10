@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Shoots.UI.Services.Backends;
@@ -16,6 +17,21 @@ public sealed class BackendProbeServiceTests
 
         Assert.False(status.IsAvailable);
         Assert.Equal("ui.ollama.timeout", status.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Probe_retries_once_for_retryable_ollama_failures()
+    {
+        var client = new SequenceOllamaClient(
+            new OllamaTagsResult(false, new string[0], "ui.ollama.timeout", "timeout"),
+            new OllamaTagsResult(true, new[] { "llama3" }, null, "ok"));
+        var service = new BackendProbeService(client, new HealthyQdrantClient());
+
+        var status = await service.ProbeOllamaAsync(CancellationToken.None);
+
+        Assert.True(status.IsAvailable);
+        Assert.Equal(2, client.CallCount);
+        Assert.Contains("after retry", status.Summary);
     }
 
     [Fact]
@@ -39,6 +55,24 @@ public sealed class BackendProbeServiceTests
     {
         public Task<OllamaTagsResult> GetTagsAsync(CancellationToken cancellationToken)
             => Task.FromResult(new OllamaTagsResult(false, new string[0], "ui.ollama.timeout", "timeout"));
+    }
+
+    private sealed class SequenceOllamaClient : IOllamaClient
+    {
+        private readonly Queue<OllamaTagsResult> _results;
+
+        public SequenceOllamaClient(params OllamaTagsResult[] results)
+        {
+            _results = new Queue<OllamaTagsResult>(results);
+        }
+
+        public int CallCount { get; private set; }
+
+        public Task<OllamaTagsResult> GetTagsAsync(CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(_results.Dequeue());
+        }
     }
 
     private sealed class HealthyQdrantClient : IQdrantClient

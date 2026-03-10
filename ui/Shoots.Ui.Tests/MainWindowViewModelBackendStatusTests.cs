@@ -10,6 +10,7 @@ using Shoots.UI.Environment;
 using Shoots.UI.ExecutionEnvironments;
 using Shoots.UI.Intents;
 using Shoots.UI.Projects;
+using Shoots.UI.Builder;
 using Shoots.UI.Services;
 using Shoots.UI.Services.Backends;
 using Shoots.UI.Settings;
@@ -33,6 +34,22 @@ public sealed class MainWindowViewModelBackendStatusTests
 
         Assert.Contains("ui.ollama.unreachable", vm.BackendDisabledReason);
         Assert.Equal("ui.ollama.unreachable", vm.ModelCatalogError);
+    }
+
+    [Fact]
+    public void Provider_unavailable_reason_prefers_backend_status_over_model_catalog_error()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, false, "ui.ollama.connection_refused", "down", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(false, System.Array.Empty<string>(), "ui.ollama.bad_json", "bad json")));
+
+        SetPrivateField(vm, "_selectedProviderMode", "ollama");
+        SetPrivateField(vm, "_ollamaStatus", new BackendStatus(BackendKind.Ollama, false, "ui.ollama.connection_refused", "down", System.DateTimeOffset.UtcNow, "http://localhost:11434", null));
+        SetPrivateField(vm, "_modelCatalogError", "ui.ollama.bad_json");
+
+        Assert.Contains("ui.ollama.connection_refused", vm.ProviderAvailabilityWarning, System.StringComparison.Ordinal);
     }
 
     [Fact]
@@ -815,6 +832,98 @@ public sealed class MainWindowViewModelBackendStatusTests
 
         InvokePrivate(vm, "SetOperationStepState", "Probe Ollama", "active", "step update");
         Assert.False(vm.IsOperationWaiting);
+    }
+
+    [Fact]
+    public void Waiting_hint_uses_provider_specific_text_for_provider_stage()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Waiting on provider", "Checking Ollama endpoint.", new[] { "Probe Ollama" });
+        SetPrivateField(vm, "_operationLastProgressUtc", System.DateTimeOffset.UtcNow.Subtract(System.TimeSpan.FromSeconds(25)));
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+
+        Assert.Contains("provider response", vm.OperationWaitHint, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Replay_selected_run_command_loads_saved_run_artifacts_read_only()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"shoots-replay-{System.Guid.NewGuid():N}");
+        var runPath = Path.Combine(tempRoot, "runs", "run-001");
+        Directory.CreateDirectory(runPath);
+
+        try
+        {
+            var metadata = new PersistedRunMetadata(
+                "run-001",
+                runPath,
+                "local",
+                "none",
+                RunStates.Completed,
+                System.DateTimeOffset.UtcNow,
+                new[]
+                {
+                    new RunStageRecord("step-01", "completed", "ok", System.DateTimeOffset.UtcNow, System.DateTimeOffset.UtcNow)
+                },
+                new[]
+                {
+                    new ProviderAttemptRecord(1, 1, "ready", null, "Provider ready.", System.DateTimeOffset.UtcNow, System.DateTimeOffset.UtcNow)
+                },
+                null,
+                new Dictionary<string, string>
+                {
+                    ["run.json"] = Path.Combine(runPath, "run.json")
+                });
+            var run = new RunModel(
+                "run-001",
+                "project-001",
+                "plan-001",
+                "plan-hash",
+                "catalog-hash",
+                "workspace-hash",
+                System.DateTimeOffset.UtcNow,
+                RunStates.Completed,
+                new[]
+                {
+                    new RunStep("step-01", "tools.sample", RunStates.Completed, null, null)
+                },
+                ExecutionContract.Version,
+                "planner",
+                "bridge",
+                "local",
+                "none");
+            File.WriteAllText(Path.Combine(runPath, "run.json"), System.Text.Json.JsonSerializer.Serialize(run, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(Path.Combine(runPath, RunReplayService.MetadataFileName), System.Text.Json.JsonSerializer.Serialize(metadata, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(Path.Combine(runPath, RunReplayService.TimelineFileName), System.Text.Json.JsonSerializer.Serialize(metadata.StageFlow, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+            var row = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, RunStates.Completed, "local", "none", "Verified");
+            vm.SelectedRunHistory = row;
+
+            Assert.True(vm.ReplaySelectedRunCommand.CanExecute(null));
+            await vm.ReplaySelectedRunCommand.ExecuteAsync();
+
+            Assert.True(vm.IsReplayMode);
+            Assert.Equal(runPath, vm.ReplaySourcePath);
+            Assert.Contains("matches saved run metadata", vm.ReplaySummary, System.StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
     }
 
     [Fact]

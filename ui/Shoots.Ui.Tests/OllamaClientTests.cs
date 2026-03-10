@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Shoots.UI.Services.Backends;
@@ -42,12 +43,33 @@ public sealed class OllamaClientTests
         Assert.Equal("ui.ollama.bad_status.502", result.ErrorCode);
     }
 
+    [Fact]
+    public async Task Connection_refused_maps_to_specific_unavailable_reason()
+    {
+        var client = BuildThrowingClient(new HttpRequestException("down", new SocketException((int)SocketError.ConnectionRefused)));
+
+        var result = await client.GetTagsAsync(CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("ui.ollama.connection_refused", result.ErrorCode);
+    }
+
     private static OllamaClient BuildClient(HttpStatusCode code, string body)
     {
         var handler = new StubHandler(new HttpResponseMessage(code)
         {
             Content = new StringContent(body)
         });
+        var http = new HttpClient(handler)
+        {
+            BaseAddress = new System.Uri("http://localhost:11434")
+        };
+        return new OllamaClient(http);
+    }
+
+    private static OllamaClient BuildThrowingClient(Exception exception)
+    {
+        var handler = new ThrowingHandler(exception);
         var http = new HttpClient(handler)
         {
             BaseAddress = new System.Uri("http://localhost:11434")
@@ -66,5 +88,18 @@ public sealed class OllamaClientTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => Task.FromResult(_response);
+    }
+
+    private sealed class ThrowingHandler : HttpMessageHandler
+    {
+        private readonly Exception _exception;
+
+        public ThrowingHandler(Exception exception)
+        {
+            _exception = exception;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromException<HttpResponseMessage>(_exception);
     }
 }
