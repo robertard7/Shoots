@@ -96,6 +96,8 @@ public sealed class MainWindowViewModelBackendStatusTests
 
         Assert.Equal("ui.backends.refresh.in_progress: wait for backend probe completion.", vm.RefreshBackendsDisabledReason);
         Assert.False(vm.RefreshBackendStatusCommand.CanExecute(null));
+        Assert.Equal("Waiting on provider", vm.CurrentOperationStage);
+        Assert.Equal("active", vm.CurrentOperationStatus);
 
         probeService.Release();
         await refreshTask;
@@ -511,7 +513,7 @@ public sealed class MainWindowViewModelBackendStatusTests
         InvokePrivate(
             vm,
             "BeginOperationProgress",
-            "Refreshing backend status",
+            "Refreshing backend",
             "Probing backend health and model catalog.",
             new[] { "Probe Ollama", "Probe Qdrant", "Refresh model catalog" });
 
@@ -519,7 +521,7 @@ public sealed class MainWindowViewModelBackendStatusTests
         Assert.Equal("active", vm.CurrentOperationStatus);
         Assert.True(vm.IsOperationBusyIndicatorVisible);
         Assert.False(vm.QuickDemoCommand.CanExecute(null));
-        Assert.Contains("refreshing backend status", vm.QuickDemoDisabledReason, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("refreshing backend", vm.QuickDemoDisabledReason, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -536,12 +538,15 @@ public sealed class MainWindowViewModelBackendStatusTests
 
         Assert.Equal("completed", vm.CurrentOperationStatus);
         Assert.True(vm.IsOperationCompletionHoldActive);
+        Assert.Equal("busy", vm.BusyState);
+        Assert.True(vm.IsOperationBusyIndicatorVisible);
 
         await Task.Delay(130);
         InvokePrivate(vm, "HandleOperationProgressTimerTick");
 
         Assert.Equal("idle", vm.CurrentOperationStatus);
         Assert.False(vm.IsOperationVisible);
+        Assert.False(vm.IsOperationBusyIndicatorVisible);
         Assert.Equal("Idle", vm.OperationStatusLine);
     }
 
@@ -561,6 +566,8 @@ public sealed class MainWindowViewModelBackendStatusTests
             new[] { "Create project", "Plan run", "Execute tools", "Host run", "Verification", "Completed" },
             vm.OperationProgressSteps.Select(step => step.Name).ToArray());
         Assert.Equal("completed", vm.OperationProgressSteps.Single(step => step.Name == "Completed").State);
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, vm.OperationProgressSteps.Select(step => step.StepOrder).ToArray());
+        Assert.Equal("Create project", vm.OperationProgressSteps[0].StepName);
         Assert.NotEmpty(vm.OperationNarrationFeed);
     }
 
@@ -585,6 +592,61 @@ public sealed class MainWindowViewModelBackendStatusTests
         Assert.Equal("idle", vm.CurrentOperationStatus);
     }
 
+
+    [Fact]
+    public void Busy_state_and_action_disable_reason_follow_operation_state()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Verification", "Validating outputs.", new[] { "Verification" });
+
+        Assert.Equal("busy", vm.BusyState);
+        Assert.Contains("verification", vm.ActionDisableReason, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Same(vm.OperationNarrationFeed, vm.NarrationFeed);
+
+        InvokePrivate(vm, "CompleteOperationProgress", true, "Done");
+        vm.OperationCompletionHoldDuration = System.TimeSpan.Zero;
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+
+        Assert.Equal("idle", vm.BusyState);
+        Assert.True(string.IsNullOrWhiteSpace(vm.ActionDisableReason));
+    }
+
+    [Fact]
+    public async Task Refresh_stage_uses_required_working_now_labels()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        await vm.RefreshBackendStatusCommand.ExecuteAsync();
+
+        Assert.Equal("Completed", vm.CurrentOperation);
+        Assert.Equal("completed", vm.CurrentOperationStatus);
+    }
+
+
+    [Fact]
+    public void Quick_demo_is_disabled_while_verification_is_in_progress()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Verifying run", "Validating run artifacts.", new[] { "Verification" });
+
+        Assert.False(vm.QuickDemoCommand.CanExecute(null));
+        Assert.Contains("verification", vm.QuickDemoDisabledReason, System.StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Operation_narration_feed_is_bounded_to_latest_entries()
     {
@@ -602,6 +664,255 @@ public sealed class MainWindowViewModelBackendStatusTests
 
         Assert.Equal(20, vm.OperationNarrationFeed.Count);
         Assert.Equal("event-25", vm.OperationNarrationFeed[^1]);
+    }
+
+    [Fact]
+    public void Narration_feed_survives_completion_hold_and_resets_on_next_operation()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Planning run", "Preparing", new[] { "Plan run" });
+        InvokePrivate(vm, "SetOperationLatestEvent", "plan-started");
+        InvokePrivate(vm, "CompleteOperationProgress", true, "Done");
+
+        Assert.True(vm.IsOperationCompletionHoldActive);
+        Assert.Contains("plan-started", vm.OperationNarrationFeed);
+
+        InvokePrivate(vm, "BeginOperationProgress", "Refreshing backend", "Probing", new[] { "Probe Ollama" });
+        Assert.Empty(vm.OperationNarrationFeed);
+    }
+
+    [Fact]
+    public void Busy_indicator_and_commands_reenable_after_completion_hold_reset()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Verifying run", "Validating run artifacts.", new[] { "Verification" });
+        InvokePrivate(vm, "CompleteOperationProgress", true, "Verified");
+
+        Assert.False(vm.QuickDemoCommand.CanExecute(null));
+        Assert.True(vm.IsOperationBusyIndicatorVisible);
+
+        vm.OperationCompletionHoldDuration = System.TimeSpan.Zero;
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+
+        Assert.Equal("idle", vm.BusyState);
+        Assert.True(vm.QuickDemoCommand.CanExecute(null));
+        Assert.False(vm.IsOperationBusyIndicatorVisible);
+    }
+
+    [Fact]
+    public void Watchdog_marks_operation_waiting_when_no_progress_is_reported()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Waiting on provider", "Checking endpoint.", new[] { "Probe Ollama" });
+        var staleAt = System.DateTimeOffset.UtcNow.Subtract(System.TimeSpan.FromSeconds(25));
+        SetPrivateField(vm, "_operationLastProgressUtc", staleAt);
+
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+
+        Assert.True(vm.IsOperationWaiting);
+        Assert.Contains("No recent progress", vm.OperationWaitHint, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Collapsed_timeline_shows_active_and_recent_steps_in_order()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Planning run", "Preparing", new[] { "A", "B", "C", "D" });
+        InvokePrivate(vm, "SetOperationStepState", "A", "completed", "ok");
+        InvokePrivate(vm, "SetOperationStepState", "B", "completed", "ok");
+        InvokePrivate(vm, "SetOperationStepState", "C", "active", "running");
+        vm.ShowFullTimeline = false;
+
+        Assert.Equal(new[] { "A", "B", "C" }, vm.VisibleOperationProgressSteps.Select(step => step.StepName).ToArray());
+        Assert.Equal(new[] { 1, 2, 3 }, vm.VisibleOperationProgressSteps.Select(step => step.StepOrder).ToArray());
+        Assert.Equal("Show full timeline", vm.TimelineToggleLabel);
+
+        vm.ShowFullTimeline = true;
+        Assert.Equal("Show active + recent", vm.TimelineToggleLabel);
+        Assert.Equal(new[] { "A", "B", "C", "D" }, vm.VisibleOperationProgressSteps.Select(step => step.StepName).ToArray());
+    }
+
+    [Fact]
+    public void Collapsed_timeline_keeps_failed_step_visible()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Planning run", "Preparing", new[] { "A", "B", "C", "D" });
+        InvokePrivate(vm, "SetOperationStepState", "A", "completed", "ok");
+        InvokePrivate(vm, "SetOperationStepState", "B", "failed", "boom");
+        vm.ShowFullTimeline = false;
+
+        Assert.Contains(vm.VisibleOperationProgressSteps, step => step.StepName == "B" && step.StepState == "failed");
+    }
+
+    [Fact]
+    public void Snapshot_consistency_prevents_idle_completion_hold_conflict()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        Assert.Equal("idle", vm.CurrentOperationStatus);
+        Assert.False(vm.CompletionHold);
+
+        InvokePrivate(vm, "BeginOperationProgress", "Verifying run", "Validating.", new[] { "Verification" });
+        Assert.Equal("busy", vm.BusyState);
+        Assert.Equal("active", vm.CurrentOperationStatus);
+    }
+
+    [Fact]
+    public void Waiting_hint_clears_on_narration_stage_and_step_updates()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Waiting on provider", "Checking endpoint.", new[] { "Probe Ollama" });
+        SetPrivateField(vm, "_operationLastProgressUtc", System.DateTimeOffset.UtcNow.Subtract(System.TimeSpan.FromSeconds(25)));
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+        Assert.True(vm.IsOperationWaiting);
+
+        InvokePrivate(vm, "SetOperationLatestEvent", "new narration");
+        Assert.False(vm.IsOperationWaiting);
+
+        SetPrivateField(vm, "_operationLastProgressUtc", System.DateTimeOffset.UtcNow.Subtract(System.TimeSpan.FromSeconds(25)));
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+        Assert.True(vm.IsOperationWaiting);
+
+        InvokePrivate(vm, "SetOperationStatus", "Planning run", "stage update");
+        Assert.False(vm.IsOperationWaiting);
+
+        SetPrivateField(vm, "_operationLastProgressUtc", System.DateTimeOffset.UtcNow.Subtract(System.TimeSpan.FromSeconds(25)));
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+        Assert.True(vm.IsOperationWaiting);
+
+        InvokePrivate(vm, "SetOperationStepState", "Probe Ollama", "active", "step update");
+        Assert.False(vm.IsOperationWaiting);
+    }
+
+    [Fact]
+    public void Waiting_hint_does_not_trigger_when_idle_or_completion_hold_only()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        SetPrivateField(vm, "_operationLastProgressUtc", System.DateTimeOffset.UtcNow.Subtract(System.TimeSpan.FromSeconds(25)));
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+        Assert.False(vm.IsOperationWaiting);
+
+        InvokePrivate(vm, "BeginOperationProgress", "Verifying run", "validating", new[] { "Verification" });
+        InvokePrivate(vm, "CompleteOperationProgress", true, "done");
+        SetPrivateField(vm, "_operationLastProgressUtc", System.DateTimeOffset.UtcNow.Subtract(System.TimeSpan.FromSeconds(25)));
+        InvokePrivate(vm, "HandleOperationProgressTimerTick");
+        Assert.False(vm.IsOperationWaiting);
+    }
+
+    [Fact]
+    public void Failure_diagnostics_handle_empty_and_malformed_reason_text()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "RecordFailure", "Run Demo", "", vm.UiLogPath, "retry");
+        Assert.Equal("Unknown", vm.LastFailureExceptionType);
+        Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
+        Assert.Equal(string.Empty, vm.LastFailureMessage);
+
+        InvokePrivate(vm, "RecordFailure", "Run Demo", "   \t  ", vm.UiLogPath, "retry");
+        Assert.Equal("Unknown", vm.LastFailureExceptionType);
+        Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
+        Assert.Equal(string.Empty, vm.LastFailureMessage);
+
+        InvokePrivate(vm, "RecordFailure", "Run Demo", "something bad happened", vm.UiLogPath, "retry");
+        Assert.Equal("Unknown", vm.LastFailureExceptionType);
+        Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
+        Assert.Equal("something bad happened", vm.LastFailureMessage);
+
+        var multilinePlain = "plain headline\nadditional detail line";
+        InvokePrivate(vm, "RecordFailure", "Run Demo", multilinePlain, vm.UiLogPath, "retry");
+        Assert.Equal("Unknown", vm.LastFailureExceptionType);
+        Assert.Equal(string.Empty, vm.LastFailureFirstStackFrame);
+        Assert.Equal("plain headline", vm.LastFailureMessage);
+
+        var multiline = "InvalidOperationException: boom\nat Demo.Run() in Demo.cs:line 42\nat Main()";
+        InvokePrivate(vm, "RecordFailure", "Run Demo", multiline, vm.UiLogPath, "retry");
+        Assert.Equal("InvalidOperationException", vm.LastFailureExceptionType);
+        Assert.StartsWith("at Demo.Run()", vm.LastFailureFirstStackFrame, System.StringComparison.Ordinal);
+        Assert.Equal("boom", vm.LastFailureMessage);
+
+        var extraColon = "InvalidOperationException: could not parse: missing token";
+        InvokePrivate(vm, "RecordFailure", "Run Demo", extraColon, vm.UiLogPath, "retry");
+        Assert.Equal("could not parse: missing token", vm.LastFailureMessage);
+        Assert.EndsWith("fatal-error.log", vm.FatalLogPath, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Open_last_run_folder_command_handles_missing_deleted_paths_safely()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"shoots-open-last-run-edge-{System.Guid.NewGuid():N}");
+        var runPath = Path.Combine(tempRoot, "runs", "run-001");
+        Directory.CreateDirectory(runPath);
+
+        try
+        {
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell);
+
+            SetPrivateField(vm, "_lastDemoRunPath", runPath);
+            Assert.True(vm.OpenLastRunFolderCommand.CanExecute(null));
+
+            Directory.Delete(runPath, recursive: true);
+            Assert.False(vm.OpenLastRunFolderCommand.CanExecute(null));
+
+            await vm.OpenLastRunFolderCommand.ExecuteAsync();
+            Assert.Empty(shell.OpenedPaths);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -629,6 +940,13 @@ public sealed class MainWindowViewModelBackendStatusTests
         var method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
         return method!.Invoke(target, args);
+    }
+
+    private static void SetPrivateField(object target, string fieldName, object? value)
+    {
+        var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(target, value);
     }
 
     private static string FindRepoRoot()
