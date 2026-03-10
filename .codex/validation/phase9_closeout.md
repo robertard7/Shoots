@@ -8,11 +8,14 @@
 - Validation report/manual checklist artifacts for runner verification.
 
 ## Validation Status
-- Build/Test: reported by runner workflow (or `scripts/validate_build.ps1` when run in runner context).
-- Smoke/Integrity: runner-stage gates recorded in `.codex/validation/phase9_validation.md`.
+- Validation completed locally on Windows on 2026-03-10.
+- `dotnet test ui/Shoots.Ui.Tests/Shoots.Ui.Tests.csproj -c Debug -v minimal`: passed.
+- `powershell -File tools/smoke/windows/ui_smoke.ps1`: passed.
+- `powershell -File tools/verify/windows_compile_runtime_integrity.ps1`: passed.
+- `powershell -ExecutionPolicy Bypass -File scripts/validate_build.ps1`: passed.
 
 ## Known Limitations
-- Final gate truth is Windows self-hosted runner output.
+- `tools/verify/windows_compile_runtime_integrity.ps1` can encounter locked NuGet cache files during `dotnet nuget locals --clear`; the gate now warns and continues when cleanup is partial.
 
 ## Runner Command Pack
 ```powershell
@@ -27,10 +30,10 @@ powershell -File ./tools/verify/windows_compile_runtime_integrity.ps1
 
 ## Phase 9 Files Touched
 - `ui/Shoots.Ui/ViewModels/MainWindowViewModel.cs`
-- `ui/Shoots.Ui/MainWindow.xaml`
 - `ui/Shoots.Ui.Tests/MainWindowViewModelBackendStatusTests.cs`
 - `scripts/validate_build.ps1`
 - `tools/verify/phase9_validation_report.ps1`
+- `tools/verify/windows_compile_runtime_integrity.ps1`
 - `.codex/validation/phase9_validation.md`
 - `.codex/validation/phase9_manual_checklist.md`
 - `.codex/validation/phase9_closeout.md`

@@ -420,7 +420,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _ => "idle"
     };
     public string CurrentOperationDetail => OperationStatusDetail;
-    public string BusyState => IsOperationActive || IsOperationCompletionHoldActive || IsBusy ? "busy" : "idle";
+    public string BusyState => IsOperationActive || IsOperationCompletionHoldActive ? "busy" : "idle";
     public bool IsOperationBusyIndicatorVisible => IsOperationActive || IsOperationCompletionHoldActive;
     public bool IsOperationCompletionHoldActive =>
         !_isOperationActive && _isOperationVisible && !string.Equals(_operationStatusLine, "Idle", StringComparison.Ordinal);
@@ -1077,12 +1077,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private string GetRunIntakePlanDisabledReason()
     {
-        var busyReason = BuildOperationBusyReason();
-        if (!string.IsNullOrWhiteSpace(busyReason)) return busyReason;
         if (!HasActiveWorkspace) return "ui.workspace.missing: select a workspace first.";
         if (string.IsNullOrWhiteSpace(IntakeIntent)) return "ui.intake.intent.missing: provide an intake intent.";
         var backendReason = BuildBackendDisabledReason();
         if (!string.IsNullOrWhiteSpace(backendReason)) return backendReason;
+        var busyReason = BuildOperationBusyReason();
+        if (!string.IsNullOrWhiteSpace(busyReason)) return busyReason;
         return string.Empty;
     }
 
@@ -2892,10 +2892,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return "ui.backends.refresh.in_progress: wait for backend probe completion.";
         }
 
-        var busyReason = BuildOperationBusyReason();
-        if (!string.IsNullOrWhiteSpace(busyReason))
+        if (IsOperationActive)
         {
-            return busyReason;
+            var busyReason = BuildOperationBusyReason();
+            if (!string.IsNullOrWhiteSpace(busyReason))
+            {
+                return busyReason;
+            }
         }
 
         return string.Empty;
@@ -3325,6 +3328,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
+        if (OperationCompletionHoldDuration <= TimeSpan.Zero)
+        {
+            ResetOperationProgressToIdle();
+            _operationProgressTimer?.Stop();
+            return;
+        }
+
         if (_operationDisplayUntilUtc is null || DateTimeOffset.UtcNow < _operationDisplayUntilUtc.Value)
         {
             return;
@@ -3383,6 +3393,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         if (IsOperationCompletionHoldActive)
         {
             return "Run disabled while completion state is being displayed.";
+        }
+
+        if (OperationStatusLine.Contains("verifying", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Run disabled while verification is in progress.";
         }
 
         return $"Run disabled while {OperationStatusLine.ToLowerInvariant()} is in progress.";
@@ -3488,6 +3503,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private void RunOnUiThread(Action action)
     {
+        if (Application.Current is null)
+        {
+            action();
+            return;
+        }
+
         if (_dispatcher.CheckAccess())
         {
             action();
@@ -4286,7 +4307,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!_ollamaStatus.IsAvailable)
         {
-            return $"AI backend unavailable ({_ollamaStatus.ErrorCode ?? "ui.backend.ollama.unavailable"}).";
+            var ollamaErrorCode = !string.IsNullOrWhiteSpace(_ollamaStatus.ErrorCode)
+                ? _ollamaStatus.ErrorCode
+                : !string.IsNullOrWhiteSpace(ModelCatalogError)
+                    ? ModelCatalogError
+                    : "ui.backend.ollama.unavailable";
+            return $"AI backend unavailable ({ollamaErrorCode}).";
         }
 
         if (!_qdrantStatus.IsAvailable)

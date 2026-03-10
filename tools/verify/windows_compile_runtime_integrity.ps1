@@ -68,7 +68,12 @@ if (Test-Path ".codex") {
 
 # Keep local Codex metadata out of clean to avoid recursive path explosions.
 Invoke-ExternalCommand -FilePath git -Arguments @("clean", "-xfd", "-e", ".codex/") -Description "git clean"
-Invoke-ExternalCommand -FilePath dotnet -Arguments @("nuget", "locals", "all", "--clear") -Description "dotnet nuget locals"
+try {
+    Invoke-ExternalCommand -FilePath dotnet -Arguments @("nuget", "locals", "all", "--clear") -Description "dotnet nuget locals"
+}
+catch {
+    Write-Warning ("dotnet nuget locals failed; continuing with existing caches. {0}" -f $_.Exception.Message)
+}
 
 Write-Host "[3/10] Restore dependencies"
 Invoke-ExternalCommand -FilePath dotnet -Arguments @("restore", "Shoots.sln") -Description "dotnet restore Shoots.sln"

@@ -8,6 +8,8 @@ param(
 )
 
 $timestamp = [DateTimeOffset]::UtcNow.ToString("O")
+$fence = '```'
+
 $lines = @(
     "# Phase 9 Validation Report",
     "",
@@ -22,9 +24,10 @@ $lines = @(
 if (-not [string]::IsNullOrWhiteSpace($FirstFailure)) {
     $lines += "## First Failure"
     $lines += ""
-    $lines += "```"
+    $lines += $fence
     $lines += $FirstFailure
-    $lines += "```"
+    $lines += $fence
+    $lines += ""
 }
 
 $directory = Split-Path -Path $OutputPath -Parent

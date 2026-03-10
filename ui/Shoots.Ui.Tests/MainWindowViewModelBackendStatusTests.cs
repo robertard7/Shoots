@@ -475,7 +475,6 @@ public sealed class MainWindowViewModelBackendStatusTests
                 new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
             new SequenceOllamaClient(
                 new OllamaTagsResult(true, new[] { "model-a", "model-b" }, null, "ok"),
-                new OllamaTagsResult(true, new[] { "model-a", "model-b" }, null, "ok"),
                 new OllamaTagsResult(true, new[] { "model-c", "model-d" }, null, "ok"),
                 new OllamaTagsResult(true, new[] { "model-c", "model-e" }, null, "ok")));
 

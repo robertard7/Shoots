@@ -86,13 +86,23 @@ catch {
 }
 finally {
     if (Test-Path $phase9ReportScript) {
-        & powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $phase9ReportScript `
-            -OutputPath ".codex/validation/phase9_validation.md" `
-            -BuildResult $buildResult `
-            -TestResult $testResult `
-            -SmokeResult $smokeResult `
-            -IntegrityResult $integrityResult `
-            -FirstFailure $firstFailure
+        $reportArguments = @(
+            "-NoLogo",
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", $phase9ReportScript,
+            "-OutputPath", ".codex/validation/phase9_validation.md",
+            "-BuildResult", $buildResult,
+            "-TestResult", $testResult,
+            "-SmokeResult", $smokeResult,
+            "-IntegrityResult", $integrityResult
+        )
+
+        if (-not [string]::IsNullOrWhiteSpace($firstFailure)) {
+            $reportArguments += @("-FirstFailure", $firstFailure)
+        }
+
+        & powershell @reportArguments
     }
 }
 
