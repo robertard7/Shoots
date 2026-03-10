@@ -10,6 +10,45 @@
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
+    <Style x:Key="OperationBusyGlyphStyle" TargetType="TextBlock">
+      <Setter Property="Opacity" Value="0.4" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsOperationBusyIndicatorVisible}" Value="True">
+          <DataTrigger.EnterActions>
+            <BeginStoryboard>
+              <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                 From="0.25"
+                                 To="1"
+                                 Duration="0:0:0.6" />
+              </Storyboard>
+            </BeginStoryboard>
+          </DataTrigger.EnterActions>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style x:Key="OperationStepStateStyle" TargetType="Border">
+      <Setter Property="Background" Value="#FFF8FAFC" />
+      <Setter Property="BorderBrush" Value="#FFE5E7EB" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="6" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding StepState}" Value="active">
+          <Setter Property="Background" Value="#FFEFF6FF" />
+          <Setter Property="BorderBrush" Value="#FF60A5FA" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding StepState}" Value="completed">
+          <Setter Property="Background" Value="#FFF0FDF4" />
+          <Setter Property="BorderBrush" Value="#FF86EFAC" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding StepState}" Value="failed">
+          <Setter Property="Background" Value="#FFFEF2F2" />
+          <Setter Property="BorderBrush" Value="#FFFCA5A5" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
   </Window.Resources>
 
   <Grid Margin="24">
@@ -166,6 +205,7 @@
           <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
             <TextBlock VerticalAlignment="Center"
                        FontSize="16"
+                       Style="{StaticResource OperationBusyGlyphStyle}"
                        Text="⟳"
                        Visibility="{Binding IsOperationBusyIndicatorVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <ProgressBar Width="100"
@@ -217,19 +257,21 @@
           <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding OperationProgressSteps}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <StackPanel Margin="0,2,0,0">
-                  <TextBlock FontWeight="SemiBold">
-                    <Run Text="{Binding StepOrder}" />
-                    <Run Text=". " />
-                    <Run Text="{Binding StepName}" />
-                  </TextBlock>
-                  <TextBlock FontSize="11"
-                             Foreground="#FF6B7280"
-                             Text="{Binding StepState, StringFormat=State: {0}}" />
-                  <TextBlock FontSize="11"
-                             Text="{Binding StepDetail}"
-                             TextWrapping="Wrap" />
-                </StackPanel>
+                <Border Margin="0,2,0,0" Style="{StaticResource OperationStepStateStyle}">
+                  <StackPanel>
+                    <TextBlock FontWeight="SemiBold">
+                      <Run Text="{Binding StepOrder}" />
+                      <Run Text=". " />
+                      <Run Text="{Binding StepName}" />
+                    </TextBlock>
+                    <TextBlock FontSize="11"
+                               Foreground="#FF6B7280"
+                               Text="{Binding StepState, StringFormat=State: {0}}" />
+                    <TextBlock FontSize="11"
+                               Text="{Binding StepDetail}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>

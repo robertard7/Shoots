@@ -413,8 +413,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _ => "idle"
     };
     public string CurrentOperationDetail => OperationStatusDetail;
-    public string BusyState => IsOperationActive || IsBusy ? "busy" : "idle";
-    public bool IsOperationBusyIndicatorVisible => IsOperationActive;
+    public string BusyState => IsOperationActive || IsOperationCompletionHoldActive || IsBusy ? "busy" : "idle";
+    public bool IsOperationBusyIndicatorVisible => IsOperationActive || IsOperationCompletionHoldActive;
     public bool IsOperationCompletionHoldActive =>
         !_isOperationActive && _isOperationVisible && !string.Equals(_operationStatusLine, "Idle", StringComparison.Ordinal);
     public string RunDemoPlanDisabledReason => GetRunDemoPlanDisabledReason();
@@ -3254,9 +3254,14 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private string BuildOperationBusyReason()
     {
-        if (!_isOperationActive)
+        if (!_isOperationActive && !IsOperationCompletionHoldActive)
         {
             return string.Empty;
+        }
+
+        if (IsOperationCompletionHoldActive)
+        {
+            return "Run disabled while completion state is being displayed.";
         }
 
         return $"Run disabled while {OperationStatusLine.ToLowerInvariant()} is in progress.";
