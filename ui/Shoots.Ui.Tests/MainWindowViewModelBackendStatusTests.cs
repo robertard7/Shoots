@@ -96,6 +96,8 @@ public sealed class MainWindowViewModelBackendStatusTests
 
         Assert.Equal("ui.backends.refresh.in_progress: wait for backend probe completion.", vm.RefreshBackendsDisabledReason);
         Assert.False(vm.RefreshBackendStatusCommand.CanExecute(null));
+        Assert.Equal("Waiting on provider", vm.CurrentOperationStage);
+        Assert.Equal("active", vm.CurrentOperationStatus);
 
         probeService.Release();
         await refreshTask;
@@ -511,7 +513,7 @@ public sealed class MainWindowViewModelBackendStatusTests
         InvokePrivate(
             vm,
             "BeginOperationProgress",
-            "Refreshing backend status",
+            "Refreshing backend",
             "Probing backend health and model catalog.",
             new[] { "Probe Ollama", "Probe Qdrant", "Refresh model catalog" });
 
@@ -519,7 +521,7 @@ public sealed class MainWindowViewModelBackendStatusTests
         Assert.Equal("active", vm.CurrentOperationStatus);
         Assert.True(vm.IsOperationBusyIndicatorVisible);
         Assert.False(vm.QuickDemoCommand.CanExecute(null));
-        Assert.Contains("refreshing backend status", vm.QuickDemoDisabledReason, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("refreshing backend", vm.QuickDemoDisabledReason, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -561,6 +563,8 @@ public sealed class MainWindowViewModelBackendStatusTests
             new[] { "Create project", "Plan run", "Execute tools", "Host run", "Verification", "Completed" },
             vm.OperationProgressSteps.Select(step => step.Name).ToArray());
         Assert.Equal("completed", vm.OperationProgressSteps.Single(step => step.Name == "Completed").State);
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, vm.OperationProgressSteps.Select(step => step.StepOrder).ToArray());
+        Assert.Equal("Create project", vm.OperationProgressSteps[0].StepName);
         Assert.NotEmpty(vm.OperationNarrationFeed);
     }
 
@@ -622,6 +626,22 @@ public sealed class MainWindowViewModelBackendStatusTests
 
         Assert.Equal("Completed", vm.CurrentOperation);
         Assert.Equal("completed", vm.CurrentOperationStatus);
+    }
+
+
+    [Fact]
+    public void Quick_demo_is_disabled_while_verification_is_in_progress()
+    {
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")));
+
+        InvokePrivate(vm, "BeginOperationProgress", "Verifying run", "Validating run artifacts.", new[] { "Verification" });
+
+        Assert.False(vm.QuickDemoCommand.CanExecute(null));
+        Assert.Contains("verification", vm.QuickDemoDisabledReason, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

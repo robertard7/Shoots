@@ -2007,9 +2007,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             BeginOperationProgress(
                 "Planning run",
                 "Preparing deterministic demo plan.",
-                "Create plan",
-                "Run tools",
-                "Verify run");
+                "Plan run",
+                "Execute tools",
+                "Host run",
+                "Verification");
         }
 
         if (CurrentProject is null)
@@ -2019,7 +2020,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             ReportRunDemoProgress(progress, "Failed", "Run Demo failed: no project loaded.", "Plan run", "failed");
             if (manageOperationProgress)
             {
-                SetOperationStepState("Create plan", "failed", "No project loaded.");
+                SetOperationStepState("Plan run", "failed", "No project loaded.");
                 CompleteOperationProgress(false, "Run Demo failed: no project loaded.");
             }
             return Task.CompletedTask;
@@ -2035,7 +2036,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             ReportRunDemoProgress(progress, "Failed", $"Run Demo blocked: {details}", "Plan run", "failed");
             if (manageOperationProgress)
             {
-                SetOperationStepState("Create plan", "failed", details);
+                SetOperationStepState("Plan run", "failed", details);
                 CompleteOperationProgress(false, $"Run Demo blocked: {details}");
             }
             RecordFailure(
@@ -2062,7 +2063,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 if (manageOperationProgress)
                 {
                     SetOperationStatus("Waiting on provider", providerMessage);
-                    SetOperationStepState("Create plan", "failed", providerMessage);
+                    SetOperationStepState("Plan run", "failed", providerMessage);
                     CompleteOperationProgress(false, providerMessage);
                 }
                 RecordFailure(
@@ -2080,7 +2081,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 ReportRunDemoProgress(progress, "Failed", "Planner could not build a deterministic plan.", "Plan run", "failed");
                 if (manageOperationProgress)
                 {
-                    SetOperationStepState("Create plan", "failed", "Planner could not build a deterministic plan.");
+                    SetOperationStepState("Plan run", "failed", "Planner could not build a deterministic plan.");
                     CompleteOperationProgress(false, "Run Demo failed: planner could not build a plan.");
                 }
                 RecordFailure(
@@ -2100,7 +2101,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             if (manageOperationProgress)
             {
                 SetOperationStatus("Planning run", "Plan generated, preparing execution.");
-                SetOperationStepState("Create plan", "completed", $"Plan {plan.PlanId} created.");
+                SetOperationStepState("Plan run", "completed", $"Plan {plan.PlanId} created.");
             }
             AddNarration("step", "RUNTIME_SUBMITTED", new Dictionary<string, string>
             {
@@ -2148,7 +2149,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                     ReportRunDemoProgress(progress, "Failed", $"Host transport failed: {hostError}", "Host run", "failed");
                     if (manageOperationProgress)
                     {
-                        SetOperationStepState("Run tools", "failed", hostError);
+                        SetOperationStepState("Host run", "failed", hostError);
                         CompleteOperationProgress(false, $"Host transport failed: {hostError}");
                     }
                     RecordFailure(
@@ -2206,7 +2207,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             ReportRunDemoProgress(progress, "Verifying run", "Validating run artifacts.", "Verification", "active");
             if (manageOperationProgress)
             {
-                SetOperationStepState("Run tools", "completed", "Tool execution finished.");
+                SetOperationStepState("Execute tools", "completed", "Tool execution finished.");
                 SetOperationStatus("Verifying run", "Validating run artifacts.");
             }
             _lastDemoRunPath = execution.RunPath;
@@ -2228,13 +2229,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                 if (verification.Valid)
                 {
                     ReportRunDemoProgress(progress, "Completed", _lastRunVerificationState, "Verification", "completed");
-                    SetOperationStepState("Verify run", "completed", _lastRunVerificationState);
+                    SetOperationStepState("Verification", "completed", _lastRunVerificationState);
                     CompleteOperationProgress(true, $"Run completed and {_lastRunVerificationState.ToLowerInvariant()}.");
                 }
                 else
                 {
                     ReportRunDemoProgress(progress, "Failed", _lastRunVerificationState, "Verification", "failed");
-                    SetOperationStepState("Verify run", "failed", _lastRunVerificationState);
+                    SetOperationStepState("Verification", "failed", _lastRunVerificationState);
                     CompleteOperationProgress(false, "Run completed but verification is invalid.");
                 }
             }
@@ -2292,7 +2293,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             AddNarration("error", "RunDemoPlan failed", new Dictionary<string, string> { ["error"] = ex.Message });
             if (manageOperationProgress)
             {
-                SetOperationStepState("Run tools", "failed", ex.Message);
+                SetOperationStepState("Execute tools", "failed", ex.Message);
                 CompleteOperationProgress(false, $"Run Demo failed: {ex.Message}");
             }
             ReportRunDemoProgress(progress, "Failed", $"Run Demo failed: {ex.Message}", "Execute tools", "failed");
@@ -2879,11 +2880,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         ProbeInFlight = true;
         try
         {
-            SetOperationStatus("Refreshing backend", "Checking Ollama endpoint.");
+            SetOperationStatus("Waiting on provider", "Checking Ollama endpoint.");
             SetOperationStepState("Probe Ollama", "active", "Checking Ollama endpoint.");
             var ollama = await _backendProbeService.ProbeOllamaAsync(default);
             SetOperationStepState("Probe Ollama", ollama.IsAvailable ? "completed" : "failed", ollama.Summary ?? ollama.Detail);
-            SetOperationStatus("Refreshing backend", "Checking vector memory endpoint.");
+            SetOperationStatus("Waiting on provider", "Checking vector memory endpoint.");
             SetOperationStepState("Probe Qdrant", "active", "Checking vector memory endpoint.");
             var qdrant = await _backendProbeService.ProbeQdrantAsync(default);
             SetOperationStepState("Probe Qdrant", qdrant.IsAvailable ? "completed" : "failed", qdrant.Summary ?? qdrant.Detail);
@@ -2901,7 +2902,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(BackendDisabledReason));
             OnPropertyChanged(nameof(RunIntakePlanDisabledReason));
 
-            SetOperationStatus("Refreshing backend", "Loading model catalog.");
+            SetOperationStatus("Waiting on provider", "Loading model catalog.");
             SetOperationStepState("Refresh model catalog", "active", "Loading models from backend.");
             await RefreshModelCatalogFromBackendAsync();
             if (HasModelCatalogError)
@@ -3047,9 +3048,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             _operationDisplayUntilUtc = null;
             _operationProgressSteps.Clear();
             _operationNarrationFeed.Clear();
-            foreach (var step in steps)
+            for (var index = 0; index < steps.Length; index++)
             {
-                _operationProgressSteps.Add(new OperationProgressStepRow(step));
+                var step = steps[index];
+                _operationProgressSteps.Add(new OperationProgressStepRow(step, index + 1));
             }
 
             OnPropertyChanged(nameof(OperationStatusLine));
@@ -3136,7 +3138,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             var step = _operationProgressSteps.FirstOrDefault(candidate => string.Equals(candidate.Name, stepName, StringComparison.Ordinal));
             if (step is null)
             {
-                step = new OperationProgressStepRow(stepName);
+                step = new OperationProgressStepRow(stepName, _operationProgressSteps.Count + 1);
                 _operationProgressSteps.Add(step);
                 OnPropertyChanged(nameof(HasOperationSteps));
             }
@@ -4331,12 +4333,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         private string _state = "pending";
         private string _detail = string.Empty;
 
-        public OperationProgressStepRow(string name)
+        public OperationProgressStepRow(string name, int order)
         {
             Name = name;
+            Order = order;
         }
 
         public string Name { get; }
+        public int Order { get; }
+        public string StepName => Name;
+        public string StepState => State;
+        public string StepDetail => Detail;
+        public int StepOrder => Order;
         public string State => _state;
         public string Detail => _detail;
 

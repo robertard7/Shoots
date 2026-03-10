@@ -157,6 +157,12 @@
         </Border.Style>
         <StackPanel>
           <TextBlock Text="Working Now" FontWeight="SemiBold" />
+          <TextBlock Margin="0,2,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding CurrentOperation, StringFormat=Operation: {0}}" />
+          <TextBlock Margin="0,2,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding CurrentOperationStage, StringFormat=Stage: {0}}" />
           <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
             <TextBlock VerticalAlignment="Center"
                        FontSize="16"
@@ -178,6 +184,16 @@
                      TextWrapping="Wrap" />
           <TextBlock Margin="0,2,0,0"
                      Foreground="#FF6B7280"
+                     Text="{Binding BusyState, StringFormat=Busy state: {0}}" />
+          <TextBlock Margin="0,2,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding CompletionHold, StringFormat=Completion hold: {0}}" />
+          <TextBlock Margin="0,2,0,0"
+                     Foreground="#FF6B7280"
+                     Text="{Binding ActionDisableReason, StringFormat=Action gate: {0}}"
+                     TextWrapping="Wrap" />
+          <TextBlock Margin="0,2,0,0"
+                     Foreground="#FF6B7280"
                      Text="{Binding OperationElapsedLabel}" />
           <TextBlock Margin="0,8,0,0"
                      FontWeight="SemiBold"
@@ -188,7 +204,7 @@
           <TextBlock Margin="0,8,0,0"
                      FontWeight="SemiBold"
                      Text="Live Narration Feed" />
-          <ItemsControl Margin="0,2,0,0" ItemsSource="{Binding OperationNarrationFeed}">
+          <ItemsControl Margin="0,2,0,0" ItemsSource="{Binding NarrationFeed}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <TextBlock FontSize="11"
@@ -202,13 +218,16 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <StackPanel Margin="0,2,0,0">
-                  <TextBlock FontWeight="SemiBold"
-                             Text="{Binding Name}" />
+                  <TextBlock FontWeight="SemiBold">
+                    <Run Text="{Binding StepOrder}" />
+                    <Run Text=". " />
+                    <Run Text="{Binding StepName}" />
+                  </TextBlock>
                   <TextBlock FontSize="11"
                              Foreground="#FF6B7280"
-                             Text="{Binding State, StringFormat=State: {0}}" />
+                             Text="{Binding StepState, StringFormat=State: {0}}" />
                   <TextBlock FontSize="11"
-                             Text="{Binding Detail}"
+                             Text="{Binding StepDetail}"
                              TextWrapping="Wrap" />
                 </StackPanel>
               </DataTemplate>
@@ -302,7 +321,6 @@
       <Button Margin="0,6,0,0"
               Content="Run Demo Plan"
               Command="{Binding RunDemoPlanCommand}"
-              IsEnabled="{Binding HasProjectLoaded}"
               ToolTip="{Binding RunDemoPlanDisabledReason}"
               ToolTipService.ShowOnDisabled="True" />
 
