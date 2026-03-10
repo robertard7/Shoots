@@ -308,6 +308,11 @@
                      Visibility="{Binding HasLastFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
           <TextBlock Margin="0,2,0,0"
                      FontSize="11"
+                     Text="{Binding LastFailureMessage}"
+                     TextWrapping="Wrap"
+                     Visibility="{Binding HasLastFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
+          <TextBlock Margin="0,2,0,0"
+                     FontSize="11"
                      Text="{Binding LastFailureFirstStackFrame}"
                      TextWrapping="Wrap"
                      Visibility="{Binding HasLastFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />

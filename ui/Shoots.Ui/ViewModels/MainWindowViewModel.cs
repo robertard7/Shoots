@@ -454,7 +454,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public bool HasLatestRunPath => !string.IsNullOrWhiteSpace(LatestRunPath) && Directory.Exists(LatestRunPath);
     public string LastFailureExceptionType => ExtractFailureExceptionType(LastFailureReason);
     public string LastFailureFirstStackFrame => ExtractFailureFirstStackFrame(LastFailureReason);
-    public string FatalLogPath => Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Shoots.UI", "fatal.log");
+    public string FatalLogPath => Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Shoots.UI", "fatal-error.log");
 
 	public string IntakeTarget
 	{
@@ -798,6 +798,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasLastFailure));
         OnPropertyChanged(nameof(LastFailurePhase));
         OnPropertyChanged(nameof(LastFailureReason));
+        OnPropertyChanged(nameof(LastFailureMessage));
         OnPropertyChanged(nameof(LastFailureProofPath));
         OnPropertyChanged(nameof(LastFailureNextAction));
         OnPropertyChanged(nameof(LastFailureSummary));
@@ -1390,6 +1391,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public bool HasLastFailure => _lastFailure is not null;
     public string LastFailurePhase => _lastFailure?.Phase ?? "None";
     public string LastFailureReason => _lastFailure?.Reason ?? "No failures recorded.";
+    public string LastFailureMessage => LastFailureReason;
     public string LastFailureProofPath => _lastFailure?.ProofPath ?? string.Empty;
     public string LastFailureNextAction => _lastFailure?.NextAction ?? string.Empty;
     public string LastFailureSummary =>

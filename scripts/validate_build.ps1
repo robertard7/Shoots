@@ -12,6 +12,13 @@ Set-Location $repoRoot
 New-Item -ItemType Directory -Force -Path artifacts | Out-Null
 
 $requiredSdk = (Get-Content global.json -Raw | ConvertFrom-Json).sdk.version
+$phase9ReportScript = Join-Path $repoRoot "tools/verify/phase9_validation_report.ps1"
+
+$buildResult = "not-run"
+$testResult = "not-run"
+$smokeResult = "not-run"
+$integrityResult = "not-run"
+$firstFailure = ""
 
 function Invoke-Step {
     param(
@@ -50,9 +57,44 @@ if ($WarningsAsErrors) {
     $warnArgs += '/p:TreatWarningsAsErrors=true'
 }
 
-Invoke-Step -Phase "restore" -FilePath "dotnet" -Arguments @("restore", "Shoots.sln")
-Invoke-Step -Phase "build-$Configuration" -FilePath "dotnet" -Arguments (@("build", "Shoots.sln", "-c", $Configuration, "-v", "minimal", "--no-restore") + $warnArgs)
-Invoke-Step -Phase "test-$Configuration" -FilePath "dotnet" -Arguments (@("test", "Shoots.sln", "-c", $Configuration, "-v", "minimal", "--no-build", "--no-restore") + $warnArgs)
+try {
+    Invoke-Step -Phase "restore" -FilePath "dotnet" -Arguments @("restore", "Shoots.sln")
+    Invoke-Step -Phase "build-$Configuration" -FilePath "dotnet" -Arguments (@("build", "Shoots.sln", "-c", $Configuration, "-v", "minimal", "--no-restore") + $warnArgs)
+    $buildResult = "passed"
+
+    Invoke-Step -Phase "test-$Configuration" -FilePath "dotnet" -Arguments (@("test", "Shoots.sln", "-c", $Configuration, "-v", "minimal", "--no-build", "--no-restore") + $warnArgs)
+    $testResult = "passed"
+
+    # validate_build.ps1 only executes build+test. Smoke/integrity are reported by runner workflow stages.
+    $smokeResult = "runner-stage"
+    $integrityResult = "runner-stage"
+}
+catch {
+    $message = $_.Exception.Message
+    if ([string]::IsNullOrWhiteSpace($firstFailure)) {
+        $firstFailure = $message
+    }
+
+    if ($buildResult -eq "not-run") {
+        $buildResult = "failed"
+    }
+    elseif ($testResult -eq "not-run") {
+        $testResult = "failed"
+    }
+
+    throw
+}
+finally {
+    if (Test-Path $phase9ReportScript) {
+        & powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File $phase9ReportScript `
+            -OutputPath ".codex/validation/phase9_validation.md" `
+            -BuildResult $buildResult `
+            -TestResult $testResult `
+            -SmokeResult $smokeResult `
+            -IntegrityResult $integrityResult `
+            -FirstFailure $firstFailure
+    }
+}
 
 @(
     "BUILD_OK=1"
