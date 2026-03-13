@@ -1,0 +1,45 @@
+{
+  "RunId": "20260312-044021987Z-qwen2-5-0-5b-instruct-test-project-validation",
+  "ActionLabel": "Builder proof: Small test project",
+  "OutputFolder": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+  "CompletedUtc": "2026-03-12T04:40:30.8742192+00:00",
+  "OverallResult": "failed",
+  "ReadinessClassification": "not_ready",
+  "StabilityClassification": "failed",
+  "StabilityStatus": "Failed",
+  "FirstFailure": {
+    "StageLabel": "Build target",
+    "ErrorExcerpt": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\ProofCalc\\Calculator.cs(7,28): error CS1002: ; expected [C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\ProofCalc\\ProofCalc.csproj]",
+    "LogPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\01-build.log",
+    "ProjectOrFile": "Small test project",
+    "FailingTestName": ""
+  },
+  "BlockedStageNotes": [],
+  "FollowupCategory": "fix_build",
+  "NextStep": "Inspect the compile failure, apply a bounded fix, and rerun the failing build scope.",
+  "HasRecentRepeatedIssue": false,
+  "RepeatedIssueSummary": "No recent repeated issue recorded for this builder proof case.",
+  "IssueFingerprint": "test-project|compile_fix_edit|qwen2.5:0.5b-instruct",
+  "HandoffBundlePath": "",
+  "HandoffSummaryPath": "",
+  "IntakePath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_followup_intake.json",
+  "PromptPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_followup_prompt.txt",
+  "ArtifactPaths": [
+    {
+      "Label": "builder_proof_matrix.json",
+      "Path": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\builder_proof_matrix.json"
+    },
+    {
+      "Label": "build_log",
+      "Path": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\01-build.log"
+    },
+    {
+      "Label": "validation_result.json",
+      "Path": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_result.json"
+    },
+    {
+      "Label": "validation_stability.json",
+      "Path": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_stability.json"
+    }
+  ]
+}

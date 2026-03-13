@@ -1,0 +1,1 @@
+Attempt the recorded formatter rename only inside the listed files. Do not widen scope or add new projects.

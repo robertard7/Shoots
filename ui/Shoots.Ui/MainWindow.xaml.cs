@@ -6,6 +6,7 @@ using Shoots.UI.ExecutionEnvironments;
 using Shoots.UI.Projects;
 using Shoots.UI.Services;
 using Shoots.UI.Settings;
+using Shoots.UI.Builder;
 using Shoots.UI.Services.Backends;
 using Shoots.UI.ViewModels;
 using System;
@@ -37,7 +38,15 @@ public partial class MainWindow : Window
 
         var ollamaClient = new OllamaClient(ollamaHttpClient);
         var qdrantClient = new QdrantClient(qdrantHttpClient);
+        var semanticReuseService = new SemanticReuseService(vectorStore: new QdrantSemanticReuseStore(qdrantHttpClient));
         var backendProbeService = new BackendProbeService(ollamaClient, qdrantClient);
+        var toolRegistry = new ToolRegistry();
+        var runtimeBridge = new RuntimeBridgeLocal(new ToolExecutionService(toolRegistry));
+        var builderExecutionService = new BuilderExecutionService(
+            runtimeBridge,
+            new ArtifactManager(),
+            toolRegistry,
+            builderStrongerTierResolver: new OllamaBuilderStrongerTierResolver(ollamaClient, EndpointResolver.ResolveOllamaEndpoint()));
 
         DataContext = new MainWindowViewModel(
             new NullExecutionCommandService(),
@@ -55,6 +64,8 @@ public partial class MainWindow : Window
             new AiPanelVisibilityService(),
             new NullAiHelpFacade(),
             backendProbeService,
-            ollamaClient);
+            ollamaClient,
+            builderExecutionService: builderExecutionService,
+            semanticReuseService: semanticReuseService);
     }
 }

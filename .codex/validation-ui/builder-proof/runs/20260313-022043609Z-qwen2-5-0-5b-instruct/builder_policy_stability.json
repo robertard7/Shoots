@@ -1,0 +1,17 @@
+{
+  "SourceProofRunId": "20260313-022043609Z-qwen2-5-0-5b-instruct",
+  "CurrentModelId": "qwen2.5:0.5b-instruct",
+  "TaskClass": "bounded_refactor",
+  "PolicyState": "split_first_low_floor",
+  "SupportLevel": "stable",
+  "SupportingRunCount": 7,
+  "ContradictionCount": 0,
+  "LatestCorroboratingArtifacts": [
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\builder_default_policy.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\builder_default_policy.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\builder_default_policy.json"
+  ],
+  "Summary": "bounded_refactor is stable for split_first_low_floor across 7 supporting proof run(s) with 0 contradiction(s).",
+  "ArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\builder_policy_stability.json",
+  "ObservedUtc": "2026-03-13T02:21:34.5375076+00:00"
+}

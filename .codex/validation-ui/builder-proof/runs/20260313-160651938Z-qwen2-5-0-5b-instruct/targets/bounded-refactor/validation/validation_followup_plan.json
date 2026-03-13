@@ -1,0 +1,79 @@
+{
+  "RunId": "20260313-160651938Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+  "ActionLabel": "Builder proof: Bounded refactor probe",
+  "OutputFolder": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+  "GeneratedUtc": "2026-03-13T16:06:53.5935212+00:00",
+  "SourceIntakePath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_followup_intake.json",
+  "FollowupCategory": "fix_build",
+  "Steps": [
+    {
+      "Order": 1,
+      "StepType": "inspect_artifact",
+      "Title": "Inspect first failure artifact",
+      "Summary": "Review the first failing build or test log before changing code.",
+      "TargetScope": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\01-build.log",
+      "ScopeConfidence": "high",
+      "EvidenceArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\01-build.log"
+      ],
+      "InteractionMode": "view_only",
+      "ActionKind": "open_artifact",
+      "ActionTarget": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\01-build.log",
+      "CommandSummary": ""
+    },
+    {
+      "Order": 2,
+      "StepType": "prepare_repair_bundle",
+      "Title": "Prepare repair bundle",
+      "Summary": "Capture the failure context for a bounded repair attempt.",
+      "TargetScope": "RefactorProof.csproj with Program.cs, NameFormatter.cs, and ProfileSummary.cs",
+      "ScopeConfidence": "high",
+      "EvidenceArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_stability.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\01-build.log"
+      ],
+      "InteractionMode": "copy_only",
+      "ActionKind": "open_repair_prep_bundle",
+      "ActionTarget": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_repair_prep_bundle.json",
+      "CommandSummary": ""
+    },
+    {
+      "Order": 3,
+      "StepType": "rerun_build_scope",
+      "Title": "Rerun bounded proof scope",
+      "Summary": "Rerun the failing proof scope after the bounded fix is applied.",
+      "TargetScope": "RefactorProof.csproj with Program.cs, NameFormatter.cs, and ProfileSummary.cs",
+      "ScopeConfidence": "medium",
+      "EvidenceArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "InteractionMode": "rerun_capable",
+      "ActionKind": "rerun_build_scope",
+      "ActionTarget": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+      "CommandSummary": "build"
+    }
+  ],
+  "TargetScopes": [
+    "RefactorProof.csproj with Program.cs, NameFormatter.cs, and ProfileSummary.cs"
+  ],
+  "TargetScopeSummary": "RefactorProof.csproj with Program.cs, NameFormatter.cs, and ProfileSummary.cs",
+  "ScopeConfidence": "medium",
+  "RequiredEvidencePaths": [
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_stability.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\01-build.log"
+  ],
+  "RerunScopeRecommendation": "Rerun the failing build scope only after the bounded fix lands.",
+  "RelatedArtifactPaths": [
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\builder_proof_matrix.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\01-build.log",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_stability.json"
+  ],
+  "EscalationHint": "Builder proof failure stayed inside a bounded target scope.",
+  "IsLatestForRepo": true,
+  "FreshnessStatus": "current",
+  "FreshnessSummary": "Current proof follow-up plan.",
+  "PlanPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160651938Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_followup_plan.json"
+}

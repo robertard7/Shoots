@@ -1,0 +1,1 @@
+Add the fixed greet endpoint and payload type only.

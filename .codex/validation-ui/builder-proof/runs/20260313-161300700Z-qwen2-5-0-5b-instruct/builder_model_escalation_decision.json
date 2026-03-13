@@ -1,0 +1,62 @@
+{
+  "ModelId": "qwen2.5:0.5b-instruct",
+  "CurrentModelId": "qwen2.5:0.5b-instruct",
+  "ProofScope": "repo_local",
+  "TargetId": "bounded-refactor",
+  "TargetLabel": "Bounded refactor probe",
+  "TaskClass": "bounded_refactor",
+  "ComplexityDimensions": {
+    "FileCountTouched": 3,
+    "ProjectCountTouched": 1,
+    "DependencyReferenceChangeCount": 0,
+    "TestChangesRequired": false,
+    "NewFileCreationCount": 1,
+    "PromptAmbiguity": "high"
+  },
+  "TrustBand": "reject_band",
+  "RoutingRecommendationState": "task_out_of_scope_for_floor",
+  "EscalationRequirementState": "task_should_be_split_first",
+  "SplitTaskRecommendationState": "split_then_escalate",
+  "RecommendedModelClass": "stronger_builder_tier",
+  "ReasonForEscalation": "Final classification: failed_after_followup.",
+  "PrimaryWeakSpot": "file_placement_mistake",
+  "PrimaryWeakSpotSummary": "File placement mistake appeared 1 time(s) and is currently classified as boundary_of_model_floor.",
+  "Reasons": [
+    "Final classification: failed_after_followup.",
+    "Files touched: 3; projects touched: 1; dependency/reference changes: 0; ambiguity: high.",
+    "This task class is retained as a routing boundary probe rather than a supported low-floor claim.",
+    "Repeated proof evidence places this task beyond the current floor.",
+    "The task creates 1 new file(s).",
+    "Escalation state: task_should_be_split_first.",
+    "Linked weak spot: File placement mistake appeared 1 time(s) and is currently classified as boundary_of_model_floor.",
+    "Repeated proof history already places this task beyond the low-floor model.",
+    "The current scope should be reduced into smaller bounded steps before another low-floor attempt."
+  ],
+  "SplitTaskGuidance": [
+    "Reduce the touched file count to one or two files per step before another low-floor attempt.",
+    "Create or move new files in a dedicated step before layering additional behavior changes.",
+    "Rewrite the task as explicit file-by-file instructions before using the low-floor model again.",
+    "Isolate file placement and namespace moves before attempting follow-on behavior edits.",
+    "Keep the task scaffold explicit: Rename scope and affected files are explicit, but the refactor still tests the floor boundary."
+  ],
+  "LinkedProofEvidencePaths": [
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161300700Z-qwen2-5-0-5b-instruct\\builder_proof_run.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161300700Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161300700Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_followup_plan.json"
+  ],
+  "ComparativeProofHook": {
+    "ComparisonKey": "repo_local|bounded_refactor",
+    "TaskClass": "bounded_refactor",
+    "CurrentModelId": "qwen2.5:0.5b-instruct",
+    "CurrentTrustBand": "reject_band",
+    "RecommendedModelClass": "stronger_builder_tier",
+    "ProofScope": "repo_local",
+    "TargetId": "bounded-refactor",
+    "CurrentProofRunArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161300700Z-qwen2-5-0-5b-instruct\\builder_proof_run.json",
+    "FutureComparisonArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161300700Z-qwen2-5-0-5b-instruct\\comparison-hooks\\repo-local-bounded-refactor.json",
+    "Summary": "Use comparison key \u0027repo_local|bounded_refactor\u0027 when a stronger-model proof run is added for the same bounded task class."
+  },
+  "Summary": "Bounded refactor probe should be split into smaller bounded steps before another low-floor attempt, and keep a stronger model ready if the split still shows boundary weak spots. Primary weak spot: File placement mistake appeared 1 time(s) and is currently classified as boundary_of_model_floor.",
+  "ArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161300700Z-qwen2-5-0-5b-instruct\\builder_model_escalation_decision.json",
+  "ObservedUtc": "2026-03-13T16:13:36.8041611+00:00"
+}

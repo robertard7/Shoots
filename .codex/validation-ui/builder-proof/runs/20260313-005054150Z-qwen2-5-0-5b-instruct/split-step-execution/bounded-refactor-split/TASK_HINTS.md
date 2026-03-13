@@ -1,0 +1,1 @@
+Update only ProfileSummary.cs so it uses the existing Formatting/DisplayNameFormatter.cs implementation. Do not move files or widen scope.

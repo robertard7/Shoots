@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Shoots.Contracts.Core;
 using Shoots.Runtime.Abstractions;
 using Xunit;
@@ -402,6 +403,68 @@ public sealed class RouteGateTests
     }
 
     [Fact]
+    public async Task TryAdvance_keeps_narrator_isolated_per_concurrent_flow()
+    {
+        var toolSpec = new ToolSpec(
+            new ToolId("tools.echo"),
+            "Echo tool.",
+            new ToolAuthorityScope(ProviderKind.Local, ProviderCapabilities.None),
+            new List<ToolInputSpec>(),
+            new List<ToolOutputSpec>(),
+            Array.Empty<string>());
+
+        var plan = CreatePlan(
+            new WorkOrderId("wo-plan"),
+            new[]
+            {
+                new RouteRule("select", RouteIntent.SelectTool, DecisionOwner.Ai, "tool.selection", MermaidNodeKind.Start, new[] { "validate" }),
+                new RouteRule("validate", RouteIntent.Validate, DecisionOwner.Runtime, "validation", MermaidNodeKind.Route, new[] { "terminate" }),
+                new RouteRule("terminate", RouteIntent.Terminate, DecisionOwner.Rule, "termination", MermaidNodeKind.Terminal, Array.Empty<string>())
+            });
+
+        var flowAReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFlowA = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var flowA = Task.Run(async () =>
+        {
+            var narrator = new RecordingNarrator();
+            RouteGate.Narrator = narrator;
+            try
+            {
+                flowAReady.TrySetResult(true);
+                await releaseFlowA.Task.ConfigureAwait(false);
+                ExecuteHappyPath(plan, toolSpec);
+                return narrator.Events;
+            }
+            finally
+            {
+                RouteGate.Narrator = null;
+            }
+        });
+
+        var flowB = Task.Run(async () =>
+        {
+            await flowAReady.Task.ConfigureAwait(false);
+            var narrator = new RecordingNarrator();
+            RouteGate.Narrator = narrator;
+            try
+            {
+                releaseFlowA.TrySetResult(true);
+                ExecuteHappyPath(plan, toolSpec);
+                return narrator.Events;
+            }
+            finally
+            {
+                RouteGate.Narrator = null;
+            }
+        });
+
+        var results = await Task.WhenAll(flowA, flowB);
+        Assert.Contains("completed", results[0]);
+        Assert.Contains("completed", results[1]);
+    }
+
+    [Fact]
     public void TryAdvance_halts_on_decision_too_early()
     {
         var plan = CreatePlan(
@@ -682,6 +745,29 @@ public sealed class RouteGateTests
             request,
             steps,
             toolResult: toolResult);
+    }
+
+    private static void ExecuteHappyPath(BuildPlan plan, ToolSpec toolSpec)
+    {
+        var registry = new SnapshotOnlyRegistry(toolSpec);
+        var state = RoutingState.CreateInitial(plan);
+
+        var decision = new RouteDecision(
+            null,
+            new ToolSelectionDecision(toolSpec.ToolId, new Dictionary<string, object?>()));
+
+        var advanced = RouteGate.TryAdvance(plan, state, decision, registry, out var nextState, out var error);
+        Assert.True(advanced);
+        Assert.Null(error);
+
+        advanced = RouteGate.TryAdvance(plan, nextState, null, registry, out var terminalState, out error);
+        Assert.True(advanced);
+        Assert.Null(error);
+
+        advanced = RouteGate.TryAdvance(plan, terminalState, null, registry, out var finalState, out error);
+        Assert.True(advanced);
+        Assert.Null(error);
+        Assert.Equal(RoutingStatus.Completed, finalState.Status);
     }
 
     private sealed class StubToolRegistry : IToolRegistry

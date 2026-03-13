@@ -1,0 +1,38 @@
+{
+  "RunId": "20260312-211727527Z-qwen2-5-0-5b-instruct-test-project-validation",
+  "OutputFolder": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+  "FollowupCategory": "fix_build",
+  "SourceIntakePath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_followup_intake.json",
+  "SourcePlanPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_followup_plan.json",
+  "HandoffBundlePath": "",
+  "FirstFailureStage": "Build target",
+  "FirstFailureExcerpt": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\ProofCalc\\Calculator.cs(7,28): error CS1002: ; expected [C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\ProofCalc\\ProofCalc.csproj]",
+  "TargetScopes": [
+    "ProofCalc.Tests.csproj with linked ProofCalc project"
+  ],
+  "TargetScopeSummary": "ProofCalc.Tests.csproj with linked ProofCalc project",
+  "ScopeConfidence": "high",
+  "EscalationHint": "No repeated unresolved proof issue recorded.",
+  "KeyArtifactPaths": [
+    {
+      "Label": "builder_proof_matrix.json",
+      "Path": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\builder_proof_matrix.json"
+    },
+    {
+      "Label": "build_log",
+      "Path": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\01-build.log"
+    },
+    {
+      "Label": "validation_result.json",
+      "Path": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_result.json"
+    },
+    {
+      "Label": "validation_stability.json",
+      "Path": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_stability.json"
+    }
+  ],
+  "SimilarCaseSuggestions": [],
+  "PlaybookSuggestions": [],
+  "BundlePath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_repair_prep_bundle.json",
+  "GeneratedUtc": "2026-03-12T21:17:47.6097207+00:00"
+}

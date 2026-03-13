@@ -1,0 +1,25 @@
+{
+  "ModelId": "qwen2.5:0.5b-instruct",
+  "RepoLocalVerdict": "sufficient_with_repair_loop",
+  "ExternalVerdict": "sufficient_for_bounded_external_targets",
+  "Summary": "The floor model is acceptable for tiny template-driven builds, including the bounded external target pack, when explicit file and namespace hints are present.",
+  "Guidance": [
+    "Good for tiny template-driven console, class-library, and test-bearing targets when explicit file and namespace hints are present.",
+    "Keep bounded compile-fix recovery available for isolated compile-fix tasks."
+  ],
+  "AllowedAssistRules": [
+    "stronger_starter_templates",
+    "explicit_file_and_namespace_hints",
+    "bounded_compile_fix_loop"
+  ],
+  "EvidencePaths": [
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\builder_proof_run.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\builder_model_floor_verdict.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\builder_external_proof_run.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\builder_external_floor_verdict.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\builder_model_floor_failure_patterns.json"
+  ],
+  "ArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\builder_model_floor_policy.json",
+  "SummaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\builder_model_floor_policy.md",
+  "ObservedUtc": "2026-03-12T05:18:30.8619998+00:00"
+}

@@ -1,0 +1,32 @@
+{
+  "SourceLaunchId": "20260313-161341805Z-qwen2-5-0-5b-instruct-split-first-low-floor-route-launch",
+  "SourceProofRunId": "20260313-161341805Z-qwen2-5-0-5b-instruct",
+  "SourceIntakeId": "20260313-161341805Z-qwen2-5-0-5b-instruct-bounded-refactor-intake",
+  "SourceExecutionPrepId": "20260313-161341805Z-qwen2-5-0-5b-instruct-bounded-refactor-intake-prep",
+  "ActualRouteUsed": "split_first_low_floor_route",
+  "ModelTierUsed": "current_model_tier",
+  "ModelUsed": "qwen2.5:0.5b-instruct",
+  "GeneratedScopeSummary": "Rerun the bounded build scope",
+  "BuildResult": "passed",
+  "TestResult": "not_applicable",
+  "FollowupState": "not_needed",
+  "FollowupIntakePath": "",
+  "FollowupPlanPath": "",
+  "RepairPrepBundlePath": "",
+  "RepairBundlePath": "",
+  "FollowupExecutionOutcomePath": "",
+  "FinalRouteOutcomeClassification": "launched_and_passed",
+  "PreparedRouteComparisonState": "confirmed",
+  "FreshnessState": "current",
+  "LinkedArtifactPaths": [
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_execution_launch.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_request_intake.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_execution_prep.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_split_first_plan.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_split_step_execution.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_comparative_proof_run.json"
+  ],
+  "Summary": "Bounded refactor probe launched on split_first_low_floor_route: launched and passed. Split-first matched the stronger-tier outcome. Compared with unsplit low-floor, split-first moved failed_after_followup/too_fragile to passed_cleanly/clean. Compared with stronger tier, split-first moved passed_cleanly/clean to passed_cleanly/clean.",
+  "ArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_execution_result.json",
+  "RecordedUtc": "2026-03-13T16:14:23.1624906+00:00"
+}

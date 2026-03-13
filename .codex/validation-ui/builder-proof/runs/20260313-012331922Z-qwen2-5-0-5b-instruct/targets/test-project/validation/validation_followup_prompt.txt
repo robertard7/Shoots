@@ -1,0 +1,7 @@
+Follow-up category: fix_build
+Next step: Inspect the compile failure, apply a bounded fix, and rerun the failing build scope.
+Model: qwen2.5:0.5b-instruct
+Provider: ollama
+Target: Small test project
+First failure: Build target: C:\dev\Shoots\.codex\validation-ui\builder-proof\runs\20260313-012331922Z-qwen2-5-0-5b-instruct\targets\test-project\ProofCalc\Calculator.cs(7,28): error CS1002: ; expected [C:\dev\Shoots\.codex\validation-ui\builder-proof\runs\20260313-012331922Z-qwen2-5-0-5b-instruct\targets\test-project\ProofCalc\ProofCalc.csproj]
+Validation result: C:\dev\Shoots\.codex\validation-ui\builder-proof\runs\20260313-012331922Z-qwen2-5-0-5b-instruct\targets\test-project\validation\validation_result.json

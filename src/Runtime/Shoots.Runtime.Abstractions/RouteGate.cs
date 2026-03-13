@@ -1,13 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Shoots.Contracts.Core;
 
 namespace Shoots.Runtime.Abstractions;
 
 public static class RouteGate
 {
-    public static IRuntimeNarrator? Narrator { get; set; }
+    private static readonly AsyncLocal<IRuntimeNarrator?> NarratorSlot = new();
+
+    public static IRuntimeNarrator? Narrator
+    {
+        get => NarratorSlot.Value;
+        set => NarratorSlot.Value = value;
+    }
 
     public static bool TryAdvance(
         BuildPlan plan,

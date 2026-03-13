@@ -1,0 +1,33 @@
+{
+  "RunId": "20260313-160823717Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+  "ActionLabel": "Builder proof: Bounded refactor probe",
+  "Classification": "failed",
+  "ConfidenceStatus": "Failed",
+  "OutputFolder": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160823717Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+  "FirstFailure": {
+    "StageId": "build",
+    "StageLabel": "Build target",
+    "ProjectOrFile": "Bounded refactor probe",
+    "FailingTestName": "",
+    "ErrorExcerpt": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160823717Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\ProfileSummary.cs(7,16): error CS0103: The name \u0027NameFormatter\u0027 does not exist in the current context [C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160823717Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\RefactorProof.csproj]",
+    "LogPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160823717Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\01-build.log",
+    "Summary": "Build target: exit_code=1; Determining projects to restore...",
+    "ExitCode": 1
+  },
+  "RetryAudits": [],
+  "StageResults": [
+    {
+      "StageId": "build",
+      "StageLabel": "Build target",
+      "Status": "failed",
+      "Summary": "Build target: exit_code=1; Determining projects to restore...",
+      "LogPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160823717Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\01-build.log",
+      "ExitCode": 1,
+      "DurationMs": 0,
+      "StabilityClassification": "failed",
+      "RetryCount": 0,
+      "RetryLogPath": null
+    }
+  ],
+  "RecordedUtc": "2026-03-13T16:08:25.1294439+00:00"
+}

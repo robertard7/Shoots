@@ -1,0 +1,3 @@
+using MultiConsole;
+
+GreetingWriter.Write();

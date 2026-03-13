@@ -1,0 +1,44 @@
+{
+  "ModelId": "qwen2.5:0.5b-instruct",
+  "Verdict": "sufficient_with_repair_loop",
+  "TaskResults": [
+    {
+      "TaskClass": "add_small_function",
+      "TargetId": "class-library",
+      "Outcome": "passed",
+      "Summary": "Class library: generated_cleanly. Build=passed. Final=passed_cleanly."
+    },
+    {
+      "TaskClass": "compile_fix_edit",
+      "TargetId": "test-project",
+      "Outcome": "recovered",
+      "Summary": "Small test project: generated_with_bounded_failure. Build=failed. Recovery=recovered. Final=recovered_with_guidance. Repeated failure classification=recoverable_with_guidance."
+    },
+    {
+      "TaskClass": "tiny_sample_app_from_template",
+      "TargetId": "service-sample",
+      "Outcome": "passed",
+      "Summary": "Service sample: generated_cleanly. Build=passed. Final=passed_cleanly."
+    },
+    {
+      "TaskClass": "trivial_edit",
+      "TargetId": "console-app",
+      "Outcome": "passed",
+      "Summary": "Console app: generated_cleanly. Build=passed. Final=passed_cleanly."
+    }
+  ],
+  "Reasons": [
+    "Clean proof targets: 3.",
+    "Recovered proof targets: 1.",
+    "Failed proof targets: 0.",
+    "Recovery burden states: clean=3, acceptable_with_repair_loop=1, too_fragile=0.",
+    "Compared against 4 prior proof history entries."
+  ],
+  "RunFolder": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct",
+  "ProofRunArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\builder_proof_run.json",
+  "ProofSummaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\builder_proof_summary.md",
+  "VerdictArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\builder_model_floor_verdict.json",
+  "VerdictSummaryPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\builder_model_floor_summary.md",
+  "Summary": "The configured model completed the bounded proof matrix, but at least one target required the guided repair loop.",
+  "ObservedUtc": "2026-03-12T05:09:04.5273124+00:00"
+}

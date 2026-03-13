@@ -1,0 +1,1 @@
+Console.WriteLine("Shoots builder proof console target passed.");

@@ -1,0 +1,331 @@
+{
+  "ProofRunId": "20260313-140702411Z-qwen2-5-0-5b-instruct",
+  "RunFolder": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct",
+  "ModelId": "qwen2.5:0.5b-instruct",
+  "CapabilityClasses": [
+    {
+      "TaskClass": "trivial_edit",
+      "ExpectationSummary": "Expected to make a tiny deterministic edit in an existing template.",
+      "InScope": true,
+      "Notes": "Bounded starter file update.",
+      "PromptTighteningSummary": "Explicit file path and exact output contract."
+    },
+    {
+      "TaskClass": "add_small_function",
+      "ExpectationSummary": "Expected to add a small implementation from strong hints.",
+      "InScope": true,
+      "Notes": "Single helper method only.",
+      "PromptTighteningSummary": "Namespace and file target are stated directly."
+    },
+    {
+      "TaskClass": "compile_fix_edit",
+      "ExpectationSummary": "Expected to recover from a bounded compile failure with guidance.",
+      "InScope": true,
+      "Notes": "Single-file compile fix only.",
+      "PromptTighteningSummary": "Compile failure is isolated to one method."
+    },
+    {
+      "TaskClass": "tiny_sample_app_from_template",
+      "ExpectationSummary": "Expected to fill in a tiny service sample from a constrained template.",
+      "InScope": true,
+      "Notes": "No broad architecture changes.",
+      "PromptTighteningSummary": "Template endpoints and output shape are fixed."
+    },
+    {
+      "TaskClass": "multi_file_console_feature",
+      "ExpectationSummary": "Expected to complete a tiny multi-file console feature.",
+      "InScope": true,
+      "Notes": "Two source files plus the starter Program.cs contract.",
+      "PromptTighteningSummary": "File list and output line are fixed in the prompt scaffold."
+    },
+    {
+      "TaskClass": "library_related_files",
+      "ExpectationSummary": "Expected to fill related helper files inside one small library.",
+      "InScope": true,
+      "Notes": "Three bounded files only.",
+      "PromptTighteningSummary": "Method names and return contracts are stated directly."
+    },
+    {
+      "TaskClass": "service_feature_addition",
+      "ExpectationSummary": "Expected to add one small API feature to a fixed service starter.",
+      "InScope": true,
+      "Notes": "Single project and one new payload type only.",
+      "PromptTighteningSummary": "Existing endpoint remains unchanged and new route is specified directly."
+    },
+    {
+      "TaskClass": "test_extension",
+      "ExpectationSummary": "Expected to extend a bounded test target without changing the project layout.",
+      "InScope": true,
+      "Notes": "One additional test file only.",
+      "PromptTighteningSummary": "The implementation already exists and only the new test contract is given."
+    },
+    {
+      "TaskClass": "ui_feature_addition",
+      "ExpectationSummary": "Expected to add one small WPF feature inside the starter window.",
+      "InScope": true,
+      "Notes": "MainWindow.xaml and MainWindow.xaml.cs only.",
+      "PromptTighteningSummary": "Window title, control names, and output text are fixed."
+    },
+    {
+      "TaskClass": "bounded_refactor",
+      "ExpectationSummary": "Boundary probe for a small multi-file refactor across a few files.",
+      "InScope": false,
+      "Notes": "Used to find the floor-routing threshold, not to claim clean low-floor support.",
+      "PromptTighteningSummary": "Rename scope and affected files are explicit, but the refactor still tests the floor boundary."
+    }
+  ],
+  "OutOfScopeItems": [
+    "large architecture changes",
+    "cross-project redesign",
+    "autonomous multi-file refactors without bounded hints",
+    "unbounded recovery outside the recorded proof scope",
+    "small refactors that already show stronger-model routing evidence"
+  ],
+  "Targets": [
+    {
+      "TargetId": "console-app",
+      "TargetType": "console_app",
+      "TaskClass": "trivial_edit",
+      "TargetLabel": "Console app",
+      "TargetScopeSummary": "ConsoleProof.csproj and Program.cs",
+      "ScopeConfidence": "high",
+      "HasTests": false,
+      "PromptScaffold": "Update only Program.cs so the console app prints the exact proof success line.",
+      "TemplateVariant": "standard",
+      "AllowedAssistRules": [
+        "stronger_starter_templates",
+        "explicit_file_and_namespace_hints"
+      ],
+      "ComplexityDimensions": {
+        "FileCountTouched": 1,
+        "ProjectCountTouched": 1,
+        "DependencyReferenceChangeCount": 0,
+        "TestChangesRequired": false,
+        "NewFileCreationCount": 0,
+        "PromptAmbiguity": "low"
+      }
+    },
+    {
+      "TargetId": "class-library",
+      "TargetType": "class_library",
+      "TaskClass": "add_small_function",
+      "TargetLabel": "Class library",
+      "TargetScopeSummary": "ProofLibrary.csproj and MathHelpers.cs",
+      "ScopeConfidence": "high",
+      "HasTests": false,
+      "PromptScaffold": "Implement MathHelpers.Add in MathHelpers.cs only.",
+      "TemplateVariant": "standard",
+      "AllowedAssistRules": [
+        "stronger_starter_templates",
+        "explicit_file_and_namespace_hints"
+      ],
+      "ComplexityDimensions": {
+        "FileCountTouched": 1,
+        "ProjectCountTouched": 1,
+        "DependencyReferenceChangeCount": 0,
+        "TestChangesRequired": false,
+        "NewFileCreationCount": 0,
+        "PromptAmbiguity": "low"
+      }
+    },
+    {
+      "TargetId": "test-project",
+      "TargetType": "test_project",
+      "TaskClass": "compile_fix_edit",
+      "TargetLabel": "Small test project",
+      "TargetScopeSummary": "ProofCalc.Tests.csproj with linked ProofCalc project",
+      "ScopeConfidence": "high",
+      "HasTests": true,
+      "PromptScaffold": "Keep the existing ProofCalc project layout. Fix only Calculator.cs when the bounded compile failure appears.",
+      "TemplateVariant": "standard",
+      "AllowedAssistRules": [
+        "stronger_starter_templates",
+        "explicit_file_and_namespace_hints",
+        "bounded_compile_fix_loop"
+      ],
+      "ComplexityDimensions": {
+        "FileCountTouched": 1,
+        "ProjectCountTouched": 1,
+        "DependencyReferenceChangeCount": 0,
+        "TestChangesRequired": true,
+        "NewFileCreationCount": 0,
+        "PromptAmbiguity": "low"
+      }
+    },
+    {
+      "TargetId": "service-sample",
+      "TargetType": "service_sample",
+      "TaskClass": "tiny_sample_app_from_template",
+      "TargetLabel": "Service sample",
+      "TargetScopeSummary": "ProofService.csproj and Program.cs",
+      "ScopeConfidence": "medium",
+      "HasTests": false,
+      "PromptScaffold": "Fill the fixed health and version endpoints in Program.cs only.",
+      "TemplateVariant": "standard",
+      "AllowedAssistRules": [
+        "stronger_starter_templates",
+        "explicit_file_and_namespace_hints"
+      ],
+      "ComplexityDimensions": {
+        "FileCountTouched": 1,
+        "ProjectCountTouched": 1,
+        "DependencyReferenceChangeCount": 0,
+        "TestChangesRequired": false,
+        "NewFileCreationCount": 0,
+        "PromptAmbiguity": "low"
+      }
+    },
+    {
+      "TargetId": "multi-file-console",
+      "TargetType": "console_app",
+      "TaskClass": "multi_file_console_feature",
+      "TargetLabel": "Multi-file console app",
+      "TargetScopeSummary": "MultiConsole.csproj with Program.cs, GreetingWriter.cs, and Messages.cs",
+      "ScopeConfidence": "medium",
+      "HasTests": false,
+      "PromptScaffold": "Keep Program.cs unchanged. Implement only GreetingWriter.cs and Messages.cs.",
+      "TemplateVariant": "multi_file_console",
+      "AllowedAssistRules": [
+        "stronger_starter_templates",
+        "explicit_file_and_namespace_hints"
+      ],
+      "ComplexityDimensions": {
+        "FileCountTouched": 2,
+        "ProjectCountTouched": 1,
+        "DependencyReferenceChangeCount": 0,
+        "TestChangesRequired": false,
+        "NewFileCreationCount": 0,
+        "PromptAmbiguity": "medium"
+      }
+    },
+    {
+      "TargetId": "related-library",
+      "TargetType": "class_library",
+      "TaskClass": "library_related_files",
+      "TargetLabel": "Related-file class library",
+      "TargetScopeSummary": "RelatedLibrary.csproj with NumberSummary.cs and Operations helpers",
+      "ScopeConfidence": "medium",
+      "HasTests": false,
+      "PromptScaffold": "Fill the bounded helper files and NumberSummary.cs only.",
+      "TemplateVariant": "related_library_files",
+      "AllowedAssistRules": [
+        "stronger_starter_templates",
+        "explicit_file_and_namespace_hints"
+      ],
+      "ComplexityDimensions": {
+        "FileCountTouched": 3,
+        "ProjectCountTouched": 1,
+        "DependencyReferenceChangeCount": 0,
+        "TestChangesRequired": false,
+        "NewFileCreationCount": 0,
+        "PromptAmbiguity": "medium"
+      }
+    },
+    {
+      "TargetId": "service-feature",
+      "TargetType": "service_sample",
+      "TaskClass": "service_feature_addition",
+      "TargetLabel": "Service feature addition",
+      "TargetScopeSummary": "ProofFeatureService.csproj with Program.cs and GreetingPayload.cs",
+      "ScopeConfidence": "medium",
+      "HasTests": false,
+      "PromptScaffold": "Add the fixed greet endpoint and payload type only.",
+      "TemplateVariant": "service_feature_addition",
+      "AllowedAssistRules": [
+        "stronger_starter_templates",
+        "explicit_file_and_namespace_hints"
+      ],
+      "ComplexityDimensions": {
+        "FileCountTouched": 2,
+        "ProjectCountTouched": 1,
+        "DependencyReferenceChangeCount": 0,
+        "TestChangesRequired": false,
+        "NewFileCreationCount": 1,
+        "PromptAmbiguity": "medium"
+      }
+    },
+    {
+      "TargetId": "test-extension",
+      "TargetType": "test_project",
+      "TaskClass": "test_extension",
+      "TargetLabel": "Test extension target",
+      "TargetScopeSummary": "ExtensionCalc.Tests.csproj with linked ExtensionCalc project",
+      "ScopeConfidence": "medium",
+      "HasTests": true,
+      "PromptScaffold": "Add the new subtraction test file only. Keep the implementation and project references intact.",
+      "TemplateVariant": "test_extension",
+      "AllowedAssistRules": [
+        "stronger_starter_templates",
+        "explicit_file_and_namespace_hints",
+        "bounded_compile_fix_loop"
+      ],
+      "ComplexityDimensions": {
+        "FileCountTouched": 1,
+        "ProjectCountTouched": 1,
+        "DependencyReferenceChangeCount": 0,
+        "TestChangesRequired": true,
+        "NewFileCreationCount": 1,
+        "PromptAmbiguity": "medium"
+      }
+    },
+    {
+      "TargetId": "ui-feature",
+      "TargetType": "wpf_app",
+      "TaskClass": "ui_feature_addition",
+      "TargetLabel": "WPF feature addition",
+      "TargetScopeSummary": "WpfProof.csproj with MainWindow.xaml and MainWindow.xaml.cs",
+      "ScopeConfidence": "medium",
+      "HasTests": false,
+      "PromptScaffold": "Add the fixed status text and title change inside the existing window files only.",
+      "TemplateVariant": "wpf_feature_addition",
+      "AllowedAssistRules": [
+        "stronger_starter_templates",
+        "explicit_file_and_namespace_hints"
+      ],
+      "ComplexityDimensions": {
+        "FileCountTouched": 2,
+        "ProjectCountTouched": 1,
+        "DependencyReferenceChangeCount": 0,
+        "TestChangesRequired": false,
+        "NewFileCreationCount": 0,
+        "PromptAmbiguity": "medium"
+      }
+    },
+    {
+      "TargetId": "bounded-refactor",
+      "TargetType": "class_library",
+      "TaskClass": "bounded_refactor",
+      "TargetLabel": "Bounded refactor probe",
+      "TargetScopeSummary": "RefactorProof.csproj with Program.cs, NameFormatter.cs, and ProfileSummary.cs",
+      "ScopeConfidence": "medium",
+      "HasTests": false,
+      "PromptScaffold": "Attempt the recorded formatter rename only inside the listed files. Do not widen scope or add new projects.",
+      "TemplateVariant": "bounded_refactor",
+      "AllowedAssistRules": [
+        "stronger_starter_templates",
+        "explicit_file_and_namespace_hints"
+      ],
+      "ComplexityDimensions": {
+        "FileCountTouched": 3,
+        "ProjectCountTouched": 1,
+        "DependencyReferenceChangeCount": 0,
+        "TestChangesRequired": false,
+        "NewFileCreationCount": 1,
+        "PromptAmbiguity": "high"
+      }
+    }
+  ],
+  "ProofScope": "repo_local",
+  "PromptTighteningRules": [
+    "keep generation inside the recorded file list",
+    "state the namespace and project file explicitly",
+    "treat bounded compile-fix work as a single-file correction only",
+    "state whether new files may be created before generation begins",
+    "pin UI feature work to MainWindow.xaml and MainWindow.xaml.cs only"
+  ],
+  "AllowedAssistRules": [
+    "stronger_starter_templates",
+    "explicit_file_and_namespace_hints",
+    "bounded_compile_fix_loop"
+  ]
+}

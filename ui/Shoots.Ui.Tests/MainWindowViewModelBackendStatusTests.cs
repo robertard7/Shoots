@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Shoots.Contracts.Core.AI;
@@ -916,6 +917,42 @@ public sealed class MainWindowViewModelBackendStatusTests
             Assert.True(vm.IsReplayMode);
             Assert.Equal(runPath, vm.ReplaySourcePath);
             Assert.Contains("matches saved run metadata", vm.ReplaySummary, System.StringComparison.Ordinal);
+            Assert.Contains("original=", vm.ReplayTimingSummary, System.StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(runPath, RunReplayService.ReplayDiffFileName)));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Refresh_backend_status_persists_provider_diagnostics_history()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"shoots-provider-diag-{System.Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, false, "ui.ollama.connection_refused", "down", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(false, System.Array.Empty<string>(), "ui.ollama.connection_refused", "down")));
+
+            SetPrivateField(vm, "_activeWorkspace", new ProjectWorkspace("diag", tempRoot, System.DateTimeOffset.UtcNow, ProjectId: "diag-project"));
+            await vm.RefreshBackendStatusCommand.ExecuteAsync();
+
+            var diagnosticsPath = Path.Combine(tempRoot, "provider_diagnostics.json");
+            Assert.True(File.Exists(diagnosticsPath));
+            var entries = System.Text.Json.JsonSerializer.Deserialize<IReadOnlyList<MainWindowViewModel.ProviderDiagnosticEventRow>>(File.ReadAllText(diagnosticsPath));
+            Assert.NotNull(entries);
+            Assert.NotEmpty(entries!);
+            Assert.Contains(entries!, entry => entry.Classification == "connection_refused");
+            Assert.True(vm.HasProviderDiagnostics);
         }
         finally
         {
@@ -1043,6 +1080,2529 @@ public sealed class MainWindowViewModelBackendStatusTests
         Assert.Contains("last_failure_reason", appSource, System.StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Validation_commands_are_disabled_while_validation_loop_is_running()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runner = new BlockingValidationRunnerService(repoRoot);
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: runner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            var task = vm.RunFullValidationLoopCommand.ExecuteAsync();
+            await runner.WaitForStartAsync();
+
+            Assert.False(vm.BuildUiProjectCommand.CanExecute(null));
+            Assert.False(vm.RunUiTestsCommand.CanExecute(null));
+            Assert.Contains("using the workspace", vm.ValidationDisabledReason, System.StringComparison.Ordinal);
+
+            runner.Release();
+            await task;
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Validation_result_surface_updates_after_success()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var outputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-001");
+        Directory.CreateDirectory(outputFolder);
+
+        var runner = new DeterministicValidationRunnerService(
+            repoRoot,
+            new ValidationRunResult(
+                "run-001",
+                "Run full validation loop",
+                outputFolder,
+                true,
+                "Validation passed (2 stages).",
+                null,
+                null,
+                System.DateTimeOffset.UtcNow.AddMinutes(-1),
+                System.DateTimeOffset.UtcNow,
+                new[]
+                {
+                    new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded.", Path.Combine(outputFolder, "01-build-ui.log"), 0, 50),
+                    new ValidationStageResult("ui_tests", "Running UI tests", "passed", "Tests passed.", Path.Combine(outputFolder, "02-ui-tests.log"), 0, 75)
+                }));
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: runner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            await vm.RunFullValidationLoopCommand.ExecuteAsync();
+
+            Assert.Equal("Validation passed (2 stages).", vm.ValidationSummary);
+            Assert.True(vm.HasValidationOutputFolder);
+            Assert.Equal(2, vm.ValidationStageResults.Count);
+            Assert.Equal("passed", vm.ValidationStageResults[0].Status);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Validation_result_surface_updates_after_failure()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var outputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-002");
+        Directory.CreateDirectory(outputFolder);
+        var failureLog = Path.Combine(outputFolder, "02-ui-tests.log");
+        File.WriteAllText(failureLog, "failed");
+
+        var runner = new DeterministicValidationRunnerService(
+            repoRoot,
+            new ValidationRunResult(
+                "run-002",
+                "Run full validation loop",
+                outputFolder,
+                false,
+                "Validation failed: Tests failed.",
+                "Tests failed.",
+                failureLog,
+                System.DateTimeOffset.UtcNow.AddMinutes(-1),
+                System.DateTimeOffset.UtcNow,
+                new[]
+                {
+                    new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded.", Path.Combine(outputFolder, "01-build-ui.log"), 0, 50),
+                    new ValidationStageResult("ui_tests", "Running UI tests", "failed", "Tests failed.", failureLog, 1, 75)
+                }));
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: runner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            await vm.RunFullValidationLoopCommand.ExecuteAsync();
+
+            Assert.Equal("Validation failed: Tests failed.", vm.ValidationSummary);
+            Assert.True(vm.HasValidationFirstFailure);
+            Assert.Equal("Tests failed.", vm.ValidationFirstFailureText);
+            Assert.Equal(failureLog, vm.ValidationFirstFailureLogPath);
+            Assert.Equal("failed", vm.ValidationStageResults[1].Status);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Validation_settings_changes_are_persisted()
+    {
+        var settingsStore = new InMemoryValidationSettingsStore();
+        var repoRoot = CreateValidationRepoRoot();
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(repoRoot, SuccessfulValidationResult(repoRoot)),
+            validationSettingsStore: settingsStore);
+
+        try
+        {
+            vm.ContinueValidationOnFailure = true;
+            vm.IncludeValidateBuildForFullLoop = true;
+            vm.AutoOpenValidationLogsOnFailure = true;
+            vm.EnableIsolatedValidationWorkspaceMode = true;
+            vm.ValidateGeneratedOutputAfterRun = true;
+            vm.EnableValidationStabilityRetry = true;
+            vm.SelectedValidationKeepLastRuns = 10;
+            vm.SelectedValidationHistoryRetentionCount = 50;
+            vm.SelectedValidationRegressionComparisonWindow = 10;
+            vm.CountRetryPassesAsStableInTrendSummaries = true;
+            vm.SelectedValidationBaselineHistoryRetentionCount = 10;
+            vm.CountPassedOnRetryAsReleaseReady = true;
+            vm.FlakySuspectedBlocksReleaseReadiness = false;
+            vm.EnableSemanticReuseSuggestions = true;
+            vm.SelectedSemanticReuseMaxCases = 8;
+            vm.SelectedSemanticReuseRetentionCount = 500;
+            vm.IndexProviderDiagnosticsEpisodes = false;
+            vm.OnlyShowPassingOrImprovedReuseCases = true;
+            vm.IncludePromotedRepairSuggestions = false;
+            vm.IncludeProviderEpisodeSuggestions = false;
+            vm.EnablePlaybookSuggestions = false;
+            vm.SelectedPlaybookMinimumEvidenceCount = 4;
+            vm.ShowTentativePlaybooks = false;
+            vm.SelectedSemanticReuseMaxPlaybooks = 5;
+
+            Assert.NotNull(settingsStore.LastSaved);
+            Assert.True(settingsStore.LastSaved!.ContinueOnFailure);
+            Assert.True(settingsStore.LastSaved.IncludeValidateBuild);
+            Assert.True(settingsStore.LastSaved.AutoOpenLogsOnFailure);
+            Assert.True(settingsStore.LastSaved.EnableIsolatedValidationWorkspaceMode);
+            Assert.True(settingsStore.LastSaved.ValidateGeneratedOutputAfterRun);
+            Assert.True(settingsStore.LastSaved.EnableStabilityRetry);
+            Assert.Equal(10, settingsStore.LastSaved.KeepLastRuns);
+            Assert.Equal(50, settingsStore.LastSaved.HistoryRetentionCount);
+            Assert.Equal(10, settingsStore.LastSaved.RegressionComparisonWindow);
+            Assert.True(settingsStore.LastSaved.CountRetryPassesAsStableInSummaries);
+            Assert.Equal(10, settingsStore.LastSaved.BaselineHistoryRetentionCount);
+            Assert.True(settingsStore.LastSaved.CountPassedOnRetryAsReleaseReady);
+            Assert.False(settingsStore.LastSaved.FlakySuspectedBlocksReleaseReadiness);
+            Assert.True(settingsStore.LastSaved.EnableSemanticReuseSuggestions);
+            Assert.Equal(8, settingsStore.LastSaved.MaxSemanticReuseCases);
+            Assert.Equal(500, settingsStore.LastSaved.SemanticReuseRetentionCount);
+            Assert.False(settingsStore.LastSaved.IndexProviderDiagnosticsEpisodes);
+            Assert.True(settingsStore.LastSaved.OnlyShowPassingOrImprovedReuseCases);
+            Assert.False(settingsStore.LastSaved.IncludePromotedRepairSuggestions);
+            Assert.False(settingsStore.LastSaved.IncludeProviderEpisodeSuggestions);
+            Assert.False(settingsStore.LastSaved.EnablePlaybookSuggestions);
+            Assert.Equal(4, settingsStore.LastSaved.MinimumPlaybookEvidenceCount);
+            Assert.False(settingsStore.LastSaved.ShowTentativePlaybooks);
+            Assert.Equal(5, settingsStore.LastSaved.MaxPlaybooksPerContext);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Smoke_and_integrity_validation_conflicts_have_specific_disable_reasons()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var smokeRunner = new BlockingValidationRunnerService(
+            repoRoot,
+            ValidationAction.RunSmokeValidation,
+            "Run smoke validation",
+            "smoke_validation",
+            "Running smoke validation");
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: smokeRunner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            var smokeTask = vm.RunSmokeValidationCommand.ExecuteAsync();
+            await smokeRunner.WaitForStartAsync();
+
+            Assert.False(vm.RunIntegrityValidationCommand.CanExecute(null));
+            Assert.Equal("Integrity validation is blocked while smoke validation is using the workspace.", vm.RunIntegrityValidationDisabledReason);
+
+            smokeRunner.Release();
+            await smokeTask;
+
+            var integrityRunner = new BlockingValidationRunnerService(
+                repoRoot,
+                ValidationAction.RunIntegrityValidation,
+                "Run integrity validation",
+                "integrity_validation",
+                "Running integrity validation");
+            vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                validationRunnerService: integrityRunner,
+                validationSettingsStore: new InMemoryValidationSettingsStore());
+
+            var integrityTask = vm.RunIntegrityValidationCommand.ExecuteAsync();
+            await integrityRunner.WaitForStartAsync();
+
+            Assert.False(vm.RunSmokeValidationCommand.CanExecute(null));
+            Assert.Equal("Smoke validation must finish before integrity can clean restore artifacts.", vm.RunSmokeValidationDisabledReason);
+
+            integrityRunner.Release();
+            await integrityTask;
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Validation_scheduling_surface_reflects_isolated_workspace_policy()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var settingsStore = new InMemoryValidationSettingsStore
+        {
+            Current = new ValidationSettings(false, false, 5, false, false, false, 20, 5, false, 5, false, true, false, 5, 200, true, false, true, true, true, 2, true, 3, true)
+        };
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(repoRoot, SuccessfulValidationResult(repoRoot)),
+            validationSettingsStore: settingsStore);
+
+        try
+        {
+            var buildRow = Assert.Single(vm.ValidationActionPolicies, row => string.Equals(row.ActionLabel, "Build UI project", System.StringComparison.Ordinal));
+            var integrityRow = Assert.Single(vm.ValidationActionPolicies, row => string.Equals(row.ActionLabel, "Run integrity validation", System.StringComparison.Ordinal));
+
+            Assert.Equal("Isolated workspace mode", buildRow.RunModeLabel);
+            Assert.Contains("parallel-safe", buildRow.ClassificationSummary, System.StringComparison.Ordinal);
+            Assert.Contains("workspace-cleaning", integrityRow.ClassificationSummary, System.StringComparison.Ordinal);
+            Assert.Contains("repo root", integrityRow.IsolationSummary, System.StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Validation_result_surface_shows_orchestration_mode_and_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var outputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-isolated");
+        Directory.CreateDirectory(outputFolder);
+        var orchestrationPath = Path.Combine(outputFolder, "validation_orchestration.json");
+        var policyPath = Path.Combine(repoRoot, ".codex", "validation-ui", "validation_orchestration_policy.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(policyPath)!);
+        File.WriteAllText(orchestrationPath, "{}");
+        File.WriteAllText(policyPath, "# policy");
+        var isolatedWorkspace = Path.Combine(outputFolder, "isolated-workspace");
+        Directory.CreateDirectory(isolatedWorkspace);
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(
+                repoRoot,
+                new ValidationRunResult(
+                    "run-isolated",
+                    "Build UI project",
+                    outputFolder,
+                    true,
+                    "Validation passed (1 stage).",
+                    null,
+                    null,
+                    System.DateTimeOffset.UtcNow.AddMinutes(-1),
+                    System.DateTimeOffset.UtcNow,
+                    new[]
+                    {
+                        new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded.", Path.Combine(outputFolder, "01-build-ui.log"), 0, 25)
+                    },
+                    "passed",
+                    "Passed cleanly",
+                    null,
+                    null,
+                    Path.Combine(outputFolder, "validation_stability.json"),
+                    "isolated_workspace_mode",
+                    orchestrationPath,
+                    isolatedWorkspace)),
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            await vm.BuildUiProjectCommand.ExecuteAsync();
+
+            Assert.Equal("Isolated workspace mode", vm.ValidationRunModeBadge);
+            Assert.True(vm.HasValidationOrchestrationArtifactPath);
+            Assert.Equal(orchestrationPath, vm.ValidationOrchestrationArtifactPath);
+            Assert.True(vm.HasValidationOrchestrationNotePath);
+            Assert.Equal(policyPath, vm.ValidationOrchestrationNotePath);
+            Assert.True(vm.HasValidationIsolatedWorkspacePath);
+            Assert.Equal(isolatedWorkspace, vm.ValidationIsolatedWorkspacePath);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Validation_handoff_surface_loads_latest_bundle_and_comparison()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var (validationRunner, latestResult) = await SeedValidationHandoffArtifactsAsync(repoRoot);
+        var summaryPath = ValidationRunnerService.HandoffSummaryPathForRun(latestResult.OutputFolder);
+        var bundlePath = ValidationRunnerService.HandoffBundlePathForRun(latestResult.OutputFolder);
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: validationRunner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            Assert.True(vm.HasValidationHandoffSummaryPath);
+            Assert.Equal(summaryPath, vm.ValidationHandoffSummaryPath);
+            Assert.True(vm.HasValidationHandoffBundlePath);
+            Assert.Equal(bundlePath, vm.ValidationHandoffBundlePath);
+            Assert.True(vm.HasValidationHandoffSummary);
+            Assert.Contains("failed / Failed / not ready.", vm.ValidationHandoffSummaryText, System.StringComparison.Ordinal);
+            Assert.Contains("First failure: Running UI tests: Tests failed.", vm.ValidationHandoffSummaryText, System.StringComparison.Ordinal);
+            Assert.True(vm.HasValidationHandoffComparisonSummary);
+            Assert.Contains("Result passed -> failed", vm.ValidationHandoffComparisonSummary, System.StringComparison.Ordinal);
+            Assert.True(vm.HasValidationFollowupIntakePath);
+            Assert.True(vm.HasValidationFollowupPromptPath);
+            Assert.Equal("Fix tests", vm.ValidationFollowupBadge);
+            Assert.Contains("fix tests.", vm.ValidationFollowupSummaryText, System.StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Isolate the first failing test", vm.ValidationFollowupNextStepText, System.StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Validation_handoff_helpers_open_and_copy_latest_bundle_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var (validationRunner, latestResult) = await SeedValidationHandoffArtifactsAsync(repoRoot);
+        var shell = new RecordingWorkspaceShellService();
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            workspaceShell: shell,
+            validationRunnerService: validationRunner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            await vm.OpenValidationHandoffSummaryCommand.ExecuteAsync();
+            await vm.OpenValidationHandoffBundleFolderCommand.ExecuteAsync();
+            await vm.CopyValidationHandoffSummaryCommand.ExecuteAsync();
+            await vm.CopyValidationHandoffArtifactPathsCommand.ExecuteAsync();
+            await vm.OpenValidationFollowupIntakeCommand.ExecuteAsync();
+            await vm.OpenValidationFollowupPromptCommand.ExecuteAsync();
+            await vm.CopyValidationFollowupSummaryCommand.ExecuteAsync();
+            await vm.CopyValidationFollowupPromptCommand.ExecuteAsync();
+
+            Assert.Contains(ValidationRunnerService.HandoffSummaryPathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Contains(latestResult.OutputFolder, shell.OpenedPaths);
+            Assert.Contains(ValidationRunnerService.FollowupIntakePathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Contains(ValidationRunnerService.FollowupPromptPathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Equal(4, shell.CopiedTexts.Count);
+            Assert.Contains("# Validation Handoff Summary", shell.CopiedTexts[0], System.StringComparison.Ordinal);
+            Assert.Contains(ValidationRunnerService.HandoffBundlePathForRun(latestResult.OutputFolder), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains(Path.Combine(latestResult.OutputFolder, "validation_result.json"), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains(ValidationRunnerService.FollowupPlanPathForRun(latestResult.OutputFolder), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains(ValidationRunnerService.FollowupExecutionPathForRun(latestResult.OutputFolder), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains(ValidationRunnerService.FollowupExecutionOutcomePathForRun(latestResult.OutputFolder), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains(ValidationRunnerService.FollowupEscalationPathForRun(latestResult.OutputFolder), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains(ValidationRunnerService.FollowupResolutionReviewPathForRun(latestResult.OutputFolder), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains(ValidationRunnerService.ResolutionHandoffPathForRun(latestResult.OutputFolder), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains(ValidationRunnerService.ResolutionPromotionReviewPathForRun(latestResult.OutputFolder), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains(ValidationRunnerService.ReleaseDecisionSummaryPathForRun(latestResult.OutputFolder), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains(ValidationRunnerService.RepairPrepBundlePathForRun(latestResult.OutputFolder), shell.CopiedTexts[1], System.StringComparison.Ordinal);
+            Assert.Contains("fix tests.", shell.CopiedTexts[2], System.StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Follow-up category: fix_tests", shell.CopiedTexts[3], System.StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Validation_followup_plan_surface_loads_latest_plan_and_repair_prep_bundle()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var (validationRunner, latestResult) = await SeedValidationHandoffArtifactsAsync(repoRoot);
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: validationRunner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            Assert.True(vm.HasValidationFollowupPlanPath);
+            Assert.Equal(ValidationRunnerService.FollowupPlanPathForRun(latestResult.OutputFolder), vm.ValidationFollowupPlanPath);
+            Assert.True(vm.HasValidationRepairPrepBundlePath);
+            Assert.Equal(ValidationRunnerService.RepairPrepBundlePathForRun(latestResult.OutputFolder), vm.ValidationRepairPrepBundlePath);
+            Assert.True(vm.HasValidationFollowupPlanSummary);
+            Assert.Contains("fix tests plan.", vm.ValidationFollowupPlanSummaryText, System.StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Inspect first failing test", vm.ValidationFollowupPlanSummaryText, System.StringComparison.Ordinal);
+            Assert.True(vm.HasValidationFollowupRerunRecommendation);
+            Assert.Contains("Rerun the first failing test or test project", vm.ValidationFollowupRerunRecommendationText, System.StringComparison.Ordinal);
+            Assert.True(vm.HasValidationRepairPrepSummary);
+            Assert.Contains("repair prep", vm.ValidationRepairPrepSummaryText, System.StringComparison.OrdinalIgnoreCase);
+            Assert.True(vm.HasValidationFollowupPlanFreshness);
+            Assert.Equal("Current plan for the latest validation run.", vm.ValidationFollowupPlanFreshnessText);
+            Assert.Equal("Do not promote", vm.ValidationResolutionPromotionBadge);
+            Assert.True(vm.HasValidationResolutionPromotionSummary);
+            Assert.True(vm.HasValidationResolutionPromotionReviewPath);
+            Assert.Equal("Resolution not stable enough", vm.ValidationReleaseDecisionBadge);
+            Assert.True(vm.HasValidationReleaseDecisionSummary);
+            Assert.True(vm.HasValidationReleaseDecisionNotesSummary);
+            Assert.True(vm.HasValidationReleaseDecisionSummaryPath);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Validation_followup_plan_helpers_open_and_copy_latest_plan_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var (validationRunner, latestResult) = await SeedValidationHandoffArtifactsAsync(repoRoot);
+        var shell = new RecordingWorkspaceShellService();
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            workspaceShell: shell,
+            validationRunnerService: validationRunner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            await vm.OpenValidationFollowupPlanCommand.ExecuteAsync();
+            await vm.OpenValidationRepairPrepBundleCommand.ExecuteAsync();
+            await vm.CopyValidationFollowupPlanSummaryCommand.ExecuteAsync();
+            await vm.CopyValidationRepairPrepSummaryCommand.ExecuteAsync();
+            await vm.CopyValidationFollowupRerunRecommendationCommand.ExecuteAsync();
+
+            Assert.Contains(ValidationRunnerService.FollowupPlanPathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Contains(ValidationRunnerService.RepairPrepBundlePathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Equal(3, shell.CopiedTexts.Count);
+            Assert.Contains("fix tests plan.", shell.CopiedTexts[0], System.StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("repair prep", shell.CopiedTexts[1], System.StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Rerun the first failing test or test project", shell.CopiedTexts[2], System.StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Validation_followup_plan_surface_exposes_step_actions_and_tracking()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var (validationRunner, latestResult) = await SeedValidationHandoffArtifactsAsync(repoRoot);
+        var shell = new RecordingWorkspaceShellService();
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            workspaceShell: shell,
+            validationRunnerService: validationRunner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            Assert.True(vm.HasValidationFollowupPlanSteps);
+            Assert.Equal(
+                new[]
+                {
+                    "inspect_test_failure",
+                    "inspect_artifact",
+                    "rerun_single_test_or_project",
+                    "prepare_repair_bundle",
+                    "rerun_single_stage"
+                },
+                vm.ValidationFollowupPlanSteps.Select(step => step.StepType).ToArray());
+            Assert.Equal("View ready", vm.ValidationFollowupPlanSteps[0].ExecutionAvailability);
+            Assert.Equal("Rerun ready", vm.ValidationFollowupPlanSteps[2].ExecutionAvailability);
+
+            await vm.OpenValidationFollowupFirstEvidenceCommand.ExecuteAsync();
+            await vm.CopyValidationFollowupRerunCommandSummaryCommand.ExecuteAsync();
+
+            Assert.Contains(latestResult.FirstFailureLogPath!, shell.OpenedPaths);
+            Assert.Contains("dotnet test .\\ui\\Shoots.Ui.Tests\\Shoots.Ui.Tests.csproj -c Debug -v minimal", shell.CopiedTexts);
+
+            var openedStep = Assert.Single(vm.ValidationFollowupPlanSteps, step => step.StepType == "inspect_test_failure");
+            Assert.Equal("Opened", openedStep.CompletionBadge);
+
+            var copiedStep = Assert.Single(vm.ValidationFollowupPlanSteps, step => step.StepType == "rerun_single_test_or_project");
+            Assert.Equal("Copied", copiedStep.CompletionBadge);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Guided_validation_rerun_records_linkage_and_blocks_superseded_plan_actions()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var (validationRunner, latestResult) = await SeedValidationHandoffArtifactsAsync(repoRoot);
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: validationRunner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            Assert.True(vm.RunValidationFollowupRecommendedRerunCommand.CanExecute(null));
+
+            await vm.RunValidationFollowupRecommendedRerunCommand.ExecuteAsync();
+
+            Assert.True(vm.HasValidationFollowupRerunOutcome);
+            Assert.Contains("stayed the same", vm.ValidationFollowupRerunOutcomeSummary, System.StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("Unchanged", vm.ValidationFollowupOutcomeBadge);
+            Assert.True(vm.HasValidationFollowupOutcomeSummary);
+            Assert.Contains("stayed unchanged", vm.ValidationFollowupOutcomeSummaryText, System.StringComparison.OrdinalIgnoreCase);
+            Assert.True(vm.HasValidationFollowupOutcomeNextStateText);
+            Assert.Contains("Prepare a repair bundle", vm.ValidationFollowupOutcomeNextStateText, System.StringComparison.Ordinal);
+            Assert.True(vm.HasValidationFollowupOutcomeFreshnessText);
+            Assert.Contains("Superseded by validation run", vm.ValidationFollowupOutcomeFreshnessText, System.StringComparison.Ordinal);
+            Assert.Equal("Watch recurring issue", vm.ValidationFollowupEscalationBadge);
+            Assert.True(vm.HasValidationFollowupEscalationSummary);
+            Assert.Equal("Superseded", vm.ValidationFollowupResolutionBadge);
+            Assert.True(vm.HasValidationFollowupResolutionSummary);
+            Assert.Contains("superseded by newer validation evidence", vm.ValidationFollowupResolutionSummaryText, System.StringComparison.OrdinalIgnoreCase);
+            Assert.True(vm.HasValidationFollowupResolutionClosureText);
+            Assert.Contains("still open", vm.ValidationFollowupResolutionClosureText, System.StringComparison.OrdinalIgnoreCase);
+            Assert.True(vm.HasValidationFollowupResolutionFreshnessText);
+            Assert.Contains("Superseded by later follow-up", vm.ValidationFollowupResolutionFreshnessText, System.StringComparison.Ordinal);
+            Assert.Equal("No handoff", vm.ValidationResolutionHandoffBadge);
+            Assert.True(vm.HasValidationResolutionHandoffSummary);
+            Assert.Equal("Do not promote", vm.ValidationResolutionPromotionBadge);
+            Assert.True(vm.HasValidationResolutionPromotionSummary);
+            Assert.Equal("Resolution not stable enough", vm.ValidationReleaseDecisionBadge);
+            Assert.True(vm.HasValidationReleaseDecisionSummary);
+            Assert.Contains("Superseded by newer validation run", vm.ValidationFollowupPlanFreshnessText, System.StringComparison.Ordinal);
+            Assert.False(vm.RunValidationFollowupRecommendedRerunCommand.CanExecute(null));
+            Assert.Contains("no longer the latest validation plan", vm.ValidationFollowupRecommendedRerunBlockedReason, System.StringComparison.Ordinal);
+
+            var rerunStep = Assert.Single(vm.ValidationFollowupPlanSteps, step => step.StepType == "rerun_single_test_or_project");
+            Assert.Equal("Completed by validation", rerunStep.CompletionBadge);
+            Assert.Equal("Blocked", rerunStep.ExecutionAvailability);
+
+            var execution = ValidationRunnerService.LoadFollowupExecutionStateForRun(latestResult.OutputFolder);
+            Assert.NotNull(execution);
+            Assert.NotNull(execution!.LatestRerun);
+            Assert.Equal(latestResult.RunId, execution.LatestRerun!.SourceValidationRunId);
+            Assert.NotEqual(latestResult.RunId, execution.LatestRerun.RerunValidationRunId);
+            Assert.Equal("unchanged", execution.LatestRerun.OutcomeClassification);
+            Assert.True(File.Exists(ValidationRunnerService.FollowupExecutionPathForRun(latestResult.OutputFolder)));
+            Assert.True(vm.HasValidationFollowupExecutionOutcomePath);
+            Assert.True(vm.HasValidationFollowupEscalationPath);
+            Assert.True(vm.HasValidationFollowupResolutionReviewPath);
+            Assert.True(vm.HasValidationResolutionHandoffPath);
+            Assert.True(vm.HasValidationResolutionPromotionReviewPath);
+            Assert.True(vm.HasValidationReleaseDecisionSummaryPath);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Guided_followup_outcome_helpers_open_and_copy_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var (validationRunner, latestResult) = await SeedValidationHandoffArtifactsAsync(repoRoot);
+        var shell = new RecordingWorkspaceShellService();
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            workspaceShell: shell,
+            validationRunnerService: validationRunner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            await vm.RunValidationFollowupRecommendedRerunCommand.ExecuteAsync();
+            await vm.OpenValidationFollowupExecutionOutcomeCommand.ExecuteAsync();
+            await vm.OpenValidationFollowupEscalationCommand.ExecuteAsync();
+            await vm.OpenValidationFollowupResolutionReviewCommand.ExecuteAsync();
+            await vm.OpenValidationResolutionHandoffCommand.ExecuteAsync();
+            await vm.OpenValidationResolutionPromotionReviewCommand.ExecuteAsync();
+            await vm.OpenValidationReleaseDecisionSummaryCommand.ExecuteAsync();
+            await vm.OpenValidationFollowupRerunArtifactsCommand.ExecuteAsync();
+            await vm.CopyValidationFollowupOutcomeNextStepCommand.ExecuteAsync();
+            await vm.CopyValidationFollowupEscalationSummaryCommand.ExecuteAsync();
+            await vm.CopyValidationFollowupClosureSummaryCommand.ExecuteAsync();
+            await vm.CopyValidationResolutionHandoffSummaryCommand.ExecuteAsync();
+            await vm.CopyValidationResolutionPromotionSummaryCommand.ExecuteAsync();
+            await vm.CopyValidationReleaseDecisionSummaryCommand.ExecuteAsync();
+
+            var execution = ValidationRunnerService.LoadFollowupExecutionStateForRun(latestResult.OutputFolder);
+            Assert.NotNull(execution);
+            Assert.NotNull(execution!.LatestRerun);
+            Assert.Contains(ValidationRunnerService.FollowupExecutionOutcomePathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Contains(ValidationRunnerService.FollowupEscalationPathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Contains(ValidationRunnerService.FollowupResolutionReviewPathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Contains(ValidationRunnerService.ResolutionHandoffPathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Contains(ValidationRunnerService.ResolutionPromotionReviewPathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Contains(ValidationRunnerService.ReleaseDecisionSummaryPathForRun(latestResult.OutputFolder), shell.OpenedPaths);
+            Assert.Contains(execution.LatestRerun!.RerunValidationOutputFolder, shell.OpenedPaths);
+            Assert.Contains("Prepare a repair bundle", shell.CopiedTexts[0], System.StringComparison.Ordinal);
+            Assert.Contains("Repeated unresolved outcomes", shell.CopiedTexts[1], System.StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Original issue:", shell.CopiedTexts[2], System.StringComparison.Ordinal);
+            Assert.Contains("still open", shell.CopiedTexts[2], System.StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("No baseline or readiness handoff", shell.CopiedTexts[3], System.StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Do not promote.", shell.CopiedTexts[4], System.StringComparison.Ordinal);
+            Assert.Contains("Decision state:", shell.CopiedTexts[5], System.StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Similar_cases_surface_updates_from_semantic_reuse_service()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var outputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-failed");
+        Directory.CreateDirectory(outputFolder);
+        var failedResult = new ValidationRunResult(
+            "run-failed",
+            "Run full validation loop",
+            outputFolder,
+            false,
+            "Validation failed: Tests failed.",
+            "Tests failed.",
+            Path.Combine(outputFolder, "02-ui-tests.log"),
+            System.DateTimeOffset.UtcNow.AddMinutes(-1),
+            System.DateTimeOffset.UtcNow,
+            new[]
+            {
+                new ValidationStageResult("ui_tests", "Running UI tests", "failed", "Tests failed.", Path.Combine(outputFolder, "02-ui-tests.log"), 1, 40)
+            },
+            "failed",
+            "Failed",
+            new ValidationFirstFailure(
+                "ui_tests",
+                "Running UI tests",
+                "Shoots.Runtime.Tests.dll",
+                "Shoots.Runtime.Tests.RouteGateTests.TryAdvance_completes_happy_path",
+                "Tests failed.",
+                Path.Combine(outputFolder, "02-ui-tests.log"),
+                "Tests failed.",
+                1));
+        WriteValidationResultArtifact(failedResult);
+
+        var semanticReuseService = new FixedSemanticReuseService(repoRoot, new SemanticReuseSuggestionSet(
+            "local_only",
+            "Loaded 1 similar past case. Qdrant was unavailable, so deterministic local ranking was used.",
+            Path.Combine(repoRoot, ".codex", "validation-ui", "semantic_reuse_design_note.md"),
+            Path.Combine(repoRoot, ".codex", "validation-ui", "semantic_reuse_index.json"),
+            Path.Combine(repoRoot, ".codex", "validation-ui", "semantic_reuse_index_linkage.json"),
+            new[]
+            {
+                new SemanticReuseSuggestedCase(
+                    "run-failed",
+                    "Current validation failure",
+                    "doc-001",
+                    "validation_failure_record",
+                    "Run UI tests",
+                    "Tests failed on a prior run.",
+                    "failed",
+                    0.82d,
+                    "High",
+                    "same failing stage; similar first-failure text",
+                    Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "old-run", "validation_result.json"),
+                    Array.Empty<SemanticReuseArtifactLink>(),
+                    "old-run",
+                    ContextKind: "validation_failure")
+            }));
+        var settingsStore = new InMemoryValidationSettingsStore
+        {
+            Current = new ValidationSettings(false, false, 5, false, false, false, 20, 5, false, 5, false, true, true, 5, 200, true)
+        };
+        File.WriteAllText(failedResult.FirstFailureLogPath!, "Tests failed.");
+        ValidationRunnerService.RefreshTrendArtifacts(repoRoot, settingsStore.Current);
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new ValidationRunnerService(
+                repoRoot,
+                new ScriptedValidationCommandExecutor(
+                    new Dictionary<string, ValidationCommandExecutionResult>(System.StringComparer.Ordinal)
+                    {
+                        ["build_ui"] = new(0, new[] { "Build succeeded." }),
+                        ["ui_tests"] = new(1, new[] { "Tests failed." })
+                    })),
+            validationSettingsStore: settingsStore,
+            semanticReuseService: semanticReuseService);
+
+        try
+        {
+            await vm.RunFullValidationLoopCommand.ExecuteAsync();
+            await vm.RefreshSimilarCasesCommand.ExecuteAsync();
+
+            Assert.Single(vm.SemanticReuseSuggestions);
+            Assert.Equal("Local ranked", vm.SemanticReuseBadge);
+            Assert.Contains("Loaded 1 similar past case", vm.SemanticReuseSummary, System.StringComparison.Ordinal);
+            Assert.Equal("Current validation failure", vm.SemanticReuseSuggestions[0].ContextLabel);
+            Assert.Equal("High", vm.SemanticReuseSuggestions[0].RankingLabel);
+            Assert.Contains("same failing stage", vm.SemanticReuseSuggestions[0].MatchExplanation, System.StringComparison.Ordinal);
+            Assert.True(vm.HasValidationFollowupReuseSuggestionSummary);
+            Assert.Contains("Similar case suggestion", vm.ValidationFollowupReuseSuggestionSummary, System.StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Generate_plan_surfaces_planning_contextual_similar_cases()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var semanticReuseService = new FixedSemanticReuseService(repoRoot, new SemanticReuseSuggestionSet(
+            "local_only",
+            "Loaded planning hints.",
+            Path.Combine(repoRoot, ".codex", "validation-ui", "semantic_reuse_design_note.md"),
+            Path.Combine(repoRoot, ".codex", "validation-ui", "semantic_reuse_index.json"),
+            Path.Combine(repoRoot, ".codex", "validation-ui", "semantic_reuse_index_linkage.json"),
+            new[]
+            {
+                new SemanticReuseSuggestedCase(
+                    "planning-001",
+                    "Current planning context",
+                    "doc-plan-001",
+                    "generated_output_pattern",
+                    "Semantic Planner generated output",
+                    "Validation passed cleanly.",
+                    "passed",
+                    0.91d,
+                    "High",
+                    "exact linked history; same project scope",
+                    Path.Combine(repoRoot, ".state", "projects", "planning", "runs", "generated-run", "generated_output_validation.json"),
+                    Array.Empty<SemanticReuseArtifactLink>(),
+                    "generated-run",
+                    "planning",
+                    new[]
+                    {
+                        new SemanticReuseMetadataField("project_name", "deterministic-workspace"),
+                        new SemanticReuseMetadataField("failing_stage", "Running UI tests")
+                    },
+                    "Follow-on evidence: helpful 1, unchanged 0, regressed 0.")
+            }));
+        var settingsStore = new InMemoryValidationSettingsStore
+        {
+            Current = new ValidationSettings(false, false, 5, false, false, false, 20, 5, false, 5, false, true, true, 5, 200, true)
+        };
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationSettingsStore: settingsStore,
+            semanticReuseService: semanticReuseService);
+
+        try
+        {
+            vm.EnableSemanticReuseSuggestions = true;
+            vm.IntakeIntent = "Build validation assistant";
+
+            await vm.GeneratePlanCommand.ExecuteAsync();
+
+            Assert.Equal("Planning", vm.SelectedSemanticReuseContext);
+            Assert.True(vm.HasVisibleSemanticReuseSuggestions);
+            Assert.Equal("planning", vm.SemanticReuseSuggestions[0].ContextKind);
+            Assert.Contains("Prior passing outputs", vm.SemanticReuseContextSummary, System.StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Operator_playbooks_are_loaded_and_filtered_by_settings()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        try
+        {
+            SeedPlanningPlaybookArtifacts(repoRoot);
+            var settingsStore = new InMemoryValidationSettingsStore
+            {
+                Current = new ValidationSettings(false, false, 5, false, false, false, 20, 5, false, 5, false, true, true, 5, 200, true, false, true, true, true, 2, true, 3)
+            };
+
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                validationSettingsStore: settingsStore,
+                semanticReuseService: new SemanticReuseService(repoRoot));
+
+            vm.SelectedSemanticReuseContext = "Planning";
+
+            Assert.True(vm.HasVisibleSemanticReusePlaybooks);
+            Assert.Single(vm.VisibleSemanticReusePlaybooks);
+            Assert.Contains("playbook suggestion", vm.SemanticReusePlaybookSummary, System.StringComparison.Ordinal);
+
+            vm.ShowTentativePlaybooks = false;
+
+            Assert.False(vm.HasVisibleSemanticReusePlaybooks);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Attempt_repair_persists_selected_similar_case_references()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, ".state", "projects", "deterministic-project", "runs", "run-001");
+        Directory.CreateDirectory(runPath);
+        GeneratedOutputValidationLinkService.Save(new GeneratedOutputValidationLink(
+            "run-001",
+            runPath,
+            runPath,
+            "failed",
+            "Generated output validation failed.",
+            "Validate generated output",
+            "validation-source",
+            Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-failed"),
+            "Tests failed.",
+            System.DateTimeOffset.UtcNow));
+
+        var outputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-failed");
+        Directory.CreateDirectory(outputFolder);
+        var failedResult = new ValidationRunResult(
+            "run-failed",
+            "Validate generated output",
+            outputFolder,
+            false,
+            "Validation failed: Tests failed.",
+            "Tests failed.",
+            Path.Combine(outputFolder, "02-ui-tests.log"),
+            System.DateTimeOffset.UtcNow.AddMinutes(-1),
+            System.DateTimeOffset.UtcNow,
+            new[]
+            {
+                new ValidationStageResult("ui_tests", "Running UI tests", "failed", "Tests failed.", Path.Combine(outputFolder, "02-ui-tests.log"), 1, 40)
+            },
+            "failed",
+            "Failed",
+            new ValidationFirstFailure("ui_tests", "Running UI tests", "Shoots.Runtime.Tests.dll", "Shoots.Runtime.Tests.RouteGateTests.TryAdvance_completes_happy_path", "Tests failed.", Path.Combine(outputFolder, "02-ui-tests.log"), "Tests failed.", 1));
+        WriteValidationResultArtifact(failedResult);
+        var repairedResult = new ValidationRunResult(
+            "run-repaired",
+            "Validate generated output",
+            Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-repaired"),
+            true,
+            "Validation passed (1 stage).",
+            null,
+            null,
+            System.DateTimeOffset.UtcNow.AddMinutes(-1),
+            System.DateTimeOffset.UtcNow,
+            new[]
+            {
+                new ValidationStageResult("ui_tests", "Running UI tests", "passed", "Tests passed.", Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-repaired", "02-ui-tests.log"), 0, 20)
+            });
+        var repairService = new RecordingRepairAttemptService(repoRoot, new[] { Path.Combine(repoRoot, "src", "Generated.cs") });
+        var semanticReuseService = new FixedSemanticReuseService(repoRoot, new SemanticReuseSuggestionSet(
+            "local_only",
+            "Loaded 1 similar past case.",
+            Path.Combine(repoRoot, ".codex", "validation-ui", "semantic_reuse_design_note.md"),
+            Path.Combine(repoRoot, ".codex", "validation-ui", "semantic_reuse_index.json"),
+            Path.Combine(repoRoot, ".codex", "validation-ui", "semantic_reuse_index_linkage.json"),
+            new[]
+            {
+                new SemanticReuseSuggestedCase(
+                    "run-failed",
+                    "Current validation failure",
+                    "doc-repair-001",
+                    "repair_bundle_summary",
+                    "Repair repair-001",
+                    "Repair outcome improved.",
+                    "improved",
+                    0.86d,
+                    "High",
+                    "same failing stage",
+                    Path.Combine(repoRoot, ".codex", "validation-ui", "repairs", "repair-001", "repair_comparison.json"),
+                    new[] { new SemanticReuseArtifactLink("Repair comparison", Path.Combine(repoRoot, ".codex", "validation-ui", "repairs", "repair-001", "repair_comparison.json")) },
+                    "run-001",
+                    "validation_failure",
+                    new[]
+                    {
+                        new SemanticReuseMetadataField("changed_file_names", "Generated.cs"),
+                        new SemanticReuseMetadataField("repaired_validation_status", "passed"),
+                        new SemanticReuseMetadataField("failing_stage", "Running UI tests")
+                    },
+                    string.Empty)
+            }));
+
+        var runner = new SequencedValidationRunnerService(repoRoot, new[] { failedResult, repairedResult });
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: runner,
+            repairAttemptService: repairService,
+            semanticReuseService: semanticReuseService,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            vm.EnableSemanticReuseSuggestions = true;
+            SetPrivateField(vm, "_lastDemoRunPath", runPath);
+            await vm.ValidateGeneratedOutputCommand.ExecuteAsync();
+            Assert.True(vm.HasVisibleSemanticReuseSuggestions);
+            vm.SemanticReuseSuggestions[0].IsSelectedForRepairReference = true;
+
+            await vm.AttemptRepairCommand.ExecuteAsync();
+
+            Assert.NotNull(repairService.BundlePath);
+            var bundle = System.Text.Json.JsonSerializer.Deserialize<RepairBundle>(File.ReadAllText(repairService.BundlePath!));
+            Assert.NotNull(bundle);
+            Assert.Single(bundle!.ReferenceCases!);
+            Assert.Equal("doc-repair-001", bundle.ReferenceCases![0].DocumentId);
+            Assert.True(File.Exists(SemanticReuseService.UsefulnessPathForRepo(repoRoot)));
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Validation_retry_classification_updates_confidence_surface()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var outputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-flaky");
+        Directory.CreateDirectory(outputFolder);
+        var stabilityPath = Path.Combine(outputFolder, "validation_stability.json");
+        File.WriteAllText(stabilityPath, "{}");
+
+        var runner = new DeterministicValidationRunnerService(
+            repoRoot,
+            new ValidationRunResult(
+                "run-flaky",
+                "Run full validation loop",
+                outputFolder,
+                true,
+                "Validation passed after retry; flaky behavior suspected (2 stages).",
+                "[xUnit.net 00:00:03.37]     Shoots.Runtime.Tests.RouteGateTests.TryAdvance_completes_happy_path [FAIL]",
+                Path.Combine(outputFolder, "02-ui-tests.log"),
+                System.DateTimeOffset.UtcNow.AddMinutes(-1),
+                System.DateTimeOffset.UtcNow,
+                new[]
+                {
+                    new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded.", Path.Combine(outputFolder, "01-build-ui.log"), 0, 25),
+                    new ValidationStageResult("ui_tests", "Running UI tests", "passed", "Running UI tests flaky behavior suspected. First failure: [xUnit.net 00:00:03.37]     Shoots.Runtime.Tests.RouteGateTests.TryAdvance_completes_happy_path [FAIL]", Path.Combine(outputFolder, "02-ui-tests.log"), 0, 60, "flaky_suspected", 1, Path.Combine(outputFolder, "02-ui-tests.retry1.log"))
+                },
+                "flaky_suspected",
+                "Flaky suspected",
+                new ValidationFirstFailure(
+                    "ui_tests",
+                    "Running UI tests",
+                    "C:\\dev\\Shoots\\src\\Runtime\\Shoots.Runtime.Tests\\bin\\Debug\\net8.0\\Shoots.Runtime.Tests.dll",
+                    "Shoots.Runtime.Tests.RouteGateTests.TryAdvance_completes_happy_path",
+                    "[xUnit.net 00:00:03.37]     Shoots.Runtime.Tests.RouteGateTests.TryAdvance_completes_happy_path [FAIL]",
+                    Path.Combine(outputFolder, "02-ui-tests.log"),
+                    "[xUnit.net 00:00:03.37]     Shoots.Runtime.Tests.RouteGateTests.TryAdvance_completes_happy_path [FAIL]",
+                    1),
+                new[]
+                {
+                    new ValidationRetryAudit(
+                        "ui_tests",
+                        "Running UI tests",
+                        "dotnet test .\\ui\\Shoots.Ui.Tests\\Shoots.Ui.Tests.csproj -c Debug -v minimal",
+                        Path.Combine(outputFolder, "02-ui-tests.retry1.log"),
+                        "passed",
+                        "flaky_suspected",
+                        "Passed on retry.",
+                        0,
+                        System.DateTimeOffset.UtcNow.AddSeconds(-15),
+                        System.DateTimeOffset.UtcNow.AddSeconds(-10))
+                },
+                stabilityPath));
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: runner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            await vm.RunFullValidationLoopCommand.ExecuteAsync();
+
+            Assert.Equal("Flaky suspected", vm.ValidationStabilityBadge);
+            Assert.True(vm.HasValidationStabilityArtifactPath);
+            Assert.True(vm.HasValidationFirstFailure);
+            Assert.Equal("Flaky suspected", vm.ValidationStageResults[1].StabilityLabel);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Validation_trend_surface_loads_history_regression_and_artifact_paths()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        SeedValidationHistoryLedger(
+            repoRoot,
+            new[]
+            {
+                ValidationHistoryEntryForUi("20260310-120000000Z-build-ui", "Build UI project", 0, "passed", "passed", "", "", "", false),
+                ValidationHistoryEntryForUi("20260310-120100000Z-ui-tests", "Run UI tests", 1, "passed", "passed", "", "", "", false),
+                ValidationHistoryEntryForUi("20260310-120200000Z-ui-tests", "Run UI tests", 2, "failed", "failed", "Tests failed.", "Running UI tests", "Shoots.Runtime.Tests.RouteGateTests.TryAdvance_completes_happy_path", false)
+            });
+        ValidationRunnerService.RefreshTrendArtifacts(repoRoot, new ValidationSettings(false, false, 5, false, false, false, 20, 3, false));
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(repoRoot, SuccessfulValidationResult(repoRoot)),
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            Assert.Equal("Regression detected", vm.ValidationTrendBadge);
+            Assert.True(vm.HasValidationStageHistory);
+            Assert.True(vm.HasValidationHistoryLedgerPath);
+            Assert.True(vm.HasValidationTrendArtifactPath);
+            Assert.True(vm.HasValidationRegressionArtifactPath);
+            Assert.Contains("Recent pass rate", vm.ValidationTrendSummaryText, System.StringComparison.Ordinal);
+            Assert.Contains("Window 3", vm.ValidationRegressionSummaryText, System.StringComparison.Ordinal);
+            Assert.Contains("Running UI tests", vm.ValidationStageHistory[0].StageOutcomeSummary, System.StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Set_release_baseline_persists_active_baseline_and_ready_state()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var outputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-clean");
+        Directory.CreateDirectory(outputFolder);
+
+        var runner = new DeterministicValidationRunnerService(
+            repoRoot,
+            new ValidationRunResult(
+                "run-clean",
+                "Run full validation loop",
+                outputFolder,
+                true,
+                "Validation passed (1 stage).",
+                null,
+                null,
+                System.DateTimeOffset.UtcNow.AddMinutes(-1),
+                System.DateTimeOffset.UtcNow,
+                new[]
+                {
+                    new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded.", Path.Combine(outputFolder, "01-build-ui.log"), 0, 25)
+                },
+                "passed",
+                "Passed cleanly"));
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: runner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            await vm.RunFullValidationLoopCommand.ExecuteAsync();
+
+            Assert.True(vm.SetReleaseBaselineCommand.CanExecute(null));
+
+            await vm.SetReleaseBaselineCommand.ExecuteAsync();
+
+            Assert.True(vm.HasValidationBaselineArtifactPath);
+            Assert.True(vm.HasValidationBaselineHistoryArtifactPath);
+            Assert.True(vm.HasValidationBaselineComparisonArtifactPath);
+            Assert.Equal("Ready", vm.ValidationReleaseReadinessBadge);
+            Assert.Contains("Active baseline run-clean", vm.ValidationBaselineSummaryText, System.StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Validation_readiness_surface_loads_baseline_comparison_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var settings = new ValidationSettings(false, false, 5, false, false, false, 20, 3, false, 5, false, true);
+        var cleanOutput = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-clean");
+        Directory.CreateDirectory(cleanOutput);
+        var cleanResult = new ValidationRunResult(
+            "run-clean",
+            "Build UI project",
+            cleanOutput,
+            true,
+            "Validation passed (1 stage).",
+            null,
+            null,
+            System.DateTimeOffset.UtcNow.AddMinutes(-2),
+            System.DateTimeOffset.UtcNow.AddMinutes(-1),
+            new[]
+            {
+                new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded.", Path.Combine(cleanOutput, "01-build-ui.log"), 0, 25)
+            },
+            "passed",
+            "Passed cleanly");
+        ValidationRunnerService.SetActiveReleaseBaseline(repoRoot, cleanResult, settings);
+
+        var retryOutput = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-retry");
+        Directory.CreateDirectory(retryOutput);
+        var retryResult = new ValidationRunResult(
+            "run-retry",
+            "Build UI project",
+            retryOutput,
+            true,
+            "Validation passed after retry (1 stage).",
+            "error CS1000: build failed",
+            Path.Combine(retryOutput, "01-build-ui.log"),
+            System.DateTimeOffset.UtcNow.AddMinutes(-1),
+            System.DateTimeOffset.UtcNow,
+            new[]
+            {
+                new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded after retry.", Path.Combine(retryOutput, "01-build-ui.log"), 0, 35, "passed_on_retry", 1, Path.Combine(retryOutput, "01-build-ui.retry1.log"))
+            },
+            "passed_on_retry",
+            "Passed after retry");
+        WriteValidationResultArtifact(retryResult);
+        ValidationRunnerService.RefreshReleaseBaselineArtifacts(repoRoot, settings, retryResult);
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(repoRoot, SuccessfulValidationResult(repoRoot)),
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            Assert.Equal("Ready with caution", vm.ValidationReleaseReadinessBadge);
+            Assert.True(vm.HasValidationBaselineComparisonArtifactPath);
+            Assert.True(vm.HasValidationBaselineStageChanges);
+            Assert.Contains("retry drift", vm.ValidationBaselineComparisonSummaryText, System.StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("after retry", vm.ValidationBaselineStageChanges[0].LatestOutcome, System.StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Validate_generated_output_updates_linked_status_and_persists_linkage()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, "generated-run");
+        Directory.CreateDirectory(runPath);
+        var outputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-linked");
+        Directory.CreateDirectory(outputFolder);
+
+        var runner = new DeterministicValidationRunnerService(
+            repoRoot,
+            new ValidationRunResult(
+                "run-linked",
+                "Validate generated output",
+                outputFolder,
+                true,
+                "Validation passed (1 stage).",
+                null,
+                null,
+                System.DateTimeOffset.UtcNow.AddMinutes(-1),
+                System.DateTimeOffset.UtcNow,
+                new[]
+                {
+                    new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded.", Path.Combine(outputFolder, "01-build-ui.log"), 0, 25)
+                }));
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: runner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            vm.SelectedRunHistory = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, "Completed", "ollama", "none", "Verified");
+            await vm.ValidateGeneratedOutputCommand.ExecuteAsync();
+
+            Assert.Equal("passed", vm.GeneratedOutputValidationStatus);
+            Assert.Equal("Passed", vm.GeneratedOutputValidationBadge);
+            Assert.Equal("Validated", vm.GeneratedOutputTrustBadge);
+            Assert.True(File.Exists(GeneratedOutputValidationLinkService.PathForRun(runPath)));
+            var link = GeneratedOutputValidationLinkService.Load(runPath);
+            Assert.Equal("run-linked", link.ValidationRunId);
+            Assert.Equal("passed", link.ValidationStatus);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Attempt_repair_is_disabled_while_generated_output_validation_is_running()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, "generated-run");
+        Directory.CreateDirectory(runPath);
+        var runner = new BlockingValidationRunnerService(repoRoot);
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: runner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            vm.SelectedRunHistory = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, "Completed", "ollama", "none", "Verified");
+            var task = vm.ValidateGeneratedOutputCommand.ExecuteAsync();
+            await runner.WaitForStartAsync();
+
+            Assert.False(vm.AttemptRepairCommand.CanExecute(null));
+            Assert.Contains("Repair is unavailable while", vm.AttemptRepairDisabledReason);
+
+            runner.Release();
+            await task;
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Attempt_repair_writes_bundle_and_updates_change_review()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, "generated-run");
+        Directory.CreateDirectory(runPath);
+        var failedOutputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-failed");
+        Directory.CreateDirectory(failedOutputFolder);
+        var passedOutputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-passed");
+        Directory.CreateDirectory(passedOutputFolder);
+
+        var validationRunner = new SequencedValidationRunnerService(
+            repoRoot,
+            new[]
+            {
+                new ValidationRunResult(
+                    "run-failed",
+                    "Validate generated output",
+                    failedOutputFolder,
+                    false,
+                    "Validation failed: Tests failed.",
+                    "Tests failed.",
+                    Path.Combine(failedOutputFolder, "01-ui-tests.log"),
+                    System.DateTimeOffset.UtcNow.AddMinutes(-2),
+                    System.DateTimeOffset.UtcNow.AddMinutes(-1),
+                    new[]
+                    {
+                        new ValidationStageResult("ui_tests", "Running UI tests", "failed", "Tests failed.", Path.Combine(failedOutputFolder, "01-ui-tests.log"), 1, 50)
+                    }),
+                new ValidationRunResult(
+                    "run-passed",
+                    "Validate generated output",
+                    passedOutputFolder,
+                    true,
+                    "Validation passed (1 stage).",
+                    null,
+                    null,
+                    System.DateTimeOffset.UtcNow.AddMinutes(-1),
+                    System.DateTimeOffset.UtcNow,
+                    new[]
+                    {
+                        new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded.", Path.Combine(passedOutputFolder, "01-build-ui.log"), 0, 25)
+                    })
+            });
+        var repairService = new RecordingRepairAttemptService(repoRoot, new[] { Path.Combine(repoRoot, "src", "Generated.cs") });
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: validationRunner,
+            validationSettingsStore: new InMemoryValidationSettingsStore(),
+            repairAttemptService: repairService);
+
+        try
+        {
+            vm.SelectedRunHistory = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, "Completed", "ollama", "none", "Verified");
+            await vm.ValidateGeneratedOutputCommand.ExecuteAsync();
+            Assert.Equal("failed", vm.GeneratedOutputValidationStatus);
+
+            await vm.AttemptRepairCommand.ExecuteAsync();
+
+            Assert.True(File.Exists(repairService.BundlePath!));
+            Assert.True(vm.HasRepairBundlePath);
+            Assert.True(vm.HasRepairChangedFiles);
+            Assert.True(vm.HasRepairHistory);
+            Assert.Contains(Path.Combine(repoRoot, "src", "Generated.cs"), vm.RepairChangedFiles);
+            Assert.Equal("passed", vm.RepairOutcome);
+            Assert.Equal("Repaired", vm.GeneratedOutputTrustBadge);
+            Assert.Equal("Running UI tests", vm.RepairComparisonSourceStage);
+            Assert.Equal("Tests failed.", vm.RepairComparisonSourceExcerpt);
+            Assert.Contains("Validation passed", vm.RepairComparisonValidationResult, System.StringComparison.Ordinal);
+            Assert.Contains("passed", vm.RepairSummary, System.StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("passed", vm.GeneratedOutputValidationStatus);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Promote_repair_result_persists_metadata_for_improved_or_passed_repairs()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, "generated-run");
+        Directory.CreateDirectory(runPath);
+        SeedRepairReviewArtifacts(runPath, repoRoot, "repair-001", "passed");
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(repoRoot, SuccessfulValidationResult(repoRoot)),
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            vm.SelectedRunHistory = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, "Completed", "ollama", "none", "Verified");
+            vm.RepairReviewNote = "operator approved";
+
+            Assert.True(vm.PromoteRepairResultCommand.CanExecute(null));
+
+            await vm.PromoteRepairResultCommand.ExecuteAsync();
+
+            var promotion = RepairReviewArtifactsService.LoadPromotion(runPath);
+            Assert.NotNull(promotion);
+            Assert.Equal("repair-001", promotion!.RepairId);
+            Assert.Equal("promoted_from_repair", promotion.Status);
+            Assert.Equal("operator approved", promotion.OperatorNote);
+            Assert.Equal("promoted_from_repair", vm.RepairPromotionStatus);
+            Assert.Equal("Promoted from repair", vm.RepairPromotionBadge);
+            Assert.Equal("Promoted", vm.GeneratedOutputTrustBadge);
+            Assert.Equal("repair-001", vm.PromotedRepairId);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Adopt_and_unadopt_repair_update_trust_and_persist_notes()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, "generated-run");
+        Directory.CreateDirectory(runPath);
+        SeedPromotedRepairArtifacts(runPath, repoRoot, "repair-001", "passed");
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(repoRoot, SuccessfulValidationResult(repoRoot)),
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            vm.SelectedRunHistory = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, "Completed", "ollama", "none", "Verified");
+            vm.RepairReviewNote = "merged into working tree";
+            await vm.AdoptRepairCommand.ExecuteAsync();
+
+            var adopted = RepairReviewArtifactsService.LoadPromotion(runPath);
+            Assert.NotNull(adopted);
+            Assert.Equal("adopted", adopted!.AdoptionState);
+            Assert.Equal("merged into working tree", adopted.OperatorNote);
+            Assert.Equal("Adopted", vm.RepairAdoptionBadge);
+            Assert.Equal("Adopted", vm.GeneratedOutputTrustBadge);
+
+            vm.RepairReviewNote = "rolled back after review";
+            await vm.UnadoptRepairCommand.ExecuteAsync();
+
+            var rolledBack = RepairReviewArtifactsService.LoadPromotion(runPath);
+            Assert.NotNull(rolledBack);
+            Assert.Equal("rolled_back", rolledBack!.AdoptionState);
+            Assert.Equal("rolled back after review", rolledBack.OperatorNote);
+            Assert.Equal("No longer current", vm.RepairAdoptionBadge);
+            Assert.Equal("Superseded", vm.GeneratedOutputTrustBadge);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Replace_repair_marks_state_replaced_by_newer_output()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, "generated-run");
+        Directory.CreateDirectory(runPath);
+        SeedPromotedRepairArtifacts(runPath, repoRoot, "repair-001", "improved");
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(repoRoot, SuccessfulValidationResult(repoRoot)),
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            vm.SelectedRunHistory = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, "Completed", "ollama", "none", "Verified");
+            vm.RepairReviewNote = "replaced by fresh generation";
+            await vm.ReplaceRepairCommand.ExecuteAsync();
+
+            var promotion = RepairReviewArtifactsService.LoadPromotion(runPath);
+            Assert.NotNull(promotion);
+            Assert.Equal("replaced_by_newer_output", promotion!.AdoptionState);
+            Assert.Equal("Replaced by newer output", vm.RepairAdoptionBadge);
+            Assert.Equal("Superseded", vm.GeneratedOutputTrustBadge);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Repair_navigation_commands_open_promoted_and_audit_paths()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, "generated-run");
+        Directory.CreateDirectory(runPath);
+        SeedPromotedRepairArtifacts(runPath, repoRoot, "repair-001", "passed");
+        var shell = new RecordingWorkspaceShellService();
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(repoRoot, SuccessfulValidationResult(repoRoot)),
+            validationSettingsStore: new InMemoryValidationSettingsStore(),
+            workspaceShell: shell);
+
+        try
+        {
+            vm.SelectedRunHistory = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, "Completed", "ollama", "none", "Verified");
+
+            await vm.OpenPromotedRepairFolderCommand.ExecuteAsync();
+            await vm.OpenRepairAuditSummaryFolderCommand.ExecuteAsync();
+            await vm.OpenLinkedRepairValidationRunFolderCommand.ExecuteAsync();
+
+            Assert.Equal(3, shell.OpenedPaths.Count);
+            Assert.Contains(Path.Combine(repoRoot, ".codex", "validation-ui", "repairs", "repair-001"), shell.OpenedPaths);
+            Assert.Contains(Path.Combine(repoRoot, ".codex", "validation-ui", "repairs", "repair-001", "audit"), shell.OpenedPaths);
+            Assert.Contains(Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "validation-repair-001"), shell.OpenedPaths);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Promote_repair_result_is_blocked_for_unchanged_repairs()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, "generated-run");
+        Directory.CreateDirectory(runPath);
+        SeedRepairReviewArtifacts(runPath, repoRoot, "repair-001", "unchanged");
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(repoRoot, SuccessfulValidationResult(repoRoot)),
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            vm.SelectedRunHistory = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, "Completed", "ollama", "none", "Verified");
+
+            Assert.False(vm.PromoteRepairResultCommand.CanExecute(null));
+            Assert.Contains("improved or passed", vm.PromoteRepairDisabledReason, System.StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Promote_repair_result_is_disabled_while_validation_is_running()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, "generated-run");
+        Directory.CreateDirectory(runPath);
+        SeedRepairReviewArtifacts(runPath, repoRoot, "repair-001", "passed");
+
+        var runner = new BlockingValidationRunnerService(repoRoot);
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: runner,
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            vm.SelectedRunHistory = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, "Completed", "ollama", "none", "Verified");
+            var task = vm.RunFullValidationLoopCommand.ExecuteAsync();
+            await runner.WaitForStartAsync();
+
+            Assert.False(vm.PromoteRepairResultCommand.CanExecute(null));
+            Assert.Contains("Promotion is unavailable while", vm.PromoteRepairDisabledReason, System.StringComparison.Ordinal);
+
+            runner.Release();
+            await task;
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Promotion_status_is_superseded_when_a_later_repair_exists()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+        var runPath = Path.Combine(repoRoot, "generated-run");
+        Directory.CreateDirectory(runPath);
+        SeedRepairReviewArtifacts(runPath, repoRoot, "repair-002", "improved");
+        RepairReviewArtifactsService.SavePromotion(
+            runPath,
+            new RepairPromotionRecord(
+                "run-001",
+                runPath,
+                "repair-001",
+                "source-run-001",
+                "validation-repair-001",
+                "passed",
+                "passed_validation",
+                "Passed validation after repair.",
+                "promoted_from_repair",
+                "Repair outcome passed.",
+                "promoted_only",
+                "Promoted repair is recorded but not yet adopted into the current working output.",
+                string.Empty,
+                Path.Combine(runPath, ".codex", "validation-ui", "repairs", "repair-001", "repair_bundle.json"),
+                Path.Combine(runPath, ".codex", "validation-ui", "repairs", "repair-001"),
+                Path.Combine(runPath, ".codex", "validation-ui", "runs", "validation-repair-001"),
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                System.DateTimeOffset.UtcNow.AddMinutes(-2),
+                System.DateTimeOffset.UtcNow.AddMinutes(-2)));
+
+        var vm = BuildViewModel(
+            new FixedBackendProbeService(
+                new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+            new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+            validationRunnerService: new DeterministicValidationRunnerService(repoRoot, SuccessfulValidationResult(repoRoot)),
+            validationSettingsStore: new InMemoryValidationSettingsStore());
+
+        try
+        {
+            vm.SelectedRunHistory = new MainWindowViewModel.RunHistoryRow("run-001", runPath, System.DateTimeOffset.UtcNow, "Completed", "ollama", "none", "Verified");
+
+            Assert.Equal("superseded_by_later_repair", vm.RepairPromotionStatus);
+            Assert.Equal("Superseded by later repair", vm.RepairPromotionBadge);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_proof_panel_loads_latest_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.Equal(BuilderExecutionService.BuilderProofFloorModelId, vm.BuilderProofModelId);
+            Assert.Equal("Passed with routing", vm.BuilderProofOutcomeBadge);
+            Assert.Equal("Passed cleanly", vm.BuilderExternalProofOutcomeBadge);
+            Assert.True(vm.HasBuilderProofSummary);
+            Assert.True(vm.HasBuilderProofSummaryPath);
+            Assert.True(vm.HasBuilderExternalProofSummary);
+            Assert.True(vm.HasBuilderExternalProofSummaryPath);
+            Assert.True(vm.HasBuilderProofSuccessCountsSummary);
+            Assert.True(vm.HasBuilderModelFloorVerdictSummary);
+            Assert.True(vm.HasBuilderModelFloorVerdictPath);
+            Assert.True(vm.HasBuilderExternalFloorVerdictSummary);
+            Assert.True(vm.HasBuilderModelFloorFailurePatternSummary);
+            Assert.True(vm.HasBuilderModelFloorFailurePatternsPath);
+            Assert.True(vm.HasBuilderModelFloorGuidanceSummary);
+            Assert.True(vm.HasBuilderModelFloorGuidancePath);
+            Assert.True(vm.HasBuilderModelTrustBandSummary);
+            Assert.True(vm.HasBuilderModelTrustBandsPath);
+            Assert.True(vm.HasBuilderModelScopeSummary);
+            Assert.True(vm.HasBuilderModelScopeSummaryPath);
+            Assert.True(vm.HasBuilderModelRoutingRecommendationSummary);
+            Assert.True(vm.HasBuilderModelRoutingRecommendationPath);
+            Assert.True(vm.HasBuilderModelWeakSpotSummary);
+            Assert.True(vm.HasBuilderModelEscalationSummary);
+            Assert.True(vm.HasBuilderModelEscalationDecisionPath);
+            Assert.True(vm.HasBuilderModelRoutingPlanSummary);
+            Assert.True(vm.HasBuilderModelRoutingPlanPath);
+            Assert.True(vm.HasBuilderModelSplitTaskGuidanceSummary);
+            Assert.True(vm.HasBuilderModelRoutingWeakSpotReason);
+            Assert.True(vm.HasBuilderStrongerTierAvailabilitySummary);
+            Assert.True(vm.HasBuilderStrongerTierAvailabilityPath);
+            Assert.Equal("Reject band", vm.BuilderProofTrustBandBadge);
+            Assert.Equal("Out of scope for low-floor model", vm.BuilderRoutingRecommendationBadge);
+            Assert.Equal("Split task before using low-floor model", vm.BuilderModelEscalationBadge);
+            Assert.Equal("Stronger tier available", vm.BuilderStrongerTierAvailabilityBadge);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Run_builder_proof_command_populates_latest_proof_state()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.False(vm.HasBuilderProofSummaryPath);
+            Assert.True(vm.RunBuilderProofMatrixCommand.CanExecute(null));
+
+            await vm.RunBuilderProofMatrixCommand.ExecuteAsync();
+
+            Assert.True(vm.HasBuilderProofSummaryPath);
+            Assert.True(vm.HasBuilderModelFloorVerdictPath);
+            Assert.True(vm.HasBuilderExternalProofSummaryPath);
+            Assert.True(vm.HasBuilderModelFloorFailurePatternsPath);
+            Assert.True(vm.HasBuilderModelFloorGuidancePath);
+            Assert.True(vm.HasBuilderModelTrustBandsPath);
+            Assert.True(vm.HasBuilderModelScopeSummaryPath);
+            Assert.True(vm.HasBuilderModelRoutingRecommendationPath);
+            Assert.True(vm.HasBuilderModelEscalationDecisionPath);
+            Assert.True(vm.HasBuilderModelRoutingPlanPath);
+            Assert.True(vm.HasBuilderStrongerTierAvailabilityPath);
+            Assert.Equal("Passed with routing", vm.BuilderProofOutcomeBadge);
+            Assert.Equal("Passed cleanly", vm.BuilderExternalProofOutcomeBadge);
+            Assert.Equal("Sufficient with repair loop", vm.BuilderModelFloorVerdictBadge);
+            Assert.Equal("Sufficient for bounded external targets", vm.BuilderExternalFloorVerdictBadge);
+            Assert.Equal("Reject band", vm.BuilderProofTrustBandBadge);
+            Assert.Equal("Out of scope for low-floor model", vm.BuilderRoutingRecommendationBadge);
+            Assert.Equal("Split task before using low-floor model", vm.BuilderModelEscalationBadge);
+            Assert.Equal("Stronger tier available", vm.BuilderStrongerTierAvailabilityBadge);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_comparative_proof_panel_loads_latest_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.Equal("Stronger tier available", vm.BuilderStrongerTierAvailabilityBadge);
+            Assert.Equal("Cleaner success", vm.BuilderComparativeProofBadge);
+            Assert.Equal("Split first, keep low-floor", vm.BuilderRoutingPolicyBadge);
+            Assert.Equal("Low floor if split first", vm.BuilderTieredRoutingBadge);
+            Assert.True(vm.HasBuilderComparativeProofSummary);
+            Assert.True(vm.HasBuilderComparativeProofSummaryPath);
+            Assert.True(vm.HasBuilderComparativeRepairBurdenSummary);
+            Assert.True(vm.HasBuilderRoutingPolicySummary);
+            Assert.True(vm.HasBuilderRoutingPolicyPath);
+            Assert.True(vm.HasBuilderSplitFirstPlanSummary);
+            Assert.True(vm.HasBuilderSplitFirstPlanPath);
+            Assert.True(vm.HasBuilderTieredRoutingSummary);
+            Assert.True(vm.HasBuilderTieredRoutingPath);
+            Assert.True(vm.HasBuilderPrimaryRoutingRecommendationSummary);
+            Assert.True(vm.HasBuilderStrongerTierRoleSummary);
+            Assert.True(vm.HasBuilderWeakSpotMitigationSummary);
+            Assert.Contains("split", vm.BuilderPrimaryRoutingRecommendationSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("cleaner", vm.BuilderStrongerTierRoleSummary, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_split_step_panel_derives_next_step_state_and_runs_first_interaction()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.True(vm.HasBuilderSplitStepExecutionSummary);
+            Assert.True(vm.HasBuilderSplitSteps);
+            Assert.Equal(3, vm.BuilderSplitSteps.Count);
+            Assert.Equal("View ready", vm.BuilderSplitSteps[0].ExecutionAvailability);
+            Assert.Equal("Not started", vm.BuilderSplitSteps[0].CompletionBadge);
+            Assert.Contains("must finish", vm.BuilderSplitSteps[1].BlockReason, StringComparison.OrdinalIgnoreCase);
+            Assert.True(vm.RunNextBuilderSplitStepCommand.CanExecute(null));
+
+            await vm.RunNextBuilderSplitStepCommand.ExecuteAsync();
+
+            Assert.Single(shell.OpenedPaths);
+            Assert.Contains("split-execution-hooks", shell.OpenedPaths[0], StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("Opened", vm.BuilderSplitSteps[0].CompletionBadge);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_split_step_helpers_route_expected_paths_after_split_execution()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            var run = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.RunBuilderSplitFirstExecutionAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.Equal("Split matched stronger tier", vm.BuilderSplitFirstOutcomeBadge);
+            Assert.True(vm.HasBuilderSplitFirstOutcomeSummary);
+            Assert.True(vm.HasBuilderSplitStepExecutionPath);
+            Assert.True(vm.HasBuilderSplitFirstOutcomePath);
+            Assert.Equal("Opened", vm.BuilderSplitSteps[0].CompletionBadge);
+            Assert.Equal("Executed", vm.BuilderSplitSteps[1].CompletionBadge);
+            Assert.Equal("Completed by outcome", vm.BuilderSplitSteps[2].CompletionBadge);
+            Assert.Contains("already completed", vm.BuilderSplitExecutionDisabledReason, StringComparison.OrdinalIgnoreCase);
+
+            Assert.True(vm.OpenBuilderSplitStepExecutionCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderSplitFirstOutcomeCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderSplitExecutionSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderSplitComparativeClosureSummaryCommand.CanExecute(null));
+
+            await vm.OpenBuilderSplitStepExecutionCommand.ExecuteAsync();
+            await vm.OpenBuilderSplitFirstOutcomeCommand.ExecuteAsync();
+            await vm.CopyBuilderSplitExecutionSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderSplitComparativeClosureSummaryCommand.ExecuteAsync();
+
+            Assert.Equal(2, shell.OpenedPaths.Count);
+            Assert.Equal(BuilderExecutionService.BuilderSplitStepExecutionPath(run.RunFolder), shell.OpenedPaths[0]);
+            Assert.Equal(BuilderExecutionService.BuilderSplitFirstOutcomePath(run.RunFolder), shell.OpenedPaths[1]);
+            Assert.Equal(2, shell.CopiedTexts.Count);
+            Assert.Contains("split-step execution recorded", shell.CopiedTexts[0], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("stronger-tier", shell.CopiedTexts[1], StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_default_guidance_surface_loads_and_helpers_open_expected_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            var run = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.RunBuilderSplitFirstExecutionAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.Equal("Split-first low-floor", vm.BuilderDefaultGuidanceBadge);
+            Assert.Equal("Provisional", vm.BuilderGuidanceSupportBadge);
+            Assert.True(vm.HasBuilderDefaultGuidanceSummary);
+            Assert.True(vm.HasBuilderDefaultGuidancePath);
+            Assert.True(vm.HasBuilderGuidanceHistoryPath);
+            Assert.True(vm.HasBuilderLatestRoutingDecisionSummary);
+            Assert.True(vm.HasBuilderLatestRoutingDecisionPath);
+            Assert.True(vm.HasBuilderGuidanceSupportSummary);
+            Assert.True(vm.HasBuilderGuidanceSupportPath);
+            Assert.Contains("split-first", vm.BuilderDefaultGuidanceSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("bounded_refactor", vm.BuilderLatestRoutingDecisionSummary, StringComparison.Ordinal);
+
+            Assert.True(vm.OpenBuilderDefaultGuidanceCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderGuidanceHistoryCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderLatestRoutingDecisionCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderGuidanceSupportCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderDefaultGuidanceSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderLatestRoutingDecisionCommand.CanExecute(null));
+
+            await vm.OpenBuilderDefaultGuidanceCommand.ExecuteAsync();
+            await vm.OpenBuilderGuidanceHistoryCommand.ExecuteAsync();
+            await vm.OpenBuilderLatestRoutingDecisionCommand.ExecuteAsync();
+            await vm.OpenBuilderGuidanceSupportCommand.ExecuteAsync();
+            await vm.CopyBuilderDefaultGuidanceSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderLatestRoutingDecisionCommand.ExecuteAsync();
+
+            Assert.Equal(4, shell.OpenedPaths.Count);
+            Assert.Equal(BuilderExecutionService.BuilderDefaultPolicyPath(run.RunFolder), shell.OpenedPaths[0]);
+            Assert.Equal(BuilderExecutionService.BuilderDefaultPolicyHistoryPathForRepo(repoRoot), shell.OpenedPaths[1]);
+            Assert.Equal(BuilderExecutionService.BuilderRequestPolicyDecisionPath(run.RunFolder), shell.OpenedPaths[2]);
+            Assert.Equal(BuilderExecutionService.BuilderPolicyStabilityPath(run.RunFolder), shell.OpenedPaths[3]);
+            Assert.Equal(2, shell.CopiedTexts.Count);
+            Assert.Contains("default builder model", shell.CopiedTexts[0], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("split_first_low_floor", shell.CopiedTexts[1], StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_default_guidance_support_badge_tracks_repeated_proof_runs()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.RunBuilderSplitFirstExecutionAsync(repoRoot, provider: "ollama");
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.RunBuilderSplitFirstExecutionAsync(repoRoot, provider: "ollama");
+
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.Equal("Corroborated", vm.BuilderGuidanceSupportBadge);
+            Assert.Contains("2 supporting proof run", vm.BuilderGuidanceSupportSummary, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_intake_and_execution_prep_surface_loads_and_helpers_open_expected_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            var run = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.RunBuilderSplitFirstExecutionAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.Equal("Ready through split-first prep", vm.BuilderIntakeBadge);
+            Assert.Equal("Split-first route", vm.BuilderPrepRouteBadge);
+            Assert.True(vm.HasBuilderIntakeSummary);
+            Assert.True(vm.HasBuilderIntakePath);
+            Assert.True(vm.HasBuilderPrepSummary);
+            Assert.True(vm.HasBuilderPrepPath);
+            Assert.Contains("Support=provisional", vm.BuilderIntakeSummary, System.StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("split_first_low_floor_route", vm.BuilderPrepSummary, System.StringComparison.Ordinal);
+
+            Assert.True(vm.OpenBuilderRequestIntakeCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderExecutionPrepCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderIntakeRoutingSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderExecutionPrepSummaryCommand.CanExecute(null));
+
+            await vm.OpenBuilderRequestIntakeCommand.ExecuteAsync();
+            await vm.OpenBuilderExecutionPrepCommand.ExecuteAsync();
+            await vm.CopyBuilderIntakeRoutingSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderExecutionPrepSummaryCommand.ExecuteAsync();
+
+            Assert.Equal(2, shell.OpenedPaths.Count);
+            Assert.Equal(BuilderExecutionService.BuilderRequestIntakePath(run.RunFolder), shell.OpenedPaths[0]);
+            Assert.Equal(BuilderExecutionService.BuilderExecutionPrepPath(run.RunFolder), shell.OpenedPaths[1]);
+            Assert.Equal(2, shell.CopiedTexts.Count);
+            Assert.Contains("ready_for_split_first_low_floor", shell.CopiedTexts[0], System.StringComparison.Ordinal);
+            Assert.Contains("split_first_low_floor_route", shell.CopiedTexts[1], System.StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_prepared_launch_surface_runs_and_helpers_open_expected_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            var run = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.True(vm.LaunchPreparedBuilderRouteCommand.CanExecute(null));
+            Assert.Equal("Ready to launch", vm.BuilderLaunchAvailabilityBadge);
+            Assert.False(vm.HasBuilderLaunchSummary);
+            Assert.False(vm.HasBuilderResultSummary);
+
+            await vm.LaunchPreparedBuilderRouteCommand.ExecuteAsync();
+
+            Assert.Equal("Already launched", vm.BuilderLaunchAvailabilityBadge);
+            Assert.Equal("Launched and passed", vm.BuilderResultBadge);
+            Assert.Equal("Prep confirmed", vm.BuilderRouteComparisonBadge);
+            Assert.True(vm.HasBuilderLaunchSummary);
+            Assert.True(vm.HasBuilderLaunchPath);
+            Assert.True(vm.HasBuilderResultSummary);
+            Assert.True(vm.HasBuilderResultPath);
+            Assert.Contains("already has a recorded route result", vm.BuilderPreparedLaunchDisabledReason, System.StringComparison.OrdinalIgnoreCase);
+
+            Assert.True(vm.OpenBuilderExecutionLaunchCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderExecutionResultCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderExecutionLaunchSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderExecutionResultSummaryCommand.CanExecute(null));
+
+            await vm.OpenBuilderExecutionLaunchCommand.ExecuteAsync();
+            await vm.OpenBuilderExecutionResultCommand.ExecuteAsync();
+            await vm.CopyBuilderExecutionLaunchSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderExecutionResultSummaryCommand.ExecuteAsync();
+
+            Assert.Equal(2, shell.OpenedPaths.Count);
+            Assert.Equal(BuilderExecutionService.BuilderExecutionLaunchPath(run.RunFolder), shell.OpenedPaths[0]);
+            Assert.Equal(BuilderExecutionService.BuilderExecutionResultPath(run.RunFolder), shell.OpenedPaths[1]);
+            Assert.Equal(2, shell.CopiedTexts.Count);
+            Assert.Contains("split_first_low_floor_route", shell.CopiedTexts[0], System.StringComparison.Ordinal);
+            Assert.Contains("launched on split_first_low_floor_route", shell.CopiedTexts[1], System.StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_default_launch_surface_records_override_evidence_and_routes_helpers()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(repoRoot, provider: "ollama");
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(repoRoot, provider: "ollama");
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(repoRoot, provider: "ollama");
+
+            var latestRun = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.True(vm.LaunchBuilderOverrideRouteCommand.CanExecute(null));
+            Assert.True(vm.HasBuilderOverrideRouteOptionSummary);
+            Assert.Contains("direct_low_floor_route", vm.BuilderOverrideRouteOptionSummary, StringComparison.Ordinal);
+
+            await vm.LaunchBuilderOverrideRouteCommand.ExecuteAsync();
+
+            Assert.Equal("Already launched", vm.BuilderLaunchAvailabilityBadge);
+            Assert.True(vm.HasBuilderLaunchDefaultDecisionSummary);
+            Assert.True(vm.HasBuilderLaunchDefaultDecisionPath);
+            Assert.True(vm.HasBuilderLaunchRouteModeSummary);
+            Assert.True(vm.HasBuilderRouteOverrideSummary);
+            Assert.True(vm.HasBuilderRouteOverridePath);
+            Assert.True(vm.HasBuilderRouteReviewSummary);
+            Assert.True(vm.HasBuilderRouteReviewPath);
+            Assert.True(vm.HasBuilderRouteReconfirmationSummary);
+            Assert.True(vm.HasBuilderRouteReconfirmationPath);
+            Assert.True(vm.HasBuilderDefaultRouteRecoverySummary);
+            Assert.True(vm.HasBuilderDefaultRouteRecoveryPath);
+            Assert.Contains("overridden_by_operator", vm.BuilderLaunchDefaultDecisionSummary, StringComparison.Ordinal);
+            Assert.Contains("clean bounded launch", vm.BuilderLaunchRouteModeSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("regressed outcome", vm.BuilderRouteOverrideSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("stable default", vm.BuilderRouteReviewSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("override_route_failure", vm.BuilderRouteReconfirmationSummary, StringComparison.Ordinal);
+            Assert.Contains("still suspended", vm.BuilderDefaultRouteRecoverySummary, StringComparison.OrdinalIgnoreCase);
+
+            Assert.True(vm.OpenBuilderLaunchDefaultDecisionCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderRouteOverrideEvidenceCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderRouteReviewCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderRouteReconfirmationCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderDefaultRouteRecoveryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderLaunchDefaultSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderRouteOverrideSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderRouteReconfirmationSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderDefaultRouteRecoverySummaryCommand.CanExecute(null));
+
+            await vm.OpenBuilderLaunchDefaultDecisionCommand.ExecuteAsync();
+            await vm.OpenBuilderRouteOverrideEvidenceCommand.ExecuteAsync();
+            await vm.OpenBuilderRouteReviewCommand.ExecuteAsync();
+            await vm.OpenBuilderRouteReconfirmationCommand.ExecuteAsync();
+            await vm.OpenBuilderDefaultRouteRecoveryCommand.ExecuteAsync();
+            await vm.CopyBuilderLaunchDefaultSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderRouteOverrideSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderRouteReconfirmationSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderDefaultRouteRecoverySummaryCommand.ExecuteAsync();
+
+            Assert.Equal(5, shell.OpenedPaths.Count);
+            Assert.Equal(BuilderExecutionService.BuilderLaunchDefaultDecisionPath(latestRun.RunFolder), shell.OpenedPaths[0]);
+            Assert.Equal(BuilderExecutionService.BuilderRouteOverrideEvidencePath(latestRun.RunFolder), shell.OpenedPaths[1]);
+            Assert.Equal(BuilderExecutionService.BuilderPolicyReviewCandidatesPath(latestRun.RunFolder), shell.OpenedPaths[2]);
+            Assert.Equal(BuilderExecutionService.BuilderRouteReconfirmationPath(latestRun.RunFolder), shell.OpenedPaths[3]);
+            Assert.Equal(BuilderExecutionService.BuilderDefaultRouteRecoveryPath(latestRun.RunFolder), shell.OpenedPaths[4]);
+            Assert.Equal(4, shell.CopiedTexts.Count);
+            Assert.Contains("overridden_by_operator", shell.CopiedTexts[0], StringComparison.Ordinal);
+            Assert.Contains("regressed outcome", shell.CopiedTexts[1], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("override_route_failure", shell.CopiedTexts[2], StringComparison.Ordinal);
+            Assert.Contains("still suspended", shell.CopiedTexts[3], StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_readiness_gate_surface_shows_confirmed_route_and_opens_expected_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(repoRoot, provider: "ollama");
+
+            var latestRun = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.Equal("Confirmed for bounded use", vm.BuilderReadinessGateBadge);
+            Assert.True(vm.HasBuilderReadinessGateSummary);
+            Assert.True(vm.HasBuilderReadinessCountsSummary);
+            Assert.True(vm.HasBuilderReadinessBoundedUseSummary);
+            Assert.True(vm.HasBuilderReadinessGatePath);
+            Assert.True(vm.HasBuilderReadinessGateHistoryPath);
+            Assert.True(vm.HasBuilderRouteStabilitySummaryPath);
+            Assert.True(vm.HasBuilderConfirmedClassesSummary);
+            Assert.True(vm.HasBuilderConfirmedClassesPath);
+            Assert.True(vm.HasBuilderDefaultRouteDecisionSummary);
+            Assert.True(vm.HasBuilderDefaultRouteDecisionPath);
+            Assert.True(vm.HasBuilderRouteSourceSummary);
+            Assert.True(vm.HasBuilderOverrideAvailabilitySummary);
+            Assert.False(vm.HasBuilderReadinessLatestContradictionNote);
+            Assert.Contains("builder-ready for bounded use", vm.BuilderReadinessBoundedUseSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("defaulted_by_confirmed_policy", vm.BuilderRouteSourceSummary, StringComparison.Ordinal);
+            Assert.Contains("override is available", vm.BuilderOverrideAvailabilitySummary, StringComparison.OrdinalIgnoreCase);
+
+            Assert.True(vm.OpenBuilderReadinessGateCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderReadinessHistoryCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderConfirmedClassesCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderDefaultRouteDecisionCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderRouteStabilitySummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderReadinessSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderConfirmedClassesSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderDefaultRouteDecisionSummaryCommand.CanExecute(null));
+            Assert.False(vm.CopyBuilderReadinessContradictionNoteCommand.CanExecute(null));
+
+            await vm.OpenBuilderReadinessGateCommand.ExecuteAsync();
+            await vm.OpenBuilderReadinessHistoryCommand.ExecuteAsync();
+            await vm.OpenBuilderConfirmedClassesCommand.ExecuteAsync();
+            await vm.OpenBuilderDefaultRouteDecisionCommand.ExecuteAsync();
+            await vm.OpenBuilderRouteStabilitySummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderReadinessSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderConfirmedClassesSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderDefaultRouteDecisionSummaryCommand.ExecuteAsync();
+
+            Assert.Equal(5, shell.OpenedPaths.Count);
+            Assert.Equal(BuilderExecutionService.BuilderReadinessGatePath(latestRun.RunFolder), shell.OpenedPaths[0]);
+            Assert.Equal(BuilderExecutionService.BuilderReadinessGateHistoryPathForRepo(repoRoot), shell.OpenedPaths[1]);
+            Assert.Equal(BuilderExecutionService.BuilderConfirmedTaskClassesPath(latestRun.RunFolder), shell.OpenedPaths[2]);
+            Assert.Equal(BuilderExecutionService.BuilderDefaultRouteDecisionPath(latestRun.RunFolder), shell.OpenedPaths[3]);
+            Assert.Equal(BuilderExecutionService.BuilderRouteStabilitySummaryPath(latestRun.RunFolder), shell.OpenedPaths[4]);
+            Assert.Equal(3, shell.CopiedTexts.Count);
+            Assert.Contains("confirmed_for_bounded_use", shell.CopiedTexts[0], StringComparison.Ordinal);
+            Assert.Contains("task class(es)", shell.CopiedTexts[1], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("defaulted_by_confirmed_policy", shell.CopiedTexts[2], StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_contradiction_surface_shows_suspension_and_routes_helpers_to_artifacts()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(repoRoot, provider: "ollama");
+
+            var contradictedRun = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(repoRoot, provider: "ollama");
+
+            var result = BuilderExecutionService.LoadBuilderExecutionResult(contradictedRun.RunFolder);
+            Assert.NotNull(result);
+            var contradicted = result! with
+            {
+                FinalRouteOutcomeClassification = "launched_and_failed_followup_created",
+                PreparedRouteComparisonState = "insufficient_for_scope",
+                Summary = "Prepared builder route failed and returned to follow-up."
+            };
+            File.WriteAllText(
+                BuilderExecutionService.BuilderExecutionResultPath(contradictedRun.RunFolder),
+                JsonSerializer.Serialize(contradicted, new JsonSerializerOptions { WriteIndented = true }));
+            var refreshMethod = typeof(BuilderExecutionService).GetMethod(
+                "RefreshBuilderDefaultPolicyArtifacts",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(refreshMethod);
+            refreshMethod!.Invoke(builderService, new object[] { repoRoot, contradictedRun.RunFolder });
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.True(vm.HasBuilderReadinessLatestContradictionNote);
+            Assert.True(vm.HasBuilderReadinessContradictionsSummary);
+            Assert.True(vm.HasBuilderReadinessContradictionsPath);
+            Assert.True(vm.HasBuilderDefaultSuspensionSummary);
+            Assert.Contains("temporarily suspended", vm.BuilderDefaultSuspensionSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("suggested", vm.BuilderDefaultRouteDecisionSummary, StringComparison.Ordinal);
+
+            Assert.True(vm.OpenBuilderReadinessContradictionsCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderReadinessContradictionNoteCommand.CanExecute(null));
+
+            await vm.OpenBuilderReadinessContradictionsCommand.ExecuteAsync();
+            await vm.CopyBuilderReadinessContradictionNoteCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderReadinessContradictionsPath(contradictedRun.RunFolder), shell.OpenedPaths);
+            Assert.Single(shell.CopiedTexts);
+            Assert.Contains("insufficient for scope", shell.CopiedTexts[0], StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_proof_open_helpers_route_expected_paths()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            var run = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.True(vm.OpenBuilderProofSummaryCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderProofRunFolderCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderModelFloorVerdictCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderFailurePatternsCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderExternalProofSummaryCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderModelFloorGuidanceCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderTrustBandsCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderScopeSummaryCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderRoutingRecommendationCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderEscalationDecisionCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderRoutingPlanCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderStrongerTierAvailabilityCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderComparativeProofSummaryCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderRoutingPolicyEvidenceCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderSplitFirstPlanCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderTieredRoutingPolicyCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderProofSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderScopeSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderRoutingRecommendationCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderSplitTaskGuidanceCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderComparativeProofSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderRoutingPolicySummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderSplitFirstPlanSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderPrimaryRoutingRecommendationCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderWeakSpotMitigationSummaryCommand.CanExecute(null));
+
+            await vm.OpenBuilderProofSummaryCommand.ExecuteAsync();
+            await vm.OpenBuilderProofRunFolderCommand.ExecuteAsync();
+            await vm.OpenBuilderModelFloorVerdictCommand.ExecuteAsync();
+            await vm.OpenBuilderFailurePatternsCommand.ExecuteAsync();
+            await vm.OpenBuilderExternalProofSummaryCommand.ExecuteAsync();
+            await vm.OpenBuilderModelFloorGuidanceCommand.ExecuteAsync();
+            await vm.OpenBuilderTrustBandsCommand.ExecuteAsync();
+            await vm.OpenBuilderScopeSummaryCommand.ExecuteAsync();
+            await vm.OpenBuilderRoutingRecommendationCommand.ExecuteAsync();
+            await vm.OpenBuilderEscalationDecisionCommand.ExecuteAsync();
+            await vm.OpenBuilderRoutingPlanCommand.ExecuteAsync();
+            await vm.OpenBuilderStrongerTierAvailabilityCommand.ExecuteAsync();
+            await vm.OpenBuilderComparativeProofSummaryCommand.ExecuteAsync();
+            await vm.OpenBuilderRoutingPolicyEvidenceCommand.ExecuteAsync();
+            await vm.OpenBuilderSplitFirstPlanCommand.ExecuteAsync();
+            await vm.OpenBuilderTieredRoutingPolicyCommand.ExecuteAsync();
+            await vm.CopyBuilderProofSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderScopeSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderRoutingRecommendationCommand.ExecuteAsync();
+            await vm.CopyBuilderSplitTaskGuidanceCommand.ExecuteAsync();
+            await vm.CopyBuilderComparativeProofSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderRoutingPolicySummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderSplitFirstPlanSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderPrimaryRoutingRecommendationCommand.ExecuteAsync();
+            await vm.CopyBuilderWeakSpotMitigationSummaryCommand.ExecuteAsync();
+
+            Assert.Equal(16, shell.OpenedPaths.Count);
+            Assert.Equal(run.SummaryArtifactPath, shell.OpenedPaths[0]);
+            Assert.Equal(run.RunFolder, shell.OpenedPaths[1]);
+            Assert.Equal(run.VerdictArtifactPath, shell.OpenedPaths[2]);
+            Assert.Equal(BuilderExecutionService.BuilderModelFloorFailurePatternsPath(run.RunFolder), shell.OpenedPaths[3]);
+            Assert.Equal(BuilderExecutionService.BuilderExternalProofSummaryPath(run.RunFolder), shell.OpenedPaths[4]);
+            Assert.Equal(BuilderExecutionService.BuilderModelFloorPolicySummaryPath(run.RunFolder), shell.OpenedPaths[5]);
+            Assert.Equal(BuilderExecutionService.BuilderModelTrustBandsPath(run.RunFolder), shell.OpenedPaths[6]);
+            Assert.Equal(BuilderExecutionService.BuilderModelScopeSummaryPath(run.RunFolder), shell.OpenedPaths[7]);
+            Assert.Equal(BuilderExecutionService.BuilderModelRoutingRecommendationPath(run.RunFolder), shell.OpenedPaths[8]);
+            Assert.Equal(BuilderExecutionService.BuilderModelEscalationDecisionPath(run.RunFolder), shell.OpenedPaths[9]);
+            Assert.Equal(BuilderExecutionService.BuilderModelRoutingPlanPath(run.RunFolder), shell.OpenedPaths[10]);
+            Assert.Equal(BuilderExecutionService.BuilderStrongerTierAvailabilityPath(run.RunFolder), shell.OpenedPaths[11]);
+            Assert.Equal(BuilderExecutionService.BuilderComparativeProofSummaryPath(run.RunFolder), shell.OpenedPaths[12]);
+            Assert.Equal(BuilderExecutionService.BuilderRoutingPolicyEvidencePath(run.RunFolder), shell.OpenedPaths[13]);
+            Assert.Equal(BuilderExecutionService.BuilderSplitFirstPlanPath(run.RunFolder), shell.OpenedPaths[14]);
+            Assert.Equal(BuilderExecutionService.BuilderTieredRoutingPolicyPath(run.RunFolder), shell.OpenedPaths[15]);
+            Assert.Equal(9, shell.CopiedTexts.Count);
+            Assert.Contains("# Builder Proof Summary", shell.CopiedTexts[0], StringComparison.Ordinal);
+            Assert.Contains("Clean band=", shell.CopiedTexts[1], StringComparison.Ordinal);
+            Assert.Contains("out of scope", shell.CopiedTexts[2], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Reduce the touched file count", shell.CopiedTexts[3], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("# Builder Comparative Proof Summary", shell.CopiedTexts[4], StringComparison.Ordinal);
+            Assert.Contains("Split first, keep low-floor", shell.CopiedTexts[5], StringComparison.Ordinal);
+            Assert.Contains("Split first", shell.CopiedTexts[6], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Primary route:", shell.CopiedTexts[7], StringComparison.Ordinal);
+            Assert.Contains("file_placement_mistake", shell.CopiedTexts[8], StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
     private static object? InvokePrivate(object target, string methodName, params object?[] args)
     {
         var method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -1073,12 +3633,26 @@ public sealed class MainWindowViewModelBackendStatusTests
         throw new DirectoryNotFoundException("Could not locate Shoots.sln from test base directory.");
     }
 
+    private static BuilderExecutionService CreateBuilderExecutionService(
+        IBuilderProofCommandRunner? runner = null,
+        IBuilderStrongerTierResolver? resolver = null)
+    {
+        var registry = new ToolRegistry("etc/ui.tools.catalog.json");
+        var runtimeBridge = new RuntimeBridgeLocal(new ToolExecutionService(registry));
+        return new BuilderExecutionService(runtimeBridge, new ArtifactManager(), registry, runner, resolver ?? new AvailableBuilderStrongerTierResolver());
+    }
+
     private static MainWindowViewModel BuildViewModel(
         IBackendProbeService probeService,
         IOllamaClient ollamaClient,
         bool includeProfile = true,
         IWorkspaceShellService? workspaceShell = null,
-        Shoots.UI.Builder.IPlanner? planner = null)
+        Shoots.UI.Builder.IPlanner? planner = null,
+        IValidationSettingsStore? validationSettingsStore = null,
+        IValidationRunnerService? validationRunnerService = null,
+        IRepairAttemptService? repairAttemptService = null,
+        ISemanticReuseService? semanticReuseService = null,
+        BuilderExecutionService? builderExecutionService = null)
     {
         return new MainWindowViewModel(
             new NullExecutionCommandService(),
@@ -1097,8 +3671,269 @@ public sealed class MainWindowViewModelBackendStatusTests
             new NullAiHelpFacade(),
             probeService,
             ollamaClient,
+            validationSettingsStore: validationSettingsStore,
+            validationRunnerService: validationRunnerService,
+            repairAttemptService: repairAttemptService,
             planner: planner,
-            autoRefreshBackends: false);
+            builderExecutionService: builderExecutionService,
+            autoRefreshBackends: false,
+            semanticReuseService: semanticReuseService);
+    }
+
+    private static string CreateValidationRepoRoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"shoots-validation-vm-{System.Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "Shoots.sln"), "Microsoft Visual Studio Solution File");
+        return root;
+    }
+
+    private static void SeedRepairReviewArtifacts(string runPath, string repoRoot, string repairId, string improvementState)
+    {
+        var repairFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "repairs", repairId);
+        var validationFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", $"validation-{repairId}");
+        Directory.CreateDirectory(repairFolder);
+        Directory.CreateDirectory(validationFolder);
+        var bundlePath = Path.Combine(repairFolder, "repair_bundle.json");
+        File.WriteAllText(bundlePath, "{}");
+
+        var comparison = new RepairComparisonRecord(
+            repairId,
+            "source-run-001",
+            "failed",
+            "Validation failed: Tests failed.",
+            "Running UI tests",
+            "Tests failed.",
+            $"validation-{repairId}",
+            string.Equals(improvementState, "passed", System.StringComparison.Ordinal) ? "passed" : "failed",
+            string.Equals(improvementState, "passed", System.StringComparison.Ordinal)
+                ? "Validation passed (1 stage)."
+                : "Validation failed: Smoke failed.",
+            string.Equals(improvementState, "passed", System.StringComparison.Ordinal) ? "Completed" : "Running smoke validation",
+            string.Equals(improvementState, "passed", System.StringComparison.Ordinal) ? string.Empty : "Smoke failed.",
+            improvementState,
+            new[] { Path.Combine(repoRoot, "src", "Generated.cs") },
+            "Repair applied deterministic changes.",
+            bundlePath,
+            repairFolder,
+            validationFolder,
+            System.DateTimeOffset.UtcNow);
+        RepairReviewArtifactsService.SaveComparison(comparison);
+
+        RepairReviewArtifactsService.AppendHistory(
+            runPath,
+            new RepairHistoryEntry(
+                repairId,
+                comparison.RecordedUtc,
+                comparison.SourceValidationRunId,
+                comparison.RepairedValidationRunId,
+                "changed",
+                comparison.ImprovementState,
+                comparison.RepairSummary,
+                bundlePath,
+                repairFolder,
+                validationFolder,
+                RepairReviewArtifactsService.ComparisonPathForRepair(repairFolder)),
+            keepLast: 5);
+    }
+
+    private static void SeedPromotedRepairArtifacts(string runPath, string repoRoot, string repairId, string improvementState)
+    {
+        SeedRepairReviewArtifacts(runPath, repoRoot, repairId, improvementState);
+
+        var repairFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "repairs", repairId);
+        var comparison = RepairReviewArtifactsService.LoadComparison(RepairReviewArtifactsService.ComparisonPathForRepair(repairFolder));
+        var history = RepairReviewArtifactsService.LoadHistory(runPath).Attempts.First();
+        Assert.NotNull(comparison);
+
+        var promotion = RepairReviewArtifactsService.CreatePromotion(
+            "run-001",
+            runPath,
+            history,
+            comparison!,
+            $"Repair outcome {improvementState}.",
+            string.Empty,
+            System.DateTimeOffset.UtcNow);
+        promotion = RepairReviewArtifactsService.WriteAuditSummary(comparison!, promotion);
+        RepairReviewArtifactsService.SavePromotion(runPath, promotion);
+    }
+
+    private static ValidationRunResult SuccessfulValidationResult(string repoRoot)
+    {
+        var outputFolder = Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "run-success");
+        Directory.CreateDirectory(outputFolder);
+        return new ValidationRunResult(
+            "run-success",
+            "Run full validation loop",
+            outputFolder,
+            true,
+            "Validation passed (1 stage).",
+            null,
+            null,
+            System.DateTimeOffset.UtcNow.AddMinutes(-1),
+            System.DateTimeOffset.UtcNow,
+            new[]
+            {
+                new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded.", Path.Combine(outputFolder, "01-build-ui.log"), 0, 25)
+            });
+    }
+
+    private static async Task<(ValidationRunnerService Service, ValidationRunResult LatestResult)> SeedValidationHandoffArtifactsAsync(string repoRoot)
+    {
+        var executor = new ScriptedValidationCommandExecutor(
+            new Dictionary<string, ValidationCommandExecutionResult>(System.StringComparer.Ordinal)
+            {
+                ["build_ui"] = new(0, new[] { "Build succeeded." }),
+                ["ui_tests"] = new(1, new[] { "Tests failed." })
+            });
+        var service = new ValidationRunnerService(repoRoot, executor);
+        var settings = new ValidationSettings(false, false, 5, false, false);
+
+        await service.RunAsync(ValidationAction.BuildUiProject, settings);
+        await Task.Delay(5);
+        var failedResult = await service.RunAsync(ValidationAction.RunFullValidationLoop, settings);
+        return (service, failedResult);
+    }
+
+    private static void SeedPlanningPlaybookArtifacts(string repoRoot)
+    {
+        var projectRoot = Path.Combine(repoRoot, ".state", "projects", "playbook-project");
+        var runPath = Path.Combine(projectRoot, "runs", "generated-run-001");
+        Directory.CreateDirectory(runPath);
+        File.WriteAllText(
+            Path.Combine(projectRoot, "project.json"),
+            JsonSerializer.Serialize(new
+            {
+                Id = "generated-run-001",
+                Name = "Playbook Project",
+                Description = "Playbook evidence",
+                ProjectRootPath = projectRoot
+            }, new JsonSerializerOptions { WriteIndented = true }));
+        GeneratedOutputValidationLinkService.Save(new GeneratedOutputValidationLink(
+            "generated-run-001",
+            runPath,
+            projectRoot,
+            "passed",
+            "Validation passed cleanly.",
+            "Validate generated output",
+            "validation-generated-run-001",
+            Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "validation-generated-run-001"),
+            null,
+            System.DateTimeOffset.UtcNow));
+
+        var settings = new ValidationSettings(false, false, 5, false, false, false, 20, 5, false, 5, false, true, true, 5, 200, true, false, true, true, true, 2, true, 3);
+        var service = new SemanticReuseService(repoRoot);
+        var index = service.RefreshLocalIndex(settings);
+        var document = Assert.Single(index.Entries, entry => entry.CaseType == "generated_output_pattern");
+        var reference = new RepairReferenceCase(
+            document.DocumentId,
+            "planning",
+            "Current planning context",
+            document.CaseType,
+            document.Title,
+            document.Outcome,
+            "High",
+            "exact linked history",
+            document.SourceRunId,
+            document.PrimaryArtifactPath,
+            new[] { document.PrimaryArtifactPath },
+            string.Empty);
+
+        SemanticReuseService.RecordSuggestionOutcome(
+            repoRoot,
+            new[] { reference },
+            "planning",
+            "generated-run-001",
+            "validation-playbook-001",
+            string.Empty,
+            "passed",
+            "Validation passed cleanly.",
+            Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "validation-playbook-001", "validation_result.json"),
+            new[] { runPath },
+            "validation",
+            System.DateTimeOffset.UtcNow.AddMinutes(-2),
+            settings);
+        SemanticReuseService.RecordSuggestionOutcome(
+            repoRoot,
+            new[] { reference },
+            "planning",
+            "generated-run-001",
+            "validation-playbook-002",
+            string.Empty,
+            "passed",
+            "Validation passed cleanly.",
+            Path.Combine(repoRoot, ".codex", "validation-ui", "runs", "validation-playbook-002", "validation_result.json"),
+            new[] { runPath },
+            "validation",
+            System.DateTimeOffset.UtcNow.AddMinutes(-1),
+            settings);
+        service.RefreshLocalIndex(settings);
+    }
+
+    private static void SeedValidationHistoryLedger(string repoRoot, IReadOnlyList<ValidationHistoryEntry> entries)
+    {
+        var artifactsRoot = ValidationRunnerService.ValidationArtifactsRootForRepo(repoRoot);
+        Directory.CreateDirectory(artifactsRoot);
+        var ledger = new ValidationHistoryLedger(entries.Count, entries);
+        File.WriteAllText(
+            ValidationRunnerService.HistoryLedgerPathForRepo(repoRoot),
+            JsonSerializer.Serialize(ledger, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static ValidationHistoryEntry ValidationHistoryEntryForUi(
+        string runId,
+        string actionLabel,
+        int minuteOffset,
+        string overallResult,
+        string stabilityClassification,
+        string firstFailureSummary,
+        string firstFailureStage,
+        string failingTestName,
+        bool retryUsed)
+    {
+        var startedUtc = System.DateTimeOffset.Parse("2026-03-10T12:00:00+00:00").AddMinutes(minuteOffset);
+        var completedUtc = startedUtc.AddSeconds(30);
+        var outputFolder = Path.Combine(Path.GetTempPath(), runId);
+        var stageLabel = string.IsNullOrWhiteSpace(firstFailureStage) ? "Building UI" : firstFailureStage;
+        return new ValidationHistoryEntry(
+            runId,
+            actionLabel,
+            outputFolder,
+            Path.Combine(outputFolder, "validation_result.json"),
+            Path.Combine(outputFolder, "validation_stability.json"),
+            startedUtc,
+            completedUtc,
+            overallResult,
+            stabilityClassification,
+            stabilityClassification switch
+            {
+                "passed_on_retry" => "Passed after retry",
+                "flaky_suspected" => "Flaky suspected",
+                "failed" => "Failed",
+                _ => "Passed cleanly"
+            },
+            firstFailureSummary,
+            firstFailureStage,
+            failingTestName,
+            retryUsed,
+            retryUsed ? 1 : 0,
+            new[]
+            {
+                new ValidationHistoryStageOutcome(
+                    "ui_tests",
+                    stageLabel,
+                    string.Equals(overallResult, "passed", System.StringComparison.Ordinal) ? "passed" : "failed",
+                    stabilityClassification,
+                    retryUsed)
+            });
+    }
+
+    private static void WriteValidationResultArtifact(ValidationRunResult result)
+    {
+        Directory.CreateDirectory(result.OutputFolder);
+        File.WriteAllText(
+            Path.Combine(result.OutputFolder, "validation_result.json"),
+            JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
     }
 
 
@@ -1129,6 +3964,229 @@ public sealed class MainWindowViewModelBackendStatusTests
         public EnvironmentProfileResult ApplyProfile(string sandboxRoot, IEnvironmentProfile profile)
         {
             return new EnvironmentProfileResult(profile.Name, System.Array.Empty<string>(), profile.DeclaredCapabilities, System.DateTimeOffset.UtcNow);
+        }
+    }
+
+    private sealed class InMemoryValidationSettingsStore : IValidationSettingsStore
+    {
+        public ValidationSettings Current { get; set; } = new(false, false, 5, false, false, false);
+        public ValidationSettings? LastSaved { get; private set; }
+
+        public ValidationSettings Load() => Current;
+
+        public void Save(ValidationSettings settings)
+        {
+            LastSaved = settings;
+            Current = settings;
+        }
+    }
+
+    private sealed class FixedSemanticReuseService : ISemanticReuseService
+    {
+        private readonly SemanticReuseSuggestionSet _result;
+
+        public FixedSemanticReuseService(string repoRoot, SemanticReuseSuggestionSet result)
+        {
+            RepoRoot = repoRoot;
+            _result = result;
+        }
+
+        public string RepoRoot { get; }
+        public string DesignNotePath => _result.DesignNotePath;
+        public string IndexPath => _result.IndexPath;
+        public string LinkagePath => _result.LinkagePath;
+
+        public SemanticReuseIndexLedger RefreshLocalIndex(ValidationSettings settings)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_result.DesignNotePath)!);
+            File.WriteAllText(_result.DesignNotePath, "# note");
+            File.WriteAllText(_result.IndexPath, "{}");
+            File.WriteAllText(_result.LinkagePath, "{}");
+            return new SemanticReuseIndexLedger(settings.SemanticReuseRetentionCount, System.DateTimeOffset.UtcNow, Array.Empty<SemanticReuseIndexedCase>());
+        }
+
+        public Task<SemanticReuseSuggestionSet> FindSimilarCasesAsync(IReadOnlyList<SemanticReuseQuery> queries, ValidationSettings settings, CancellationToken cancellationToken = default)
+            => Task.FromResult(_result);
+    }
+
+    private sealed class DeterministicValidationRunnerService : IValidationRunnerService
+    {
+        private readonly ValidationRunResult _result;
+
+        public DeterministicValidationRunnerService(string repoRoot, ValidationRunResult result)
+        {
+            RepoRoot = repoRoot;
+            ValidationRunsRoot = Path.Combine(repoRoot, ".codex", "validation-ui", "runs");
+            _result = result;
+        }
+
+        public string RepoRoot { get; }
+        public string ValidationRunsRoot { get; }
+
+        public IReadOnlyList<string> GetStageLabels(ValidationAction action, bool includeValidateBuild)
+            => _result.Stages.Select(stage => stage.StageLabel).ToArray();
+
+        public IReadOnlyList<ValidationRunSummary> LoadRecentRuns(int maxCount)
+            => new[]
+            {
+                new ValidationRunSummary(
+                    _result.RunId,
+                    _result.ActionLabel,
+                    _result.OutputFolder,
+                    _result.Success,
+                    _result.Summary,
+                    _result.StartedUtc,
+                    _result.CompletedUtc)
+            };
+
+        public Task<ValidationRunResult> RunAsync(ValidationAction action, ValidationSettings settings, Action<ValidationProgressEvent>? progress = null, CancellationToken ct = default)
+        {
+            progress?.Invoke(new ValidationProgressEvent("run_started", string.Empty, _result.ActionLabel, "active", _result.Summary, null, null, _result.OutputFolder, System.DateTimeOffset.UtcNow));
+            foreach (var stage in _result.Stages)
+            {
+                progress?.Invoke(new ValidationProgressEvent("stage_started", stage.StageId, stage.StageLabel, "active", $"{stage.StageLabel} started.", null, stage.LogPath, _result.OutputFolder, System.DateTimeOffset.UtcNow));
+                progress?.Invoke(new ValidationProgressEvent("stage_completed", stage.StageId, stage.StageLabel, stage.Status == "failed" ? "failed" : "completed", stage.Summary, null, stage.LogPath, _result.OutputFolder, System.DateTimeOffset.UtcNow));
+            }
+
+            progress?.Invoke(new ValidationProgressEvent("run_completed", string.Empty, _result.ActionLabel, _result.Success ? "completed" : "failed", _result.Summary, null, _result.FirstFailureLogPath, _result.OutputFolder, System.DateTimeOffset.UtcNow));
+            return Task.FromResult(_result);
+        }
+    }
+
+    private sealed class BlockingValidationRunnerService : IValidationRunnerService
+    {
+        private readonly TaskCompletionSource<bool> _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly string _actionLabel;
+        private readonly string _stageId;
+        private readonly string _stageLabel;
+
+        public BlockingValidationRunnerService(
+            string repoRoot,
+            ValidationAction action = ValidationAction.RunFullValidationLoop,
+            string actionLabel = "Run full validation loop",
+            string stageId = "build_ui",
+            string stageLabel = "Building UI")
+        {
+            RepoRoot = repoRoot;
+            ValidationRunsRoot = Path.Combine(repoRoot, ".codex", "validation-ui", "runs");
+            _actionLabel = actionLabel;
+            _stageId = stageId;
+            _stageLabel = stageLabel;
+        }
+
+        public string RepoRoot { get; }
+        public string ValidationRunsRoot { get; }
+
+        public IReadOnlyList<string> GetStageLabels(ValidationAction action, bool includeValidateBuild)
+            => new[] { _stageLabel };
+
+        public IReadOnlyList<ValidationRunSummary> LoadRecentRuns(int maxCount)
+            => System.Array.Empty<ValidationRunSummary>();
+
+        public async Task<ValidationRunResult> RunAsync(ValidationAction action, ValidationSettings settings, Action<ValidationProgressEvent>? progress = null, CancellationToken ct = default)
+        {
+            var outputFolder = Path.Combine(ValidationRunsRoot, "run-blocking");
+            Directory.CreateDirectory(outputFolder);
+            var logPath = Path.Combine(outputFolder, "01-build-ui.log");
+            progress?.Invoke(new ValidationProgressEvent("run_started", string.Empty, _actionLabel, "active", "Validation output folder ready.", null, null, outputFolder, System.DateTimeOffset.UtcNow));
+            progress?.Invoke(new ValidationProgressEvent("stage_started", _stageId, _stageLabel, "active", $"{_stageLabel} started.", null, logPath, outputFolder, System.DateTimeOffset.UtcNow));
+            _started.TrySetResult(true);
+            using var _ = ct.Register(() => _release.TrySetCanceled(ct));
+            await _release.Task;
+
+            var result = new ValidationRunResult(
+                "run-blocking",
+                _actionLabel,
+                outputFolder,
+                true,
+                "Validation passed (1 stage).",
+                null,
+                null,
+                System.DateTimeOffset.UtcNow.AddSeconds(-1),
+                System.DateTimeOffset.UtcNow,
+                new[]
+                {
+                    new ValidationStageResult(_stageId, _stageLabel, "passed", "Build succeeded.", logPath, 0, 10)
+                },
+                "passed",
+                "Passed cleanly",
+                null,
+                null,
+                Path.Combine(outputFolder, "validation_stability.json"),
+                action == ValidationAction.RunFullValidationLoop ? "sequential_standard_mode" : "single_stage_manual_mode");
+            progress?.Invoke(new ValidationProgressEvent("stage_completed", _stageId, _stageLabel, "completed", "Build succeeded.", null, logPath, outputFolder, System.DateTimeOffset.UtcNow));
+            progress?.Invoke(new ValidationProgressEvent("run_completed", string.Empty, _actionLabel, "completed", result.Summary, null, null, outputFolder, System.DateTimeOffset.UtcNow));
+            return result;
+        }
+
+        public Task WaitForStartAsync() => _started.Task;
+
+        public void Release() => _release.TrySetResult(true);
+    }
+
+    private sealed class SequencedValidationRunnerService : IValidationRunnerService
+    {
+        private readonly Queue<ValidationRunResult> _results;
+
+        public SequencedValidationRunnerService(string repoRoot, IEnumerable<ValidationRunResult> results)
+        {
+            RepoRoot = repoRoot;
+            ValidationRunsRoot = Path.Combine(repoRoot, ".codex", "validation-ui", "runs");
+            _results = new Queue<ValidationRunResult>(results);
+        }
+
+        public string RepoRoot { get; }
+        public string ValidationRunsRoot { get; }
+
+        public IReadOnlyList<string> GetStageLabels(ValidationAction action, bool includeValidateBuild)
+            => new[] { "Running UI tests" };
+
+        public IReadOnlyList<ValidationRunSummary> LoadRecentRuns(int maxCount)
+            => System.Array.Empty<ValidationRunSummary>();
+
+        public Task<ValidationRunResult> RunAsync(ValidationAction action, ValidationSettings settings, Action<ValidationProgressEvent>? progress = null, CancellationToken ct = default)
+        {
+            var result = _results.Dequeue();
+            progress?.Invoke(new ValidationProgressEvent("run_started", string.Empty, result.ActionLabel, "active", result.Summary, null, null, result.OutputFolder, System.DateTimeOffset.UtcNow));
+            foreach (var stage in result.Stages)
+            {
+                progress?.Invoke(new ValidationProgressEvent("stage_started", stage.StageId, stage.StageLabel, "active", $"{stage.StageLabel} started.", null, stage.LogPath, result.OutputFolder, System.DateTimeOffset.UtcNow));
+                progress?.Invoke(new ValidationProgressEvent("stage_completed", stage.StageId, stage.StageLabel, stage.Status == "failed" ? "failed" : "completed", stage.Summary, null, stage.LogPath, result.OutputFolder, System.DateTimeOffset.UtcNow));
+            }
+
+            progress?.Invoke(new ValidationProgressEvent("run_completed", string.Empty, result.ActionLabel, result.Success ? "completed" : "failed", result.Summary, null, result.FirstFailureLogPath, result.OutputFolder, System.DateTimeOffset.UtcNow));
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class RecordingRepairAttemptService : IRepairAttemptService
+    {
+        private readonly IReadOnlyList<string> _changedFiles;
+
+        public RecordingRepairAttemptService(string repoRoot, IReadOnlyList<string> changedFiles)
+        {
+            RepairsRoot = Path.Combine(repoRoot, ".codex", "validation-ui", "repairs");
+            _changedFiles = changedFiles;
+        }
+
+        public string RepairsRoot { get; }
+        public string? BundlePath { get; private set; }
+
+        public Task<RepairAttemptResult> AttemptRepairAsync(RepairBundle bundle, CancellationToken ct = default)
+        {
+            var repairFolder = Path.Combine(RepairsRoot, bundle.RepairId);
+            Directory.CreateDirectory(repairFolder);
+            BundlePath = Path.Combine(repairFolder, "repair_bundle.json");
+            File.WriteAllText(BundlePath, System.Text.Json.JsonSerializer.Serialize(bundle));
+
+            return Task.FromResult(new RepairAttemptResult(
+                bundle.RepairId,
+                repairFolder,
+                "Repair applied deterministic changes.",
+                _changedFiles,
+                "changed",
+                System.DateTimeOffset.UtcNow));
         }
     }
 
@@ -1227,6 +4285,118 @@ public sealed class MainWindowViewModelBackendStatusTests
             CopiedTexts.Add(text);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class ScriptedValidationCommandExecutor : IValidationCommandExecutor
+    {
+        private readonly IReadOnlyDictionary<string, ValidationCommandExecutionResult> _results;
+
+        public ScriptedValidationCommandExecutor(IReadOnlyDictionary<string, ValidationCommandExecutionResult> results)
+        {
+            _results = results;
+        }
+
+        public Task<ValidationCommandExecutionResult> ExecuteAsync(
+            ValidationCommandSpec command,
+            string workingDirectory,
+            string logPath,
+            Action<string> onOutput,
+            CancellationToken ct)
+        {
+            var result = _results.TryGetValue(command.StageId, out var mapped)
+                ? mapped
+                : new ValidationCommandExecutionResult(0, System.Array.Empty<string>());
+
+            Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+            File.WriteAllLines(logPath, result.OutputLines);
+            foreach (var line in result.OutputLines)
+            {
+                onOutput(line);
+            }
+
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class SuccessfulBuilderProofCommandRunner : IBuilderProofCommandRunner
+    {
+        public Task<BuilderProofCommandExecutionResult> ExecuteAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            string workingDirectory,
+            string logPath,
+            CancellationToken ct)
+        {
+            var isProofCalc = arguments.Any(argument => argument.Contains("ProofCalc.Tests.csproj", StringComparison.OrdinalIgnoreCase));
+            var isTestExtension = arguments.Any(argument => argument.Contains("ExtensionCalc.Tests.csproj", StringComparison.OrdinalIgnoreCase));
+            var isSplitRefactorProbe = workingDirectory.Contains($"comparative-proof{Path.DirectorySeparatorChar}split-floor", StringComparison.OrdinalIgnoreCase) ||
+                                       workingDirectory.Contains("bounded-refactor-split", StringComparison.OrdinalIgnoreCase);
+            var isComparativeRefactorProbe = workingDirectory.Contains($"comparative-proof{Path.DirectorySeparatorChar}stronger-tier", StringComparison.OrdinalIgnoreCase);
+            var isRefactorProbe = arguments.Any(argument => argument.Contains("RefactorProof.csproj", StringComparison.OrdinalIgnoreCase)) &&
+                                  !isSplitRefactorProbe &&
+                                  !isComparativeRefactorProbe;
+            var isRecovery = logPath.Contains($"{Path.DirectorySeparatorChar}recovery{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase);
+            var isTestCommand = arguments.Count > 0 && string.Equals(arguments[0], "test", StringComparison.Ordinal);
+
+            var lines = isRefactorProbe
+                ? new[]
+                {
+                    "ProfileSummary.cs(7,20): error CS0103: The name 'NameFormatter' does not exist in the current context",
+                    "Build FAILED."
+                }
+                : isTestExtension && !isRecovery
+                    ? new[]
+                    {
+                        "CalculatorExtensionTests.cs(10,35): error CS0103: The name 'Calculator' does not exist in the current context",
+                        "Build FAILED."
+                    }
+                : isProofCalc && !isRecovery
+                ? new[]
+                {
+                    "ProofCalc/Calculator.cs(7,36): error CS1002: ; expected",
+                    "Build FAILED."
+                }
+                : isTestCommand
+                    ? new[]
+                    {
+                        "Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1"
+                    }
+                    : new[]
+                    {
+                        "Build succeeded."
+                    };
+
+            var exitCode = (isProofCalc && !isRecovery) || (isTestExtension && !isRecovery) || isRefactorProbe ? 1 : 0;
+            Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+            File.WriteAllText(logPath, string.Join(System.Environment.NewLine, lines));
+            return Task.FromResult(new BuilderProofCommandExecutionResult(exitCode, lines));
+        }
+    }
+
+    private sealed class AvailableBuilderStrongerTierResolver : IBuilderStrongerTierResolver
+    {
+        public Task<BuilderStrongerTierAvailability> ResolveAsync(
+            string currentModelId,
+            string recommendedModelClass,
+            string? preferredStrongerModelId,
+            string provider,
+            CancellationToken ct)
+            => Task.FromResult(new BuilderStrongerTierAvailability(
+                currentModelId,
+                recommendedModelClass,
+                preferredStrongerModelId ?? string.Empty,
+                "qwen2.5:7b-instruct",
+                "available",
+                "qwen2.5:7b-instruct is available for bounded comparative proof.",
+                provider,
+                "http://localhost:11434",
+                string.Empty,
+                new[] { BuilderExecutionService.BuilderProofFloorModelId, "qwen2.5:7b-instruct" },
+                "Resolved qwen2.5:7b-instruct from the bounded stronger-tier candidate set.",
+                Array.Empty<string>(),
+                "qwen2.5:7b-instruct is available for bounded comparative proof.",
+                string.Empty,
+                System.DateTimeOffset.UtcNow));
     }
 
     private sealed class InMemoryAiPolicyStore : IAiPolicyStore

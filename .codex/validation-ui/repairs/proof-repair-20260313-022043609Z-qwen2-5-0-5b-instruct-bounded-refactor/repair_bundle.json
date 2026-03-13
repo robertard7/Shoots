@@ -1,0 +1,20 @@
+{
+  "RepairId": "proof-repair-20260313-022043609Z-qwen2-5-0-5b-instruct-bounded-refactor",
+  "RepoRoot": "C:\\dev\\Shoots",
+  "TargetScopePath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor",
+  "SourceRunId": "20260313-022043609Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+  "SourceRunPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+  "ValidationRunId": "20260313-022043609Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+  "FailedStage": "Build target",
+  "FirstFailureExcerpt": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\ProfileSummary.cs(7,16): error CS0103: The name \u0027NameFormatter\u0027 does not exist in the current context [C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\RefactorProof.csproj]",
+  "ValidationOutputFolder": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+  "FailureLogPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\01-build.log",
+  "RelatedArtifactPaths": [
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\builder_proof_matrix.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\01-build.log",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_stability.json"
+  ],
+  "CreatedUtc": "2026-03-13T02:20:45.4097048+00:00",
+  "ReferenceCases": null
+}

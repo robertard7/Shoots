@@ -1,0 +1,45 @@
+{
+  "RunId": "test-project-recovery",
+  "ActionLabel": "Builder proof recovery: Small test project",
+  "OutputFolder": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation",
+  "Success": true,
+  "Summary": "Recovery validation passed.",
+  "FirstFailureText": null,
+  "FirstFailureLogPath": null,
+  "StartedUtc": "2026-03-13T00:51:19.3778862+00:00",
+  "CompletedUtc": "2026-03-13T00:51:19.3778866+00:00",
+  "Stages": [
+    {
+      "StageId": "build",
+      "StageLabel": "Build target",
+      "Status": "passed",
+      "Summary": "Build target: exit_code=0; Determining projects to restore...",
+      "LogPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\01-build.log",
+      "ExitCode": 0,
+      "DurationMs": 0,
+      "StabilityClassification": "passed",
+      "RetryCount": 0,
+      "RetryLogPath": null
+    },
+    {
+      "StageId": "test",
+      "StageLabel": "Run target tests",
+      "Status": "passed",
+      "Summary": "Run target tests: exit_code=0; Determining projects to restore...",
+      "LogPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\02-test.log",
+      "ExitCode": 0,
+      "DurationMs": 0,
+      "StabilityClassification": "passed",
+      "RetryCount": 0,
+      "RetryLogPath": null
+    }
+  ],
+  "StabilityClassification": "passed",
+  "StabilityStatus": "Passed cleanly",
+  "FirstFailure": null,
+  "RetryAudits": [],
+  "StabilityArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_stability.json",
+  "RunMode": "single_stage_manual_mode",
+  "OrchestrationArtifactPath": "",
+  "IsolatedWorkspacePath": null
+}

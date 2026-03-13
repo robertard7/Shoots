@@ -1,0 +1,12 @@
+{
+  "SourceRunId": "test-project",
+  "SourceRunPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160823717Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+  "SourcePath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160823717Z-qwen2-5-0-5b-instruct\\targets\\test-project",
+  "ValidationStatus": "passed",
+  "ValidationSummary": "Recovery validation passed.",
+  "ValidationActionLabel": "Builder proof recovery validation",
+  "ValidationRunId": "test-project-recovery",
+  "ValidationOutputFolder": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-160823717Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation",
+  "FirstFailureText": null,
+  "RecordedUtc": "2026-03-13T16:08:46.6878453+00:00"
+}

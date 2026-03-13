@@ -655,6 +655,10 @@ PYCHK
         shell: pwsh
         run: .\tools\smoke\windows\ui_smoke.ps1 -Configuration Debug
 
+      - name: Run Windows validation parity loop
+        shell: pwsh
+        run: .\scripts\validate_ci_parity.ps1 -Configuration Debug
+
       - name: Collect UI smoke artifacts
         if: always()
         shell: pwsh
@@ -665,6 +669,7 @@ PYCHK
           if (Test-Path $sentinel) {
             Copy-Item $sentinel .\artifacts\ui-smoke\last.json -Force
             $proof = Get-Content $sentinel -Raw | ConvertFrom-Json
+            $providerDiagnostics = Join-Path $proof.workspace_path "provider_diagnostics.json"
             if ($proof.workspace_path -and $proof.demo_run_id) {
               $runPath = Join-Path $proof.workspace_path (Join-Path "runs" $proof.demo_run_id)
               $narrator = Join-Path $runPath "narrator.jsonl"
@@ -673,13 +678,24 @@ PYCHK
               $evidence = Join-Path $runPath "evidence_bundle.json"
               $verification = Join-Path $runPath "verification_report.json"
               $operatorFlow = Join-Path $runPath "operator_flow.json"
+              $runMetadata = Join-Path $runPath "run_metadata.json"
+              $timeline = Join-Path $runPath "timeline.json"
+              $replayDiff = Join-Path $runPath "replay_diff.json"
+              $replayError = Join-Path $runPath "replay_error.json"
+              $failureFingerprint = Join-Path $runPath "failure-fingerprint.json"
               if (Test-Path $narrator) { Copy-Item $narrator .\artifacts\ui-smoke\narrator.jsonl -Force }
               if (Test-Path $manifest) { Copy-Item $manifest .\artifacts\ui-smoke\manifest.json -Force }
               if (Test-Path $environment) { Copy-Item $environment .\artifacts\ui-smoke\environment.json -Force }
               if (Test-Path $evidence) { Copy-Item $evidence .\artifacts\ui-smoke\evidence_bundle.json -Force }
               if (Test-Path $verification) { Copy-Item $verification .\artifacts\ui-smoke\verification_report.json -Force }
               if (Test-Path $operatorFlow) { Copy-Item $operatorFlow .\artifacts\ui-smoke\operator_flow.json -Force }
+              if (Test-Path $runMetadata) { Copy-Item $runMetadata .\artifacts\ui-smoke\run_metadata.json -Force }
+              if (Test-Path $timeline) { Copy-Item $timeline .\artifacts\ui-smoke\timeline.json -Force }
+              if (Test-Path $replayDiff) { Copy-Item $replayDiff .\artifacts\ui-smoke\replay_diff.json -Force }
+              if (Test-Path $replayError) { Copy-Item $replayError .\artifacts\ui-smoke\replay_error.json -Force }
+              if (Test-Path $failureFingerprint) { Copy-Item $failureFingerprint .\artifacts\ui-smoke\failure-fingerprint.json -Force }
             }
+            if (Test-Path $providerDiagnostics) { Copy-Item $providerDiagnostics .\artifacts\ui-smoke\provider_diagnostics.json -Force }
           }
           if (Test-Path $log) { Copy-Item $log .\artifacts\ui-smoke\ui.log -Force }
 
@@ -688,4 +704,6 @@ PYCHK
         uses: actions/upload-artifact@v4
         with:
           name: ui-windows-smoke
-          path: artifacts/ui-smoke/
+          path: |
+            artifacts/ui-smoke/
+            artifacts/validation/**

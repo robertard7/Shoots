@@ -1,0 +1,566 @@
+{
+  "RetentionCount": 200,
+  "GeneratedUtc": "2026-03-13T16:06:22.1016147+00:00",
+  "Entries": [
+    {
+      "DocumentId": "8a778865a5e10ae99f2bc95efbab3e6ab7972b83920e4961d39be0bc2bdf1b85",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260313-140824790Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\prepared-launch\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "2435915573bf7cf5a650238d83a0a3b7a232a5a13e2ef525d650306630ed1494",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\prepared-launch\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\prepared-launch\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\prepared-launch\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\prepared-launch\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-13T14:09:05.4467648+00:00"
+    },
+    {
+      "DocumentId": "56523f86c207b5cbb6f59e799977d53fe51c055e6b6048671aeb021a08687e42",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "46ed8b3c7d345b56e48d6a9874e06d8eecfe1d0c65bf333e85a1d7250a737565",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-13T14:08:47.6901046+00:00"
+    },
+    {
+      "DocumentId": "9e90b18e55aca0aff0d40991cfe0fcd5ef4abce7e350ef87942291edd034a45c",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260313-140824790Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "aed27271203361d15e9de339f28d4e5e28dba04f0a0bc2877214322a20772b36",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140824790Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-13T14:08:26.3154635+00:00"
+    },
+    {
+      "DocumentId": "1f0705e9f2c0ebd8fc8d745987c152a51f6bdad6a4d9aef77e6d2c5137e06091",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140743978Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "b51da932f0efabb1c925ebde5fd0697be7ef56e9a37f430d59124e2ae42684e2",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140743978Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140743978Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140743978Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140743978Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-13T14:08:06.8522635+00:00"
+    },
+    {
+      "DocumentId": "0c2975ea7e67962c5642c76ff7527e2c65f579393631f09c7bcd55e662c19fb4",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260313-140743978Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140743978Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "8b1e517df5940772cab77bd5503e8f218a75c0159a6ac1e5743ca2736532bcbd",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140743978Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140743978Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140743978Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140743978Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-13T14:07:45.4093035+00:00"
+    },
+    {
+      "DocumentId": "d2dfaafe2687b3b099f1043c72f14d91411e10781687ab29ec203496c257d507",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "64a1f6a25b119aa5d50f67897f538ff2dfb772f6c6ddfcb27e6ddb8304be13da",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-13T14:07:25.7079442+00:00"
+    },
+    {
+      "DocumentId": "67999cbcb7fb71bceabd72d7dfa134cee5e654ba279e2c060d698a3825aaf825",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260313-140702411Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "e8fd5f1185d660cb33bb1940e18c08aa977023d398bc4994a231faec1c1564c1",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140702411Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-13T14:07:03.9175313+00:00"
+    },
+    {
+      "DocumentId": "9b669f3e005091ed6612ed2d3cb54b090e089a26c9c70304c53fe5c5d72293bc",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140618282Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "d9eb20642d800e1a09bbabab8f00f88ad9339636825ceb528ea89a46fdb93138",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140618282Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140618282Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140618282Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140618282Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-13T14:06:43.9596132+00:00"
+    },
+    {
+      "DocumentId": "55ab2a8a87a4395606abb91ed7e05095fd1743885dc07cf26a914bf15fdded0a",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260313-140618282Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140618282Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "e837dacc303e174b2c03b9ba21b3b7af16901876c0d8846a312a083d1ec4d30e",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140618282Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140618282Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140618282Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-140618282Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-13T14:06:19.8952965+00:00"
+    },
+    {
+      "DocumentId": "51f610b12b0d8a8df5e3af7c8d322bf906f20185c522396526245780f1772e8b",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022141009Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "baa4d9f5e327fc5d2bbe7e21a12919573401a02a1404947d78d91718b3a1e33b",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022141009Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022141009Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022141009Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022141009Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-13T02:22:09.3408993+00:00"
+    },
+    {
+      "DocumentId": "a96c14675c8faa846088635a97363ee52a81857d6a6ba6210b5ba3a8f79e7d3a",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260313-022141009Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022141009Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "c6959af18e23506c5e74630b526c0761c19518c5a99a6a47f3d65cfae09d4097",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022141009Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022141009Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022141009Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022141009Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-13T02:21:42.7989095+00:00"
+    },
+    {
+      "DocumentId": "314dff2eed9e3158852d68c30e1396d7dd4336f5ec20c64c577177791b1c3350",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "d5af8890b352d08d49bdffa9c09a1e03c14afa6326bdd86f8d0c10359985cce6",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-13T02:21:12.7063649+00:00"
+    },
+    {
+      "DocumentId": "ba1582c3007abdce139880184941dd57a526c1fc508714f00feb7cafe07c9ac5",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260313-022043609Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "1431282087f9c9a7b9acc276ba604974ba1049d8ac4953b814719172c8651d92",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-022043609Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-13T02:20:45.4097048+00:00"
+    },
+    {
+      "DocumentId": "168038255d7ac1ab8b56944f2ce9d744de6be1fd2db7c883df74cf7a589e6721",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "1597f04226001ea4b44fed7ddab9e18318be669f235a4296cf4287460b9cef82",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-13T01:23:55.4585582+00:00"
+    },
+    {
+      "DocumentId": "039875e088dc90d262d1e0365a52bd48db7062ba737ccc6ef6c73b01f8e177f5",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260313-012331922Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "69d13df7b4a37590b9876d7496600d826669d30108d0fbc21bce4fa8d77e32e5",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012331922Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-13T01:23:33.662523+00:00"
+    },
+    {
+      "DocumentId": "34e2a472d99c296d74d89e9c7fe39a5d036ce61e150f57ead22b180ce2753c87",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "df065500fd5e28815a5604eb4c1cb6829d3976b61a1761ebac98122cca890e9f",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-13T01:23:07.8974183+00:00"
+    },
+    {
+      "DocumentId": "462f4b3b7998413604d287139708503cd9043d3ed1be29341992c22bb2008441",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260313-012242875Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "491c1f6df8b3a5cd3cb5d03fa8ceb951a528751d037d9dda5315fdbc9b19369e",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-012242875Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-13T01:22:44.5483258+00:00"
+    },
+    {
+      "DocumentId": "1006e30a46ea70137a43a2699d2e6af8e07c0b9dacf383829a6caa3efda60b41",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "ec0d05e58330158c63d141f46b5fc1bf19990f20be916b0f3eb16ad08a8f2581",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-13T00:51:19.397552+00:00"
+    },
+    {
+      "DocumentId": "810186c9aa9f883dd85d45cb9178259dcbdbb0441ff19d66d28de20f4b753320",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260313-005054150Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "86cfc14ee581e55184fe9791fbc9407a351bbbeb22d38766d6f46aa2eeb08d52",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-005054150Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-13T00:50:55.7729671+00:00"
+    },
+    {
+      "DocumentId": "1c73d0eabffaae2071d43ba250e40bfbfc6adcda3d2f867f4cbe4bf195c70340",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-214440560Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "d9a42dce08e204c2b69774c378ee33a4e5394376765e8fe34eff8044069cf4ed",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-214440560Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-214440560Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-214440560Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-214440560Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T21:45:05.7567698+00:00"
+    },
+    {
+      "DocumentId": "44bcb70bd1d3587df0db637df883b784f77f35880d03a96df6db81833fdc197c",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260312-214440560Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-214440560Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "23a8f90d684e4bf214c8d1fcf318c2bd9e41c12ad7dd7b58389264b5256d82e2",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-214440560Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-214440560Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-214440560Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-214440560Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-12T21:44:42.3450605+00:00"
+    },
+    {
+      "DocumentId": "ad1b8ab7cdb6d74a77b21047aa0b8ab1401dc6d368af800530f3d0e7268988be",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211827439Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "4960d64b5d7c3afcf12f18b2036b0d50716f1877e33dfaa616be7b8f75b52444",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211827439Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211827439Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211827439Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211827439Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T21:18:50.9663133+00:00"
+    },
+    {
+      "DocumentId": "648cf599db532994ceb03ab983ec3bfdf0f2dc5ec005227a1899e9cbedbcb6e4",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260312-211827439Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211827439Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "bf58834d8be918ecc34d90c0bbe9873c13e37ac071afe98e189e48691a1b499b",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211827439Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211827439Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211827439Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211827439Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-12T21:18:29.1905907+00:00"
+    },
+    {
+      "DocumentId": "7ff284149e8868e0ebf5747b0906212638abbca07189574030ba5e8f31613d95",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "eb313f2d6154924c7c5fce920c4a29475472efbf57b76b6de3e0048034f5888f",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T21:17:52.7527871+00:00"
+    },
+    {
+      "DocumentId": "55ecd52c3b362f74fbbe8760ceff94b83c7b240e52f4f238cdfde2195327ba06",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260312-211727527Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "08b77eb17e91463e5a97d86636024af32eb4b0749226a7e7b07936b339285125",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-211727527Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-12T21:17:29.1597317+00:00"
+    },
+    {
+      "DocumentId": "d7c14ce945393b5f829c4f8a532bc52b70a508ec02de2271865ebae630e604d5",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-205421745Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "abb9a4d6916994cc0ffa12436f7ee9f8af4cb00eba5b25b608e82c7bb6fb67d1",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-205421745Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-205421745Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-205421745Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-205421745Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T20:54:48.1269052+00:00"
+    },
+    {
+      "DocumentId": "8584667466e8f26fe78669e93854780c9d91ebfcb40cc9c172dbb4d36149cfba",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260312-205421745Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-205421745Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "33c461d44e0ce887c47553a67353b037d247e8fc56986d01b7ccf298438f65f0",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-205421745Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-205421745Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-205421745Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-205421745Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-12T20:54:23.4977887+00:00"
+    },
+    {
+      "DocumentId": "042df7dac0a4ff0dc1c65e6dc26697c0cba44e9434c9b795e2c9842dfd6fb1ef",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-182852451Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "51aeff81f14634847b549a4b5aa5da055c886f40a89199c6cbf270a15add137a",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-182852451Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-182852451Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-182852451Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-182852451Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T18:29:18.2556051+00:00"
+    },
+    {
+      "DocumentId": "cc210218e5cf08610c7c38563b452d001b28f0ed807eb453c93d208d3276438c",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260312-182852451Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-182852451Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "52f440e2e419b9b365ec66ad3ff0c8abc6e1d0f8d1563393e974679c0a608d53",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-182852451Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-182852451Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-182852451Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-182852451Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-12T18:28:54.1067455+00:00"
+    },
+    {
+      "DocumentId": "2086f3c0c44714385a96e57c6166231239f567939c67942372a715b50637e9e7",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "a4ea6e842f18291325f4e119b8ac4ec1db054cd61b9b36b90b4851b35c2c9646",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T18:08:31.6381257+00:00"
+    },
+    {
+      "DocumentId": "2a005456e7ab3676af976cac172750d88695f6da1653b8dbb05dc5ae93201730",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260312-180804876Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "128292510d8216965a25d693a687e79567d9a4c34243c54156b403501231bc6f",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-12T18:08:06.6187791+00:00"
+    },
+    {
+      "DocumentId": "bfba30272f62a72eb3fac54f45e347889b2da2c9e81c75040cc4cf5aea80fbb2",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-080540629Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "b353f5d0e3438cba974341af841d2402edd1bfd466e7ccb1696f5db11f7ca5de",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-080540629Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-080540629Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-080540629Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-080540629Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T08:06:08.506687+00:00"
+    },
+    {
+      "DocumentId": "19372479ac2c21eb50ed3503d62e78eab03d5a7788cba8ec002397568e84d706",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260312-080540629Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-080540629Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "9dba89fd8cdb32a714ba5914c417bb441bdb66515e05dc5ff27820a9ae815974",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-080540629Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-080540629Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-080540629Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-080540629Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-12T08:05:42.3971779+00:00"
+    },
+    {
+      "DocumentId": "092bc52b7fc4194b1048bd5f3c9696272cda6af6cbf386703062c4b3309248ec",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-074937000Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "6a9a52ca7de9c5c4c12afb6873fa67437c58c14ea64f91978a14addbbfa3073a",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-074937000Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-074937000Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-074937000Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-074937000Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T07:50:01.6716449+00:00"
+    },
+    {
+      "DocumentId": "6d06a2656b66603ab82bb1bd4374e1c955bd90b5eece10001537947c219f2d43",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260312-074937000Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-074937000Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "2d6b35373029cecc0a5437c6c6af968ea9abb96934b208427770b10b594e4519",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-074937000Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-074937000Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-074937000Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-074937000Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-12T07:49:38.5444382+00:00"
+    },
+    {
+      "DocumentId": "3ad91fe319f183fb45ee8f6f4c6546f02bd46c106c04b4c911b09b80ca52e4d4",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-073806737Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "5e197a98ffc8910d38873ccb1b45b5455e42655d379d1e13c044efb3d9eb9009",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-073806737Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-073806737Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-073806737Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-073806737Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T07:38:35.4960865+00:00"
+    },
+    {
+      "DocumentId": "344eb19b051f08a2ac83532dcb8226645a9972f1c7d0ae5c1753a3da867882a4",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "20260312-073806737Z-qwen2-5-0-5b-instruct-bounded-refactor-validation",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-073806737Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "38d28f0fb9bb6899d1806679acc8cfc9ef511bc915ffc3fb38566c105b12f687",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-073806737Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-073806737Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-073806737Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\repair_promotion.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-073806737Z-qwen2-5-0-5b-instruct\\targets\\bounded-refactor\\validation\\validation_result.json"
+      ],
+      "IndexedUtc": "2026-03-12T07:38:08.5392755+00:00"
+    },
+    {
+      "DocumentId": "b03ca87f908ae2193b952aa9595a55e44de7a4fb46112529db8d84d008922067",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "8de4f683eca53be38275e84c9e57dfc0acdec3998dd40a24e46052f319530afc",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-051806084Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T05:18:21.1436134+00:00"
+    },
+    {
+      "DocumentId": "22499d315b9d8ba7cd71b86dcb95b8fdd1ab3d14ef4b4a4128c97d47d9838ced",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "f17f23cd6e2c0915546f03f0a9e75d6572791ee6cca85556ebba586f1b014489",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T05:09:04.5243173+00:00"
+    },
+    {
+      "DocumentId": "e4e39d309a8520a2fa72ea2c5935d1ac6b31c74a907c2b4797c6da3d09aad2ea",
+      "CaseType": "generated_output_pattern",
+      "SourceRunId": "test-project",
+      "PrimaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+      "SourceFingerprint": "e3051947aac07f60a5da99e5a4b393bbe4c519215c74600d145dd98d64ef2580",
+      "ArtifactPaths": [
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation\\validation_result.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\generated_output_validation.json",
+        "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-044021987Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\repair_promotion.json"
+      ],
+      "IndexedUtc": "2026-03-12T04:40:37.6626874+00:00"
+    }
+  ]
+}

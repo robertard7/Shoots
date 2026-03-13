@@ -1,0 +1,16 @@
+<Window x:Class="WpfProof.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Builder Proof Window"
+        Height="220"
+        Width="340">
+    <Grid Margin="16">
+        <StackPanel>
+            <TextBlock x:Name="StatusText"
+                       Text="builder-proof-ready"
+                       FontSize="18" />
+            <Button Margin="0,12,0,0"
+                    Content="Refresh proof view" />
+        </StackPanel>
+    </Grid>
+</Window>

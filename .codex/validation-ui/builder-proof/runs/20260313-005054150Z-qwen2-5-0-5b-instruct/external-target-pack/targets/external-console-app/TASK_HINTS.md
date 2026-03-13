@@ -1,0 +1,1 @@
+Update only Program.cs so the app prints the exact external proof success line.

@@ -1,0 +1,33 @@
+{
+  "ModelId": "qwen2.5:0.5b-instruct",
+  "Categories": [
+    {
+      "Category": "partial_implementation_gap",
+      "Count": 1,
+      "TargetIds": [
+        "test-project"
+      ],
+      "Summary": "Partial implementation gaps appeared 1 time(s)."
+    }
+  ],
+  "Entries": [
+    {
+      "ProofScope": "repo_local",
+      "TargetId": "test-project",
+      "TargetLabel": "Small test project",
+      "FailureCategory": "partial_implementation_gap",
+      "FailureReason": "The failure looked like a partial implementation gap inside the bounded target file.",
+      "RecoveryBurdenClassification": "acceptable_with_repair_loop",
+      "RepairAttempts": 1,
+      "RerunAttempts": 1,
+      "RecoveryStageId": "build",
+      "ErrorExcerpt": "Determining projects to restore...",
+      "LogPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\targets\\test-project\\01-build.log",
+      "ValidationResultPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_result.json",
+      "FollowupPlanPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\targets\\test-project\\validation\\validation_followup_plan.json"
+    }
+  ],
+  "Summary": "Observed 1 low-floor stumble pattern(s): partial_implementation_gap=1.",
+  "ArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-050850347Z-qwen2-5-0-5b-instruct\\builder_model_floor_failure_patterns.json",
+  "ObservedUtc": "2026-03-12T05:09:13.2500694+00:00"
+}

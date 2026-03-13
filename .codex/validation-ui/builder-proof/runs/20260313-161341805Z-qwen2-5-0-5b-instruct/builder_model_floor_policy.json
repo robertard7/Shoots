@@ -1,0 +1,28 @@
+{
+  "ModelId": "qwen2.5:0.5b-instruct",
+  "RepoLocalVerdict": "sufficient_with_repair_loop",
+  "ExternalVerdict": "sufficient_for_bounded_external_targets",
+  "Summary": "The floor model remains acceptable for bounded template-driven builds and small multi-file additions, but bounded refactor-style probes should be routed to a stronger model.",
+  "Guidance": [
+    "Good for tiny template-driven console, class-library, service, UI, and external starter targets when explicit file and namespace hints are present.",
+    "Small multi-file additions stay acceptable when the task remains inside the recorded project and file list.",
+    "Keep bounded compile-fix recovery available for isolated compile-fix and test-extension tasks.",
+    "Escalate to a stronger model when a proof target stays too fragile after the bounded repair loop.",
+    "Route bounded_refactor work to a stronger model instead of repeating low-floor attempts."
+  ],
+  "AllowedAssistRules": [
+    "stronger_starter_templates",
+    "explicit_file_and_namespace_hints",
+    "bounded_compile_fix_loop"
+  ],
+  "EvidencePaths": [
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_proof_run.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_model_floor_verdict.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_external_proof_run.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_external_floor_verdict.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_model_floor_failure_patterns.json"
+  ],
+  "ArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_model_floor_policy.json",
+  "SummaryArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_model_floor_policy.md",
+  "ObservedUtc": "2026-03-13T16:14:18.1680238+00:00"
+}

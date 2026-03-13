@@ -1,0 +1,28 @@
+{
+  "SourceProofRunId": "20260313-161219089Z-qwen2-5-0-5b-instruct",
+  "SourceIntakeId": "20260313-161219089Z-qwen2-5-0-5b-instruct-bounded-refactor-intake",
+  "TaskClass": "bounded_refactor",
+  "SuspendedRoute": "split_first_low_floor_route",
+  "SuspensionCauseState": "no_active_suspension",
+  "ContradictionAttributionState": "none",
+  "RecoveryEvidenceRunIds": [],
+  "RequiredFreshProofRunCount": 2,
+  "RequiredFreshPreparedLaunchConfirmations": 2,
+  "FreshProofRunCount": 3,
+  "FreshPreparedLaunchConfirmationCount": 3,
+  "RecoveryState": "recovery_not_required",
+  "DefaultRouteRestored": false,
+  "LinkedArtifactPaths": [
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161219089Z-qwen2-5-0-5b-instruct\\builder_request_intake.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161219089Z-qwen2-5-0-5b-instruct\\builder_execution_prep.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161219089Z-qwen2-5-0-5b-instruct\\builder_default_route_decision.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161219089Z-qwen2-5-0-5b-instruct\\builder_readiness_gate.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161219089Z-qwen2-5-0-5b-instruct\\builder_readiness_contradictions.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161219089Z-qwen2-5-0-5b-instruct\\builder_launch_default_decision.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161219089Z-qwen2-5-0-5b-instruct\\builder_route_override_evidence.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161219089Z-qwen2-5-0-5b-instruct\\builder_route_reconfirmation.json"
+  ],
+  "Summary": "split_first_low_floor_route does not require recovery because no contradiction has been recorded.",
+  "ArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161219089Z-qwen2-5-0-5b-instruct\\builder_default_route_recovery.json",
+  "ObservedUtc": "2026-03-13T16:13:00.7001101+00:00"
+}

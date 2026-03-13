@@ -1,0 +1,34 @@
+{
+  "SourceProofRunId": "20260313-161341805Z-qwen2-5-0-5b-instruct",
+  "SourceIntakeId": "20260313-161341805Z-qwen2-5-0-5b-instruct-bounded-refactor-intake",
+  "TaskClass": "bounded_refactor",
+  "PriorConfirmedDefaultRoute": "split_first_low_floor_route",
+  "ContradictionAttributionState": "override_route_failure",
+  "ContradictionSourceRunIds": [
+    "20260313-161300700Z-qwen2-5-0-5b-instruct"
+  ],
+  "ReconfirmationRunIds": [
+    "20260313-161341805Z-qwen2-5-0-5b-instruct"
+  ],
+  "RequiredFreshProofRunCount": 1,
+  "RequiredFreshPreparedLaunchConfirmations": 1,
+  "FreshProofRunCount": 1,
+  "FreshPreparedLaunchConfirmationCount": 1,
+  "CurrentReconfirmationState": "reconfirmed_default_route",
+  "LinkedArtifactPaths": [
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_request_intake.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_execution_prep.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_default_route_decision.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_readiness_gate.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_readiness_contradictions.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_launch_default_decision.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_route_override_evidence.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\builder_readiness_gate_history.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_execution_launch.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_execution_result.json",
+    "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161300700Z-qwen2-5-0-5b-instruct\\builder_execution_result.json"
+  ],
+  "Summary": "split_first_low_floor_route for bounded_refactor is reconfirmed_default_route. Attribution=override_route_failure. Recovery progress=1/1 launch confirmation(s) and 1/1 proof run(s) after contradiction.",
+  "ArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161341805Z-qwen2-5-0-5b-instruct\\builder_route_reconfirmation.json",
+  "ObservedUtc": "2026-03-13T16:14:23.3224681+00:00"
+}

@@ -1,0 +1,36 @@
+{
+  "RunId": "test-project-recovery",
+  "ActionLabel": "Builder proof recovery: Small test project",
+  "Classification": "passed",
+  "ConfidenceStatus": "Passed cleanly",
+  "OutputFolder": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\validation",
+  "FirstFailure": null,
+  "RetryAudits": [],
+  "StageResults": [
+    {
+      "StageId": "build",
+      "StageLabel": "Build target",
+      "Status": "passed",
+      "Summary": "Build target: exit_code=0; Determining projects to restore...",
+      "LogPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\01-build.log",
+      "ExitCode": 0,
+      "DurationMs": 0,
+      "StabilityClassification": "passed",
+      "RetryCount": 0,
+      "RetryLogPath": null
+    },
+    {
+      "StageId": "test",
+      "StageLabel": "Run target tests",
+      "Status": "passed",
+      "Summary": "Run target tests: exit_code=0; Determining projects to restore...",
+      "LogPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260312-180804876Z-qwen2-5-0-5b-instruct\\targets\\test-project\\recovery\\02-test.log",
+      "ExitCode": 0,
+      "DurationMs": 0,
+      "StabilityClassification": "passed",
+      "RetryCount": 0,
+      "RetryLogPath": null
+    }
+  ],
+  "RecordedUtc": "2026-03-12T18:08:31.6291948+00:00"
+}

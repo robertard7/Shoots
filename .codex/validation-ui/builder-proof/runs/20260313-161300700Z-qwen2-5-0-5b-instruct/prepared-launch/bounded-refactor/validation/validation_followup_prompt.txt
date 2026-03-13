@@ -1,0 +1,7 @@
+Follow-up category: fix_build
+Next step: Inspect the compile failure, apply a bounded fix, and rerun the failing build scope.
+Model: qwen2.5:0.5b-instruct
+Provider: ollama
+Target: Bounded refactor probe
+First failure: Build target: C:\dev\Shoots\.codex\validation-ui\builder-proof\runs\20260313-161300700Z-qwen2-5-0-5b-instruct\prepared-launch\bounded-refactor\ProfileSummary.cs(7,16): error CS0103: The name 'NameFormatter' does not exist in the current context [C:\dev\Shoots\.codex\validation-ui\builder-proof\runs\20260313-161300700Z-qwen2-5-0-5b-instruct\prepared-launch\bounded-refactor\RefactorProof.csproj]
+Validation result: C:\dev\Shoots\.codex\validation-ui\builder-proof\runs\20260313-161300700Z-qwen2-5-0-5b-instruct\prepared-launch\bounded-refactor\validation\validation_result.json
