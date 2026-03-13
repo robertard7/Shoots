@@ -1,1 +1,0 @@
-Console.WriteLine("Shoots external builder proof console target passed.");

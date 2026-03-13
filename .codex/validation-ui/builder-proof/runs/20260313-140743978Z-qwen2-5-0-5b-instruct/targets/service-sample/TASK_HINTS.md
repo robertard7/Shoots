@@ -1,1 +1,0 @@
-Fill the fixed health and version endpoints in Program.cs only.

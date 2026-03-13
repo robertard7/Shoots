@@ -5,7 +5,7 @@
 **/obj/
 
 # --------------------------------------------------
-# Test Output
+# Test Output and Coverage
 # --------------------------------------------------
 **/TestResults/
 **/*.coverage
@@ -26,15 +26,21 @@
 Thumbs.db
 
 # --------------------------------------------------
-# Generated Artifacts (build + validation)
+# Generated Build / Validation Artifacts
 # --------------------------------------------------
 artifacts/
 *.log
 *.env
 
 # --------------------------------------------------
-# Local Deterministic State Cache
+# Generated Codex / Validation UI Artifacts
 # --------------------------------------------------
+.codex/validation-ui/
+
+# --------------------------------------------------
+# Local / Temporary Workspace Files
+# --------------------------------------------------
+tmp/
 .state/
 
 # --------------------------------------------------

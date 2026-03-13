@@ -1,1 +1,0 @@
-Implement ExternalCalc.Calculator.Multiply in Calculator.cs only. Keep namespace ExternalCalc and the existing project reference intact.

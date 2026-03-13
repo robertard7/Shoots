@@ -1,1 +1,0 @@
-Add the fixed status text and title change inside the existing window files only.

@@ -1,1 +1,0 @@
-Keep the existing ProofCalc project layout. Fix only Calculator.cs when the bounded compile failure appears.

@@ -1,1 +1,0 @@
-Update only Program.cs so the console app prints the exact proof success line.

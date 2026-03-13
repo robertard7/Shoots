@@ -1,7 +1,0 @@
-{
-  "SourceProofRunId": "20260313-161219089Z-qwen2-5-0-5b-instruct",
-  "Entries": [],
-  "Summary": "No builder readiness contradictions are currently recorded.",
-  "ArtifactPath": "C:\\dev\\Shoots\\.codex\\validation-ui\\builder-proof\\runs\\20260313-161219089Z-qwen2-5-0-5b-instruct\\builder_readiness_contradictions.json",
-  "ObservedUtc": "2026-03-13T16:13:00.6235007+00:00"
-}

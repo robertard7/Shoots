@@ -1,1 +1,0 @@
-Fill the bounded helper files only and keep the starter project layout intact.

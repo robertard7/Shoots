@@ -1,1 +1,0 @@
-Keep Program.cs unchanged. Implement only ConsoleBanner.cs and MessageCatalog.cs.

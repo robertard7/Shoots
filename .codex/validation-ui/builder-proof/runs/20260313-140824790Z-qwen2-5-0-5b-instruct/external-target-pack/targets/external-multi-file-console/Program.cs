@@ -1,3 +1,0 @@
-using ExternalMultiConsole;
-
-GreetingConsole.Write();
