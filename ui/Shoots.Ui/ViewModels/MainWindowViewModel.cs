@@ -104,6 +104,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private readonly ObservableCollection<SemanticReusePlaybookRow> _semanticReusePlaybooks = new();
     private readonly ObservableCollection<string> _repairChangedFiles = new();
     private readonly ObservableCollection<RepairHistoryRow> _repairHistory = new();
+    private readonly ObservableCollection<BuilderPatchDiffFileRow> _builderPatchDiffFiles = new();
+    private readonly ObservableCollection<BuilderPatchSnapshotFileRow> _builderPatchSnapshotFiles = new();
 
     public ReadOnlyObservableCollection<ProjectWorkspace> RecentWorkspaces { get; }
     public ReadOnlyObservableCollection<BlueprintEntryViewModel> Blueprints { get; }
@@ -124,6 +126,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     public ReadOnlyObservableCollection<SemanticReusePlaybookRow> SemanticReusePlaybooks { get; private set; } = null!;
     public ReadOnlyObservableCollection<string> RepairChangedFiles { get; private set; } = null!;
     public ReadOnlyObservableCollection<RepairHistoryRow> RepairHistory { get; private set; } = null!;
+    public ReadOnlyObservableCollection<BuilderPatchDiffFileRow> BuilderPatchDiffFiles { get; private set; } = null!;
+    public ReadOnlyObservableCollection<BuilderPatchSnapshotFileRow> BuilderPatchSnapshotFiles { get; private set; } = null!;
 
     private string _startupInput = string.Empty;
     private string _selectedModelId = string.Empty;
@@ -309,6 +313,85 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private string _builderDefaultRouteDecisionPath = string.Empty;
     private string _builderLaunchDefaultDecisionSummary = "No builder launch default decision recorded.";
     private string _builderLaunchDefaultDecisionPath = string.Empty;
+    private string _builderRouteContinuitySummary = "No builder route continuity recorded.";
+    private string _builderRouteContinuityPath = string.Empty;
+    private string _builderRouteCurrentStateIndexSummary = "No builder route current-state index recorded.";
+    private string _builderRouteCurrentStateIndexPath = string.Empty;
+    private string _builderModelCapabilityMatrixSummary = "No builder model capability matrix recorded.";
+    private string _builderModelCapabilityMatrixPath = string.Empty;
+    private string _builderModelRoutingRulesSummary = "No builder model routing rules recorded.";
+    private string _builderModelRoutingRulesPath = string.Empty;
+    private string _builderModelRoutingPolicySummaryPath = string.Empty;
+    private string _builderModelRoutingPolicyHistoryPath = string.Empty;
+    private string _builderModelRoutingStabilitySummary = "No builder model routing stability recorded.";
+    private string _builderModelRoutingStabilityPath = string.Empty;
+    private string _builderCurrentModelDecisionSummary = "No builder model decision recorded.";
+    private string _builderCurrentModelDecisionPath = string.Empty;
+    private string _builderModelEscalationDecisionSummaryText = "No builder model escalation decision recorded.";
+    private string _builderModelEscalationDecisionArtifactPath = string.Empty;
+    private string _builderRouteExplanationSummary = "No builder route explanation recorded.";
+    private string _builderRouteExplanationPath = string.Empty;
+    private string _builderModelDecisionExplanationSummary = "No builder model decision explanation recorded.";
+    private string _builderModelDecisionExplanationPath = string.Empty;
+    private string _builderFailureAnalysisSummary = "No builder failure analysis recorded.";
+    private string _builderFailureAnalysisPath = string.Empty;
+    private string _builderOperatorDiagnosticSummary = "No builder operator diagnostic summary recorded.";
+    private string _builderOperatorDiagnosticSummaryPath = string.Empty;
+    private string _builderToolchainReadinessSummary = "No toolchain readiness summary recorded.";
+    private string _builderToolchainRefreshSummary = "No toolchain capability refresh recorded.";
+    private string _builderToolchainCapabilityRegistryPath = string.Empty;
+    private string _builderToolchainCapabilityHistoryPath = string.Empty;
+    private string _builderLanguageEligibilitySummary = "No language eligibility summary recorded.";
+    private string _builderLanguageEligibilityPath = string.Empty;
+    private string _builderCapabilityRoutingSummary = "No capability-aware builder intake recorded.";
+    private string _builderCapabilityBlockDecisionPath = string.Empty;
+    private string _builderRepoKnowledgeSummary = "No repo knowledge summary recorded.";
+    private string _builderRepoKnowledgeRefreshSummary = "No repo knowledge refresh recorded.";
+    private string _builderRepoKnowledgeIndexPath = string.Empty;
+    private string _builderRepoKnowledgeSummaryPath = string.Empty;
+    private string _builderRepoKnowledgeHistoryPath = string.Empty;
+    private string _builderRepoKnowledgeDriftPath = string.Empty;
+    private string _builderConversationRequestText = string.Empty;
+    private string _builderConversationTaskSummary = "No builder conversation preview recorded.";
+    private string _builderConversationRepoMatchSummary = "No builder repo retrieval summary recorded.";
+    private string _builderConversationRouteSummary = "No builder conversation route handoff recorded.";
+    private string _builderConversationRetrievalContextPath = string.Empty;
+    private string _builderConversationIntakePath = string.Empty;
+    private string _builderConversationHandoffPath = string.Empty;
+    private string _builderConversationExecutionSessionSummary = "No builder conversation execution session recorded.";
+    private string _builderConversationPatchReviewSummary = "No builder patch review recorded.";
+    private string _builderConversationReviewStateSummary = "No builder patch review outcome recorded.";
+    private string _builderPatchDiffReviewSummary = "No builder patch diff review recorded.";
+    private string _builderPatchApplySummary = "No builder patch apply decision recorded.";
+    private string _builderPatchSnapshotSummary = "No builder patch snapshot recorded.";
+    private string _builderCommitProposalSummary = "No builder commit proposal recorded.";
+    private string _builderCommitProposalMessage = string.Empty;
+    private string _builderPatchExportSummary = "No builder patch export recorded.";
+    private string _builderOutputHandoffSummary = "No builder output handoff recorded.";
+    private string _builderManualApplySummary = "No builder manual apply guidance recorded.";
+    private string _builderGitHandoffReadinessSummary = "No builder Git handoff readiness recorded.";
+    private string _builderGitCommitHandoffSummary = "No builder Git commit handoff recorded.";
+    private string _builderConversationExecutionSessionPath = string.Empty;
+    private string _builderConversationPatchReviewPath = string.Empty;
+    private string _builderConversationPatchReviewOutcomePath = string.Empty;
+    private string _builderPatchDiffReviewPath = string.Empty;
+    private string _builderFileReviewDecisionPath = string.Empty;
+    private string _builderPatchApplyDecisionPath = string.Empty;
+    private string _builderPatchSnapshotId = string.Empty;
+    private string _builderPatchSnapshotPath = string.Empty;
+    private string _builderCommitProposalPath = string.Empty;
+    private string _builderPatchExportPath = string.Empty;
+    private string _builderPatchBundlePath = string.Empty;
+    private string _builderPatchSnapshotHistoryPath = string.Empty;
+    private string _builderOutputHandoffPath = string.Empty;
+    private string _builderManualApplyGuidancePath = string.Empty;
+    private string _builderGitHandoffReadinessPath = string.Empty;
+    private string _builderGitCommitHandoffPath = string.Empty;
+    private string _builderOutputHandoffHistoryPath = string.Empty;
+    private string _selectedBuilderPatchDiffFilePath = string.Empty;
+    private string _builderSelectedPatchDiffPreview = "No builder patch diff file selected.";
+    private string _builderSelectedPatchDiffStateSummary = "No builder patch file selection recorded.";
+    private string _builderConversationSelectedOverrideRoute = string.Empty;
     private string _builderLaunchRouteModeSummary = "No builder launch default mode recorded.";
     private string _builderRouteSourceSummary = "No current builder route source recorded.";
     private string _builderOverrideAvailabilitySummary = "No operator override state recorded.";
@@ -457,6 +540,33 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private PreparedBuilderExecutionResult? _latestBuilderExecutionResult;
     private BuilderReadinessGate? _latestBuilderReadinessGate;
     private BuilderConfirmedTaskClasses? _latestBuilderConfirmedTaskClasses;
+    private BuilderToolchainCapabilityRegistry? _latestBuilderToolchainCapabilityRegistry;
+    private BuilderToolchainCapabilityHistory? _latestBuilderToolchainCapabilityHistory;
+    private BuilderLanguageEligibility? _latestBuilderLanguageEligibility;
+    private BuilderCapabilityBlockDecision? _latestBuilderCapabilityBlockDecision;
+    private BuilderRepoKnowledgeIndex? _latestBuilderRepoKnowledgeIndex;
+    private BuilderRepoKnowledgeHistory? _latestBuilderRepoKnowledgeHistory;
+    private BuilderRepoKnowledgeDrift? _latestBuilderRepoKnowledgeDrift;
+    private BuilderRepoRetrievalContext? _latestBuilderRepoRetrievalContext;
+    private BuilderConversationIntake? _latestBuilderConversationIntake;
+    private BuilderConversationHandoff? _latestBuilderConversationHandoff;
+    private BuilderConversationExecutionSession? _latestBuilderConversationExecutionSession;
+    private BuilderPatchReview? _latestBuilderPatchReview;
+    private BuilderPatchReviewOutcome? _latestBuilderPatchReviewOutcome;
+    private BuilderPatchDiffReview? _latestBuilderPatchDiffReview;
+    private BuilderFileReviewDecision? _latestBuilderFileReviewDecision;
+    private BuilderPatchApplyDecision? _latestBuilderPatchApplyDecision;
+    private BuilderPatchSnapshot? _latestBuilderPatchSnapshot;
+    private BuilderCommitProposal? _latestBuilderCommitProposal;
+    private BuilderPatchExport? _latestBuilderPatchExport;
+    private BuilderPatchSnapshotHistory? _latestBuilderPatchSnapshotHistory;
+    private BuilderOutputHandoff? _latestBuilderOutputHandoff;
+    private BuilderGitHandoffReadiness? _latestBuilderGitHandoffReadiness;
+    private BuilderManualApplyGuidance? _latestBuilderManualApplyGuidance;
+    private BuilderGitCommitHandoff? _latestBuilderGitCommitHandoff;
+    private BuilderOutputHandoffHistory? _latestBuilderOutputHandoffHistory;
+    private BuilderRouteStateContinuity? _latestBuilderRouteStateContinuity;
+    private BuilderRouteCurrentStateIndex? _latestBuilderRouteCurrentStateIndex;
     private BuilderDefaultRouteDecision? _latestBuilderDefaultRouteDecision;
     private BuilderLaunchDefaultDecision? _latestBuilderLaunchDefaultDecision;
     private BuilderRouteOverrideEvidence? _latestBuilderRouteOverrideEvidence;
@@ -466,6 +576,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private BuilderReadinessContradictions? _latestBuilderReadinessContradictions;
     private BuilderSplitStepExecution? _latestBuilderSplitStepExecution;
     private BuilderSplitFirstOutcome? _latestBuilderSplitFirstOutcome;
+    private BuilderModelCapabilityMatrix? _latestBuilderModelCapabilityMatrix;
+    private BuilderModelRoutingPolicy? _latestBuilderModelRoutingRulesArtifact;
+    private BuilderModelRoutingPolicyHistory? _latestBuilderModelRoutingPolicyHistory;
+    private BuilderModelRoutingStability? _latestBuilderModelRoutingStability;
+    private BuilderModelDecision? _latestBuilderModelDecision;
+    private BuilderModelEscalationPolicyDecision? _latestBuilderModelEscalationDecisionArtifact;
+    private BuilderRouteExplanation? _latestBuilderRouteExplanation;
+    private BuilderModelDecisionExplanation? _latestBuilderModelDecisionExplanation;
+    private BuilderFailureAnalysis? _latestBuilderFailureAnalysis;
     private ValidationAction? _activeValidationAction;
     private string _activeValidationActionLabel = string.Empty;
     private string _activeValidationStageId = string.Empty;
@@ -1681,6 +1800,248 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
                                                           !string.Equals(_builderLaunchDefaultDecisionSummary, "No builder launch default decision recorded.", StringComparison.Ordinal);
     public string BuilderLaunchDefaultDecisionPath => _builderLaunchDefaultDecisionPath;
     public bool HasBuilderLaunchDefaultDecisionPath => !string.IsNullOrWhiteSpace(_builderLaunchDefaultDecisionPath) && File.Exists(_builderLaunchDefaultDecisionPath);
+    public string BuilderRouteContinuitySummary => _builderRouteContinuitySummary;
+    public bool HasBuilderRouteContinuitySummary => !string.IsNullOrWhiteSpace(_builderRouteContinuitySummary) &&
+                                                    !string.Equals(_builderRouteContinuitySummary, "No builder route continuity recorded.", StringComparison.Ordinal);
+    public string BuilderRouteContinuityPath => _builderRouteContinuityPath;
+    public bool HasBuilderRouteContinuityPath => !string.IsNullOrWhiteSpace(_builderRouteContinuityPath) && File.Exists(_builderRouteContinuityPath);
+    public string BuilderRouteCurrentStateIndexSummary => _builderRouteCurrentStateIndexSummary;
+    public bool HasBuilderRouteCurrentStateIndexSummary => !string.IsNullOrWhiteSpace(_builderRouteCurrentStateIndexSummary) &&
+                                                           !string.Equals(_builderRouteCurrentStateIndexSummary, "No builder route current-state index recorded.", StringComparison.Ordinal);
+    public string BuilderRouteCurrentStateIndexPath => _builderRouteCurrentStateIndexPath;
+    public bool HasBuilderRouteCurrentStateIndexPath => !string.IsNullOrWhiteSpace(_builderRouteCurrentStateIndexPath) && File.Exists(_builderRouteCurrentStateIndexPath);
+    public string BuilderModelCapabilityMatrixSummary => _builderModelCapabilityMatrixSummary;
+    public bool HasBuilderModelCapabilityMatrixSummary => !string.IsNullOrWhiteSpace(_builderModelCapabilityMatrixSummary) &&
+                                                          !string.Equals(_builderModelCapabilityMatrixSummary, "No builder model capability matrix recorded.", StringComparison.Ordinal);
+    public string BuilderModelCapabilityMatrixPath => _builderModelCapabilityMatrixPath;
+    public bool HasBuilderModelCapabilityMatrixPath => !string.IsNullOrWhiteSpace(_builderModelCapabilityMatrixPath) && File.Exists(_builderModelCapabilityMatrixPath);
+    public string BuilderModelRoutingRulesSummary => _builderModelRoutingRulesSummary;
+    public bool HasBuilderModelRoutingRulesSummary => !string.IsNullOrWhiteSpace(_builderModelRoutingRulesSummary) &&
+                                                      !string.Equals(_builderModelRoutingRulesSummary, "No builder model routing rules recorded.", StringComparison.Ordinal);
+    public string BuilderModelRoutingRulesPath => _builderModelRoutingRulesPath;
+    public bool HasBuilderModelRoutingRulesPath => !string.IsNullOrWhiteSpace(_builderModelRoutingRulesPath) && File.Exists(_builderModelRoutingRulesPath);
+    public string BuilderModelRoutingPolicySummaryPath => _builderModelRoutingPolicySummaryPath;
+    public bool HasBuilderModelRoutingPolicySummaryPath => !string.IsNullOrWhiteSpace(_builderModelRoutingPolicySummaryPath) && File.Exists(_builderModelRoutingPolicySummaryPath);
+    public string BuilderModelRoutingPolicyHistoryPath => _builderModelRoutingPolicyHistoryPath;
+    public bool HasBuilderModelRoutingPolicyHistoryPath => !string.IsNullOrWhiteSpace(_builderModelRoutingPolicyHistoryPath) && File.Exists(_builderModelRoutingPolicyHistoryPath);
+    public string BuilderModelRoutingStabilitySummary => _builderModelRoutingStabilitySummary;
+    public bool HasBuilderModelRoutingStabilitySummary => !string.IsNullOrWhiteSpace(_builderModelRoutingStabilitySummary) &&
+                                                          !string.Equals(_builderModelRoutingStabilitySummary, "No builder model routing stability recorded.", StringComparison.Ordinal);
+    public string BuilderModelRoutingStabilityPath => _builderModelRoutingStabilityPath;
+    public bool HasBuilderModelRoutingStabilityPath => !string.IsNullOrWhiteSpace(_builderModelRoutingStabilityPath) && File.Exists(_builderModelRoutingStabilityPath);
+    public string BuilderCurrentModelDecisionSummary => _builderCurrentModelDecisionSummary;
+    public bool HasBuilderCurrentModelDecisionSummary => !string.IsNullOrWhiteSpace(_builderCurrentModelDecisionSummary) &&
+                                                         !string.Equals(_builderCurrentModelDecisionSummary, "No builder model decision recorded.", StringComparison.Ordinal);
+    public string BuilderCurrentModelDecisionPath => _builderCurrentModelDecisionPath;
+    public bool HasBuilderCurrentModelDecisionPath => !string.IsNullOrWhiteSpace(_builderCurrentModelDecisionPath) && File.Exists(_builderCurrentModelDecisionPath);
+    public string BuilderModelEscalationDecisionSummaryText => _builderModelEscalationDecisionSummaryText;
+    public bool HasBuilderModelEscalationDecisionSummaryText => !string.IsNullOrWhiteSpace(_builderModelEscalationDecisionSummaryText) &&
+                                                                !string.Equals(_builderModelEscalationDecisionSummaryText, "No builder model escalation decision recorded.", StringComparison.Ordinal);
+    public string BuilderModelEscalationDecisionArtifactPath => _builderModelEscalationDecisionArtifactPath;
+    public bool HasBuilderModelEscalationDecisionArtifactPath => !string.IsNullOrWhiteSpace(_builderModelEscalationDecisionArtifactPath) && File.Exists(_builderModelEscalationDecisionArtifactPath);
+    public string BuilderRouteExplanationSummary => _builderRouteExplanationSummary;
+    public bool HasBuilderRouteExplanationSummary => !string.IsNullOrWhiteSpace(_builderRouteExplanationSummary) &&
+                                                     !string.Equals(_builderRouteExplanationSummary, "No builder route explanation recorded.", StringComparison.Ordinal);
+    public string BuilderRouteExplanationPath => _builderRouteExplanationPath;
+    public bool HasBuilderRouteExplanationPath => !string.IsNullOrWhiteSpace(_builderRouteExplanationPath) && File.Exists(_builderRouteExplanationPath);
+    public string BuilderModelDecisionExplanationSummary => _builderModelDecisionExplanationSummary;
+    public bool HasBuilderModelDecisionExplanationSummary => !string.IsNullOrWhiteSpace(_builderModelDecisionExplanationSummary) &&
+                                                             !string.Equals(_builderModelDecisionExplanationSummary, "No builder model decision explanation recorded.", StringComparison.Ordinal);
+    public string BuilderModelDecisionExplanationPath => _builderModelDecisionExplanationPath;
+    public bool HasBuilderModelDecisionExplanationPath => !string.IsNullOrWhiteSpace(_builderModelDecisionExplanationPath) && File.Exists(_builderModelDecisionExplanationPath);
+    public string BuilderFailureAnalysisSummary => _builderFailureAnalysisSummary;
+    public bool HasBuilderFailureAnalysisSummary => !string.IsNullOrWhiteSpace(_builderFailureAnalysisSummary) &&
+                                                    !string.Equals(_builderFailureAnalysisSummary, "No builder failure analysis recorded.", StringComparison.Ordinal);
+    public string BuilderFailureAnalysisPath => _builderFailureAnalysisPath;
+    public bool HasBuilderFailureAnalysisPath => !string.IsNullOrWhiteSpace(_builderFailureAnalysisPath) && File.Exists(_builderFailureAnalysisPath);
+    public string BuilderOperatorDiagnosticSummary => _builderOperatorDiagnosticSummary;
+    public bool HasBuilderOperatorDiagnosticSummary => !string.IsNullOrWhiteSpace(_builderOperatorDiagnosticSummary) &&
+                                                       !string.Equals(_builderOperatorDiagnosticSummary, "No builder operator diagnostic summary recorded.", StringComparison.Ordinal);
+    public string BuilderOperatorDiagnosticSummaryPath => _builderOperatorDiagnosticSummaryPath;
+    public bool HasBuilderOperatorDiagnosticSummaryPath => !string.IsNullOrWhiteSpace(_builderOperatorDiagnosticSummaryPath) && File.Exists(_builderOperatorDiagnosticSummaryPath);
+    public string BuilderToolchainReadinessSummary => _builderToolchainReadinessSummary;
+    public bool HasBuilderToolchainReadinessSummary => !string.IsNullOrWhiteSpace(_builderToolchainReadinessSummary) &&
+                                                       !string.Equals(_builderToolchainReadinessSummary, "No toolchain readiness summary recorded.", StringComparison.Ordinal);
+    public string BuilderToolchainRefreshSummary => _builderToolchainRefreshSummary;
+    public bool HasBuilderToolchainRefreshSummary => !string.IsNullOrWhiteSpace(_builderToolchainRefreshSummary) &&
+                                                     !string.Equals(_builderToolchainRefreshSummary, "No toolchain capability refresh recorded.", StringComparison.Ordinal);
+    public string BuilderToolchainCapabilityRegistryPath => _builderToolchainCapabilityRegistryPath;
+    public bool HasBuilderToolchainCapabilityRegistryPath => !string.IsNullOrWhiteSpace(_builderToolchainCapabilityRegistryPath) && File.Exists(_builderToolchainCapabilityRegistryPath);
+    public string BuilderToolchainCapabilityHistoryPath => _builderToolchainCapabilityHistoryPath;
+    public bool HasBuilderToolchainCapabilityHistoryPath => !string.IsNullOrWhiteSpace(_builderToolchainCapabilityHistoryPath) && File.Exists(_builderToolchainCapabilityHistoryPath);
+    public string BuilderLanguageEligibilitySummary => _builderLanguageEligibilitySummary;
+    public bool HasBuilderLanguageEligibilitySummary => !string.IsNullOrWhiteSpace(_builderLanguageEligibilitySummary) &&
+                                                        !string.Equals(_builderLanguageEligibilitySummary, "No language eligibility summary recorded.", StringComparison.Ordinal);
+    public string BuilderLanguageEligibilityPath => _builderLanguageEligibilityPath;
+    public bool HasBuilderLanguageEligibilityPath => !string.IsNullOrWhiteSpace(_builderLanguageEligibilityPath) && File.Exists(_builderLanguageEligibilityPath);
+    public string BuilderCapabilityRoutingSummary => _builderCapabilityRoutingSummary;
+    public bool HasBuilderCapabilityRoutingSummary => !string.IsNullOrWhiteSpace(_builderCapabilityRoutingSummary) &&
+                                                      !string.Equals(_builderCapabilityRoutingSummary, "No capability-aware builder intake recorded.", StringComparison.Ordinal);
+    public string BuilderCapabilityBlockDecisionPath => _builderCapabilityBlockDecisionPath;
+    public bool HasBuilderCapabilityBlockDecisionPath => !string.IsNullOrWhiteSpace(_builderCapabilityBlockDecisionPath) && File.Exists(_builderCapabilityBlockDecisionPath);
+    public string BuilderRepoKnowledgeSummary => _builderRepoKnowledgeSummary;
+    public bool HasBuilderRepoKnowledgeSummary => !string.IsNullOrWhiteSpace(_builderRepoKnowledgeSummary) &&
+                                                  !string.Equals(_builderRepoKnowledgeSummary, "No repo knowledge summary recorded.", StringComparison.Ordinal);
+    public string BuilderRepoKnowledgeRefreshSummary => _builderRepoKnowledgeRefreshSummary;
+    public bool HasBuilderRepoKnowledgeRefreshSummary => !string.IsNullOrWhiteSpace(_builderRepoKnowledgeRefreshSummary) &&
+                                                         !string.Equals(_builderRepoKnowledgeRefreshSummary, "No repo knowledge refresh recorded.", StringComparison.Ordinal);
+    public string BuilderRepoKnowledgeIndexPath => _builderRepoKnowledgeIndexPath;
+    public bool HasBuilderRepoKnowledgeIndexPath => !string.IsNullOrWhiteSpace(_builderRepoKnowledgeIndexPath) && File.Exists(_builderRepoKnowledgeIndexPath);
+    public string BuilderRepoKnowledgeSummaryPath => _builderRepoKnowledgeSummaryPath;
+    public bool HasBuilderRepoKnowledgeSummaryPath => !string.IsNullOrWhiteSpace(_builderRepoKnowledgeSummaryPath) && File.Exists(_builderRepoKnowledgeSummaryPath);
+    public string BuilderRepoKnowledgeHistoryPath => _builderRepoKnowledgeHistoryPath;
+    public bool HasBuilderRepoKnowledgeHistoryPath => !string.IsNullOrWhiteSpace(_builderRepoKnowledgeHistoryPath) && File.Exists(_builderRepoKnowledgeHistoryPath);
+    public string BuilderRepoKnowledgeDriftPath => _builderRepoKnowledgeDriftPath;
+    public bool HasBuilderRepoKnowledgeDriftPath => !string.IsNullOrWhiteSpace(_builderRepoKnowledgeDriftPath) && File.Exists(_builderRepoKnowledgeDriftPath);
+    public string BuilderConversationRequestText
+    {
+        get => _builderConversationRequestText;
+        set
+        {
+            if (string.Equals(_builderConversationRequestText, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _builderConversationRequestText = value ?? string.Empty;
+            OnPropertyChanged(nameof(BuilderConversationRequestText));
+            PreviewBuilderConversationCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    public string BuilderConversationTaskSummary => _builderConversationTaskSummary;
+    public bool HasBuilderConversationTaskSummary => !string.IsNullOrWhiteSpace(_builderConversationTaskSummary) &&
+                                                     !string.Equals(_builderConversationTaskSummary, "No builder conversation preview recorded.", StringComparison.Ordinal);
+    public string BuilderConversationRepoMatchSummary => _builderConversationRepoMatchSummary;
+    public bool HasBuilderConversationRepoMatchSummary => !string.IsNullOrWhiteSpace(_builderConversationRepoMatchSummary) &&
+                                                          !string.Equals(_builderConversationRepoMatchSummary, "No builder repo retrieval summary recorded.", StringComparison.Ordinal);
+    public string BuilderConversationRouteSummary => _builderConversationRouteSummary;
+    public bool HasBuilderConversationRouteSummary => !string.IsNullOrWhiteSpace(_builderConversationRouteSummary) &&
+                                                      !string.Equals(_builderConversationRouteSummary, "No builder conversation route handoff recorded.", StringComparison.Ordinal);
+    public string BuilderConversationRetrievalContextPath => _builderConversationRetrievalContextPath;
+    public bool HasBuilderConversationRetrievalContextPath => !string.IsNullOrWhiteSpace(_builderConversationRetrievalContextPath) && File.Exists(_builderConversationRetrievalContextPath);
+    public string BuilderConversationIntakePath => _builderConversationIntakePath;
+    public bool HasBuilderConversationIntakePath => !string.IsNullOrWhiteSpace(_builderConversationIntakePath) && File.Exists(_builderConversationIntakePath);
+    public string BuilderConversationHandoffPath => _builderConversationHandoffPath;
+    public bool HasBuilderConversationHandoffPath => !string.IsNullOrWhiteSpace(_builderConversationHandoffPath) && File.Exists(_builderConversationHandoffPath);
+    public string BuilderConversationExecutionSessionSummary => _builderConversationExecutionSessionSummary;
+    public bool HasBuilderConversationExecutionSessionSummary => !string.IsNullOrWhiteSpace(_builderConversationExecutionSessionSummary) &&
+                                                                 !string.Equals(_builderConversationExecutionSessionSummary, "No builder conversation execution session recorded.", StringComparison.Ordinal);
+    public string BuilderConversationPatchReviewSummary => _builderConversationPatchReviewSummary;
+    public bool HasBuilderConversationPatchReviewSummary => !string.IsNullOrWhiteSpace(_builderConversationPatchReviewSummary) &&
+                                                            !string.Equals(_builderConversationPatchReviewSummary, "No builder patch review recorded.", StringComparison.Ordinal);
+    public string BuilderConversationReviewStateSummary => _builderConversationReviewStateSummary;
+    public bool HasBuilderConversationReviewStateSummary => !string.IsNullOrWhiteSpace(_builderConversationReviewStateSummary) &&
+                                                            !string.Equals(_builderConversationReviewStateSummary, "No builder patch review outcome recorded.", StringComparison.Ordinal);
+    public string BuilderConversationExecutionSessionPath => _builderConversationExecutionSessionPath;
+    public bool HasBuilderConversationExecutionSessionPath => !string.IsNullOrWhiteSpace(_builderConversationExecutionSessionPath) && File.Exists(_builderConversationExecutionSessionPath);
+    public string BuilderConversationPatchReviewPath => _builderConversationPatchReviewPath;
+    public bool HasBuilderConversationPatchReviewPath => !string.IsNullOrWhiteSpace(_builderConversationPatchReviewPath) && File.Exists(_builderConversationPatchReviewPath);
+    public string BuilderConversationPatchReviewOutcomePath => _builderConversationPatchReviewOutcomePath;
+    public bool HasBuilderConversationPatchReviewOutcomePath => !string.IsNullOrWhiteSpace(_builderConversationPatchReviewOutcomePath) && File.Exists(_builderConversationPatchReviewOutcomePath);
+    public string BuilderPatchDiffReviewSummary => _builderPatchDiffReviewSummary;
+    public bool HasBuilderPatchDiffReviewSummary => !string.IsNullOrWhiteSpace(_builderPatchDiffReviewSummary) &&
+                                                    !string.Equals(_builderPatchDiffReviewSummary, "No builder patch diff review recorded.", StringComparison.Ordinal);
+    public string BuilderPatchApplySummary => _builderPatchApplySummary;
+    public bool HasBuilderPatchApplySummary => !string.IsNullOrWhiteSpace(_builderPatchApplySummary) &&
+                                               !string.Equals(_builderPatchApplySummary, "No builder patch apply decision recorded.", StringComparison.Ordinal);
+    public string BuilderPatchDiffReviewPath => _builderPatchDiffReviewPath;
+    public bool HasBuilderPatchDiffReviewPath => !string.IsNullOrWhiteSpace(_builderPatchDiffReviewPath) && File.Exists(_builderPatchDiffReviewPath);
+    public string BuilderFileReviewDecisionPath => _builderFileReviewDecisionPath;
+    public bool HasBuilderFileReviewDecisionPath => !string.IsNullOrWhiteSpace(_builderFileReviewDecisionPath) && File.Exists(_builderFileReviewDecisionPath);
+    public string BuilderPatchApplyDecisionPath => _builderPatchApplyDecisionPath;
+    public bool HasBuilderPatchApplyDecisionPath => !string.IsNullOrWhiteSpace(_builderPatchApplyDecisionPath) && File.Exists(_builderPatchApplyDecisionPath);
+    public string BuilderPatchSnapshotSummary => _builderPatchSnapshotSummary;
+    public bool HasBuilderPatchSnapshotSummary => !string.IsNullOrWhiteSpace(_builderPatchSnapshotSummary) &&
+                                                  !string.Equals(_builderPatchSnapshotSummary, "No builder patch snapshot recorded.", StringComparison.Ordinal);
+    public string BuilderCommitProposalSummary => _builderCommitProposalSummary;
+    public bool HasBuilderCommitProposalSummary => !string.IsNullOrWhiteSpace(_builderCommitProposalSummary) &&
+                                                   !string.Equals(_builderCommitProposalSummary, "No builder commit proposal recorded.", StringComparison.Ordinal);
+    public string BuilderCommitProposalMessage => _builderCommitProposalMessage;
+    public bool HasBuilderCommitProposalMessage => !string.IsNullOrWhiteSpace(_builderCommitProposalMessage);
+    public string BuilderPatchExportSummary => _builderPatchExportSummary;
+    public bool HasBuilderPatchExportSummary => !string.IsNullOrWhiteSpace(_builderPatchExportSummary) &&
+                                                !string.Equals(_builderPatchExportSummary, "No builder patch export recorded.", StringComparison.Ordinal);
+    public string BuilderOutputHandoffSummary => _builderOutputHandoffSummary;
+    public bool HasBuilderOutputHandoffSummary => !string.IsNullOrWhiteSpace(_builderOutputHandoffSummary) &&
+                                                  !string.Equals(_builderOutputHandoffSummary, "No builder output handoff recorded.", StringComparison.Ordinal);
+    public string BuilderManualApplySummary => _builderManualApplySummary;
+    public bool HasBuilderManualApplySummary => !string.IsNullOrWhiteSpace(_builderManualApplySummary) &&
+                                                !string.Equals(_builderManualApplySummary, "No builder manual apply guidance recorded.", StringComparison.Ordinal);
+    public string BuilderGitHandoffReadinessSummary => _builderGitHandoffReadinessSummary;
+    public bool HasBuilderGitHandoffReadinessSummary => !string.IsNullOrWhiteSpace(_builderGitHandoffReadinessSummary) &&
+                                                        !string.Equals(_builderGitHandoffReadinessSummary, "No builder Git handoff readiness recorded.", StringComparison.Ordinal);
+    public string BuilderGitCommitHandoffSummary => _builderGitCommitHandoffSummary;
+    public bool HasBuilderGitCommitHandoffSummary => !string.IsNullOrWhiteSpace(_builderGitCommitHandoffSummary) &&
+                                                     !string.Equals(_builderGitCommitHandoffSummary, "No builder Git commit handoff recorded.", StringComparison.Ordinal);
+    public string BuilderPatchSnapshotId => _builderPatchSnapshotId;
+    public bool HasBuilderPatchSnapshotId => !string.IsNullOrWhiteSpace(_builderPatchSnapshotId);
+    public string BuilderPatchSnapshotPath => _builderPatchSnapshotPath;
+    public bool HasBuilderPatchSnapshotPath => !string.IsNullOrWhiteSpace(_builderPatchSnapshotPath) && File.Exists(_builderPatchSnapshotPath);
+    public string BuilderCommitProposalPath => _builderCommitProposalPath;
+    public bool HasBuilderCommitProposalPath => !string.IsNullOrWhiteSpace(_builderCommitProposalPath) && File.Exists(_builderCommitProposalPath);
+    public string BuilderPatchExportPath => _builderPatchExportPath;
+    public bool HasBuilderPatchExportPath => !string.IsNullOrWhiteSpace(_builderPatchExportPath) && File.Exists(_builderPatchExportPath);
+    public string BuilderPatchBundlePath => _builderPatchBundlePath;
+    public bool HasBuilderPatchBundlePath => !string.IsNullOrWhiteSpace(_builderPatchBundlePath) && File.Exists(_builderPatchBundlePath);
+    public string BuilderPatchSnapshotHistoryPath => _builderPatchSnapshotHistoryPath;
+    public bool HasBuilderPatchSnapshotHistoryPath => !string.IsNullOrWhiteSpace(_builderPatchSnapshotHistoryPath) && File.Exists(_builderPatchSnapshotHistoryPath);
+    public string BuilderOutputHandoffPath => _builderOutputHandoffPath;
+    public bool HasBuilderOutputHandoffPath => !string.IsNullOrWhiteSpace(_builderOutputHandoffPath) && File.Exists(_builderOutputHandoffPath);
+    public string BuilderManualApplyGuidancePath => _builderManualApplyGuidancePath;
+    public bool HasBuilderManualApplyGuidancePath => !string.IsNullOrWhiteSpace(_builderManualApplyGuidancePath) && File.Exists(_builderManualApplyGuidancePath);
+    public string BuilderGitHandoffReadinessPath => _builderGitHandoffReadinessPath;
+    public bool HasBuilderGitHandoffReadinessPath => !string.IsNullOrWhiteSpace(_builderGitHandoffReadinessPath) && File.Exists(_builderGitHandoffReadinessPath);
+    public string BuilderGitCommitHandoffPath => _builderGitCommitHandoffPath;
+    public bool HasBuilderGitCommitHandoffPath => !string.IsNullOrWhiteSpace(_builderGitCommitHandoffPath) && File.Exists(_builderGitCommitHandoffPath);
+    public string BuilderOutputHandoffHistoryPath => _builderOutputHandoffHistoryPath;
+    public bool HasBuilderOutputHandoffHistoryPath => !string.IsNullOrWhiteSpace(_builderOutputHandoffHistoryPath) && File.Exists(_builderOutputHandoffHistoryPath);
+    public string SelectedBuilderPatchDiffFilePath
+    {
+        get => _selectedBuilderPatchDiffFilePath;
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(_selectedBuilderPatchDiffFilePath, normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _selectedBuilderPatchDiffFilePath = normalized;
+            RefreshSelectedBuilderPatchDiffFileSurface();
+            OnPropertyChanged(nameof(SelectedBuilderPatchDiffFilePath));
+            OnPropertyChanged(nameof(BuilderSelectedPatchDiffPreview));
+            OnPropertyChanged(nameof(HasBuilderSelectedPatchDiffPreview));
+            OnPropertyChanged(nameof(BuilderSelectedPatchDiffStateSummary));
+            OnPropertyChanged(nameof(HasBuilderSelectedPatchDiffStateSummary));
+            ApproveSelectedBuilderPatchFileCommand.RaiseCanExecuteChanged();
+            RejectSelectedBuilderPatchFileCommand.RaiseCanExecuteChanged();
+            MarkSelectedBuilderPatchFileNeedsRevisionCommand.RaiseCanExecuteChanged();
+        }
+    }
+    public string BuilderSelectedPatchDiffPreview => _builderSelectedPatchDiffPreview;
+    public bool HasBuilderSelectedPatchDiffPreview => !string.IsNullOrWhiteSpace(_builderSelectedPatchDiffPreview) &&
+                                                      !string.Equals(_builderSelectedPatchDiffPreview, "No builder patch diff file selected.", StringComparison.Ordinal);
+    public string BuilderSelectedPatchDiffStateSummary => _builderSelectedPatchDiffStateSummary;
+    public bool HasBuilderSelectedPatchDiffStateSummary => !string.IsNullOrWhiteSpace(_builderSelectedPatchDiffStateSummary) &&
+                                                           !string.Equals(_builderSelectedPatchDiffStateSummary, "No builder patch file selection recorded.", StringComparison.Ordinal);
+    public string BuilderConversationSelectedOverrideRoute
+    {
+        get => _builderConversationSelectedOverrideRoute;
+        set
+        {
+            if (string.Equals(_builderConversationSelectedOverrideRoute, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _builderConversationSelectedOverrideRoute = value ?? string.Empty;
+            OnPropertyChanged(nameof(BuilderConversationSelectedOverrideRoute));
+            OverrideBuilderConversationCommand.RaiseCanExecuteChanged();
+            RequestBuilderConversationRerouteCommand.RaiseCanExecuteChanged();
+        }
+    }
+
     public string BuilderLaunchRouteModeSummary => _builderLaunchRouteModeSummary;
     public bool HasBuilderLaunchRouteModeSummary => !string.IsNullOrWhiteSpace(_builderLaunchRouteModeSummary) &&
                                                     !string.Equals(_builderLaunchRouteModeSummary, "No builder launch default mode recorded.", StringComparison.Ordinal);
@@ -2290,6 +2651,50 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public AsyncRelayCommand OpenBuilderConfirmedClassesCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenBuilderDefaultRouteDecisionCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenBuilderLaunchDefaultDecisionCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderRouteContinuityCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderRouteCurrentStateIndexCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderModelCapabilityMatrixCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderModelRoutingRulesCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderCurrentModelDecisionCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderModelEscalationDecisionArtifactCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderRouteExplanationCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderModelDecisionExplanationCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderFailureAnalysisCommand { get; private set; } = null!;
+        public AsyncRelayCommand RefreshBuilderToolchainCapabilityCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderToolchainCapabilityRegistryCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderLanguageEligibilityCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderCapabilityBlockDecisionCommand { get; private set; } = null!;
+        public AsyncRelayCommand RefreshBuilderRepoKnowledgeCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderRepoKnowledgeIndexCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderRepoKnowledgeSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand PreviewBuilderConversationCommand { get; private set; } = null!;
+        public AsyncRelayCommand AcceptBuilderConversationCommand { get; private set; } = null!;
+        public AsyncRelayCommand OverrideBuilderConversationCommand { get; private set; } = null!;
+        public AsyncRelayCommand CancelBuilderConversationCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderRepoRetrievalContextCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderConversationIntakeCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderConversationHandoffCommand { get; private set; } = null!;
+        public AsyncRelayCommand ExecuteBuilderConversationSessionCommand { get; private set; } = null!;
+        public AsyncRelayCommand AcceptBuilderConversationPatchReviewCommand { get; private set; } = null!;
+        public AsyncRelayCommand RejectBuilderConversationPatchReviewCommand { get; private set; } = null!;
+        public AsyncRelayCommand RequestBuilderConversationRevisionCommand { get; private set; } = null!;
+        public AsyncRelayCommand RequestBuilderConversationRerouteCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderConversationExecutionSessionCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderPatchReviewCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderPatchReviewOutcomeCommand { get; private set; } = null!;
+        public AsyncRelayCommand ApproveSelectedBuilderPatchFileCommand { get; private set; } = null!;
+        public AsyncRelayCommand RejectSelectedBuilderPatchFileCommand { get; private set; } = null!;
+        public AsyncRelayCommand MarkSelectedBuilderPatchFileNeedsRevisionCommand { get; private set; } = null!;
+        public AsyncRelayCommand ApproveAllBuilderPatchFilesCommand { get; private set; } = null!;
+        public AsyncRelayCommand FinalizeBuilderConversationPatchCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderPatchDiffReviewCommand { get; private set; } = null!;
+        public AsyncRelayCommand PrepareBuilderCommitCommand { get; private set; } = null!;
+        public AsyncRelayCommand ExportBuilderPatchBundleCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderPatchSnapshotCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderOutputHandoffCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderManualApplyGuidanceCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderGitHandoffReadinessCommand { get; private set; } = null!;
+        public AsyncRelayCommand OpenBuilderGitCommitHandoffCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenBuilderRouteOverrideEvidenceCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenBuilderRouteReviewCommand { get; private set; } = null!;
         public AsyncRelayCommand OpenBuilderRouteReconfirmationCommand { get; private set; } = null!;
@@ -2319,6 +2724,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public AsyncRelayCommand CopyBuilderConfirmedClassesSummaryCommand { get; private set; } = null!;
         public AsyncRelayCommand CopyBuilderDefaultRouteDecisionSummaryCommand { get; private set; } = null!;
         public AsyncRelayCommand CopyBuilderLaunchDefaultSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderModelRoutingRulesSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderCurrentModelDecisionSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderDiagnosticSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderToolchainReadinessSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderLanguageEligibilitySummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderRepoKnowledgeSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderConversationRouteSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderConversationSessionSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderPatchDiffReviewSummaryCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderCommitMessageCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderManualApplyStepsCommand { get; private set; } = null!;
+        public AsyncRelayCommand CopyBuilderOutputHandoffSummaryCommand { get; private set; } = null!;
         public AsyncRelayCommand CopyBuilderRouteOverrideSummaryCommand { get; private set; } = null!;
         public AsyncRelayCommand CopyBuilderRouteReconfirmationSummaryCommand { get; private set; } = null!;
         public AsyncRelayCommand CopyBuilderDefaultRouteRecoverySummaryCommand { get; private set; } = null!;
@@ -2470,6 +2887,50 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OpenBuilderConfirmedClassesCommand = new AsyncRelayCommand(OpenBuilderConfirmedClassesAsync, () => HasBuilderConfirmedClassesPath);
         OpenBuilderDefaultRouteDecisionCommand = new AsyncRelayCommand(OpenBuilderDefaultRouteDecisionAsync, () => HasBuilderDefaultRouteDecisionPath);
         OpenBuilderLaunchDefaultDecisionCommand = new AsyncRelayCommand(OpenBuilderLaunchDefaultDecisionAsync, () => HasBuilderLaunchDefaultDecisionPath);
+        OpenBuilderRouteContinuityCommand = new AsyncRelayCommand(OpenBuilderRouteContinuityAsync, () => HasBuilderRouteContinuityPath);
+        OpenBuilderRouteCurrentStateIndexCommand = new AsyncRelayCommand(OpenBuilderRouteCurrentStateIndexAsync, () => HasBuilderRouteCurrentStateIndexPath);
+        OpenBuilderModelCapabilityMatrixCommand = new AsyncRelayCommand(OpenBuilderModelCapabilityMatrixAsync, () => HasBuilderModelCapabilityMatrixPath);
+        OpenBuilderModelRoutingRulesCommand = new AsyncRelayCommand(OpenBuilderModelRoutingRulesAsync, () => HasBuilderModelRoutingRulesPath);
+        OpenBuilderCurrentModelDecisionCommand = new AsyncRelayCommand(OpenBuilderCurrentModelDecisionAsync, () => HasBuilderCurrentModelDecisionPath);
+        OpenBuilderModelEscalationDecisionArtifactCommand = new AsyncRelayCommand(OpenBuilderModelEscalationDecisionArtifactAsync, () => HasBuilderModelEscalationDecisionArtifactPath);
+        OpenBuilderRouteExplanationCommand = new AsyncRelayCommand(OpenBuilderRouteExplanationAsync, () => HasBuilderRouteExplanationPath);
+        OpenBuilderModelDecisionExplanationCommand = new AsyncRelayCommand(OpenBuilderModelDecisionExplanationAsync, () => HasBuilderModelDecisionExplanationPath);
+        OpenBuilderFailureAnalysisCommand = new AsyncRelayCommand(OpenBuilderFailureAnalysisAsync, () => HasBuilderFailureAnalysisPath);
+        RefreshBuilderToolchainCapabilityCommand = new AsyncRelayCommand(RefreshBuilderToolchainCapabilityAsync);
+        OpenBuilderToolchainCapabilityRegistryCommand = new AsyncRelayCommand(OpenBuilderToolchainCapabilityRegistryAsync, () => HasBuilderToolchainCapabilityRegistryPath);
+        OpenBuilderLanguageEligibilityCommand = new AsyncRelayCommand(OpenBuilderLanguageEligibilityAsync, () => HasBuilderLanguageEligibilityPath);
+        OpenBuilderCapabilityBlockDecisionCommand = new AsyncRelayCommand(OpenBuilderCapabilityBlockDecisionAsync, () => HasBuilderCapabilityBlockDecisionPath);
+        RefreshBuilderRepoKnowledgeCommand = new AsyncRelayCommand(RefreshBuilderRepoKnowledgeAsync);
+        OpenBuilderRepoKnowledgeIndexCommand = new AsyncRelayCommand(OpenBuilderRepoKnowledgeIndexAsync, () => HasBuilderRepoKnowledgeIndexPath);
+        OpenBuilderRepoKnowledgeSummaryCommand = new AsyncRelayCommand(OpenBuilderRepoKnowledgeSummaryAsync, () => HasBuilderRepoKnowledgeSummaryPath);
+        PreviewBuilderConversationCommand = new AsyncRelayCommand(PreviewBuilderConversationAsync, () => !string.IsNullOrWhiteSpace(BuilderConversationRequestText));
+        AcceptBuilderConversationCommand = new AsyncRelayCommand(AcceptBuilderConversationAsync, () => HasBuilderConversationIntakePath);
+        OverrideBuilderConversationCommand = new AsyncRelayCommand(OverrideBuilderConversationAsync, () => HasBuilderConversationIntakePath && !string.IsNullOrWhiteSpace(BuilderConversationSelectedOverrideRoute));
+        CancelBuilderConversationCommand = new AsyncRelayCommand(CancelBuilderConversationAsync, () => HasBuilderConversationIntakePath);
+        OpenBuilderRepoRetrievalContextCommand = new AsyncRelayCommand(OpenBuilderRepoRetrievalContextAsync, () => HasBuilderConversationRetrievalContextPath);
+        OpenBuilderConversationIntakeCommand = new AsyncRelayCommand(OpenBuilderConversationIntakeAsync, () => HasBuilderConversationIntakePath);
+        OpenBuilderConversationHandoffCommand = new AsyncRelayCommand(OpenBuilderConversationHandoffAsync, () => HasBuilderConversationHandoffPath);
+        ExecuteBuilderConversationSessionCommand = new AsyncRelayCommand(ExecuteBuilderConversationSessionAsync, () => string.IsNullOrWhiteSpace(GetBuilderConversationExecutionDisabledReason()));
+        AcceptBuilderConversationPatchReviewCommand = new AsyncRelayCommand(AcceptBuilderConversationPatchReviewAsync, () => CanReviewBuilderConversationPatch());
+        RejectBuilderConversationPatchReviewCommand = new AsyncRelayCommand(RejectBuilderConversationPatchReviewAsync, () => CanReviewBuilderConversationPatch());
+        RequestBuilderConversationRevisionCommand = new AsyncRelayCommand(RequestBuilderConversationRevisionAsync, () => CanReviewBuilderConversationPatch());
+        RequestBuilderConversationRerouteCommand = new AsyncRelayCommand(RequestBuilderConversationRerouteAsync, () => CanReviewBuilderConversationPatch());
+        OpenBuilderConversationExecutionSessionCommand = new AsyncRelayCommand(OpenBuilderConversationExecutionSessionAsync, () => HasBuilderConversationExecutionSessionPath);
+        OpenBuilderPatchReviewCommand = new AsyncRelayCommand(OpenBuilderPatchReviewAsync, () => HasBuilderConversationPatchReviewPath);
+        OpenBuilderPatchReviewOutcomeCommand = new AsyncRelayCommand(OpenBuilderPatchReviewOutcomeAsync, () => HasBuilderConversationPatchReviewOutcomePath);
+        ApproveSelectedBuilderPatchFileCommand = new AsyncRelayCommand(ApproveSelectedBuilderPatchFileAsync, () => CanReviewSelectedBuilderPatchFile());
+        RejectSelectedBuilderPatchFileCommand = new AsyncRelayCommand(RejectSelectedBuilderPatchFileAsync, () => CanReviewSelectedBuilderPatchFile());
+        MarkSelectedBuilderPatchFileNeedsRevisionCommand = new AsyncRelayCommand(MarkSelectedBuilderPatchFileNeedsRevisionAsync, () => CanReviewSelectedBuilderPatchFile());
+        ApproveAllBuilderPatchFilesCommand = new AsyncRelayCommand(ApproveAllBuilderPatchFilesAsync, () => HasBuilderPatchDiffReviewPath);
+        FinalizeBuilderConversationPatchCommand = new AsyncRelayCommand(FinalizeBuilderConversationPatchAsync, () => HasBuilderPatchDiffReviewPath);
+        OpenBuilderPatchDiffReviewCommand = new AsyncRelayCommand(OpenBuilderPatchDiffReviewAsync, () => HasBuilderPatchDiffReviewPath);
+        PrepareBuilderCommitCommand = new AsyncRelayCommand(PrepareBuilderCommitAsync, () => HasBuilderPatchSnapshotPath);
+        ExportBuilderPatchBundleCommand = new AsyncRelayCommand(ExportBuilderPatchBundleAsync, () => HasBuilderPatchSnapshotPath);
+        OpenBuilderPatchSnapshotCommand = new AsyncRelayCommand(OpenBuilderPatchSnapshotAsync, () => HasBuilderPatchSnapshotPath);
+        OpenBuilderOutputHandoffCommand = new AsyncRelayCommand(OpenBuilderOutputHandoffAsync, () => HasBuilderOutputHandoffPath);
+        OpenBuilderManualApplyGuidanceCommand = new AsyncRelayCommand(OpenBuilderManualApplyGuidanceAsync, () => HasBuilderManualApplyGuidancePath);
+        OpenBuilderGitHandoffReadinessCommand = new AsyncRelayCommand(OpenBuilderGitHandoffReadinessAsync, () => HasBuilderGitHandoffReadinessPath);
+        OpenBuilderGitCommitHandoffCommand = new AsyncRelayCommand(OpenBuilderGitCommitHandoffAsync, () => HasBuilderGitCommitHandoffPath);
         OpenBuilderRouteOverrideEvidenceCommand = new AsyncRelayCommand(OpenBuilderRouteOverrideEvidenceAsync, () => HasBuilderRouteOverridePath);
         OpenBuilderRouteReviewCommand = new AsyncRelayCommand(OpenBuilderRouteReviewAsync, () => HasBuilderRouteReviewPath);
         OpenBuilderRouteReconfirmationCommand = new AsyncRelayCommand(OpenBuilderRouteReconfirmationAsync, () => HasBuilderRouteReconfirmationPath);
@@ -2499,6 +2960,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         CopyBuilderConfirmedClassesSummaryCommand = new AsyncRelayCommand(CopyBuilderConfirmedClassesSummaryAsync, () => HasBuilderConfirmedClassesSummary);
         CopyBuilderDefaultRouteDecisionSummaryCommand = new AsyncRelayCommand(CopyBuilderDefaultRouteDecisionSummaryAsync, () => HasBuilderDefaultRouteDecisionSummary);
         CopyBuilderLaunchDefaultSummaryCommand = new AsyncRelayCommand(CopyBuilderLaunchDefaultSummaryAsync, () => HasBuilderLaunchDefaultDecisionSummary);
+        CopyBuilderModelRoutingRulesSummaryCommand = new AsyncRelayCommand(CopyBuilderModelRoutingRulesSummaryAsync, () => HasBuilderModelRoutingRulesSummary);
+        CopyBuilderCurrentModelDecisionSummaryCommand = new AsyncRelayCommand(CopyBuilderCurrentModelDecisionSummaryAsync, () => HasBuilderCurrentModelDecisionSummary);
+        CopyBuilderDiagnosticSummaryCommand = new AsyncRelayCommand(CopyBuilderDiagnosticSummaryAsync, () => HasBuilderOperatorDiagnosticSummary);
+        CopyBuilderToolchainReadinessSummaryCommand = new AsyncRelayCommand(CopyBuilderToolchainReadinessSummaryAsync, () => HasBuilderToolchainReadinessSummary);
+        CopyBuilderLanguageEligibilitySummaryCommand = new AsyncRelayCommand(CopyBuilderLanguageEligibilitySummaryAsync, () => HasBuilderLanguageEligibilitySummary);
+        CopyBuilderRepoKnowledgeSummaryCommand = new AsyncRelayCommand(CopyBuilderRepoKnowledgeSummaryAsync, () => HasBuilderRepoKnowledgeSummary);
+        CopyBuilderConversationRouteSummaryCommand = new AsyncRelayCommand(CopyBuilderConversationRouteSummaryAsync, () => HasBuilderConversationRouteSummary);
+        CopyBuilderConversationSessionSummaryCommand = new AsyncRelayCommand(CopyBuilderConversationSessionSummaryAsync, () => HasBuilderConversationExecutionSessionSummary);
+        CopyBuilderPatchDiffReviewSummaryCommand = new AsyncRelayCommand(CopyBuilderPatchDiffReviewSummaryAsync, () => HasBuilderPatchDiffReviewSummary);
+        CopyBuilderCommitMessageCommand = new AsyncRelayCommand(CopyBuilderCommitMessageAsync, () => HasBuilderCommitProposalMessage);
+        CopyBuilderManualApplyStepsCommand = new AsyncRelayCommand(CopyBuilderManualApplyStepsAsync, () => HasBuilderManualApplySummary);
+        CopyBuilderOutputHandoffSummaryCommand = new AsyncRelayCommand(CopyBuilderOutputHandoffSummaryAsync, () => HasBuilderOutputHandoffSummary);
         CopyBuilderRouteOverrideSummaryCommand = new AsyncRelayCommand(CopyBuilderRouteOverrideSummaryAsync, () => HasBuilderRouteOverrideSummary);
         CopyBuilderRouteReconfirmationSummaryCommand = new AsyncRelayCommand(CopyBuilderRouteReconfirmationSummaryAsync, () => HasBuilderRouteReconfirmationSummary);
         CopyBuilderDefaultRouteRecoverySummaryCommand = new AsyncRelayCommand(CopyBuilderDefaultRouteRecoverySummaryAsync, () => HasBuilderDefaultRouteRecoverySummary);
@@ -3187,6 +3660,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         SemanticReusePlaybooks = new ReadOnlyObservableCollection<SemanticReusePlaybookRow>(_semanticReusePlaybooks);
         RepairChangedFiles = new ReadOnlyObservableCollection<string>(_repairChangedFiles);
         RepairHistory = new ReadOnlyObservableCollection<RepairHistoryRow>(_repairHistory);
+        BuilderPatchDiffFiles = new ReadOnlyObservableCollection<BuilderPatchDiffFileRow>(_builderPatchDiffFiles);
+        BuilderPatchSnapshotFiles = new ReadOnlyObservableCollection<BuilderPatchSnapshotFileRow>(_builderPatchSnapshotFiles);
         OperationProgressSteps = new ReadOnlyObservableCollection<OperationProgressStepRow>(_operationProgressSteps);
         VisibleOperationProgressSteps = new ReadOnlyObservableCollection<OperationProgressStepRow>(_visibleOperationProgressSteps);
         OperationNarrationFeed = new ReadOnlyObservableCollection<string>(_operationNarrationFeed);
@@ -5015,6 +5490,18 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         if (!string.Equals(_latestBuilderExecutionPrep.FreshnessState, "current", StringComparison.Ordinal))
             return "Prepared launch is blocked because the latest execution prep is stale.";
 
+        if (string.Equals(_latestBuilderExecutionPrep.CapabilityRoutingState, "route_blocked_missing_toolchain", StringComparison.Ordinal) ||
+            string.Equals(_latestBuilderExecutionPrep.CapabilityRoutingState, "route_blocked_repo_policy", StringComparison.Ordinal))
+        {
+            return string.IsNullOrWhiteSpace(_latestBuilderExecutionPrep.CapabilityBlockReason)
+                ? "Prepared launch is blocked by the current toolchain capability state."
+                : _latestBuilderExecutionPrep.CapabilityBlockReason;
+        }
+
+        var conversationBlocker = GetBuilderConversationLaunchDisabledReason();
+        if (!string.IsNullOrWhiteSpace(conversationBlocker))
+            return conversationBlocker;
+
         if (_activeValidationAction is { } activeAction)
         {
             var activeLabel = string.IsNullOrWhiteSpace(_activeValidationActionLabel)
@@ -5064,6 +5551,103 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         return string.Empty;
     }
+
+    private BuilderConversationIntake? GetActiveBuilderConversationIntake()
+    {
+        if (_latestBuilderConversationIntake is null)
+        {
+            return null;
+        }
+
+        if (_latestBuilderExecutionPrep is not null &&
+            _latestBuilderConversationIntake.ObservedUtc < _latestBuilderExecutionPrep.ObservedUtc)
+        {
+            return null;
+        }
+
+        return _latestBuilderConversationIntake;
+    }
+
+    private BuilderConversationHandoff? GetActiveBuilderConversationHandoff(BuilderConversationIntake? intake = null)
+    {
+        intake ??= GetActiveBuilderConversationIntake();
+        if (_latestBuilderConversationHandoff is null)
+        {
+            return null;
+        }
+
+        if (intake is not null && _latestBuilderConversationHandoff.ObservedUtc < intake.ObservedUtc)
+        {
+            return null;
+        }
+
+        return _latestBuilderConversationHandoff;
+    }
+
+    private string GetBuilderConversationLaunchDisabledReason()
+    {
+        var intake = GetActiveBuilderConversationIntake();
+        if (intake is null)
+        {
+            return string.Empty;
+        }
+
+        var handoff = GetActiveBuilderConversationHandoff(intake);
+        if (handoff is not null)
+        {
+            if (string.Equals(handoff.LaunchReadinessState, "ready_for_launch", StringComparison.Ordinal) ||
+                string.Equals(handoff.LaunchReadinessState, "ready_for_launch_with_override", StringComparison.Ordinal))
+            {
+                return string.Empty;
+            }
+
+            return FirstNonEmpty(handoff.BlockReason, handoff.Summary, "Prepared launch is blocked by the current builder conversation handoff.");
+        }
+
+        if (string.Equals(intake.CapabilityRoutingState, "route_blocked_missing_toolchain", StringComparison.Ordinal) ||
+            string.Equals(intake.CapabilityRoutingState, "route_blocked_repo_policy", StringComparison.Ordinal))
+        {
+            return FirstNonEmpty(intake.BlockReason, "Prepared launch is blocked by the builder conversation capability review.");
+        }
+
+        if (string.Equals(intake.RetrievalConfidenceState, "weak_match_needs_operator_review", StringComparison.Ordinal) ||
+            string.Equals(intake.RetrievalConfidenceState, "no_clear_match", StringComparison.Ordinal))
+        {
+            return "Prepared launch is blocked until the operator accepts or overrides the weak repo match from the current builder conversation preview.";
+        }
+
+        return "Prepared launch is blocked until the operator accepts or overrides the current builder conversation route preview.";
+    }
+
+    private string GetBuilderConversationExecutionDisabledReason()
+    {
+        var handoff = GetActiveBuilderConversationHandoff();
+        if (handoff is null)
+        {
+            return "Builder conversation execution requires an accepted conversation handoff.";
+        }
+
+        if (string.Equals(handoff.LaunchReadinessState, "ready_for_launch", StringComparison.Ordinal) ||
+            string.Equals(handoff.LaunchReadinessState, "ready_for_launch_with_override", StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        return FirstNonEmpty(
+            handoff.BlockReason,
+            handoff.Summary,
+            "Builder conversation execution is blocked until the conversation handoff is ready for launch.");
+    }
+
+    private bool CanReviewBuilderConversationPatch()
+        => HasBuilderConversationPatchReviewPath &&
+           _latestBuilderConversationExecutionSession is not null &&
+           string.Equals(_latestBuilderConversationExecutionSession.SessionState, "awaiting_patch_review", StringComparison.Ordinal);
+
+    private bool CanReviewSelectedBuilderPatchFile()
+        => HasBuilderPatchDiffReviewPath &&
+           !string.IsNullOrWhiteSpace(_selectedBuilderPatchDiffFilePath) &&
+           _builderPatchDiffFiles.Any(file => string.Equals(file.RelativePath, _selectedBuilderPatchDiffFilePath, StringComparison.Ordinal));
 
     private string GetBuilderOverrideLaunchDisabledReason()
     {
@@ -5157,13 +5741,49 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _latestBuilderExecutionResult = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderExecutionResult(_latestBuilderProofRun.RunFolder);
         _latestBuilderReadinessGate = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderReadinessGate(_latestBuilderProofRun.RunFolder);
         _latestBuilderConfirmedTaskClasses = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderConfirmedTaskClasses(_latestBuilderProofRun.RunFolder);
-        _latestBuilderDefaultRouteDecision = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderDefaultRouteDecision(_latestBuilderProofRun.RunFolder);
-        _latestBuilderLaunchDefaultDecision = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderLaunchDefaultDecision(_latestBuilderProofRun.RunFolder);
-        _latestBuilderRouteOverrideEvidence = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderRouteOverrideEvidence(_latestBuilderProofRun.RunFolder);
-        _latestBuilderRouteReviewCandidates = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderPolicyReviewCandidates(_latestBuilderProofRun.RunFolder);
-        _latestBuilderRouteReconfirmation = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderRouteReconfirmation(_latestBuilderProofRun.RunFolder);
-        _latestBuilderDefaultRouteRecovery = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderDefaultRouteRecovery(_latestBuilderProofRun.RunFolder);
-        _latestBuilderReadinessContradictions = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderReadinessContradictions(_latestBuilderProofRun.RunFolder);
+        _latestBuilderToolchainCapabilityRegistry = BuilderExecutionService.LoadBuilderToolchainCapabilityRegistry(_validationRunnerService.RepoRoot);
+        _latestBuilderToolchainCapabilityHistory = BuilderExecutionService.LoadBuilderToolchainCapabilityHistory(_validationRunnerService.RepoRoot);
+        _latestBuilderLanguageEligibility = BuilderExecutionService.LoadBuilderLanguageEligibility(_validationRunnerService.RepoRoot);
+        _latestBuilderCapabilityBlockDecision = BuilderExecutionService.LoadLatestBuilderCapabilityBlockDecision(_validationRunnerService.RepoRoot);
+        _latestBuilderRepoKnowledgeIndex = BuilderExecutionService.LoadBuilderRepoKnowledgeIndex(_validationRunnerService.RepoRoot);
+        _latestBuilderRepoKnowledgeHistory = BuilderExecutionService.LoadBuilderRepoKnowledgeHistory(_validationRunnerService.RepoRoot);
+        _latestBuilderRepoKnowledgeDrift = BuilderExecutionService.LoadBuilderRepoKnowledgeDrift(_validationRunnerService.RepoRoot);
+        _latestBuilderRepoRetrievalContext = BuilderExecutionService.LoadBuilderRepoRetrievalContext(_validationRunnerService.RepoRoot);
+        _latestBuilderConversationIntake = BuilderExecutionService.LoadBuilderConversationIntake(_validationRunnerService.RepoRoot);
+        _latestBuilderConversationHandoff = BuilderExecutionService.LoadBuilderConversationHandoff(_validationRunnerService.RepoRoot);
+        _latestBuilderConversationExecutionSession = BuilderExecutionService.LoadBuilderConversationExecutionSession(_validationRunnerService.RepoRoot);
+        _latestBuilderPatchReview = BuilderExecutionService.LoadBuilderPatchReview(_validationRunnerService.RepoRoot);
+        _latestBuilderPatchReviewOutcome = BuilderExecutionService.LoadBuilderPatchReviewOutcome(_validationRunnerService.RepoRoot);
+        _latestBuilderPatchDiffReview = BuilderExecutionService.LoadBuilderPatchDiffReview(_validationRunnerService.RepoRoot);
+        _latestBuilderFileReviewDecision = BuilderExecutionService.LoadBuilderFileReviewDecision(_validationRunnerService.RepoRoot);
+        _latestBuilderPatchApplyDecision = BuilderExecutionService.LoadBuilderPatchApplyDecision(_validationRunnerService.RepoRoot);
+        _latestBuilderPatchSnapshot = BuilderExecutionService.LoadBuilderPatchSnapshot(_validationRunnerService.RepoRoot);
+        _latestBuilderCommitProposal = BuilderExecutionService.LoadBuilderCommitProposal(_validationRunnerService.RepoRoot);
+        _latestBuilderPatchExport = BuilderExecutionService.LoadBuilderPatchExport(_validationRunnerService.RepoRoot);
+        _latestBuilderPatchSnapshotHistory = BuilderExecutionService.LoadBuilderPatchSnapshotHistory(_validationRunnerService.RepoRoot);
+        _latestBuilderOutputHandoff = BuilderExecutionService.LoadBuilderOutputHandoff(_validationRunnerService.RepoRoot);
+        _latestBuilderGitHandoffReadiness = BuilderExecutionService.LoadBuilderGitHandoffReadiness(_validationRunnerService.RepoRoot);
+        _latestBuilderManualApplyGuidance = BuilderExecutionService.LoadBuilderManualApplyGuidance(_validationRunnerService.RepoRoot);
+        _latestBuilderGitCommitHandoff = BuilderExecutionService.LoadBuilderGitCommitHandoff(_validationRunnerService.RepoRoot);
+        _latestBuilderOutputHandoffHistory = BuilderExecutionService.LoadBuilderOutputHandoffHistory(_validationRunnerService.RepoRoot);
+        _latestBuilderRouteStateContinuity = BuilderExecutionService.LoadBuilderRouteStateContinuity(_validationRunnerService.RepoRoot);
+        _latestBuilderRouteCurrentStateIndex = BuilderExecutionService.LoadBuilderRouteCurrentStateIndex(_validationRunnerService.RepoRoot);
+        _latestBuilderModelCapabilityMatrix = BuilderExecutionService.LoadBuilderModelCapabilityMatrix(_validationRunnerService.RepoRoot);
+        _latestBuilderModelRoutingRulesArtifact = BuilderExecutionService.LoadBuilderModelRoutingPolicy(_validationRunnerService.RepoRoot);
+        _latestBuilderModelRoutingPolicyHistory = BuilderExecutionService.LoadBuilderModelRoutingPolicyHistory(_validationRunnerService.RepoRoot);
+        _latestBuilderModelRoutingStability = BuilderExecutionService.LoadBuilderModelRoutingStability(_validationRunnerService.RepoRoot);
+        _latestBuilderModelDecision = BuilderExecutionService.LoadBuilderModelDecision(_validationRunnerService.RepoRoot);
+        _latestBuilderModelEscalationDecisionArtifact = BuilderExecutionService.LoadBuilderModelEscalationPolicyDecision(_validationRunnerService.RepoRoot);
+        _latestBuilderRouteExplanation = BuilderExecutionService.LoadBuilderRouteExplanation(_validationRunnerService.RepoRoot);
+        _latestBuilderModelDecisionExplanation = BuilderExecutionService.LoadBuilderModelDecisionExplanation(_validationRunnerService.RepoRoot);
+        _latestBuilderFailureAnalysis = BuilderExecutionService.LoadBuilderFailureAnalysis(_validationRunnerService.RepoRoot);
+        _latestBuilderDefaultRouteDecision = BuilderExecutionService.LoadLatestBuilderDefaultRouteDecision(_validationRunnerService.RepoRoot);
+        _latestBuilderLaunchDefaultDecision = BuilderExecutionService.LoadLatestBuilderLaunchDefaultDecision(_validationRunnerService.RepoRoot);
+        _latestBuilderRouteOverrideEvidence = BuilderExecutionService.LoadLatestBuilderRouteOverrideEvidence(_validationRunnerService.RepoRoot);
+        _latestBuilderRouteReviewCandidates = BuilderExecutionService.LoadLatestBuilderPolicyReviewCandidates(_validationRunnerService.RepoRoot);
+        _latestBuilderRouteReconfirmation = BuilderExecutionService.LoadLatestBuilderRouteReconfirmation(_validationRunnerService.RepoRoot);
+        _latestBuilderDefaultRouteRecovery = BuilderExecutionService.LoadLatestBuilderDefaultRouteRecovery(_validationRunnerService.RepoRoot);
+        _latestBuilderReadinessContradictions = BuilderExecutionService.LoadLatestBuilderReadinessContradictions(_validationRunnerService.RepoRoot);
         _latestBuilderSplitStepExecution = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderSplitStepExecution(_latestBuilderProofRun.RunFolder);
         _latestBuilderSplitFirstOutcome = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderSplitFirstOutcome(_latestBuilderProofRun.RunFolder);
 
@@ -5238,6 +5858,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             _builderDefaultRouteDecisionPath = string.Empty;
             _builderLaunchDefaultDecisionSummary = "No builder launch default decision recorded.";
             _builderLaunchDefaultDecisionPath = string.Empty;
+            _builderRouteContinuitySummary = "No builder route continuity recorded.";
+            _builderRouteContinuityPath = string.Empty;
+            _builderRouteCurrentStateIndexSummary = "No builder route current-state index recorded.";
+            _builderRouteCurrentStateIndexPath = string.Empty;
             _builderLaunchRouteModeSummary = "No builder launch default mode recorded.";
             _builderRouteSourceSummary = "No current builder route source recorded.";
             _builderOverrideAvailabilitySummary = "No operator override state recorded.";
@@ -5356,6 +5980,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             _builderDefaultRouteDecisionPath = _latestBuilderDefaultRouteDecision?.ArtifactPath ?? string.Empty;
             _builderLaunchDefaultDecisionSummary = _latestBuilderLaunchDefaultDecision?.Summary ?? "No builder launch default decision recorded.";
             _builderLaunchDefaultDecisionPath = _latestBuilderLaunchDefaultDecision?.ArtifactPath ?? string.Empty;
+            _builderRouteContinuitySummary = _latestBuilderRouteStateContinuity?.Summary ?? "No builder route continuity recorded.";
+            _builderRouteContinuityPath = _latestBuilderRouteStateContinuity?.ArtifactPath ?? string.Empty;
+            _builderRouteCurrentStateIndexSummary = _latestBuilderRouteCurrentStateIndex?.Summary ?? "No builder route current-state index recorded.";
+            _builderRouteCurrentStateIndexPath = _latestBuilderRouteCurrentStateIndex?.ArtifactPath ?? string.Empty;
             _builderLaunchRouteModeSummary = _latestBuilderLaunchDefaultDecision is null
                 ? "No builder launch default mode recorded."
                 : _latestBuilderLaunchDefaultDecision.RepairLoopExpectedDefault
@@ -5393,6 +6021,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             _builderSplitFirstOutcomePath = _latestBuilderSplitFirstOutcome?.ArtifactPath ?? string.Empty;
             RebuildBuilderSplitStepRows();
         }
+
+        RefreshBuilderToolchainCapabilitySurface();
+        RefreshBuilderRepoKnowledgeSurface();
+        RefreshBuilderModelRoutingSurface();
+        RefreshBuilderDiagnosticsSurface();
+        RefreshBuilderConversationSurface();
+        RefreshBuilderConversationExecutionSurface();
+        RefreshBuilderPatchDiffSurface();
+        RefreshBuilderPatchPackagingSurface();
+        RefreshBuilderOutputHandoffSurface();
 
         if (_latestBuilderModelFloorVerdict is null)
         {
@@ -5594,6 +6232,160 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasBuilderLaunchDefaultDecisionSummary));
         OnPropertyChanged(nameof(BuilderLaunchDefaultDecisionPath));
         OnPropertyChanged(nameof(HasBuilderLaunchDefaultDecisionPath));
+        OnPropertyChanged(nameof(BuilderRouteContinuitySummary));
+        OnPropertyChanged(nameof(HasBuilderRouteContinuitySummary));
+        OnPropertyChanged(nameof(BuilderRouteContinuityPath));
+        OnPropertyChanged(nameof(HasBuilderRouteContinuityPath));
+        OnPropertyChanged(nameof(BuilderRouteCurrentStateIndexSummary));
+        OnPropertyChanged(nameof(HasBuilderRouteCurrentStateIndexSummary));
+        OnPropertyChanged(nameof(BuilderRouteCurrentStateIndexPath));
+        OnPropertyChanged(nameof(HasBuilderRouteCurrentStateIndexPath));
+        OnPropertyChanged(nameof(BuilderModelCapabilityMatrixSummary));
+        OnPropertyChanged(nameof(HasBuilderModelCapabilityMatrixSummary));
+        OnPropertyChanged(nameof(BuilderModelCapabilityMatrixPath));
+        OnPropertyChanged(nameof(HasBuilderModelCapabilityMatrixPath));
+        OnPropertyChanged(nameof(BuilderModelRoutingRulesSummary));
+        OnPropertyChanged(nameof(HasBuilderModelRoutingRulesSummary));
+        OnPropertyChanged(nameof(BuilderModelRoutingRulesPath));
+        OnPropertyChanged(nameof(HasBuilderModelRoutingRulesPath));
+        OnPropertyChanged(nameof(BuilderModelRoutingPolicySummaryPath));
+        OnPropertyChanged(nameof(HasBuilderModelRoutingPolicySummaryPath));
+        OnPropertyChanged(nameof(BuilderModelRoutingPolicyHistoryPath));
+        OnPropertyChanged(nameof(HasBuilderModelRoutingPolicyHistoryPath));
+        OnPropertyChanged(nameof(BuilderModelRoutingStabilitySummary));
+        OnPropertyChanged(nameof(HasBuilderModelRoutingStabilitySummary));
+        OnPropertyChanged(nameof(BuilderModelRoutingStabilityPath));
+        OnPropertyChanged(nameof(HasBuilderModelRoutingStabilityPath));
+        OnPropertyChanged(nameof(BuilderCurrentModelDecisionSummary));
+        OnPropertyChanged(nameof(HasBuilderCurrentModelDecisionSummary));
+        OnPropertyChanged(nameof(BuilderCurrentModelDecisionPath));
+        OnPropertyChanged(nameof(HasBuilderCurrentModelDecisionPath));
+        OnPropertyChanged(nameof(BuilderModelEscalationDecisionSummaryText));
+        OnPropertyChanged(nameof(HasBuilderModelEscalationDecisionSummaryText));
+        OnPropertyChanged(nameof(BuilderModelEscalationDecisionArtifactPath));
+        OnPropertyChanged(nameof(HasBuilderModelEscalationDecisionArtifactPath));
+        OnPropertyChanged(nameof(BuilderRouteExplanationSummary));
+        OnPropertyChanged(nameof(HasBuilderRouteExplanationSummary));
+        OnPropertyChanged(nameof(BuilderRouteExplanationPath));
+        OnPropertyChanged(nameof(HasBuilderRouteExplanationPath));
+        OnPropertyChanged(nameof(BuilderModelDecisionExplanationSummary));
+        OnPropertyChanged(nameof(HasBuilderModelDecisionExplanationSummary));
+        OnPropertyChanged(nameof(BuilderModelDecisionExplanationPath));
+        OnPropertyChanged(nameof(HasBuilderModelDecisionExplanationPath));
+        OnPropertyChanged(nameof(BuilderFailureAnalysisSummary));
+        OnPropertyChanged(nameof(HasBuilderFailureAnalysisSummary));
+        OnPropertyChanged(nameof(BuilderFailureAnalysisPath));
+        OnPropertyChanged(nameof(HasBuilderFailureAnalysisPath));
+        OnPropertyChanged(nameof(BuilderOperatorDiagnosticSummary));
+        OnPropertyChanged(nameof(HasBuilderOperatorDiagnosticSummary));
+        OnPropertyChanged(nameof(BuilderOperatorDiagnosticSummaryPath));
+        OnPropertyChanged(nameof(HasBuilderOperatorDiagnosticSummaryPath));
+        OnPropertyChanged(nameof(BuilderToolchainReadinessSummary));
+        OnPropertyChanged(nameof(HasBuilderToolchainReadinessSummary));
+        OnPropertyChanged(nameof(BuilderToolchainRefreshSummary));
+        OnPropertyChanged(nameof(HasBuilderToolchainRefreshSummary));
+        OnPropertyChanged(nameof(BuilderToolchainCapabilityRegistryPath));
+        OnPropertyChanged(nameof(HasBuilderToolchainCapabilityRegistryPath));
+        OnPropertyChanged(nameof(BuilderToolchainCapabilityHistoryPath));
+        OnPropertyChanged(nameof(HasBuilderToolchainCapabilityHistoryPath));
+        OnPropertyChanged(nameof(BuilderLanguageEligibilitySummary));
+        OnPropertyChanged(nameof(HasBuilderLanguageEligibilitySummary));
+        OnPropertyChanged(nameof(BuilderLanguageEligibilityPath));
+        OnPropertyChanged(nameof(HasBuilderLanguageEligibilityPath));
+        OnPropertyChanged(nameof(BuilderCapabilityRoutingSummary));
+        OnPropertyChanged(nameof(HasBuilderCapabilityRoutingSummary));
+        OnPropertyChanged(nameof(BuilderCapabilityBlockDecisionPath));
+        OnPropertyChanged(nameof(HasBuilderCapabilityBlockDecisionPath));
+        OnPropertyChanged(nameof(BuilderRepoKnowledgeSummary));
+        OnPropertyChanged(nameof(HasBuilderRepoKnowledgeSummary));
+        OnPropertyChanged(nameof(BuilderRepoKnowledgeRefreshSummary));
+        OnPropertyChanged(nameof(HasBuilderRepoKnowledgeRefreshSummary));
+        OnPropertyChanged(nameof(BuilderRepoKnowledgeIndexPath));
+        OnPropertyChanged(nameof(HasBuilderRepoKnowledgeIndexPath));
+        OnPropertyChanged(nameof(BuilderRepoKnowledgeSummaryPath));
+        OnPropertyChanged(nameof(HasBuilderRepoKnowledgeSummaryPath));
+        OnPropertyChanged(nameof(BuilderRepoKnowledgeHistoryPath));
+        OnPropertyChanged(nameof(HasBuilderRepoKnowledgeHistoryPath));
+        OnPropertyChanged(nameof(BuilderRepoKnowledgeDriftPath));
+        OnPropertyChanged(nameof(HasBuilderRepoKnowledgeDriftPath));
+        OnPropertyChanged(nameof(BuilderConversationTaskSummary));
+        OnPropertyChanged(nameof(HasBuilderConversationTaskSummary));
+        OnPropertyChanged(nameof(BuilderConversationRepoMatchSummary));
+        OnPropertyChanged(nameof(HasBuilderConversationRepoMatchSummary));
+        OnPropertyChanged(nameof(BuilderConversationRouteSummary));
+        OnPropertyChanged(nameof(HasBuilderConversationRouteSummary));
+        OnPropertyChanged(nameof(BuilderConversationRetrievalContextPath));
+        OnPropertyChanged(nameof(HasBuilderConversationRetrievalContextPath));
+        OnPropertyChanged(nameof(BuilderConversationIntakePath));
+        OnPropertyChanged(nameof(HasBuilderConversationIntakePath));
+        OnPropertyChanged(nameof(BuilderConversationHandoffPath));
+        OnPropertyChanged(nameof(HasBuilderConversationHandoffPath));
+        OnPropertyChanged(nameof(BuilderConversationExecutionSessionSummary));
+        OnPropertyChanged(nameof(HasBuilderConversationExecutionSessionSummary));
+        OnPropertyChanged(nameof(BuilderConversationPatchReviewSummary));
+        OnPropertyChanged(nameof(HasBuilderConversationPatchReviewSummary));
+        OnPropertyChanged(nameof(BuilderConversationReviewStateSummary));
+        OnPropertyChanged(nameof(HasBuilderConversationReviewStateSummary));
+        OnPropertyChanged(nameof(BuilderConversationExecutionSessionPath));
+        OnPropertyChanged(nameof(HasBuilderConversationExecutionSessionPath));
+        OnPropertyChanged(nameof(BuilderConversationPatchReviewPath));
+        OnPropertyChanged(nameof(HasBuilderConversationPatchReviewPath));
+        OnPropertyChanged(nameof(BuilderConversationPatchReviewOutcomePath));
+        OnPropertyChanged(nameof(HasBuilderConversationPatchReviewOutcomePath));
+        OnPropertyChanged(nameof(BuilderPatchDiffReviewSummary));
+        OnPropertyChanged(nameof(HasBuilderPatchDiffReviewSummary));
+        OnPropertyChanged(nameof(BuilderPatchApplySummary));
+        OnPropertyChanged(nameof(HasBuilderPatchApplySummary));
+        OnPropertyChanged(nameof(BuilderPatchDiffReviewPath));
+        OnPropertyChanged(nameof(HasBuilderPatchDiffReviewPath));
+        OnPropertyChanged(nameof(BuilderFileReviewDecisionPath));
+        OnPropertyChanged(nameof(HasBuilderFileReviewDecisionPath));
+        OnPropertyChanged(nameof(BuilderPatchApplyDecisionPath));
+        OnPropertyChanged(nameof(HasBuilderPatchApplyDecisionPath));
+        OnPropertyChanged(nameof(BuilderPatchSnapshotSummary));
+        OnPropertyChanged(nameof(HasBuilderPatchSnapshotSummary));
+        OnPropertyChanged(nameof(BuilderCommitProposalSummary));
+        OnPropertyChanged(nameof(HasBuilderCommitProposalSummary));
+        OnPropertyChanged(nameof(BuilderCommitProposalMessage));
+        OnPropertyChanged(nameof(HasBuilderCommitProposalMessage));
+        OnPropertyChanged(nameof(BuilderPatchExportSummary));
+        OnPropertyChanged(nameof(HasBuilderPatchExportSummary));
+        OnPropertyChanged(nameof(BuilderOutputHandoffSummary));
+        OnPropertyChanged(nameof(HasBuilderOutputHandoffSummary));
+        OnPropertyChanged(nameof(BuilderManualApplySummary));
+        OnPropertyChanged(nameof(HasBuilderManualApplySummary));
+        OnPropertyChanged(nameof(BuilderGitHandoffReadinessSummary));
+        OnPropertyChanged(nameof(HasBuilderGitHandoffReadinessSummary));
+        OnPropertyChanged(nameof(BuilderGitCommitHandoffSummary));
+        OnPropertyChanged(nameof(HasBuilderGitCommitHandoffSummary));
+        OnPropertyChanged(nameof(BuilderPatchSnapshotId));
+        OnPropertyChanged(nameof(HasBuilderPatchSnapshotId));
+        OnPropertyChanged(nameof(BuilderPatchSnapshotPath));
+        OnPropertyChanged(nameof(HasBuilderPatchSnapshotPath));
+        OnPropertyChanged(nameof(BuilderCommitProposalPath));
+        OnPropertyChanged(nameof(HasBuilderCommitProposalPath));
+        OnPropertyChanged(nameof(BuilderPatchExportPath));
+        OnPropertyChanged(nameof(HasBuilderPatchExportPath));
+        OnPropertyChanged(nameof(BuilderPatchBundlePath));
+        OnPropertyChanged(nameof(HasBuilderPatchBundlePath));
+        OnPropertyChanged(nameof(BuilderPatchSnapshotHistoryPath));
+        OnPropertyChanged(nameof(HasBuilderPatchSnapshotHistoryPath));
+        OnPropertyChanged(nameof(BuilderOutputHandoffPath));
+        OnPropertyChanged(nameof(HasBuilderOutputHandoffPath));
+        OnPropertyChanged(nameof(BuilderManualApplyGuidancePath));
+        OnPropertyChanged(nameof(HasBuilderManualApplyGuidancePath));
+        OnPropertyChanged(nameof(BuilderGitHandoffReadinessPath));
+        OnPropertyChanged(nameof(HasBuilderGitHandoffReadinessPath));
+        OnPropertyChanged(nameof(BuilderGitCommitHandoffPath));
+        OnPropertyChanged(nameof(HasBuilderGitCommitHandoffPath));
+        OnPropertyChanged(nameof(BuilderOutputHandoffHistoryPath));
+        OnPropertyChanged(nameof(HasBuilderOutputHandoffHistoryPath));
+        OnPropertyChanged(nameof(SelectedBuilderPatchDiffFilePath));
+        OnPropertyChanged(nameof(BuilderSelectedPatchDiffPreview));
+        OnPropertyChanged(nameof(HasBuilderSelectedPatchDiffPreview));
+        OnPropertyChanged(nameof(BuilderSelectedPatchDiffStateSummary));
+        OnPropertyChanged(nameof(HasBuilderSelectedPatchDiffStateSummary));
+        OnPropertyChanged(nameof(BuilderPatchSnapshotFiles));
         OnPropertyChanged(nameof(BuilderLaunchRouteModeSummary));
         OnPropertyChanged(nameof(HasBuilderLaunchRouteModeSummary));
         OnPropertyChanged(nameof(BuilderRouteSourceSummary));
@@ -5684,6 +6476,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OpenBuilderConfirmedClassesCommand.RaiseCanExecuteChanged();
         OpenBuilderDefaultRouteDecisionCommand.RaiseCanExecuteChanged();
         OpenBuilderLaunchDefaultDecisionCommand.RaiseCanExecuteChanged();
+        OpenBuilderRouteContinuityCommand.RaiseCanExecuteChanged();
+        OpenBuilderRouteCurrentStateIndexCommand.RaiseCanExecuteChanged();
+        OpenBuilderModelCapabilityMatrixCommand.RaiseCanExecuteChanged();
+        OpenBuilderModelRoutingRulesCommand.RaiseCanExecuteChanged();
+        OpenBuilderCurrentModelDecisionCommand.RaiseCanExecuteChanged();
+        OpenBuilderModelEscalationDecisionArtifactCommand.RaiseCanExecuteChanged();
+        OpenBuilderRouteExplanationCommand.RaiseCanExecuteChanged();
+        OpenBuilderModelDecisionExplanationCommand.RaiseCanExecuteChanged();
+        OpenBuilderFailureAnalysisCommand.RaiseCanExecuteChanged();
         OpenBuilderRouteOverrideEvidenceCommand.RaiseCanExecuteChanged();
         OpenBuilderRouteReviewCommand.RaiseCanExecuteChanged();
         OpenBuilderRouteReconfirmationCommand.RaiseCanExecuteChanged();
@@ -5713,12 +6514,326 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         CopyBuilderConfirmedClassesSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderDefaultRouteDecisionSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderLaunchDefaultSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderModelRoutingRulesSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderCurrentModelDecisionSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderDiagnosticSummaryCommand.RaiseCanExecuteChanged();
+        RefreshBuilderToolchainCapabilityCommand.RaiseCanExecuteChanged();
+        OpenBuilderToolchainCapabilityRegistryCommand.RaiseCanExecuteChanged();
+        OpenBuilderLanguageEligibilityCommand.RaiseCanExecuteChanged();
+        OpenBuilderCapabilityBlockDecisionCommand.RaiseCanExecuteChanged();
+        RefreshBuilderRepoKnowledgeCommand.RaiseCanExecuteChanged();
+        OpenBuilderRepoKnowledgeIndexCommand.RaiseCanExecuteChanged();
+        OpenBuilderRepoKnowledgeSummaryCommand.RaiseCanExecuteChanged();
+        PreviewBuilderConversationCommand.RaiseCanExecuteChanged();
+        AcceptBuilderConversationCommand.RaiseCanExecuteChanged();
+        OverrideBuilderConversationCommand.RaiseCanExecuteChanged();
+        CancelBuilderConversationCommand.RaiseCanExecuteChanged();
+        OpenBuilderRepoRetrievalContextCommand.RaiseCanExecuteChanged();
+        OpenBuilderConversationIntakeCommand.RaiseCanExecuteChanged();
+        OpenBuilderConversationHandoffCommand.RaiseCanExecuteChanged();
+        ExecuteBuilderConversationSessionCommand.RaiseCanExecuteChanged();
+        AcceptBuilderConversationPatchReviewCommand.RaiseCanExecuteChanged();
+        RejectBuilderConversationPatchReviewCommand.RaiseCanExecuteChanged();
+        RequestBuilderConversationRevisionCommand.RaiseCanExecuteChanged();
+        RequestBuilderConversationRerouteCommand.RaiseCanExecuteChanged();
+        OpenBuilderConversationExecutionSessionCommand.RaiseCanExecuteChanged();
+        OpenBuilderPatchReviewCommand.RaiseCanExecuteChanged();
+        OpenBuilderPatchReviewOutcomeCommand.RaiseCanExecuteChanged();
+        ApproveSelectedBuilderPatchFileCommand.RaiseCanExecuteChanged();
+        RejectSelectedBuilderPatchFileCommand.RaiseCanExecuteChanged();
+        MarkSelectedBuilderPatchFileNeedsRevisionCommand.RaiseCanExecuteChanged();
+        ApproveAllBuilderPatchFilesCommand.RaiseCanExecuteChanged();
+        FinalizeBuilderConversationPatchCommand.RaiseCanExecuteChanged();
+        OpenBuilderPatchDiffReviewCommand.RaiseCanExecuteChanged();
+        PrepareBuilderCommitCommand.RaiseCanExecuteChanged();
+        ExportBuilderPatchBundleCommand.RaiseCanExecuteChanged();
+        OpenBuilderPatchSnapshotCommand.RaiseCanExecuteChanged();
+        OpenBuilderOutputHandoffCommand.RaiseCanExecuteChanged();
+        OpenBuilderManualApplyGuidanceCommand.RaiseCanExecuteChanged();
+        OpenBuilderGitHandoffReadinessCommand.RaiseCanExecuteChanged();
+        OpenBuilderGitCommitHandoffCommand.RaiseCanExecuteChanged();
+        CopyBuilderToolchainReadinessSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderLanguageEligibilitySummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderRepoKnowledgeSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderConversationRouteSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderConversationSessionSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderPatchDiffReviewSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderCommitMessageCommand.RaiseCanExecuteChanged();
+        CopyBuilderManualApplyStepsCommand.RaiseCanExecuteChanged();
+        CopyBuilderOutputHandoffSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderRouteOverrideSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderRouteReconfirmationSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderDefaultRouteRecoverySummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderSplitExecutionSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderSplitComparativeClosureSummaryCommand.RaiseCanExecuteChanged();
     }
+
+    private void RefreshBuilderToolchainCapabilitySurface()
+    {
+        _builderToolchainReadinessSummary = _latestBuilderToolchainCapabilityRegistry?.Summary ?? "No toolchain readiness summary recorded.";
+        _builderToolchainCapabilityRegistryPath = _latestBuilderToolchainCapabilityRegistry?.ArtifactPath ?? string.Empty;
+        _builderToolchainCapabilityHistoryPath = _latestBuilderToolchainCapabilityHistory?.ArtifactPath ?? string.Empty;
+        _builderToolchainRefreshSummary = _latestBuilderToolchainCapabilityRegistry is null
+            ? "No toolchain capability refresh recorded."
+            : $"Refresh={_latestBuilderToolchainCapabilityRegistry.RefreshState}. Drift={_latestBuilderToolchainCapabilityRegistry.DriftState}. Observed {_latestBuilderToolchainCapabilityRegistry.ObservedUtc:yyyy-MM-dd HH:mm:ss} UTC.";
+        _builderLanguageEligibilitySummary = File.Exists(BuilderExecutionService.BuilderLanguageEligibilitySummaryPathForRepo(_validationRunnerService.RepoRoot))
+            ? File.ReadAllText(BuilderExecutionService.BuilderLanguageEligibilitySummaryPathForRepo(_validationRunnerService.RepoRoot))
+            : _latestBuilderLanguageEligibility?.Summary ?? "No language eligibility summary recorded.";
+        _builderLanguageEligibilityPath = _latestBuilderLanguageEligibility?.ArtifactPath ?? string.Empty;
+        _builderCapabilityBlockDecisionPath = _latestBuilderCapabilityBlockDecision?.ArtifactPath ?? string.Empty;
+        _builderCapabilityRoutingSummary = BuildBuilderCapabilityRoutingSummary(
+            _latestBuilderRequestIntake,
+            _latestBuilderExecutionPrep,
+            _latestBuilderCapabilityBlockDecision);
+    }
+
+    private void RefreshBuilderRepoKnowledgeSurface()
+    {
+        _builderRepoKnowledgeIndexPath = _latestBuilderRepoKnowledgeIndex?.ArtifactPath ?? string.Empty;
+        _builderRepoKnowledgeSummaryPath = BuilderExecutionService.BuilderRepoKnowledgeSummaryPathForRepo(_validationRunnerService.RepoRoot);
+        _builderRepoKnowledgeHistoryPath = _latestBuilderRepoKnowledgeHistory?.ArtifactPath ?? string.Empty;
+        _builderRepoKnowledgeDriftPath = _latestBuilderRepoKnowledgeDrift?.ArtifactPath ?? string.Empty;
+        _builderRepoKnowledgeSummary = File.Exists(_builderRepoKnowledgeSummaryPath)
+            ? File.ReadAllText(_builderRepoKnowledgeSummaryPath)
+            : _latestBuilderRepoKnowledgeIndex?.Summary ?? "No repo knowledge summary recorded.";
+        _builderRepoKnowledgeRefreshSummary = _latestBuilderRepoKnowledgeIndex is null
+            ? "No repo knowledge refresh recorded."
+            : $"Refresh={_latestBuilderRepoKnowledgeIndex.RefreshState}. Drift={_latestBuilderRepoKnowledgeIndex.DriftState}. Preferred stack={_latestBuilderRepoKnowledgeIndex.PreferredStackLabel}. Observed {_latestBuilderRepoKnowledgeIndex.ObservedUtc:yyyy-MM-dd HH:mm:ss} UTC.";
+    }
+
+    private void RefreshBuilderModelRoutingSurface()
+    {
+        _builderModelCapabilityMatrixSummary = _latestBuilderModelCapabilityMatrix?.Summary ?? "No builder model capability matrix recorded.";
+        _builderModelCapabilityMatrixPath = _latestBuilderModelCapabilityMatrix?.ArtifactPath ?? string.Empty;
+        _builderModelRoutingRulesPath = _latestBuilderModelRoutingRulesArtifact?.ArtifactPath ?? string.Empty;
+        _builderModelRoutingPolicySummaryPath = _latestBuilderModelRoutingRulesArtifact?.SummaryArtifactPath
+                                               ?? BuilderExecutionService.BuilderModelRoutingPolicySummaryPathForRepo(_validationRunnerService.RepoRoot);
+        _builderModelRoutingPolicyHistoryPath = _latestBuilderModelRoutingPolicyHistory?.ArtifactPath ?? string.Empty;
+        _builderModelRoutingRulesSummary = File.Exists(_builderModelRoutingPolicySummaryPath)
+            ? File.ReadAllText(_builderModelRoutingPolicySummaryPath)
+            : _latestBuilderModelRoutingRulesArtifact?.Summary ?? "No builder model routing rules recorded.";
+        _builderModelRoutingStabilitySummary = _latestBuilderModelRoutingStability?.Summary ?? "No builder model routing stability recorded.";
+        _builderModelRoutingStabilityPath = _latestBuilderModelRoutingStability?.ArtifactPath ?? string.Empty;
+        _builderCurrentModelDecisionSummary = _latestBuilderModelDecision?.Summary ?? "No builder model decision recorded.";
+        _builderCurrentModelDecisionPath = _latestBuilderModelDecision?.ArtifactPath ?? string.Empty;
+        _builderModelEscalationDecisionSummaryText = _latestBuilderModelEscalationDecisionArtifact?.Summary ?? "No builder model escalation decision recorded.";
+        _builderModelEscalationDecisionArtifactPath = _latestBuilderModelEscalationDecisionArtifact?.ArtifactPath ?? string.Empty;
+    }
+
+    private void RefreshBuilderDiagnosticsSurface()
+    {
+        _builderRouteExplanationSummary = _latestBuilderRouteExplanation?.Summary ?? "No builder route explanation recorded.";
+        _builderRouteExplanationPath = _latestBuilderRouteExplanation?.ArtifactPath ?? string.Empty;
+        _builderModelDecisionExplanationSummary = _latestBuilderModelDecisionExplanation?.Summary ?? "No builder model decision explanation recorded.";
+        _builderModelDecisionExplanationPath = _latestBuilderModelDecisionExplanation?.ArtifactPath ?? string.Empty;
+        _builderFailureAnalysisSummary = _latestBuilderFailureAnalysis?.Summary ?? "No builder failure analysis recorded.";
+        _builderFailureAnalysisPath = _latestBuilderFailureAnalysis?.ArtifactPath ?? string.Empty;
+        _builderOperatorDiagnosticSummaryPath = BuilderExecutionService.BuilderOperatorDiagnosticSummaryPathForRepo(_validationRunnerService.RepoRoot);
+        _builderOperatorDiagnosticSummary = File.Exists(_builderOperatorDiagnosticSummaryPath)
+            ? File.ReadAllText(_builderOperatorDiagnosticSummaryPath)
+            : "No builder operator diagnostic summary recorded.";
+    }
+
+    private void RefreshBuilderConversationSurface()
+    {
+        _builderConversationRetrievalContextPath = _latestBuilderRepoRetrievalContext?.ArtifactPath ?? string.Empty;
+        _builderConversationIntakePath = _latestBuilderConversationIntake?.ArtifactPath ?? string.Empty;
+        _builderConversationHandoffPath = _latestBuilderConversationHandoff?.ArtifactPath ?? string.Empty;
+        _builderConversationTaskSummary = BuildBuilderConversationTaskSummary(_latestBuilderConversationIntake, _latestBuilderModelDecision);
+        _builderConversationRepoMatchSummary = _latestBuilderRepoRetrievalContext?.Summary
+            ?? _latestBuilderConversationIntake?.RetrievalSummary
+            ?? "No builder repo retrieval summary recorded.";
+        _builderConversationRouteSummary = BuildBuilderConversationRouteSummary(_latestBuilderConversationIntake, _latestBuilderConversationHandoff);
+
+        if (string.IsNullOrWhiteSpace(_builderConversationRequestText) && _latestBuilderConversationIntake is not null)
+        {
+            _builderConversationRequestText = _latestBuilderConversationIntake.RawRequestText;
+            OnPropertyChanged(nameof(BuilderConversationRequestText));
+        }
+
+        if (string.IsNullOrWhiteSpace(_builderConversationSelectedOverrideRoute) &&
+            _latestBuilderConversationHandoff is { OperatorDecisionState: "override_route" } overrideHandoff)
+        {
+            _builderConversationSelectedOverrideRoute = overrideHandoff.SelectedRoute;
+            OnPropertyChanged(nameof(BuilderConversationSelectedOverrideRoute));
+        }
+    }
+
+    private void RefreshBuilderConversationExecutionSurface()
+    {
+        _builderConversationExecutionSessionPath = _latestBuilderConversationExecutionSession?.ArtifactPath ?? string.Empty;
+        _builderConversationPatchReviewPath = _latestBuilderPatchReview?.ArtifactPath ?? string.Empty;
+        _builderConversationPatchReviewOutcomePath = _latestBuilderPatchReviewOutcome?.ArtifactPath ?? string.Empty;
+        _builderConversationExecutionSessionSummary = _latestBuilderConversationExecutionSession?.Summary
+            ?? "No builder conversation execution session recorded.";
+        _builderConversationPatchReviewSummary = _latestBuilderPatchReview?.Summary
+            ?? "No builder patch review recorded.";
+        _builderConversationReviewStateSummary = BuildBuilderConversationReviewStateSummary(
+            _latestBuilderConversationExecutionSession,
+            _latestBuilderPatchReview,
+            _latestBuilderPatchReviewOutcome);
+    }
+
+    private void RefreshBuilderPatchDiffSurface()
+    {
+        _builderPatchDiffReviewPath = _latestBuilderPatchDiffReview?.ArtifactPath ?? string.Empty;
+        _builderFileReviewDecisionPath = _latestBuilderFileReviewDecision?.ArtifactPath ?? string.Empty;
+        _builderPatchApplyDecisionPath = _latestBuilderPatchApplyDecision?.ArtifactPath ?? string.Empty;
+        _builderPatchDiffReviewSummary = _latestBuilderPatchDiffReview?.Summary ?? "No builder patch diff review recorded.";
+        _builderPatchApplySummary = _latestBuilderPatchApplyDecision?.Summary ?? "No builder patch apply decision recorded.";
+
+        _builderPatchDiffFiles.Clear();
+        foreach (var entry in _latestBuilderPatchDiffReview?.FileEntries ?? Array.Empty<BuilderPatchDiffReviewFileEntry>())
+        {
+            _builderPatchDiffFiles.Add(new BuilderPatchDiffFileRow(
+                entry.RelativePath,
+                entry.FileCategory,
+                entry.ChangeKind,
+                entry.ApprovalState,
+                entry.DiffSummary,
+                entry.PatchPreviewText,
+                entry.RejectionReason));
+        }
+
+        if (_builderPatchDiffFiles.Count == 0)
+        {
+            _selectedBuilderPatchDiffFilePath = string.Empty;
+        }
+        else if (string.IsNullOrWhiteSpace(_selectedBuilderPatchDiffFilePath) ||
+                 !_builderPatchDiffFiles.Any(file => string.Equals(file.RelativePath, _selectedBuilderPatchDiffFilePath, StringComparison.Ordinal)))
+        {
+            _selectedBuilderPatchDiffFilePath = _builderPatchDiffFiles[0].RelativePath;
+        }
+
+        RefreshSelectedBuilderPatchDiffFileSurface();
+    }
+
+    private void RefreshBuilderPatchPackagingSurface()
+    {
+        _builderPatchSnapshotId = _latestBuilderPatchSnapshot?.SnapshotId ?? string.Empty;
+        _builderPatchSnapshotPath = _latestBuilderPatchSnapshot?.ArtifactPath ?? string.Empty;
+        _builderCommitProposalPath = _latestBuilderCommitProposal?.ArtifactPath ?? string.Empty;
+        _builderPatchExportPath = _latestBuilderPatchExport?.ArtifactPath ?? string.Empty;
+        _builderPatchBundlePath = _latestBuilderPatchExport?.BundleFilePath ?? string.Empty;
+        _builderPatchSnapshotHistoryPath = _latestBuilderPatchSnapshotHistory?.ArtifactPath ?? string.Empty;
+        _builderPatchSnapshotSummary = _latestBuilderPatchSnapshot?.Summary ?? "No builder patch snapshot recorded.";
+        _builderCommitProposalSummary = _latestBuilderCommitProposal?.Summary ?? "No builder commit proposal recorded.";
+        _builderCommitProposalMessage = _latestBuilderCommitProposal?.ProposedCommitMessage ?? string.Empty;
+        _builderPatchExportSummary = _latestBuilderPatchExport?.Summary ?? "No builder patch export recorded.";
+
+        _builderPatchSnapshotFiles.Clear();
+        foreach (var file in _latestBuilderPatchSnapshot?.ApprovedFiles ?? Array.Empty<BuilderPatchSnapshotFileEntry>())
+        {
+            _builderPatchSnapshotFiles.Add(new BuilderPatchSnapshotFileRow(
+                file.RelativePath,
+                file.ChangeType,
+                file.Checksum,
+                file.ApprovalState));
+        }
+    }
+
+    private void RefreshBuilderOutputHandoffSurface()
+    {
+        _builderOutputHandoffSummary = _latestBuilderOutputHandoff?.Summary ?? "No builder output handoff recorded.";
+        _builderManualApplySummary = _latestBuilderManualApplyGuidance?.Summary ?? "No builder manual apply guidance recorded.";
+        _builderGitHandoffReadinessSummary = _latestBuilderGitHandoffReadiness?.Summary ?? "No builder Git handoff readiness recorded.";
+        _builderGitCommitHandoffSummary = _latestBuilderGitCommitHandoff?.Summary ?? "No builder Git commit handoff recorded.";
+        _builderOutputHandoffPath = _latestBuilderOutputHandoff?.ArtifactPath ?? string.Empty;
+        _builderManualApplyGuidancePath = _latestBuilderManualApplyGuidance?.ArtifactPath ?? string.Empty;
+        _builderGitHandoffReadinessPath = _latestBuilderGitHandoffReadiness?.ArtifactPath ?? string.Empty;
+        _builderGitCommitHandoffPath = _latestBuilderGitCommitHandoff?.ArtifactPath ?? string.Empty;
+        _builderOutputHandoffHistoryPath = _latestBuilderOutputHandoffHistory?.ArtifactPath ?? string.Empty;
+    }
+
+    private void RefreshSelectedBuilderPatchDiffFileSurface()
+    {
+        var selected = _builderPatchDiffFiles.FirstOrDefault(file => string.Equals(file.RelativePath, _selectedBuilderPatchDiffFilePath, StringComparison.Ordinal));
+        if (selected is null)
+        {
+            _builderSelectedPatchDiffPreview = "No builder patch diff file selected.";
+            _builderSelectedPatchDiffStateSummary = "No builder patch file selection recorded.";
+            return;
+        }
+
+        _builderSelectedPatchDiffPreview = FirstNonEmpty(selected.PatchPreviewText, "No bounded diff preview recorded for the selected file.");
+        _builderSelectedPatchDiffStateSummary = $"File={selected.RelativePath}. State={selected.ApprovalState}. {FirstNonEmpty(selected.RejectionReason, selected.DiffSummary)}";
+    }
+
+    private static string BuildBuilderConversationTaskSummary(BuilderConversationIntake? intake, BuilderModelDecision? modelDecision)
+    {
+        if (intake is null)
+        {
+            return "No builder conversation preview recorded.";
+        }
+
+        var modelText = modelDecision is null
+            ? "No model decision recorded."
+            : $"Model={modelDecision.SelectedModelTier} ({modelDecision.SelectedModelId}). Capability={modelDecision.CapabilityState}.";
+        return $"Task={intake.NormalizedTaskClass}. Stack={intake.ImpliedStackLabel}. Match={intake.RetrievalConfidenceState}. Split-first={(intake.SplitFirstRequired ? "required" : "not required")}. Stronger tier={intake.StrongerTierDisposition}. {modelText}";
+    }
+
+    private static string BuildBuilderConversationRouteSummary(
+        BuilderConversationIntake? intake,
+        BuilderConversationHandoff? handoff)
+    {
+        if (handoff is not null)
+        {
+            return handoff.Summary;
+        }
+
+        if (intake is not null)
+        {
+            return intake.Summary;
+        }
+
+        return "No builder conversation route handoff recorded.";
+    }
+
+    private static string BuildBuilderConversationReviewStateSummary(
+        BuilderConversationExecutionSession? session,
+        BuilderPatchReview? patchReview,
+        BuilderPatchReviewOutcome? patchReviewOutcome)
+    {
+        if (patchReviewOutcome is not null &&
+            (!string.Equals(patchReviewOutcome.ReviewDecisionState, "not_reviewed", StringComparison.Ordinal) ||
+             !string.Equals(patchReviewOutcome.SessionState, "not_started", StringComparison.Ordinal)))
+        {
+            return patchReviewOutcome.Summary;
+        }
+
+        if (session is not null)
+        {
+            return $"Review state={session.ReviewState}. {FirstNonEmpty(patchReview?.Summary, session.Summary)}";
+        }
+
+        return "No builder patch review outcome recorded.";
+    }
+
+    private static string BuildBuilderCapabilityRoutingSummary(
+        BuilderRequestIntake? intake,
+        BuilderExecutionPrep? prep,
+        BuilderCapabilityBlockDecision? capabilityDecision)
+    {
+        if (prep is not null && !string.IsNullOrWhiteSpace(prep.CapabilitySummary))
+        {
+            return $"Implied stack={FirstNonEmpty(prep.EffectiveStackLabel, prep.EffectiveStackId)}. Eligibility={prep.LanguageEligibilityState}. Routing={prep.CapabilityRoutingState}. {prep.CapabilitySummary}";
+        }
+
+        if (intake is not null && !string.IsNullOrWhiteSpace(intake.CapabilitySummary))
+        {
+            return $"Implied stack={FirstNonEmpty(intake.EffectiveStackLabel, intake.EffectiveStackId)}. Eligibility={intake.LanguageEligibilityState}. Routing={intake.CapabilityRoutingState}. {intake.CapabilitySummary}";
+        }
+
+        if (capabilityDecision is not null)
+        {
+            return $"Implied stack={FirstNonEmpty(capabilityDecision.EffectiveStackLabel, capabilityDecision.EffectiveStackId)}. Eligibility={capabilityDecision.EligibilityState}. Routing={capabilityDecision.RoutingDecisionState}. {capabilityDecision.Summary}";
+        }
+
+        return "No capability-aware builder intake recorded.";
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
 
     private static string BuildBuilderProofLatestTargetSummary(BuilderProofRun run)
     {
@@ -7465,15 +8580,281 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    private async Task RefreshBuilderToolchainCapabilityAsync()
+    {
+        using var busy = EnterBusyScope("RefreshBuilderToolchainCapability");
+        await Task.Run(() => _builderExecutionService.RefreshBuilderCapabilityArtifacts(_validationRunnerService.RepoRoot)).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task RefreshBuilderRepoKnowledgeAsync()
+    {
+        using var busy = EnterBusyScope("RefreshBuilderRepoKnowledge");
+        await Task.Run(() => _builderExecutionService.RefreshBuilderRepoKnowledgeArtifacts(_validationRunnerService.RepoRoot)).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task PreviewBuilderConversationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_builderConversationRequestText))
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("PreviewBuilderConversation");
+        await Task.Run(() => _builderExecutionService.PreviewBuilderConversationIntake(_validationRunnerService.RepoRoot, _builderConversationRequestText)).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task AcceptBuilderConversationAsync()
+    {
+        if (_latestBuilderConversationIntake is null)
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("AcceptBuilderConversation");
+        await Task.Run(() => _builderExecutionService.CreateBuilderConversationHandoff(_validationRunnerService.RepoRoot, "accept_suggested_route")).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task OverrideBuilderConversationAsync()
+    {
+        if (_latestBuilderConversationIntake is null || string.IsNullOrWhiteSpace(_builderConversationSelectedOverrideRoute))
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("OverrideBuilderConversation");
+        await Task.Run(() => _builderExecutionService.CreateBuilderConversationHandoff(
+            _validationRunnerService.RepoRoot,
+            "override_route",
+            _builderConversationSelectedOverrideRoute,
+            "Operator approved a bounded builder conversation override.")).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task CancelBuilderConversationAsync()
+    {
+        if (_latestBuilderConversationIntake is null)
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("CancelBuilderConversation");
+        await Task.Run(() => _builderExecutionService.CreateBuilderConversationHandoff(_validationRunnerService.RepoRoot, "cancel")).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task ExecuteBuilderConversationSessionAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(GetBuilderConversationExecutionDisabledReason()))
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("ExecuteBuilderConversationSession");
+        await Task.Run(() => _builderExecutionService.RunBuilderConversationExecutionSessionAsync(
+            _validationRunnerService.RepoRoot,
+            provider: string.IsNullOrWhiteSpace(SelectedProviderMode) ? "ollama" : SelectedProviderMode)).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task AcceptBuilderConversationPatchReviewAsync()
+    {
+        if (!CanReviewBuilderConversationPatch())
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("AcceptBuilderConversationPatchReview");
+        await Task.Run(() =>
+        {
+            _builderExecutionService.ApproveAllBuilderPatchFiles(_validationRunnerService.RepoRoot);
+            _builderExecutionService.FinalizeBuilderApprovedPatch(_validationRunnerService.RepoRoot);
+        }).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task RejectBuilderConversationPatchReviewAsync()
+    {
+        if (!CanReviewBuilderConversationPatch())
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("RejectBuilderConversationPatchReview");
+        await Task.Run(() => _builderExecutionService.RecordBuilderPatchReviewOutcome(
+            _validationRunnerService.RepoRoot,
+            "rejected",
+            "Operator rejected the candidate changes during patch review.")).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task RequestBuilderConversationRevisionAsync()
+    {
+        if (!CanReviewBuilderConversationPatch())
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("RequestBuilderConversationRevision");
+        await Task.Run(() => _builderExecutionService.RecordBuilderPatchReviewOutcome(
+            _validationRunnerService.RepoRoot,
+            "revise_requested",
+            "Operator requested revision before completion.")).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task RequestBuilderConversationRerouteAsync()
+    {
+        if (!CanReviewBuilderConversationPatch())
+        {
+            return;
+        }
+
+        var rerouteRoute = !string.IsNullOrWhiteSpace(_builderConversationSelectedOverrideRoute)
+            ? _builderConversationSelectedOverrideRoute
+            : string.Equals(_latestBuilderConversationExecutionSession?.SelectedRoute, "direct_low_floor_route", StringComparison.Ordinal)
+                ? "split_first_low_floor_route"
+                : "direct_low_floor_route";
+
+        using var busy = EnterBusyScope("RequestBuilderConversationReroute");
+        await Task.Run(() => _builderExecutionService.RecordBuilderPatchReviewOutcome(
+            _validationRunnerService.RepoRoot,
+            "reroute_requested",
+            "Operator requested a bounded route override during patch review.",
+            rerouteRoute)).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task ApproveSelectedBuilderPatchFileAsync()
+    {
+        if (!CanReviewSelectedBuilderPatchFile())
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("ApproveSelectedBuilderPatchFile");
+        await Task.Run(() => _builderExecutionService.RecordBuilderPatchFileReviewDecision(
+            _validationRunnerService.RepoRoot,
+            _selectedBuilderPatchDiffFilePath,
+            "approved",
+            "operator_file_approve")).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task RejectSelectedBuilderPatchFileAsync()
+    {
+        if (!CanReviewSelectedBuilderPatchFile())
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("RejectSelectedBuilderPatchFile");
+        await Task.Run(() => _builderExecutionService.RecordBuilderPatchFileReviewDecision(
+            _validationRunnerService.RepoRoot,
+            _selectedBuilderPatchDiffFilePath,
+            "rejected",
+            "operator_file_reject",
+            "Operator rejected the selected file during patch review.")).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task MarkSelectedBuilderPatchFileNeedsRevisionAsync()
+    {
+        if (!CanReviewSelectedBuilderPatchFile())
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("MarkSelectedBuilderPatchFileNeedsRevision");
+        await Task.Run(() => _builderExecutionService.RecordBuilderPatchFileReviewDecision(
+            _validationRunnerService.RepoRoot,
+            _selectedBuilderPatchDiffFilePath,
+            "needs_revision",
+            "operator_file_revision",
+            "Operator requested revision for the selected file before apply.")).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task ApproveAllBuilderPatchFilesAsync()
+    {
+        if (!HasBuilderPatchDiffReviewPath)
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("ApproveAllBuilderPatchFiles");
+        await Task.Run(() => _builderExecutionService.ApproveAllBuilderPatchFiles(_validationRunnerService.RepoRoot)).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task FinalizeBuilderConversationPatchAsync()
+    {
+        if (!HasBuilderPatchDiffReviewPath)
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("FinalizeBuilderConversationPatch");
+        await Task.Run(() => _builderExecutionService.FinalizeBuilderApprovedPatch(_validationRunnerService.RepoRoot)).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task PrepareBuilderCommitAsync()
+    {
+        if (!HasBuilderPatchSnapshotPath)
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("PrepareBuilderCommit");
+        await Task.Run(() =>
+        {
+            _builderExecutionService.PrepareBuilderCommitProposal(_validationRunnerService.RepoRoot);
+            _builderExecutionService.PrepareBuilderOutputHandoff(_validationRunnerService.RepoRoot);
+        }).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
+    private async Task ExportBuilderPatchBundleAsync()
+    {
+        if (!HasBuilderPatchSnapshotPath)
+        {
+            return;
+        }
+
+        using var busy = EnterBusyScope("ExportBuilderPatchBundle");
+        await Task.Run(() =>
+        {
+            _builderExecutionService.ExportBuilderApprovedPatchBundle(_validationRunnerService.RepoRoot);
+            _builderExecutionService.PrepareBuilderOutputHandoff(_validationRunnerService.RepoRoot);
+        }).ConfigureAwait(true);
+        LoadBuilderProofArtifacts();
+    }
+
     private Task LaunchPreparedBuilderRouteAsync()
-        => LaunchPreparedBuilderRouteCoreAsync(
-            routeOverride: null,
-            overrideReason: null,
+    {
+        var handoff = GetActiveBuilderConversationHandoff();
+        var useConversationOverride = handoff is not null &&
+                                      string.Equals(handoff.LaunchReadinessState, "ready_for_launch_with_override", StringComparison.Ordinal) &&
+                                      !string.IsNullOrWhiteSpace(handoff.SelectedRoute);
+        var routeOverride = useConversationOverride ? handoff!.SelectedRoute : null;
+        var overrideReason = useConversationOverride ? handoff!.Summary : null;
+        var routeLabel = useConversationOverride ? routeOverride! : BuilderPrepRouteState;
+        var introText = useConversationOverride
+            ? $"Launching builder conversation override route {routeLabel} for the latest builder intake."
+            : $"Launching {(string.IsNullOrWhiteSpace(BuilderPrepRouteBadge) ? "prepared route" : BuilderPrepRouteBadge.ToLowerInvariant())} for the latest builder intake.";
+        return LaunchPreparedBuilderRouteCoreAsync(
+            routeOverride: routeOverride,
+            overrideReason: overrideReason,
             blocker: GetBuilderPreparedLaunchDisabledReason(),
-            operationName: "Launching prepared route",
-            narrationTitle: "Prepared builder route started",
-            narrationRoute: BuilderPrepRouteState,
-            introText: $"Launching {(string.IsNullOrWhiteSpace(BuilderPrepRouteBadge) ? "prepared route" : BuilderPrepRouteBadge.ToLowerInvariant())} for the latest builder intake.");
+            operationName: useConversationOverride ? "Launching conversation-approved route" : "Launching prepared route",
+            narrationTitle: useConversationOverride ? "Builder conversation route started" : "Prepared builder route started",
+            narrationRoute: routeLabel,
+            introText: introText);
+    }
 
     private Task LaunchBuilderOverrideRouteAsync()
     {
@@ -7718,6 +9099,84 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private Task OpenBuilderLaunchDefaultDecisionAsync()
         => OpenPathIfExistsAsync(_builderLaunchDefaultDecisionPath);
 
+    private Task OpenBuilderRouteContinuityAsync()
+        => OpenPathIfExistsAsync(_builderRouteContinuityPath);
+
+    private Task OpenBuilderRouteCurrentStateIndexAsync()
+        => OpenPathIfExistsAsync(_builderRouteCurrentStateIndexPath);
+
+    private Task OpenBuilderModelCapabilityMatrixAsync()
+        => OpenPathIfExistsAsync(_builderModelCapabilityMatrixPath);
+
+    private Task OpenBuilderModelRoutingRulesAsync()
+        => OpenPathIfExistsAsync(_builderModelRoutingRulesPath);
+
+    private Task OpenBuilderCurrentModelDecisionAsync()
+        => OpenPathIfExistsAsync(_builderCurrentModelDecisionPath);
+
+    private Task OpenBuilderModelEscalationDecisionArtifactAsync()
+        => OpenPathIfExistsAsync(_builderModelEscalationDecisionArtifactPath);
+
+    private Task OpenBuilderRouteExplanationAsync()
+        => OpenPathIfExistsAsync(_builderRouteExplanationPath);
+
+    private Task OpenBuilderModelDecisionExplanationAsync()
+        => OpenPathIfExistsAsync(_builderModelDecisionExplanationPath);
+
+    private Task OpenBuilderFailureAnalysisAsync()
+        => OpenPathIfExistsAsync(_builderFailureAnalysisPath);
+
+    private Task OpenBuilderToolchainCapabilityRegistryAsync()
+        => OpenPathIfExistsAsync(_builderToolchainCapabilityRegistryPath);
+
+    private Task OpenBuilderLanguageEligibilityAsync()
+        => OpenPathIfExistsAsync(_builderLanguageEligibilityPath);
+
+    private Task OpenBuilderCapabilityBlockDecisionAsync()
+        => OpenPathIfExistsAsync(_builderCapabilityBlockDecisionPath);
+
+    private Task OpenBuilderRepoKnowledgeIndexAsync()
+        => OpenPathIfExistsAsync(_builderRepoKnowledgeIndexPath);
+
+    private Task OpenBuilderRepoKnowledgeSummaryAsync()
+        => OpenPathIfExistsAsync(_builderRepoKnowledgeSummaryPath);
+
+    private Task OpenBuilderRepoRetrievalContextAsync()
+        => OpenPathIfExistsAsync(_builderConversationRetrievalContextPath);
+
+    private Task OpenBuilderConversationIntakeAsync()
+        => OpenPathIfExistsAsync(_builderConversationIntakePath);
+
+    private Task OpenBuilderConversationHandoffAsync()
+        => OpenPathIfExistsAsync(_builderConversationHandoffPath);
+
+    private Task OpenBuilderConversationExecutionSessionAsync()
+        => OpenPathIfExistsAsync(_builderConversationExecutionSessionPath);
+
+    private Task OpenBuilderPatchReviewAsync()
+        => OpenPathIfExistsAsync(_builderConversationPatchReviewPath);
+
+    private Task OpenBuilderPatchReviewOutcomeAsync()
+        => OpenPathIfExistsAsync(_builderConversationPatchReviewOutcomePath);
+
+    private Task OpenBuilderPatchDiffReviewAsync()
+        => OpenPathIfExistsAsync(_builderPatchDiffReviewPath);
+
+    private Task OpenBuilderPatchSnapshotAsync()
+        => OpenPathIfExistsAsync(_builderPatchSnapshotPath);
+
+    private Task OpenBuilderOutputHandoffAsync()
+        => OpenPathIfExistsAsync(_builderOutputHandoffPath);
+
+    private Task OpenBuilderManualApplyGuidanceAsync()
+        => OpenPathIfExistsAsync(_builderManualApplyGuidancePath);
+
+    private Task OpenBuilderGitHandoffReadinessAsync()
+        => OpenPathIfExistsAsync(_builderGitHandoffReadinessPath);
+
+    private Task OpenBuilderGitCommitHandoffAsync()
+        => OpenPathIfExistsAsync(_builderGitCommitHandoffPath);
+
     private Task OpenBuilderRouteOverrideEvidenceAsync()
         => OpenPathIfExistsAsync(_builderRouteOverridePath);
 
@@ -7912,6 +9371,142 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
 
         return _workspaceShell.CopyTextAsync(_builderLaunchDefaultDecisionSummary);
+    }
+
+    private Task CopyBuilderModelRoutingRulesSummaryAsync()
+    {
+        if (!HasBuilderModelRoutingRulesSummary)
+            return Task.CompletedTask;
+
+        if (File.Exists(_builderModelRoutingPolicySummaryPath))
+            return _workspaceShell.CopyTextAsync(File.ReadAllText(_builderModelRoutingPolicySummaryPath));
+
+        return _workspaceShell.CopyTextAsync(_builderModelRoutingRulesSummary);
+    }
+
+    private Task CopyBuilderCurrentModelDecisionSummaryAsync()
+    {
+        if (!HasBuilderCurrentModelDecisionSummary)
+            return Task.CompletedTask;
+
+        return _workspaceShell.CopyTextAsync(_builderCurrentModelDecisionSummary);
+    }
+
+    private Task CopyBuilderDiagnosticSummaryAsync()
+    {
+        if (!HasBuilderOperatorDiagnosticSummary)
+            return Task.CompletedTask;
+
+        if (File.Exists(_builderOperatorDiagnosticSummaryPath))
+            return _workspaceShell.CopyTextAsync(File.ReadAllText(_builderOperatorDiagnosticSummaryPath));
+
+        return _workspaceShell.CopyTextAsync(_builderOperatorDiagnosticSummary);
+    }
+
+    private Task CopyBuilderToolchainReadinessSummaryAsync()
+    {
+        if (!HasBuilderToolchainReadinessSummary)
+            return Task.CompletedTask;
+
+        return _workspaceShell.CopyTextAsync(_builderToolchainReadinessSummary);
+    }
+
+    private Task CopyBuilderLanguageEligibilitySummaryAsync()
+    {
+        if (!HasBuilderLanguageEligibilitySummary)
+            return Task.CompletedTask;
+
+        if (File.Exists(BuilderExecutionService.BuilderLanguageEligibilitySummaryPathForRepo(_validationRunnerService.RepoRoot)))
+            return _workspaceShell.CopyTextAsync(File.ReadAllText(BuilderExecutionService.BuilderLanguageEligibilitySummaryPathForRepo(_validationRunnerService.RepoRoot)));
+
+        return _workspaceShell.CopyTextAsync(_builderLanguageEligibilitySummary);
+    }
+
+    private Task CopyBuilderRepoKnowledgeSummaryAsync()
+    {
+        if (!HasBuilderRepoKnowledgeSummary)
+            return Task.CompletedTask;
+
+        if (File.Exists(_builderRepoKnowledgeSummaryPath))
+            return _workspaceShell.CopyTextAsync(File.ReadAllText(_builderRepoKnowledgeSummaryPath));
+
+        return _workspaceShell.CopyTextAsync(_builderRepoKnowledgeSummary);
+    }
+
+    private Task CopyBuilderConversationRouteSummaryAsync()
+    {
+        if (!HasBuilderConversationRouteSummary)
+            return Task.CompletedTask;
+
+        return _workspaceShell.CopyTextAsync(_builderConversationRouteSummary);
+    }
+
+    private Task CopyBuilderConversationSessionSummaryAsync()
+    {
+        if (!HasBuilderConversationExecutionSessionSummary)
+            return Task.CompletedTask;
+
+        var summary = string.Join(
+            System.Environment.NewLine,
+            new[]
+            {
+                _builderConversationExecutionSessionSummary,
+                HasBuilderConversationPatchReviewSummary ? _builderConversationPatchReviewSummary : string.Empty,
+                HasBuilderConversationReviewStateSummary ? _builderConversationReviewStateSummary : string.Empty
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        return _workspaceShell.CopyTextAsync(summary);
+    }
+
+    private Task CopyBuilderPatchDiffReviewSummaryAsync()
+    {
+        if (!HasBuilderPatchDiffReviewSummary)
+            return Task.CompletedTask;
+
+        var summary = string.Join(
+            System.Environment.NewLine,
+            new[]
+            {
+                _builderPatchDiffReviewSummary,
+                HasBuilderPatchApplySummary ? _builderPatchApplySummary : string.Empty,
+                HasBuilderSelectedPatchDiffStateSummary ? _builderSelectedPatchDiffStateSummary : string.Empty
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        return _workspaceShell.CopyTextAsync(summary);
+    }
+
+    private Task CopyBuilderCommitMessageAsync()
+    {
+        if (!HasBuilderCommitProposalMessage)
+            return Task.CompletedTask;
+
+        return _workspaceShell.CopyTextAsync(_builderCommitProposalMessage);
+    }
+
+    private Task CopyBuilderManualApplyStepsAsync()
+    {
+        if (_latestBuilderManualApplyGuidance is null || _latestBuilderManualApplyGuidance.ApplySteps.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _workspaceShell.CopyTextAsync(string.Join(System.Environment.NewLine, _latestBuilderManualApplyGuidance.ApplySteps));
+    }
+
+    private Task CopyBuilderOutputHandoffSummaryAsync()
+    {
+        if (!HasBuilderOutputHandoffSummary)
+        {
+            return Task.CompletedTask;
+        }
+
+        var summary = string.Join(
+            System.Environment.NewLine,
+            new[]
+            {
+                _builderOutputHandoffSummary,
+                HasBuilderManualApplySummary ? _builderManualApplySummary : string.Empty,
+                HasBuilderGitHandoffReadinessSummary ? _builderGitHandoffReadinessSummary : string.Empty
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        return _workspaceShell.CopyTextAsync(summary);
     }
 
     private Task CopyBuilderRouteOverrideSummaryAsync()
@@ -11719,6 +13314,43 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         OpenBuilderConfirmedClassesCommand.RaiseCanExecuteChanged();
         OpenBuilderDefaultRouteDecisionCommand.RaiseCanExecuteChanged();
         OpenBuilderLaunchDefaultDecisionCommand.RaiseCanExecuteChanged();
+        OpenBuilderRouteContinuityCommand.RaiseCanExecuteChanged();
+        OpenBuilderRouteCurrentStateIndexCommand.RaiseCanExecuteChanged();
+        RefreshBuilderToolchainCapabilityCommand.RaiseCanExecuteChanged();
+        OpenBuilderToolchainCapabilityRegistryCommand.RaiseCanExecuteChanged();
+        OpenBuilderLanguageEligibilityCommand.RaiseCanExecuteChanged();
+        OpenBuilderCapabilityBlockDecisionCommand.RaiseCanExecuteChanged();
+        RefreshBuilderRepoKnowledgeCommand.RaiseCanExecuteChanged();
+        OpenBuilderRepoKnowledgeIndexCommand.RaiseCanExecuteChanged();
+        OpenBuilderRepoKnowledgeSummaryCommand.RaiseCanExecuteChanged();
+        PreviewBuilderConversationCommand.RaiseCanExecuteChanged();
+        AcceptBuilderConversationCommand.RaiseCanExecuteChanged();
+        OverrideBuilderConversationCommand.RaiseCanExecuteChanged();
+        CancelBuilderConversationCommand.RaiseCanExecuteChanged();
+        OpenBuilderRepoRetrievalContextCommand.RaiseCanExecuteChanged();
+        OpenBuilderConversationIntakeCommand.RaiseCanExecuteChanged();
+        OpenBuilderConversationHandoffCommand.RaiseCanExecuteChanged();
+        ExecuteBuilderConversationSessionCommand.RaiseCanExecuteChanged();
+        AcceptBuilderConversationPatchReviewCommand.RaiseCanExecuteChanged();
+        RejectBuilderConversationPatchReviewCommand.RaiseCanExecuteChanged();
+        RequestBuilderConversationRevisionCommand.RaiseCanExecuteChanged();
+        RequestBuilderConversationRerouteCommand.RaiseCanExecuteChanged();
+        OpenBuilderConversationExecutionSessionCommand.RaiseCanExecuteChanged();
+        OpenBuilderPatchReviewCommand.RaiseCanExecuteChanged();
+        OpenBuilderPatchReviewOutcomeCommand.RaiseCanExecuteChanged();
+        ApproveSelectedBuilderPatchFileCommand.RaiseCanExecuteChanged();
+        RejectSelectedBuilderPatchFileCommand.RaiseCanExecuteChanged();
+        MarkSelectedBuilderPatchFileNeedsRevisionCommand.RaiseCanExecuteChanged();
+        ApproveAllBuilderPatchFilesCommand.RaiseCanExecuteChanged();
+        FinalizeBuilderConversationPatchCommand.RaiseCanExecuteChanged();
+        OpenBuilderPatchDiffReviewCommand.RaiseCanExecuteChanged();
+        PrepareBuilderCommitCommand.RaiseCanExecuteChanged();
+        ExportBuilderPatchBundleCommand.RaiseCanExecuteChanged();
+        OpenBuilderPatchSnapshotCommand.RaiseCanExecuteChanged();
+        OpenBuilderOutputHandoffCommand.RaiseCanExecuteChanged();
+        OpenBuilderManualApplyGuidanceCommand.RaiseCanExecuteChanged();
+        OpenBuilderGitHandoffReadinessCommand.RaiseCanExecuteChanged();
+        OpenBuilderGitCommitHandoffCommand.RaiseCanExecuteChanged();
         OpenBuilderRouteOverrideEvidenceCommand.RaiseCanExecuteChanged();
         OpenBuilderRouteReviewCommand.RaiseCanExecuteChanged();
         OpenBuilderReadinessContradictionsCommand.RaiseCanExecuteChanged();
@@ -11746,6 +13378,15 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         CopyBuilderConfirmedClassesSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderDefaultRouteDecisionSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderLaunchDefaultSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderToolchainReadinessSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderLanguageEligibilitySummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderRepoKnowledgeSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderConversationRouteSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderConversationSessionSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderPatchDiffReviewSummaryCommand.RaiseCanExecuteChanged();
+        CopyBuilderCommitMessageCommand.RaiseCanExecuteChanged();
+        CopyBuilderManualApplyStepsCommand.RaiseCanExecuteChanged();
+        CopyBuilderOutputHandoffSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderRouteOverrideSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderSplitExecutionSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderSplitComparativeClosureSummaryCommand.RaiseCanExecuteChanged();
@@ -12908,6 +14549,27 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         public string OutcomeLabel => string.IsNullOrWhiteSpace(RepairOutcome)
             ? ImprovementState
             : $"{ImprovementState} ({RepairOutcome})";
+    }
+
+    public sealed record BuilderPatchDiffFileRow(
+        string RelativePath,
+        string FileCategory,
+        string ChangeKind,
+        string ApprovalState,
+        string DiffSummary,
+        string PatchPreviewText,
+        string RejectionReason)
+    {
+        public string DisplayLabel => $"{RelativePath} [{ApprovalState}]";
+    }
+
+    public sealed record BuilderPatchSnapshotFileRow(
+        string RelativePath,
+        string ChangeType,
+        string Checksum,
+        string ApprovalState)
+    {
+        public string DisplayLabel => $"{RelativePath} [{ChangeType}] {ApprovalState}";
     }
 
     private sealed record GeneratedOutputContext(

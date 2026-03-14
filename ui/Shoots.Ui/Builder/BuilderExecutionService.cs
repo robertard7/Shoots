@@ -30,19 +30,25 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
     private readonly ToolRegistry _toolRegistry;
     private readonly IBuilderProofCommandRunner _builderProofCommandRunner;
     private readonly IBuilderStrongerTierResolver _builderStrongerTierResolver;
+    private readonly IBuilderToolchainCapabilityScanner _builderToolchainCapabilityScanner;
+    private readonly IBuilderGitReadinessProbe _builderGitReadinessProbe;
 
     public BuilderExecutionService(
         IRuntimeBridge runtimeBridge,
         ArtifactManager artifactManager,
         ToolRegistry toolRegistry,
         IBuilderProofCommandRunner? builderProofCommandRunner = null,
-        IBuilderStrongerTierResolver? builderStrongerTierResolver = null)
+        IBuilderStrongerTierResolver? builderStrongerTierResolver = null,
+        IBuilderToolchainCapabilityScanner? builderToolchainCapabilityScanner = null,
+        IBuilderGitReadinessProbe? builderGitReadinessProbe = null)
     {
         _runtimeBridge = runtimeBridge;
         _artifactManager = artifactManager;
         _toolRegistry = toolRegistry;
         _builderProofCommandRunner = builderProofCommandRunner ?? new ValidationCommandBuilderProofRunner();
         _builderStrongerTierResolver = builderStrongerTierResolver ?? new NullBuilderStrongerTierResolver();
+        _builderToolchainCapabilityScanner = builderToolchainCapabilityScanner ?? new DefaultBuilderToolchainCapabilityScanner();
+        _builderGitReadinessProbe = builderGitReadinessProbe ?? new DefaultBuilderGitReadinessProbe();
     }
 
     public BuilderExecutionResult Execute(PlanModel plan, ProjectModel project, string plannerSource = "runtime", string runtimeBridge = "RuntimeBridgeLocal", string provider = "local", string hostTransport = "none", string? hostResponseOutcome = null, string? hostResponseWorkOrderId = null, string? hostResponsePlanId = null, string? hostResponsePlanHash = null, string? hostResponseMessage = null, string? hostResponseErrorCode = null, Action<NarrationEvent>? narrate = null)
@@ -718,10 +724,686 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
     public static string BuilderDefaultRouteRecoveryPath(string runFolder)
         => Path.Combine(runFolder, "builder_default_route_recovery.json");
 
+    public static string BuilderRouteStateContinuityPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_route_state_continuity.json");
+
+    public static string BuilderRouteCurrentStateIndexPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_route_current_state_index.json");
+
+    public static string BuilderModelCapabilityMatrixPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_model_capability_matrix.json");
+
+    public static string BuilderModelRoutingPolicyPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_model_routing_policy.json");
+
+    public static string BuilderModelRoutingPolicySummaryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_model_routing_policy_summary.md");
+
+    public static string BuilderModelDecisionPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_model_decision.json");
+
+    public static string BuilderModelEscalationPolicyDecisionPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_model_escalation_policy_decision.json");
+
+    public static string BuilderModelRoutingPolicyHistoryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_model_routing_policy_history.json");
+
+    public static string BuilderModelRoutingStabilityPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_model_routing_stability.json");
+
+    public static string BuilderRouteExplanationPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_route_explanation.json");
+
+    public static string BuilderModelDecisionExplanationPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_model_decision_explanation.json");
+
+    public static string BuilderFailureAnalysisPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_failure_analysis.json");
+
+    public static string BuilderOperatorDiagnosticSummaryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_operator_diagnostic_summary.md");
+
+    public static string BuilderToolchainCapabilityRegistryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_toolchain_capability_registry.json");
+
+    public static string BuilderToolchainCapabilityHistoryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_toolchain_capability_history.json");
+
+    public static string BuilderLanguageEligibilityPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_language_eligibility.json");
+
+    public static string BuilderLanguageEligibilitySummaryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_language_eligibility_summary.md");
+
+    public static string BuilderCapabilityBlockDecisionPath(string runFolder)
+        => Path.Combine(runFolder, "builder_capability_block_decision.json");
+
+    public static string BuilderRepoKnowledgeIndexPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_repo_knowledge_index.json");
+
+    public static string BuilderRepoKnowledgeSummaryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_repo_knowledge_summary.md");
+
+    public static string BuilderRepoKnowledgeHistoryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_repo_knowledge_history.json");
+
+    public static string BuilderRepoKnowledgeDriftPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_repo_knowledge_drift.json");
+
+    public static string BuilderRepoRetrievalContextPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_repo_retrieval_context.json");
+
+    public static string BuilderConversationIntakePathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_conversation_intake.json");
+
+    public static string BuilderConversationHandoffPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_conversation_handoff.json");
+
+    public static string BuilderConversationExecutionSessionPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_conversation_execution_session.json");
+
+    public static string BuilderPatchReviewPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_patch_review.json");
+
+    public static string BuilderPatchReviewOutcomePathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_patch_review_outcome.json");
+
+    public static string BuilderPatchDiffReviewPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_patch_diff_review.json");
+
+    public static string BuilderFileReviewDecisionPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_file_review_decision.json");
+
+    public static string BuilderPatchApplyDecisionPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_patch_apply_decision.json");
+
+    public static string BuilderPatchSnapshotPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_patch_snapshot.json");
+
+    public static string BuilderCommitProposalPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_commit_proposal.json");
+
+    public static string BuilderPatchBundlePathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_patch_bundle.patch");
+
+    public static string BuilderPatchExportPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_patch_export.json");
+
+    public static string BuilderPatchSnapshotHistoryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_patch_snapshot_history.json");
+
+    public static string BuilderOutputHandoffPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_output_handoff.json");
+
+    public static string BuilderOutputHandoffSummaryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_output_handoff_summary.md");
+
+    public static string BuilderGitHandoffReadinessPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_git_handoff_readiness.json");
+
+    public static string BuilderManualApplyGuidancePathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_manual_apply_guidance.json");
+
+    public static string BuilderGitCommitHandoffPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_git_commit_handoff.json");
+
+    public static string BuilderOutputHandoffHistoryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_output_handoff_history.json");
+
+    public static string BuilderConversationExecutionHistoryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_conversation_execution_history.json");
+
+    public static string BuilderConversationReviewSummaryPathForRepo(string repoRoot)
+        => Path.Combine(BuilderProofRootForRepo(repoRoot), "builder_conversation_review_summary.md");
+
     public static BuilderProofHistory LoadBuilderProofHistory(string repoRoot)
         => TryLoadBuilderProofArtifact(
             BuilderProofHistoryPathForRepo(repoRoot),
             new BuilderProofHistory(20, Array.Empty<BuilderProofHistoryEntry>()));
+
+    public static BuilderRouteStateContinuity LoadBuilderRouteStateContinuity(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderRouteStateContinuityPathForRepo(repoRoot),
+            new BuilderRouteStateContinuity(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                false,
+                0,
+                0,
+                Array.Empty<BuilderRouteStateContinuityEntry>(),
+                "No builder route continuity recorded.",
+                BuilderRouteStateContinuityPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderRouteCurrentStateIndex LoadBuilderRouteCurrentStateIndex(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderRouteCurrentStateIndexPathForRepo(repoRoot),
+            new BuilderRouteCurrentStateIndex(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                false,
+                0,
+                0,
+                Array.Empty<BuilderRouteCurrentStateArtifactIndexEntry>(),
+                "No builder route current-state index recorded.",
+                BuilderRouteCurrentStateIndexPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderModelCapabilityMatrix LoadBuilderModelCapabilityMatrix(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderModelCapabilityMatrixPathForRepo(repoRoot),
+            new BuilderModelCapabilityMatrix(
+                string.Empty,
+                string.Empty,
+                "low_floor_model_tier",
+                "stronger_builder_tier",
+                Array.Empty<BuilderModelCapabilityMatrixEntry>(),
+                "No builder model capability matrix recorded.",
+                BuilderModelCapabilityMatrixPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderModelRoutingPolicy LoadBuilderModelRoutingPolicy(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderModelRoutingPolicyPathForRepo(repoRoot),
+            new BuilderModelRoutingPolicy(
+                string.Empty,
+                string.Empty,
+                "low_floor_model_tier",
+                string.Empty,
+                Array.Empty<BuilderModelRoutingPolicyEntry>(),
+                "No builder model routing policy recorded.",
+                BuilderModelRoutingPolicyPathForRepo(repoRoot),
+                BuilderModelRoutingPolicySummaryPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderModelDecision LoadBuilderModelDecision(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderModelDecisionPathForRepo(repoRoot),
+            new BuilderModelDecision(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "not_yet_proven",
+                "not_needed",
+                "not_required",
+                false,
+                string.Empty,
+                string.Empty,
+                Array.Empty<string>(),
+                "No builder model decision recorded.",
+                BuilderModelDecisionPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderModelEscalationPolicyDecision LoadBuilderModelEscalationPolicyDecision(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderModelEscalationPolicyDecisionPathForRepo(repoRoot),
+            new BuilderModelEscalationPolicyDecision(
+                string.Empty,
+                string.Empty,
+                "not_yet_proven",
+                "not_needed",
+                "not_viable",
+                "unknown",
+                "not_ready",
+                string.Empty,
+                Array.Empty<string>(),
+                "No builder model escalation policy decision recorded.",
+                BuilderModelEscalationPolicyDecisionPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderModelRoutingPolicyHistory LoadBuilderModelRoutingPolicyHistory(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderModelRoutingPolicyHistoryPathForRepo(repoRoot),
+            new BuilderModelRoutingPolicyHistory(
+                20,
+                Array.Empty<BuilderModelRoutingPolicyHistoryEntry>(),
+                "No builder model routing policy history recorded.",
+                BuilderModelRoutingPolicyHistoryPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderModelRoutingStability LoadBuilderModelRoutingStability(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderModelRoutingStabilityPathForRepo(repoRoot),
+            new BuilderModelRoutingStability(
+                string.Empty,
+                string.Empty,
+                Array.Empty<BuilderModelRoutingStabilityEntry>(),
+                "No builder model routing stability recorded.",
+                BuilderModelRoutingStabilityPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderRouteExplanation LoadBuilderRouteExplanation(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderRouteExplanationPathForRepo(repoRoot),
+            new BuilderRouteExplanation(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                Array.Empty<string>(),
+                "No builder route explanation recorded.",
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                "No builder route explanation recorded.",
+                BuilderRouteExplanationPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderModelDecisionExplanation LoadBuilderModelDecisionExplanation(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderModelDecisionExplanationPathForRepo(repoRoot),
+            new BuilderModelDecisionExplanation(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "No builder model capability entry recorded.",
+                "No builder routing rules entry recorded.",
+                "not_recorded",
+                "No split-first reasoning recorded.",
+                "not_recorded",
+                "not_recorded",
+                Array.Empty<string>(),
+                "No builder model decision explanation recorded.",
+                BuilderModelDecisionExplanationPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderFailureAnalysis LoadBuilderFailureAnalysis(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderFailureAnalysisPathForRepo(repoRoot),
+            new BuilderFailureAnalysis(
+                string.Empty,
+                "not_started",
+                "Not started",
+                "no_failure_recorded",
+                "No builder failure analysis recorded.",
+                Array.Empty<string>(),
+                "No remediation required.",
+                "No builder failure analysis recorded.",
+                BuilderFailureAnalysisPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderToolchainCapabilityRegistry LoadBuilderToolchainCapabilityRegistry(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderToolchainCapabilityRegistryPathForRepo(repoRoot),
+            new BuilderToolchainCapabilityRegistry(
+                string.Empty,
+                string.Empty,
+                Array.Empty<BuilderToolchainCapabilityRegistryEntry>(),
+                "not_refreshed",
+                "not_recorded",
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                "No toolchain capability registry recorded.",
+                BuilderToolchainCapabilityRegistryPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderToolchainCapabilityHistory LoadBuilderToolchainCapabilityHistory(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderToolchainCapabilityHistoryPathForRepo(repoRoot),
+            new BuilderToolchainCapabilityHistory(
+                12,
+                Array.Empty<BuilderToolchainCapabilityHistoryEntry>(),
+                "No toolchain capability refresh history recorded.",
+                BuilderToolchainCapabilityHistoryPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderLanguageEligibility LoadBuilderLanguageEligibility(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderLanguageEligibilityPathForRepo(repoRoot),
+            new BuilderLanguageEligibility(
+                string.Empty,
+                string.Empty,
+                Array.Empty<BuilderLanguageEligibilityEntry>(),
+                "No language eligibility registry recorded.",
+                BuilderLanguageEligibilityPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderRepoKnowledgeIndex LoadBuilderRepoKnowledgeIndex(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderRepoKnowledgeIndexPathForRepo(repoRoot),
+            new BuilderRepoKnowledgeIndex(
+                string.Empty,
+                string.Empty,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<BuilderRepoKnowledgeProjectEntry>(),
+                Array.Empty<BuilderRepoKnowledgeOwnershipSummary>(),
+                Array.Empty<string>(),
+                "not_refreshed",
+                "not_recorded",
+                Array.Empty<string>(),
+                "No repo knowledge index recorded.",
+                BuilderRepoKnowledgeIndexPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderRepoKnowledgeHistory LoadBuilderRepoKnowledgeHistory(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderRepoKnowledgeHistoryPathForRepo(repoRoot),
+            new BuilderRepoKnowledgeHistory(
+                12,
+                Array.Empty<BuilderRepoKnowledgeHistoryEntry>(),
+                "No repo knowledge refresh history recorded.",
+                BuilderRepoKnowledgeHistoryPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderRepoKnowledgeDrift? LoadBuilderRepoKnowledgeDrift(string repoRoot)
+        => TryLoadBuilderProofArtifact<BuilderRepoKnowledgeDrift?>(BuilderRepoKnowledgeDriftPathForRepo(repoRoot), null);
+
+    public static BuilderRepoRetrievalContext LoadBuilderRepoRetrievalContext(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderRepoRetrievalContextPathForRepo(repoRoot),
+            new BuilderRepoRetrievalContext(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "not_recorded",
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                string.Empty,
+                Array.Empty<string>(),
+                "No repo retrieval context recorded.",
+                BuilderRepoRetrievalContextPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderConversationIntake LoadBuilderConversationIntake(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderConversationIntakePathForRepo(repoRoot),
+            new BuilderConversationIntake(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "not_recorded",
+                "No repo retrieval match recorded.",
+                "not_recorded",
+                "No capability decision recorded.",
+                string.Empty,
+                string.Empty,
+                false,
+                string.Empty,
+                "not_reviewed",
+                "not_ready",
+                "No builder conversation intake recorded.",
+                Array.Empty<string>(),
+                "No builder conversation intake recorded.",
+                BuilderConversationIntakePathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderConversationHandoff LoadBuilderConversationHandoff(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderConversationHandoffPathForRepo(repoRoot),
+            new BuilderConversationHandoff(
+                string.Empty,
+                string.Empty,
+                "not_recorded",
+                "not_recorded",
+                string.Empty,
+                string.Empty,
+                "not_reviewed",
+                "not_ready",
+                "No builder conversation handoff recorded.",
+                Array.Empty<string>(),
+                "No builder conversation handoff recorded.",
+                BuilderConversationHandoffPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderConversationExecutionSession LoadBuilderConversationExecutionSession(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderConversationExecutionSessionPathForRepo(repoRoot),
+            new BuilderConversationExecutionSession(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "not_started",
+                string.Empty,
+                string.Empty,
+                "not_reviewed",
+                "No validation summary recorded.",
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                Array.Empty<BuilderPatchReviewChangedFile>(),
+                Array.Empty<BuilderConversationExecutionStage>(),
+                Array.Empty<string>(),
+                "No builder conversation execution session recorded.",
+                BuilderConversationExecutionSessionPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderPatchReview LoadBuilderPatchReview(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderPatchReviewPathForRepo(repoRoot),
+            new BuilderPatchReview(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "No validation summary recorded.",
+                "not_ready",
+                Array.Empty<BuilderPatchReviewChangedFile>(),
+                Array.Empty<string>(),
+                "No builder patch review recorded.",
+                BuilderPatchReviewPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderPatchReviewOutcome LoadBuilderPatchReviewOutcome(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderPatchReviewOutcomePathForRepo(repoRoot),
+            new BuilderPatchReviewOutcome(
+                string.Empty,
+                "not_reviewed",
+                "not_started",
+                "not_reviewed",
+                string.Empty,
+                string.Empty,
+                Array.Empty<string>(),
+                "No builder patch review outcome recorded.",
+                BuilderPatchReviewOutcomePathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderPatchDiffReview LoadBuilderPatchDiffReview(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderPatchDiffReviewPathForRepo(repoRoot),
+            new BuilderPatchDiffReview(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "all_files_pending",
+                "not_ready",
+                Array.Empty<BuilderPatchDiffReviewFileEntry>(),
+                Array.Empty<string>(),
+                "No builder patch diff review recorded.",
+                BuilderPatchDiffReviewPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderFileReviewDecision LoadBuilderFileReviewDecision(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderFileReviewDecisionPathForRepo(repoRoot),
+            new BuilderFileReviewDecision(
+                string.Empty,
+                string.Empty,
+                "all_files_pending",
+                Array.Empty<BuilderFileReviewDecisionEntry>(),
+                Array.Empty<string>(),
+                "No builder file review decision recorded.",
+                BuilderFileReviewDecisionPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderPatchApplyDecision LoadBuilderPatchApplyDecision(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderPatchApplyDecisionPathForRepo(repoRoot),
+            new BuilderPatchApplyDecision(
+                string.Empty,
+                "all_files_pending",
+                "not_ready",
+                Array.Empty<string>(),
+                "not_ready_to_apply",
+                Array.Empty<string>(),
+                "No builder patch apply decision recorded.",
+                BuilderPatchApplyDecisionPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderPatchSnapshot LoadBuilderPatchSnapshot(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderPatchSnapshotPathForRepo(repoRoot),
+            new BuilderPatchSnapshot(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "not_recorded",
+                Array.Empty<BuilderPatchSnapshotFileEntry>(),
+                Array.Empty<string>(),
+                "No builder patch snapshot recorded.",
+                BuilderPatchSnapshotPathForRepo(repoRoot),
+                DateTimeOffset.MinValue,
+                DateTimeOffset.MinValue));
+
+    public static BuilderCommitProposal LoadBuilderCommitProposal(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderCommitProposalPathForRepo(repoRoot),
+            new BuilderCommitProposal(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                Array.Empty<string>(),
+                string.Empty,
+                repoRoot,
+                Array.Empty<string>(),
+                "No builder commit proposal recorded.",
+                BuilderCommitProposalPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderPatchExport LoadBuilderPatchExport(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderPatchExportPathForRepo(repoRoot),
+            new BuilderPatchExport(
+                string.Empty,
+                string.Empty,
+                DateTimeOffset.MinValue,
+                0,
+                Array.Empty<string>(),
+                "No builder patch export recorded.",
+                BuilderPatchExportPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderPatchSnapshotHistory LoadBuilderPatchSnapshotHistory(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderPatchSnapshotHistoryPathForRepo(repoRoot),
+            new BuilderPatchSnapshotHistory(
+                12,
+                Array.Empty<BuilderPatchSnapshotHistoryEntry>(),
+                "No builder patch snapshot history recorded.",
+                BuilderPatchSnapshotHistoryPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderOutputHandoff LoadBuilderOutputHandoff(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderOutputHandoffPathForRepo(repoRoot),
+            new BuilderOutputHandoff(
+                string.Empty,
+                string.Empty,
+                Array.Empty<string>(),
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "not_ready",
+                "blocked_git_unknown_state",
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                "No builder output handoff recorded.",
+                BuilderOutputHandoffPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderGitHandoffReadiness LoadBuilderGitHandoffReadiness(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderGitHandoffReadinessPathForRepo(repoRoot),
+            new BuilderGitHandoffReadiness(
+                false,
+                string.Empty,
+                false,
+                false,
+                "unknown",
+                "blocked_git_unknown_state",
+                Array.Empty<string>(),
+                "No builder Git handoff readiness recorded.",
+                BuilderGitHandoffReadinessPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderManualApplyGuidance LoadBuilderManualApplyGuidance(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderManualApplyGuidancePathForRepo(repoRoot),
+            new BuilderManualApplyGuidance(
+                string.Empty,
+                string.Empty,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                "No builder manual apply guidance recorded.",
+                BuilderManualApplyGuidancePathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderGitCommitHandoff LoadBuilderGitCommitHandoff(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderGitCommitHandoffPathForRepo(repoRoot),
+            new BuilderGitCommitHandoff(
+                string.Empty,
+                string.Empty,
+                Array.Empty<string>(),
+                string.Empty,
+                "blocked_git_unknown_state",
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                "No builder Git commit handoff recorded.",
+                BuilderGitCommitHandoffPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderOutputHandoffHistory LoadBuilderOutputHandoffHistory(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderOutputHandoffHistoryPathForRepo(repoRoot),
+            new BuilderOutputHandoffHistory(
+                12,
+                Array.Empty<BuilderOutputHandoffHistoryEntry>(),
+                "No builder output handoff history recorded.",
+                BuilderOutputHandoffHistoryPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
+
+    public static BuilderConversationExecutionHistory LoadBuilderConversationExecutionHistory(string repoRoot)
+        => TryLoadBuilderProofArtifact(
+            BuilderConversationExecutionHistoryPathForRepo(repoRoot),
+            new BuilderConversationExecutionHistory(
+                12,
+                Array.Empty<BuilderConversationExecutionHistoryEntry>(),
+                "No builder conversation execution history recorded.",
+                BuilderConversationExecutionHistoryPathForRepo(repoRoot),
+                DateTimeOffset.MinValue));
 
     public static BuilderProofRun? LoadBuilderProofRun(string runFolder)
         => TryLoadBuilderProofArtifact<BuilderProofRun?>(BuilderProofRunArtifactPath(runFolder), null);
@@ -964,56 +1646,71 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
         => TryLoadBuilderProofArtifact<BuilderDefaultRouteDecision?>(BuilderDefaultRouteDecisionPath(runFolder), null);
 
     public static BuilderDefaultRouteDecision? LoadLatestBuilderDefaultRouteDecision(string repoRoot)
-        => LoadLatestBuilderProofRun(repoRoot) is { RunFolder: { } runFolder }
-            ? LoadBuilderDefaultRouteDecision(runFolder)
-            : null;
+        => LoadBuilderRouteArtifactFromCurrentStateIndex(
+            repoRoot,
+            "builder_default_route_decision",
+            LoadBuilderDefaultRouteDecision);
 
     public static BuilderReadinessContradictions? LoadBuilderReadinessContradictions(string runFolder)
         => TryLoadBuilderProofArtifact<BuilderReadinessContradictions?>(BuilderReadinessContradictionsPath(runFolder), null);
 
     public static BuilderReadinessContradictions? LoadLatestBuilderReadinessContradictions(string repoRoot)
-        => LoadLatestBuilderProofRun(repoRoot) is { RunFolder: { } runFolder }
-            ? LoadBuilderReadinessContradictions(runFolder)
-            : null;
+        => LoadBuilderRouteArtifactFromCurrentStateIndex(
+            repoRoot,
+            "builder_readiness_contradictions",
+            LoadBuilderReadinessContradictions);
 
     public static BuilderLaunchDefaultDecision? LoadBuilderLaunchDefaultDecision(string runFolder)
         => TryLoadBuilderProofArtifact<BuilderLaunchDefaultDecision?>(BuilderLaunchDefaultDecisionPath(runFolder), null);
 
     public static BuilderLaunchDefaultDecision? LoadLatestBuilderLaunchDefaultDecision(string repoRoot)
-        => LoadLatestBuilderProofRun(repoRoot) is { RunFolder: { } runFolder }
-            ? LoadBuilderLaunchDefaultDecision(runFolder)
-            : null;
+        => LoadBuilderRouteArtifactFromCurrentStateIndex(
+            repoRoot,
+            "builder_launch_default_decision",
+            LoadBuilderLaunchDefaultDecision);
 
     public static BuilderRouteOverrideEvidence? LoadBuilderRouteOverrideEvidence(string runFolder)
         => TryLoadBuilderProofArtifact<BuilderRouteOverrideEvidence?>(BuilderRouteOverrideEvidencePath(runFolder), null);
 
     public static BuilderRouteOverrideEvidence? LoadLatestBuilderRouteOverrideEvidence(string repoRoot)
-        => LoadLatestBuilderProofRun(repoRoot) is { RunFolder: { } runFolder }
-            ? LoadBuilderRouteOverrideEvidence(runFolder)
-            : null;
+        => LoadBuilderRouteArtifactFromCurrentStateIndex(
+            repoRoot,
+            "builder_route_override_evidence",
+            LoadBuilderRouteOverrideEvidence);
 
     public static BuilderRouteReviewCandidates? LoadBuilderPolicyReviewCandidates(string runFolder)
         => TryLoadBuilderProofArtifact<BuilderRouteReviewCandidates?>(BuilderPolicyReviewCandidatesPath(runFolder), null);
 
     public static BuilderRouteReviewCandidates? LoadLatestBuilderPolicyReviewCandidates(string repoRoot)
-        => LoadLatestBuilderProofRun(repoRoot) is { RunFolder: { } runFolder }
-            ? LoadBuilderPolicyReviewCandidates(runFolder)
-            : null;
+        => LoadBuilderRouteArtifactFromCurrentStateIndex(
+            repoRoot,
+            "builder_policy_review_candidates",
+            LoadBuilderPolicyReviewCandidates);
 
     public static BuilderRouteReconfirmation? LoadBuilderRouteReconfirmation(string runFolder)
         => TryLoadBuilderProofArtifact<BuilderRouteReconfirmation?>(BuilderRouteReconfirmationPath(runFolder), null);
 
     public static BuilderRouteReconfirmation? LoadLatestBuilderRouteReconfirmation(string repoRoot)
-        => LoadLatestBuilderProofRun(repoRoot) is { RunFolder: { } runFolder }
-            ? LoadBuilderRouteReconfirmation(runFolder)
-            : null;
+        => LoadBuilderRouteArtifactFromCurrentStateIndex(
+            repoRoot,
+            "builder_route_reconfirmation",
+            LoadBuilderRouteReconfirmation);
 
     public static BuilderDefaultRouteRecovery? LoadBuilderDefaultRouteRecovery(string runFolder)
         => TryLoadBuilderProofArtifact<BuilderDefaultRouteRecovery?>(BuilderDefaultRouteRecoveryPath(runFolder), null);
 
     public static BuilderDefaultRouteRecovery? LoadLatestBuilderDefaultRouteRecovery(string repoRoot)
+        => LoadBuilderRouteArtifactFromCurrentStateIndex(
+            repoRoot,
+            "builder_default_route_recovery",
+            LoadBuilderDefaultRouteRecovery);
+
+    public static BuilderCapabilityBlockDecision? LoadBuilderCapabilityBlockDecision(string runFolder)
+        => TryLoadBuilderProofArtifact<BuilderCapabilityBlockDecision?>(BuilderCapabilityBlockDecisionPath(runFolder), null);
+
+    public static BuilderCapabilityBlockDecision? LoadLatestBuilderCapabilityBlockDecision(string repoRoot)
         => LoadLatestBuilderProofRun(repoRoot) is { RunFolder: { } runFolder }
-            ? LoadBuilderDefaultRouteRecovery(runFolder)
+            ? LoadBuilderCapabilityBlockDecision(runFolder)
             : null;
 
     public static BuilderProofMatrixDefinition? LoadBuilderProofMatrix(string runFolder)
@@ -1708,6 +2405,7 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
         RefreshBuilderDefaultPolicyArtifacts(repoRoot, latestRun.RunFolder);
         RewriteSupersededBuilderExecutionLaunchArtifacts(repoRoot, latestRun.RunFolder);
         RewriteSupersededBuilderExecutionResultArtifacts(repoRoot, latestRun.RunFolder);
+        RefreshBuilderRouteContinuityArtifacts(repoRoot);
         var refreshedDefaultRouteDecision = LoadBuilderDefaultRouteDecision(latestRun.RunFolder) ?? defaultRouteDecision;
         var refreshedReadinessGate = LoadBuilderReadinessGate(latestRun.RunFolder) ?? readinessGate;
         var refreshedConfirmedClasses = LoadBuilderConfirmedTaskClasses(latestRun.RunFolder) ?? confirmedTaskClasses;
@@ -1728,6 +2426,7 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             refreshedContradictions);
         File.WriteAllText(BuilderPolicyReviewCandidatesPath(latestRun.RunFolder), JsonSerializer.Serialize(reviewCandidates, new JsonSerializerOptions { WriteIndented = true }));
         RefreshBuilderRouteRecoveryArtifacts(repoRoot, latestRun.RunFolder);
+        RefreshBuilderRouteContinuityArtifacts(repoRoot);
         return result;
     }
 
@@ -2837,7 +3536,9 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             linkedArtifactPaths,
             summary,
             BuilderSplitFirstOutcomePath(runFolder),
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            splitResult.TargetFolder,
+            splitResult.StarterStateManifestPath);
     }
 
     private static string DetermineBuilderSplitClosureClassification(
@@ -3229,6 +3930,7 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
         Directory.CreateDirectory(targetFolder);
 
         WriteProofStarterState(target, targetFolder);
+        var starterStateManifestPath = WriteBuilderStarterStateManifest(targetFolder);
         var generation = ApplyProofGeneration(target, modelId, targetFolder);
         var primaryProjectPath = ResolvePrimaryProjectPath(target, targetFolder);
         var buildLogPath = Path.Combine(targetFolder, "01-build.log");
@@ -3328,7 +4030,10 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             recovery?.FollowupExecutionOutcomePath ?? string.Empty,
             finalSummary,
             target.ComplexityDimensions ?? new BuilderProofComplexityDimensions(),
-            proofScope);
+            proofScope,
+            string.Empty,
+            string.Empty,
+            starterStateManifestPath);
     }
 
     private async Task<BuilderProofCommandExecutionResult> ExecuteProofCommandAsync(
@@ -6702,6 +7407,9 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             return;
         }
 
+        var capabilityRegistry = RefreshBuilderCapabilityArtifacts(repoRoot);
+        var languageEligibility = LoadBuilderLanguageEligibility(repoRoot);
+
         var proofRun = LoadBuilderProofRun(runFolder);
         var trustBands = LoadBuilderModelTrustBands(runFolder);
         var routingRecommendation = LoadBuilderModelRoutingRecommendation(runFolder);
@@ -6777,6 +7485,19 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
                 BuilderDefaultRouteDecisionPath(runFolder),
                 JsonSerializer.Serialize(defaultRouteDecision, new JsonSerializerOptions { WriteIndented = true }));
 
+            var capabilityDecision = BuildBuilderCapabilityBlockDecision(
+                runFolder,
+                requestDecision,
+                defaultRouteDecision,
+                capabilityRegistry,
+                languageEligibility);
+            if (ShouldPersistBuilderCapabilityBlockDecision(capabilityDecision))
+            {
+                File.WriteAllText(
+                    BuilderCapabilityBlockDecisionPath(runFolder),
+                    JsonSerializer.Serialize(capabilityDecision, new JsonSerializerOptions { WriteIndented = true }));
+            }
+
             var intake = BuildBuilderRequestIntake(
                 runFolder,
                 requestDecision,
@@ -6785,7 +7506,8 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
                 splitPlan,
                 tieredRoutingPolicy,
                 splitOutcome,
-                defaultRouteDecision);
+                defaultRouteDecision,
+                capabilityDecision);
             File.WriteAllText(BuilderRequestIntakePath(runFolder), JsonSerializer.Serialize(intake, new JsonSerializerOptions { WriteIndented = true }));
 
             var intakeHistory = BuildBuilderRequestIntakeHistory(
@@ -6805,7 +7527,8 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
                 splitPlan,
                 tieredRoutingPolicy,
                 splitOutcome,
-                defaultRouteDecision);
+                defaultRouteDecision,
+                capabilityDecision);
             File.WriteAllText(BuilderExecutionPrepPath(runFolder), JsonSerializer.Serialize(prep, new JsonSerializerOptions { WriteIndented = true }));
 
             var prepHistory = BuildBuilderExecutionPrepHistory(
@@ -6821,6 +7544,8 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
         RefreshBuilderRouteRecoveryArtifacts(repoRoot, runFolder);
         RewriteSupersededBuilderExecutionLaunchArtifacts(repoRoot, runFolder);
         RewriteSupersededBuilderExecutionResultArtifacts(repoRoot, runFolder);
+        RefreshBuilderRouteContinuityArtifacts(repoRoot);
+        RefreshBuilderModelRoutingArtifacts(repoRoot);
     }
 
     private void RefreshBuilderReadinessArtifacts(string repoRoot, string runFolder)
@@ -6895,6 +7620,4794 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             overrideEvidence,
             reconfirmation);
         File.WriteAllText(BuilderDefaultRouteRecoveryPath(runFolder), JsonSerializer.Serialize(recovery, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static T? LoadBuilderRouteArtifactFromCurrentStateIndex<T>(
+        string repoRoot,
+        string artifactKind,
+        Func<string, T?> loadFromRunFolder)
+    {
+        var authoritativePath = TryResolveBuilderRouteArtifactPathFromCurrentStateIndex(repoRoot, artifactKind);
+        if (!string.IsNullOrWhiteSpace(authoritativePath))
+        {
+            return TryLoadBuilderProofArtifact<T?>(authoritativePath, default);
+        }
+
+        return LoadLatestBuilderProofRun(repoRoot) is { RunFolder: { } runFolder }
+            ? loadFromRunFolder(runFolder)
+            : default;
+    }
+
+    private static string TryResolveBuilderRouteArtifactPathFromCurrentStateIndex(string repoRoot, string artifactKind)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot) || string.IsNullOrWhiteSpace(artifactKind))
+        {
+            return string.Empty;
+        }
+
+        var entry = LoadBuilderRouteCurrentStateIndex(repoRoot).Entries
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.ArtifactKind, artifactKind, StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(candidate.ArtifactPath) &&
+                File.Exists(candidate.ArtifactPath));
+        return entry?.ArtifactPath ?? string.Empty;
+    }
+
+    public BuilderToolchainCapabilityRegistry RefreshBuilderCapabilityArtifacts(string repoRoot)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderToolchainCapabilityRegistry(repoRoot);
+        }
+
+        Directory.CreateDirectory(BuilderProofRootForRepo(repoRoot));
+        var policy = BuildBuilderRepoToolchainPolicySnapshot(repoRoot);
+        var observations = _builderToolchainCapabilityScanner.Scan(repoRoot);
+        var registry = BuildBuilderToolchainCapabilityRegistry(
+            repoRoot,
+            policy,
+            observations,
+            LoadBuilderToolchainCapabilityRegistry(repoRoot));
+        File.WriteAllText(
+            BuilderToolchainCapabilityRegistryPathForRepo(repoRoot),
+            JsonSerializer.Serialize(registry, new JsonSerializerOptions { WriteIndented = true }));
+
+        var history = BuildBuilderToolchainCapabilityHistory(
+            LoadBuilderToolchainCapabilityHistory(repoRoot),
+            registry);
+        File.WriteAllText(
+            BuilderToolchainCapabilityHistoryPathForRepo(repoRoot),
+            JsonSerializer.Serialize(history, new JsonSerializerOptions { WriteIndented = true }));
+
+        var eligibility = BuildBuilderLanguageEligibility(repoRoot, policy, registry);
+        File.WriteAllText(
+            BuilderLanguageEligibilityPathForRepo(repoRoot),
+            JsonSerializer.Serialize(eligibility, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(
+            BuilderLanguageEligibilitySummaryPathForRepo(repoRoot),
+            BuildBuilderLanguageEligibilitySummaryMarkdown(eligibility));
+        return registry;
+    }
+
+    public BuilderModelRoutingPolicy RefreshBuilderModelRoutingArtifacts(string repoRoot)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderModelRoutingPolicy(repoRoot);
+        }
+
+        Directory.CreateDirectory(BuilderProofRootForRepo(repoRoot));
+        var latestRun = LoadLatestBuilderProofRun(repoRoot);
+        if (latestRun is not null && LoadBuilderDefaultPolicy(latestRun.RunFolder) is null)
+        {
+            RefreshBuilderDefaultPolicyArtifacts(repoRoot, latestRun.RunFolder);
+        }
+
+        var defaultPolicy = LoadLatestBuilderDefaultPolicy(repoRoot);
+        if (defaultPolicy is null)
+        {
+            return LoadBuilderModelRoutingPolicy(repoRoot);
+        }
+
+        var priorPolicy = LoadBuilderModelRoutingPolicy(repoRoot);
+        var stability = BuildBuilderModelRoutingStability(repoRoot, defaultPolicy);
+        File.WriteAllText(
+            BuilderModelRoutingStabilityPathForRepo(repoRoot),
+            JsonSerializer.Serialize(stability, new JsonSerializerOptions { WriteIndented = true }));
+
+        var matrix = BuildBuilderModelCapabilityMatrix(repoRoot, defaultPolicy, stability);
+        File.WriteAllText(
+            BuilderModelCapabilityMatrixPathForRepo(repoRoot),
+            JsonSerializer.Serialize(matrix, new JsonSerializerOptions { WriteIndented = true }));
+
+        var routingPolicy = BuildBuilderModelRoutingPolicyArtifact(repoRoot, defaultPolicy, matrix);
+        File.WriteAllText(
+            BuilderModelRoutingPolicyPathForRepo(repoRoot),
+            JsonSerializer.Serialize(routingPolicy, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(
+            BuilderModelRoutingPolicySummaryPathForRepo(repoRoot),
+            BuildBuilderModelRoutingPolicySummaryMarkdown(routingPolicy));
+
+        var history = BuildBuilderModelRoutingPolicyHistory(
+            LoadBuilderModelRoutingPolicyHistory(repoRoot),
+            priorPolicy,
+            routingPolicy);
+        File.WriteAllText(
+            BuilderModelRoutingPolicyHistoryPathForRepo(repoRoot),
+            JsonSerializer.Serialize(history, new JsonSerializerOptions { WriteIndented = true }));
+        return routingPolicy;
+    }
+
+    public BuilderRepoKnowledgeIndex RefreshBuilderRepoKnowledgeArtifacts(string repoRoot)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderRepoKnowledgeIndex(repoRoot);
+        }
+
+        Directory.CreateDirectory(BuilderProofRootForRepo(repoRoot));
+        var capabilityRegistry = LoadBuilderToolchainCapabilityRegistry(repoRoot);
+        if (capabilityRegistry.ObservedUtc <= DateTimeOffset.MinValue)
+        {
+            capabilityRegistry = RefreshBuilderCapabilityArtifacts(repoRoot);
+        }
+
+        var priorIndex = LoadBuilderRepoKnowledgeIndex(repoRoot);
+        var index = BuildBuilderRepoKnowledgeIndex(repoRoot, capabilityRegistry, priorIndex);
+        File.WriteAllText(
+            BuilderRepoKnowledgeIndexPathForRepo(repoRoot),
+            JsonSerializer.Serialize(index, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(
+            BuilderRepoKnowledgeSummaryPathForRepo(repoRoot),
+            BuildBuilderRepoKnowledgeSummaryMarkdown(index));
+
+        var drift = BuildBuilderRepoKnowledgeDrift(priorIndex, index);
+        var driftPath = BuilderRepoKnowledgeDriftPathForRepo(repoRoot);
+        if (drift is null)
+        {
+            if (File.Exists(driftPath))
+            {
+                File.Delete(driftPath);
+            }
+        }
+        else
+        {
+            File.WriteAllText(
+                driftPath,
+                JsonSerializer.Serialize(drift, new JsonSerializerOptions { WriteIndented = true }));
+        }
+
+        var history = BuildBuilderRepoKnowledgeHistory(
+            LoadBuilderRepoKnowledgeHistory(repoRoot),
+            index);
+        File.WriteAllText(
+            BuilderRepoKnowledgeHistoryPathForRepo(repoRoot),
+            JsonSerializer.Serialize(history, new JsonSerializerOptions { WriteIndented = true }));
+        return index;
+    }
+
+    public BuilderConversationIntake PreviewBuilderConversationIntake(string repoRoot, string rawRequestText)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderConversationIntake(repoRoot);
+        }
+
+        rawRequestText ??= string.Empty;
+        Directory.CreateDirectory(BuilderProofRootForRepo(repoRoot));
+        var knowledgeIndex = RefreshBuilderRepoKnowledgeArtifacts(repoRoot);
+        var capabilityRegistry = LoadBuilderToolchainCapabilityRegistry(repoRoot);
+        if (capabilityRegistry.ObservedUtc <= DateTimeOffset.MinValue)
+        {
+            capabilityRegistry = RefreshBuilderCapabilityArtifacts(repoRoot);
+        }
+
+        var languageEligibility = LoadBuilderLanguageEligibility(repoRoot);
+        if (languageEligibility.ObservedUtc <= DateTimeOffset.MinValue)
+        {
+            capabilityRegistry = RefreshBuilderCapabilityArtifacts(repoRoot);
+            languageEligibility = LoadBuilderLanguageEligibility(repoRoot);
+        }
+
+        var normalizedTaskClass = NormalizeBuilderConversationTaskClass(rawRequestText);
+        var impliedStackId = ResolveBuilderConversationImpliedStackId(rawRequestText, knowledgeIndex);
+        var impliedStackLabel = ResolveBuilderStackLabel(impliedStackId);
+        var retrieval = BuildBuilderRepoRetrievalContext(
+            repoRoot,
+            knowledgeIndex,
+            rawRequestText,
+            normalizedTaskClass,
+            impliedStackId,
+            impliedStackLabel);
+        File.WriteAllText(
+            BuilderRepoRetrievalContextPathForRepo(repoRoot),
+            JsonSerializer.Serialize(retrieval, new JsonSerializerOptions { WriteIndented = true }));
+
+        var modelRoutingPolicy = RefreshBuilderModelRoutingArtifacts(repoRoot);
+        var modelCapabilityMatrix = LoadBuilderModelCapabilityMatrix(repoRoot);
+        var modelRoutingStability = LoadBuilderModelRoutingStability(repoRoot);
+        var matchedPolicyEntry = FindBuilderModelRoutingPolicyEntry(modelRoutingPolicy, normalizedTaskClass);
+        var matchedMatrixEntry = FindBuilderModelCapabilityMatrixEntry(modelCapabilityMatrix, normalizedTaskClass);
+        var latestPrep = LoadLatestBuilderExecutionPrep(repoRoot);
+        var latestRequestDecision = LoadLatestBuilderRequestPolicyDecision(repoRoot);
+        var defaultRouteDecision = LoadLatestBuilderDefaultRouteDecision(repoRoot);
+        var launchDefaultDecision = LoadLatestBuilderLaunchDefaultDecision(repoRoot);
+        var selectedRoute = FirstNonEmpty(
+            matchedPolicyEntry?.RouteClass,
+            launchDefaultDecision?.ConfirmedDefaultRoute,
+            defaultRouteDecision?.ChosenDefaultRoute,
+            latestPrep?.SelectedRoute);
+        var routeSourceState = matchedPolicyEntry is null
+            ? FirstNonEmpty(
+                launchDefaultDecision?.RouteSourceState,
+                defaultRouteDecision?.RouteSourceState,
+                "not_recorded")
+            : "model_routing_policy";
+        var capabilityRoutingState = DetermineBuilderConversationCapabilityRoutingState(
+            languageEligibility,
+            impliedStackId);
+        var capabilitySummary = BuildBuilderConversationCapabilitySummary(
+            languageEligibility,
+            impliedStackId,
+            capabilityRoutingState);
+        var observedUtc = DateTimeOffset.UtcNow;
+        var provisionalIntake = new BuilderConversationIntake(
+            rawRequestText,
+            normalizedTaskClass,
+            impliedStackId,
+            impliedStackLabel,
+            retrieval.RetrievalConfidenceState,
+            retrieval.Summary,
+            capabilityRoutingState,
+            capabilitySummary,
+            selectedRoute,
+            routeSourceState,
+            matchedMatrixEntry?.SplitFirstRequired ?? string.Equals(selectedRoute, "split_first_low_floor_route", StringComparison.Ordinal),
+            FirstNonEmpty(matchedMatrixEntry?.StrongerTierRecommendationState, latestRequestDecision?.StrongerTierDisposition, "not_recorded"),
+            "pending_operator_review",
+            "not_ready",
+            string.Empty,
+            Array.Empty<string>(),
+            string.Empty,
+            BuilderConversationIntakePathForRepo(repoRoot),
+            observedUtc);
+        var modelDecision = BuildBuilderModelDecision(
+            repoRoot,
+            BuildBuilderConversationIntakeId(provisionalIntake),
+            provisionalIntake,
+            modelCapabilityMatrix,
+            modelRoutingPolicy,
+            modelRoutingStability);
+        var escalationPolicyDecision = BuildBuilderModelEscalationPolicyDecision(repoRoot, modelDecision);
+        File.WriteAllText(
+            BuilderModelDecisionPathForRepo(repoRoot),
+            JsonSerializer.Serialize(modelDecision, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(
+            BuilderModelEscalationPolicyDecisionPathForRepo(repoRoot),
+            JsonSerializer.Serialize(escalationPolicyDecision, new JsonSerializerOptions { WriteIndented = true }));
+        var launchReadinessState = DetermineBuilderConversationLaunchReadinessState(
+            retrieval.RetrievalConfidenceState,
+            capabilityRoutingState,
+            selectedRoute,
+            escalationPolicyDecision);
+        var blockReason = BuildBuilderConversationBlockReason(
+            retrieval,
+            languageEligibility,
+            impliedStackId,
+            capabilityRoutingState,
+            launchReadinessState,
+            selectedRoute,
+            escalationPolicyDecision);
+        var linkedArtifactPaths = BuildBuilderConversationAuthoritativeArtifactPaths(repoRoot)
+            .Concat(new[]
+            {
+                knowledgeIndex.ArtifactPath,
+                capabilityRegistry.ArtifactPath,
+                languageEligibility.ArtifactPath,
+                retrieval.ArtifactPath,
+                latestPrep?.ArtifactPath ?? string.Empty,
+                modelCapabilityMatrix.ArtifactPath,
+                modelRoutingPolicy.ArtifactPath,
+                modelRoutingStability.ArtifactPath,
+                modelDecision.ArtifactPath,
+                escalationPolicyDecision.ArtifactPath
+            })
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var summary = BuildBuilderConversationIntakeSummary(
+            rawRequestText,
+            normalizedTaskClass,
+            impliedStackLabel,
+            retrieval,
+            capabilitySummary,
+            modelDecision.Summary,
+            selectedRoute,
+            routeSourceState,
+            launchReadinessState,
+            blockReason);
+        var intake = provisionalIntake with
+        {
+            LaunchReadinessState = launchReadinessState,
+            BlockReason = blockReason,
+            LinkedArtifactPaths = linkedArtifactPaths,
+            Summary = summary
+        };
+        File.WriteAllText(
+            BuilderConversationIntakePathForRepo(repoRoot),
+            JsonSerializer.Serialize(intake, new JsonSerializerOptions { WriteIndented = true }));
+        modelDecision = modelDecision with
+        {
+            LinkedArtifactPaths = modelDecision.LinkedArtifactPaths
+                .Concat(new[] { intake.ArtifactPath, escalationPolicyDecision.ArtifactPath })
+                .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+        };
+        File.WriteAllText(
+            BuilderModelDecisionPathForRepo(repoRoot),
+            JsonSerializer.Serialize(modelDecision, new JsonSerializerOptions { WriteIndented = true }));
+        escalationPolicyDecision = escalationPolicyDecision with
+        {
+            LinkedArtifactPaths = escalationPolicyDecision.LinkedArtifactPaths
+                .Concat(new[] { intake.ArtifactPath, modelDecision.ArtifactPath })
+                .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+        };
+        File.WriteAllText(
+            BuilderModelEscalationPolicyDecisionPathForRepo(repoRoot),
+            JsonSerializer.Serialize(escalationPolicyDecision, new JsonSerializerOptions { WriteIndented = true }));
+        RefreshBuilderDiagnosticArtifacts(repoRoot);
+        return intake;
+    }
+
+    public BuilderConversationHandoff CreateBuilderConversationHandoff(
+        string repoRoot,
+        string operatorDecisionState,
+        string routeOverride = "",
+        string overrideReason = "")
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderConversationHandoff(repoRoot);
+        }
+
+        var intake = LoadBuilderConversationIntake(repoRoot);
+        var modelEscalationPolicyDecision = LoadBuilderModelEscalationPolicyDecision(repoRoot);
+        var selectedRoute = intake.SelectedRoute;
+        var routeSourceState = intake.RouteSourceState;
+        var launchReadinessState = intake.LaunchReadinessState;
+        var blockReason = intake.BlockReason;
+
+        if (string.Equals(operatorDecisionState, "override_route", StringComparison.Ordinal))
+        {
+            routeSourceState = "operator_override";
+            if (string.IsNullOrWhiteSpace(routeOverride))
+            {
+                launchReadinessState = "launch_blocked_missing_override_route";
+                blockReason = "Builder conversation override requires an explicit supported route.";
+            }
+            else if (string.Equals(intake.CapabilityRoutingState, "route_blocked_missing_toolchain", StringComparison.Ordinal) ||
+                     string.Equals(intake.CapabilityRoutingState, "route_blocked_repo_policy", StringComparison.Ordinal))
+            {
+                launchReadinessState = "launch_blocked_capability";
+                blockReason = intake.BlockReason;
+            }
+            else if (string.Equals(modelEscalationPolicyDecision.FinalDecisionState, "blocked_required_stronger_tier_unavailable", StringComparison.Ordinal) ||
+                     string.Equals(modelEscalationPolicyDecision.FinalDecisionState, "not_yet_proven", StringComparison.Ordinal))
+            {
+                launchReadinessState = "launch_blocked_model_policy";
+                blockReason = FirstNonEmpty(modelEscalationPolicyDecision.BlockReason, modelEscalationPolicyDecision.Summary, intake.BlockReason);
+            }
+            else if (!IsBuilderPreparedRouteSupported(routeOverride))
+            {
+                launchReadinessState = "launch_blocked_override_route";
+                blockReason = $"Builder conversation override route {routeOverride} is not supported for prepared launch.";
+            }
+            else
+            {
+                selectedRoute = routeOverride;
+                launchReadinessState = "ready_for_launch_with_override";
+                blockReason = string.Empty;
+            }
+        }
+        else if (string.Equals(operatorDecisionState, "cancel", StringComparison.Ordinal))
+        {
+            launchReadinessState = "launch_cancelled_by_operator";
+            blockReason = "Operator cancelled the builder conversation handoff before launch.";
+        }
+        else
+        {
+            if (string.Equals(intake.LaunchReadinessState, "launch_blocked_weak_match", StringComparison.Ordinal))
+            {
+                launchReadinessState = "launch_blocked_weak_match";
+                blockReason = intake.BlockReason;
+            }
+            else if (string.Equals(intake.CapabilityRoutingState, "route_blocked_missing_toolchain", StringComparison.Ordinal) ||
+                     string.Equals(intake.CapabilityRoutingState, "route_blocked_repo_policy", StringComparison.Ordinal))
+            {
+                launchReadinessState = "launch_blocked_capability";
+                blockReason = intake.BlockReason;
+            }
+            else if (string.Equals(intake.LaunchReadinessState, "launch_blocked_model_policy", StringComparison.Ordinal))
+            {
+                launchReadinessState = intake.LaunchReadinessState;
+                blockReason = FirstNonEmpty(intake.BlockReason, modelEscalationPolicyDecision.BlockReason, modelEscalationPolicyDecision.Summary);
+            }
+            else if (string.IsNullOrWhiteSpace(intake.SelectedRoute) || !IsBuilderPreparedRouteSupported(intake.SelectedRoute))
+            {
+                launchReadinessState = "launch_blocked_route";
+                blockReason = string.IsNullOrWhiteSpace(intake.SelectedRoute)
+                    ? "Builder conversation handoff has no prepared route to launch."
+                    : $"Prepared route {intake.SelectedRoute} still requires operator review.";
+            }
+            else
+            {
+                launchReadinessState = "ready_for_launch";
+                blockReason = string.Empty;
+            }
+        }
+
+        var linkedArtifactPaths = intake.LinkedArtifactPaths
+            .Concat(BuildBuilderConversationAuthoritativeArtifactPaths(repoRoot))
+            .Concat(new[]
+            {
+                BuilderConversationIntakePathForRepo(repoRoot),
+                LoadLatestBuilderExecutionPrep(repoRoot)?.ArtifactPath ?? string.Empty
+            })
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var summary = BuildBuilderConversationHandoffSummary(
+            intake,
+            operatorDecisionState,
+            selectedRoute,
+            launchReadinessState,
+            blockReason,
+            overrideReason);
+        var handoff = new BuilderConversationHandoff(
+            intake.RawRequestText,
+            intake.NormalizedTaskClass,
+            intake.RetrievalConfidenceState,
+            intake.CapabilityRoutingState,
+            selectedRoute,
+            routeSourceState,
+            operatorDecisionState,
+            launchReadinessState,
+            blockReason,
+            linkedArtifactPaths,
+            summary,
+            BuilderConversationHandoffPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+        File.WriteAllText(
+            BuilderConversationHandoffPathForRepo(repoRoot),
+            JsonSerializer.Serialize(handoff, new JsonSerializerOptions { WriteIndented = true }));
+        RefreshBuilderDiagnosticArtifacts(repoRoot);
+        return handoff;
+    }
+
+    public async Task<BuilderConversationExecutionSession> RunBuilderConversationExecutionSessionAsync(
+        string repoRoot,
+        string provider = "ollama",
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderConversationExecutionSession(repoRoot);
+        }
+
+        var intake = LoadBuilderConversationIntake(repoRoot);
+        var handoff = LoadBuilderConversationHandoff(repoRoot);
+        if (!string.Equals(handoff.LaunchReadinessState, "ready_for_launch", StringComparison.Ordinal) &&
+            !string.Equals(handoff.LaunchReadinessState, "ready_for_launch_with_override", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Builder conversation execution requires a ready conversation handoff.");
+        }
+
+        var latestPrep = LoadLatestBuilderExecutionPrep(repoRoot);
+        var intakeId = BuildBuilderConversationIntakeId(intake);
+        var handoffId = BuildBuilderConversationHandoffId(handoff);
+        var sessionId = BuildBuilderConversationExecutionSessionId(handoff);
+        var executingSession = BuildBuilderConversationExecutionSession(
+            repoRoot,
+            sessionId,
+            intakeId,
+            handoffId,
+            intake,
+            handoff,
+            latestPrep,
+            launch: null,
+            result: null,
+            patchReview: null,
+            patchReviewOutcome: null,
+            sessionState: "executing",
+            currentStageId: "builder_launched",
+            currentStageLabel: "Builder launched",
+            reviewState: "pending_operator_review",
+            validationSummary: "Prepared route execution is in progress.",
+            reviewNote: string.Empty);
+        WriteBuilderConversationExecutionSessionArtifacts(repoRoot, executingSession, null);
+
+        var routeOverride = string.Equals(handoff.LaunchReadinessState, "ready_for_launch_with_override", StringComparison.Ordinal) ||
+                            string.Equals(handoff.OperatorDecisionState, "override_route", StringComparison.Ordinal)
+            ? handoff.SelectedRoute
+            : null;
+        var overrideReason = !string.IsNullOrWhiteSpace(routeOverride) ? handoff.Summary : null;
+        var result = await LaunchPreparedBuilderRouteAsync(repoRoot, provider, routeOverride, overrideReason, ct).ConfigureAwait(false);
+        var latestRun = LoadLatestBuilderProofRun(repoRoot)
+            ?? throw new InvalidOperationException("Builder conversation execution requires a recorded proof run.");
+        var launch = LoadBuilderExecutionLaunch(latestRun.RunFolder);
+        var refreshedPrep = LoadBuilderExecutionPrep(latestRun.RunFolder) ?? latestPrep;
+        var patchReview = BuildBuilderPatchReview(
+            repoRoot,
+            sessionId,
+            intakeId,
+            handoffId,
+            intake,
+            handoff,
+            refreshedPrep,
+            result);
+        File.WriteAllText(
+            BuilderPatchReviewPathForRepo(repoRoot),
+            JsonSerializer.Serialize(patchReview, new JsonSerializerOptions { WriteIndented = true }));
+
+        var finalSessionState = string.Equals(patchReview.ReviewReadinessState, "ready_for_operator_review", StringComparison.Ordinal)
+            ? "awaiting_patch_review"
+            : "failed_into_followup";
+        var finalCurrentStageId = string.Equals(finalSessionState, "awaiting_patch_review", StringComparison.Ordinal)
+            ? "awaiting_operator_review"
+            : "validation_run";
+        var finalCurrentStageLabel = string.Equals(finalSessionState, "awaiting_patch_review", StringComparison.Ordinal)
+            ? "Awaiting operator review"
+            : "Validation run";
+        var finalSession = BuildBuilderConversationExecutionSession(
+            repoRoot,
+            sessionId,
+            intakeId,
+            handoffId,
+            intake,
+            handoff,
+            refreshedPrep,
+            launch,
+            result,
+            patchReview,
+            patchReviewOutcome: null,
+            sessionState: finalSessionState,
+            currentStageId: finalCurrentStageId,
+            currentStageLabel: finalCurrentStageLabel,
+            reviewState: "pending_operator_review",
+            validationSummary: BuildBuilderConversationValidationSummary(result),
+            reviewNote: string.Empty);
+        WriteBuilderConversationExecutionSessionArtifacts(repoRoot, finalSession, patchReview);
+        var patchDiffReview = BuildBuilderPatchDiffReview(repoRoot, finalSession, patchReview, result);
+        var initialFileReviewDecision = BuildBuilderFileReviewDecision(
+            repoRoot,
+            patchDiffReview,
+            patchDiffReview.FileEntries
+                .Select(entry => new BuilderFileReviewDecisionEntry(
+                    entry.RelativePath,
+                    entry.ApprovalState,
+                    string.Empty,
+                    entry.RejectionReason,
+                    new[] { patchDiffReview.ArtifactPath },
+                    entry.ObservedUtc))
+                .ToArray(),
+            patchDiffReview.ObservedUtc);
+        var initialApplyDecision = BuildBuilderPatchApplyDecision(
+            repoRoot,
+            finalSession,
+            patchDiffReview,
+            initialFileReviewDecision,
+            patchReviewOutcome: null);
+        WriteBuilderPatchReviewGovernanceArtifacts(repoRoot, patchDiffReview, initialFileReviewDecision, initialApplyDecision);
+        RefreshBuilderDiagnosticArtifacts(repoRoot);
+        return finalSession;
+    }
+
+    public BuilderPatchReviewOutcome RecordBuilderPatchReviewOutcome(
+        string repoRoot,
+        string reviewDecisionState,
+        string reviewNote = "",
+        string rerouteRoute = "")
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderPatchReviewOutcome(repoRoot);
+        }
+
+        var currentSession = LoadBuilderConversationExecutionSession(repoRoot);
+        var patchReview = LoadBuilderPatchReview(repoRoot);
+        var intake = LoadBuilderConversationIntake(repoRoot);
+        var handoff = LoadBuilderConversationHandoff(repoRoot);
+        var result = LoadLatestBuilderExecutionResult(repoRoot);
+        var latestPrep = LoadLatestBuilderExecutionPrep(repoRoot);
+
+        BuilderConversationHandoff effectiveHandoff = handoff;
+        if (string.Equals(reviewDecisionState, "reroute_requested", StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(rerouteRoute))
+        {
+            effectiveHandoff = CreateBuilderConversationHandoff(
+                repoRoot,
+                "override_route",
+                rerouteRoute,
+                FirstNonEmpty(reviewNote, "Operator requested a bounded reroute during patch review."));
+        }
+
+        var nextSessionState = DetermineBuilderConversationReviewSessionState(reviewDecisionState, result);
+        var linkedArtifactPaths = BuildBuilderConversationReviewLinkedArtifactPaths(
+            repoRoot,
+            currentSession,
+            patchReview,
+            result,
+            effectiveHandoff);
+        var summary = BuildBuilderPatchReviewOutcomeSummary(
+            reviewDecisionState,
+            nextSessionState,
+            reviewNote,
+            rerouteRoute,
+            result);
+        var outcome = new BuilderPatchReviewOutcome(
+            currentSession.SessionId,
+            reviewDecisionState,
+            nextSessionState,
+            reviewDecisionState,
+            reviewNote,
+            rerouteRoute,
+            linkedArtifactPaths,
+            summary,
+            BuilderPatchReviewOutcomePathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+        File.WriteAllText(
+            BuilderPatchReviewOutcomePathForRepo(repoRoot),
+            JsonSerializer.Serialize(outcome, new JsonSerializerOptions { WriteIndented = true }));
+
+        var updatedSession = BuildBuilderConversationExecutionSession(
+            repoRoot,
+            currentSession.SessionId,
+            currentSession.SourceConversationIntakeId,
+            currentSession.SourceConversationHandoffId,
+            intake,
+            effectiveHandoff,
+            latestPrep,
+            LoadLatestBuilderExecutionLaunch(repoRoot),
+            result,
+            patchReview,
+            outcome,
+            sessionState: nextSessionState,
+            currentStageId: string.Equals(reviewDecisionState, "accepted", StringComparison.Ordinal) ? "completed" : currentSession.CurrentStageId,
+            currentStageLabel: string.Equals(reviewDecisionState, "accepted", StringComparison.Ordinal) ? "Completed" : currentSession.CurrentStageLabel,
+            reviewState: reviewDecisionState,
+            validationSummary: FirstNonEmpty(currentSession.ValidationSummary, BuildBuilderConversationValidationSummary(result)),
+            reviewNote: reviewNote);
+        WriteBuilderConversationExecutionSessionArtifacts(repoRoot, updatedSession, patchReview, outcome);
+        var patchDiffReview = LoadBuilderPatchDiffReview(repoRoot);
+        if (patchDiffReview.FileEntries.Count > 0)
+        {
+            var fileReviewDecision = LoadBuilderFileReviewDecision(repoRoot);
+            var applyDecision = BuildBuilderPatchApplyDecision(repoRoot, updatedSession, patchDiffReview, fileReviewDecision, outcome);
+            WriteBuilderPatchReviewGovernanceArtifacts(repoRoot, patchDiffReview, fileReviewDecision, applyDecision);
+        }
+
+        RefreshBuilderDiagnosticArtifacts(repoRoot);
+        return outcome;
+    }
+
+    public BuilderFileReviewDecision RecordBuilderPatchFileReviewDecision(
+        string repoRoot,
+        string relativePath,
+        string approvalState,
+        string operatorDecisionSource,
+        string rejectionReason = "")
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderFileReviewDecision(repoRoot);
+        }
+
+        var patchDiffReview = LoadBuilderPatchDiffReview(repoRoot);
+        if (patchDiffReview.FileEntries.Count == 0)
+        {
+            return LoadBuilderFileReviewDecision(repoRoot);
+        }
+
+        var priorDecision = LoadBuilderFileReviewDecision(repoRoot);
+        var normalizedRelativePath = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        var observedUtc = DateTimeOffset.UtcNow;
+        var updatedFileEntries = patchDiffReview.FileEntries
+            .Select(entry => string.Equals(entry.RelativePath, normalizedRelativePath, StringComparison.Ordinal)
+                ? entry with
+                {
+                    ApprovalState = approvalState,
+                    RejectionReason = approvalState is "rejected" or "needs_revision" ? rejectionReason : string.Empty,
+                    ObservedUtc = observedUtc
+                }
+                : entry)
+            .ToArray();
+        var updatedPatchDiffReview = patchDiffReview with
+        {
+            FileEntries = updatedFileEntries,
+            OverallFileReviewState = DetermineBuilderPatchOverallFileReviewState(updatedFileEntries),
+            Summary = BuildBuilderPatchDiffReviewSummary(updatedFileEntries, patchDiffReview.ReviewReadinessState),
+            ObservedUtc = observedUtc
+        };
+
+        var entryMap = priorDecision.Entries.ToDictionary(entry => entry.RelativePath, entry => entry, StringComparer.Ordinal);
+        entryMap[normalizedRelativePath] = new BuilderFileReviewDecisionEntry(
+            normalizedRelativePath,
+            approvalState,
+            operatorDecisionSource,
+            approvalState is "rejected" or "needs_revision" ? rejectionReason : string.Empty,
+            new[] { updatedPatchDiffReview.ArtifactPath },
+            observedUtc);
+        var decisionEntries = updatedPatchDiffReview.FileEntries
+            .Select(entry => entryMap.TryGetValue(entry.RelativePath, out var existing)
+                ? existing with
+                {
+                    ApprovalState = entry.ApprovalState,
+                    RejectionReason = entry.RejectionReason,
+                    LinkedArtifactPaths = new[] { updatedPatchDiffReview.ArtifactPath },
+                    ObservedUtc = entry.ObservedUtc
+                }
+                : new BuilderFileReviewDecisionEntry(
+                    entry.RelativePath,
+                    entry.ApprovalState,
+                    string.Empty,
+                    entry.RejectionReason,
+                    new[] { updatedPatchDiffReview.ArtifactPath },
+                    entry.ObservedUtc))
+            .OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+        var fileReviewDecision = BuildBuilderFileReviewDecision(repoRoot, updatedPatchDiffReview, decisionEntries, observedUtc);
+        var applyDecision = BuildBuilderPatchApplyDecision(
+            repoRoot,
+            LoadBuilderConversationExecutionSession(repoRoot),
+            updatedPatchDiffReview,
+            fileReviewDecision,
+            LoadBuilderPatchReviewOutcome(repoRoot));
+        WriteBuilderPatchReviewGovernanceArtifacts(repoRoot, updatedPatchDiffReview, fileReviewDecision, applyDecision);
+        RefreshBuilderDiagnosticArtifacts(repoRoot);
+        return fileReviewDecision;
+    }
+
+    public BuilderPatchDiffReview ApproveAllBuilderPatchFiles(string repoRoot, string operatorDecisionSource = "approve_all")
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderPatchDiffReview(repoRoot);
+        }
+
+        var patchDiffReview = LoadBuilderPatchDiffReview(repoRoot);
+        foreach (var file in patchDiffReview.FileEntries.Where(entry => !string.Equals(entry.ApprovalState, "approved", StringComparison.Ordinal)))
+        {
+            RecordBuilderPatchFileReviewDecision(repoRoot, file.RelativePath, "approved", operatorDecisionSource);
+        }
+
+        return LoadBuilderPatchDiffReview(repoRoot);
+    }
+
+    public BuilderPatchApplyDecision FinalizeBuilderApprovedPatch(string repoRoot)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderPatchApplyDecision(repoRoot);
+        }
+
+        var session = LoadBuilderConversationExecutionSession(repoRoot);
+        var patchDiffReview = LoadBuilderPatchDiffReview(repoRoot);
+        var fileReviewDecision = LoadBuilderFileReviewDecision(repoRoot);
+        var currentOutcome = LoadBuilderPatchReviewOutcome(repoRoot);
+        var applyDecision = BuildBuilderPatchApplyDecision(repoRoot, session, patchDiffReview, fileReviewDecision, currentOutcome);
+        if (!string.Equals(applyDecision.FinalizationState, "ready_to_apply", StringComparison.Ordinal))
+        {
+            WriteBuilderPatchReviewGovernanceArtifacts(repoRoot, patchDiffReview, fileReviewDecision, applyDecision);
+            RefreshBuilderDiagnosticArtifacts(repoRoot);
+            return applyDecision;
+        }
+
+        var outcome = RecordBuilderPatchReviewOutcome(
+            repoRoot,
+            "accepted",
+            "Operator finalized the approved patch after file-level review.");
+        var finalizedApplyDecision = applyDecision with
+        {
+            LinkedArtifactPaths = applyDecision.LinkedArtifactPaths
+                .Concat(new[] { outcome.ArtifactPath })
+                .Where(BuilderArtifactPathExists)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToArray(),
+            FinalizationState = "applied_with_operator_approval",
+            Summary = "Approved patch was applied with explicit operator approval.",
+            ObservedUtc = DateTimeOffset.UtcNow
+        };
+        WriteBuilderPatchReviewGovernanceArtifacts(
+            repoRoot,
+            LoadBuilderPatchDiffReview(repoRoot),
+            LoadBuilderFileReviewDecision(repoRoot),
+            finalizedApplyDecision);
+        WriteBuilderPatchSnapshotArtifacts(
+            repoRoot,
+            EnsureBuilderPatchSnapshot(
+                repoRoot,
+                LoadBuilderConversationExecutionSession(repoRoot),
+                LoadBuilderPatchDiffReview(repoRoot),
+                LoadBuilderFileReviewDecision(repoRoot),
+                finalizedApplyDecision,
+                LoadBuilderPatchReviewOutcome(repoRoot),
+                LoadLatestBuilderExecutionResult(repoRoot)));
+        RefreshBuilderDiagnosticArtifacts(repoRoot);
+        return finalizedApplyDecision;
+    }
+
+    public BuilderCommitProposal PrepareBuilderCommitProposal(string repoRoot)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderCommitProposal(repoRoot);
+        }
+
+        var snapshot = EnsureBuilderPatchSnapshot(
+            repoRoot,
+            LoadBuilderConversationExecutionSession(repoRoot),
+            LoadBuilderPatchDiffReview(repoRoot),
+            LoadBuilderFileReviewDecision(repoRoot),
+            LoadBuilderPatchApplyDecision(repoRoot),
+            LoadBuilderPatchReviewOutcome(repoRoot),
+            LoadLatestBuilderExecutionResult(repoRoot));
+        if (snapshot.ApprovedFiles.Count == 0 ||
+            !string.Equals(snapshot.OperatorApprovalState, "applied_with_operator_approval", StringComparison.Ordinal))
+        {
+            return LoadBuilderCommitProposal(repoRoot);
+        }
+
+        var patchDiffReview = LoadBuilderPatchDiffReview(repoRoot);
+        var changedFiles = snapshot.ApprovedFiles
+            .Select(file => file.RelativePath)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var diffSummary = string.Join(
+            " ",
+            patchDiffReview.FileEntries
+                .Where(entry => changedFiles.Contains(entry.RelativePath, StringComparer.Ordinal))
+                .OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)
+                .Select(entry => entry.DiffSummary));
+        var commitMessage = BuildBuilderCommitProposalMessage(snapshot, patchDiffReview);
+        var observedUtc = DateTimeOffset.UtcNow;
+        var proposal = new BuilderCommitProposal(
+            snapshot.SnapshotId,
+            snapshot.ExecutionSessionId,
+            commitMessage,
+            changedFiles,
+            diffSummary,
+            repoRoot,
+            snapshot.LinkedArtifactPaths
+                .Concat(new[] { snapshot.ArtifactPath })
+                .Where(BuilderArtifactPathExists)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToArray(),
+            $"Commit proposal prepared for {changedFiles.Length} approved file(s).",
+            BuilderCommitProposalPathForRepo(repoRoot),
+            observedUtc);
+        File.WriteAllText(
+            BuilderCommitProposalPathForRepo(repoRoot),
+            JsonSerializer.Serialize(proposal, new JsonSerializerOptions { WriteIndented = true }));
+        return proposal;
+    }
+
+    public BuilderPatchExport ExportBuilderApprovedPatchBundle(string repoRoot)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderPatchExport(repoRoot);
+        }
+
+        var snapshot = EnsureBuilderPatchSnapshot(
+            repoRoot,
+            LoadBuilderConversationExecutionSession(repoRoot),
+            LoadBuilderPatchDiffReview(repoRoot),
+            LoadBuilderFileReviewDecision(repoRoot),
+            LoadBuilderPatchApplyDecision(repoRoot),
+            LoadBuilderPatchReviewOutcome(repoRoot),
+            LoadLatestBuilderExecutionResult(repoRoot));
+        if (snapshot.ApprovedFiles.Count == 0 ||
+            !string.Equals(snapshot.OperatorApprovalState, "applied_with_operator_approval", StringComparison.Ordinal))
+        {
+            return LoadBuilderPatchExport(repoRoot);
+        }
+
+        var patchDiffReview = LoadBuilderPatchDiffReview(repoRoot);
+        var result = LoadLatestBuilderExecutionResult(repoRoot);
+        var bundleText = BuildBuilderPatchBundleText(repoRoot, snapshot, patchDiffReview, result);
+        File.WriteAllText(BuilderPatchBundlePathForRepo(repoRoot), bundleText);
+
+        var observedUtc = DateTimeOffset.UtcNow;
+        var export = new BuilderPatchExport(
+            snapshot.SnapshotId,
+            BuilderPatchBundlePathForRepo(repoRoot),
+            observedUtc,
+            snapshot.ApprovedFiles.Count,
+            snapshot.LinkedArtifactPaths
+                .Concat(new[]
+                {
+                    snapshot.ArtifactPath,
+                    patchDiffReview.ArtifactPath,
+                    BuilderPatchBundlePathForRepo(repoRoot)
+                })
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToArray(),
+            $"Patch export created for {snapshot.ApprovedFiles.Count} approved file(s).",
+            BuilderPatchExportPathForRepo(repoRoot),
+            observedUtc);
+        File.WriteAllText(
+            BuilderPatchExportPathForRepo(repoRoot),
+            JsonSerializer.Serialize(export, new JsonSerializerOptions { WriteIndented = true }));
+
+        var history = BuildBuilderPatchSnapshotHistory(repoRoot, LoadBuilderPatchSnapshotHistory(repoRoot), snapshot, export);
+        File.WriteAllText(
+            BuilderPatchSnapshotHistoryPathForRepo(repoRoot),
+            JsonSerializer.Serialize(history, new JsonSerializerOptions { WriteIndented = true }));
+        return export;
+    }
+
+    public BuilderOutputHandoff PrepareBuilderOutputHandoff(string repoRoot)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return LoadBuilderOutputHandoff(repoRoot);
+        }
+
+        var session = LoadBuilderConversationExecutionSession(repoRoot);
+        var patchDiffReview = LoadBuilderPatchDiffReview(repoRoot);
+        var fileReviewDecision = LoadBuilderFileReviewDecision(repoRoot);
+        var patchApplyDecision = LoadBuilderPatchApplyDecision(repoRoot);
+        var patchReviewOutcome = LoadBuilderPatchReviewOutcome(repoRoot);
+        var result = LoadLatestBuilderExecutionResult(repoRoot);
+        var snapshot = EnsureBuilderPatchSnapshot(
+            repoRoot,
+            session,
+            patchDiffReview,
+            fileReviewDecision,
+            patchApplyDecision,
+            patchReviewOutcome,
+            result);
+        if (snapshot.ApprovedFiles.Count == 0 ||
+            !string.Equals(snapshot.OperatorApprovalState, "applied_with_operator_approval", StringComparison.Ordinal))
+        {
+            return LoadBuilderOutputHandoff(repoRoot);
+        }
+
+        var proposal = PrepareBuilderCommitProposal(repoRoot);
+        var export = ExportBuilderApprovedPatchBundle(repoRoot);
+        if (string.IsNullOrWhiteSpace(proposal.ArtifactPath) ||
+            string.IsNullOrWhiteSpace(export.ArtifactPath) ||
+            string.IsNullOrWhiteSpace(export.BundleFilePath))
+        {
+            return LoadBuilderOutputHandoff(repoRoot);
+        }
+
+        var approvedFiles = snapshot.ApprovedFiles
+            .Select(file => file.RelativePath)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var gitObservation = _builderGitReadinessProbe.Probe(repoRoot);
+        var gitReadiness = BuildBuilderGitHandoffReadiness(repoRoot, gitObservation);
+        File.WriteAllText(
+            BuilderGitHandoffReadinessPathForRepo(repoRoot),
+            JsonSerializer.Serialize(gitReadiness, new JsonSerializerOptions { WriteIndented = true }));
+
+        var manualApplyGuidance = BuildBuilderManualApplyGuidance(repoRoot, snapshot, export, gitReadiness);
+        File.WriteAllText(
+            BuilderManualApplyGuidancePathForRepo(repoRoot),
+            JsonSerializer.Serialize(manualApplyGuidance, new JsonSerializerOptions { WriteIndented = true }));
+
+        var gitCommitHandoff = BuildBuilderGitCommitHandoff(repoRoot, snapshot, proposal, gitReadiness);
+        File.WriteAllText(
+            BuilderGitCommitHandoffPathForRepo(repoRoot),
+            JsonSerializer.Serialize(gitCommitHandoff, new JsonSerializerOptions { WriteIndented = true }));
+
+        var observedUtc = new[]
+            {
+                snapshot.ObservedUtc,
+                proposal.ObservedUtc,
+                export.ObservedUtc,
+                gitReadiness.ObservedUtc,
+                manualApplyGuidance.ObservedUtc,
+                gitCommitHandoff.ObservedUtc
+            }
+            .Max();
+        var handoffReadinessState = DetermineBuilderOutputHandoffReadinessState(export, gitReadiness);
+        var linkedArtifactPaths = snapshot.LinkedArtifactPaths
+            .Concat(new[]
+            {
+                snapshot.ArtifactPath,
+                proposal.ArtifactPath,
+                export.ArtifactPath,
+                export.BundleFilePath,
+                manualApplyGuidance.ArtifactPath,
+                gitReadiness.ArtifactPath,
+                gitCommitHandoff.ArtifactPath,
+                BuilderPatchApplyDecisionPathForRepo(repoRoot),
+                patchReviewOutcome.ArtifactPath
+            })
+            .Where(BuilderArtifactPathExists)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var blockReasons = gitReadiness.BlockReasons
+            .OrderBy(reason => reason, StringComparer.Ordinal)
+            .ToArray();
+        var handoff = new BuilderOutputHandoff(
+            snapshot.SnapshotId,
+            snapshot.ExecutionSessionId,
+            approvedFiles,
+            export.BundleFilePath,
+            proposal.ArtifactPath,
+            export.ArtifactPath,
+            manualApplyGuidance.ArtifactPath,
+            gitReadiness.ArtifactPath,
+            gitCommitHandoff.ArtifactPath,
+            handoffReadinessState,
+            gitReadiness.ReadinessClassification,
+            blockReasons,
+            linkedArtifactPaths,
+            BuildBuilderOutputHandoffSummary(snapshot, export, gitReadiness),
+            BuilderOutputHandoffPathForRepo(repoRoot),
+            observedUtc);
+        File.WriteAllText(
+            BuilderOutputHandoffPathForRepo(repoRoot),
+            JsonSerializer.Serialize(handoff, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(
+            BuilderOutputHandoffSummaryPathForRepo(repoRoot),
+            BuildBuilderOutputHandoffSummaryMarkdown(handoff, manualApplyGuidance));
+
+        var history = BuildBuilderOutputHandoffHistory(repoRoot, LoadBuilderOutputHandoffHistory(repoRoot), handoff);
+        File.WriteAllText(
+            BuilderOutputHandoffHistoryPathForRepo(repoRoot),
+            JsonSerializer.Serialize(history, new JsonSerializerOptions { WriteIndented = true }));
+        RefreshBuilderDiagnosticArtifacts(repoRoot);
+        return handoff;
+    }
+
+    private void RefreshBuilderDiagnosticArtifacts(string repoRoot)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(BuilderProofRootForRepo(repoRoot));
+        var intake = LoadBuilderConversationIntake(repoRoot);
+        var handoff = LoadBuilderConversationHandoff(repoRoot);
+        var modelDecision = LoadBuilderModelDecision(repoRoot);
+        var escalationPolicyDecision = LoadBuilderModelEscalationPolicyDecision(repoRoot);
+        var capabilityMatrix = LoadBuilderModelCapabilityMatrix(repoRoot);
+        var routingPolicy = LoadBuilderModelRoutingPolicy(repoRoot);
+        var defaultRouteDecision = LoadLatestBuilderDefaultRouteDecision(repoRoot);
+        var launchDefaultDecision = LoadLatestBuilderLaunchDefaultDecision(repoRoot);
+        var session = LoadBuilderConversationExecutionSession(repoRoot);
+        var patchReviewOutcome = LoadBuilderPatchReviewOutcome(repoRoot);
+        var patchApplyDecision = LoadBuilderPatchApplyDecision(repoRoot);
+        var result = LoadLatestBuilderExecutionResult(repoRoot);
+
+        var routeExplanation = BuildBuilderRouteExplanation(
+            repoRoot,
+            intake,
+            handoff,
+            capabilityMatrix,
+            routingPolicy,
+            defaultRouteDecision,
+            launchDefaultDecision);
+        File.WriteAllText(
+            BuilderRouteExplanationPathForRepo(repoRoot),
+            JsonSerializer.Serialize(routeExplanation, new JsonSerializerOptions { WriteIndented = true }));
+
+        var modelDecisionExplanation = BuildBuilderModelDecisionExplanation(
+            repoRoot,
+            intake,
+            modelDecision,
+            escalationPolicyDecision,
+            capabilityMatrix,
+            routingPolicy);
+        File.WriteAllText(
+            BuilderModelDecisionExplanationPathForRepo(repoRoot),
+            JsonSerializer.Serialize(modelDecisionExplanation, new JsonSerializerOptions { WriteIndented = true }));
+
+        var failureAnalysis = BuildBuilderFailureAnalysis(
+            repoRoot,
+            intake,
+            handoff,
+            session,
+            patchReviewOutcome,
+            patchApplyDecision,
+            result);
+        File.WriteAllText(
+            BuilderFailureAnalysisPathForRepo(repoRoot),
+            JsonSerializer.Serialize(failureAnalysis, new JsonSerializerOptions { WriteIndented = true }));
+
+        File.WriteAllText(
+            BuilderOperatorDiagnosticSummaryPathForRepo(repoRoot),
+            BuildBuilderOperatorDiagnosticSummaryMarkdown(
+                intake,
+                handoff,
+                session,
+                result,
+                routeExplanation,
+                modelDecisionExplanation,
+                failureAnalysis));
+    }
+
+    private static BuilderRouteExplanation BuildBuilderRouteExplanation(
+        string repoRoot,
+        BuilderConversationIntake intake,
+        BuilderConversationHandoff handoff,
+        BuilderModelCapabilityMatrix capabilityMatrix,
+        BuilderModelRoutingPolicy routingPolicy,
+        BuilderDefaultRouteDecision? defaultRouteDecision,
+        BuilderLaunchDefaultDecision? launchDefaultDecision)
+    {
+        var requestId = intake.ObservedUtc <= DateTimeOffset.MinValue ? string.Empty : BuildBuilderConversationIntakeId(intake);
+        var selectedRoute = FirstNonEmpty(handoff.SelectedRoute, intake.SelectedRoute);
+        var policyEntry = FindBuilderModelRoutingPolicyEntry(routingPolicy, intake.NormalizedTaskClass);
+        var matrixEntry = FindBuilderModelCapabilityMatrixEntry(capabilityMatrix, intake.NormalizedTaskClass);
+        var alternateRoutes = BuildBuilderAlternateRoutesConsidered(
+            selectedRoute,
+            policyEntry,
+            defaultRouteDecision,
+            launchDefaultDecision);
+        var linkedCapabilityEntries = matrixEntry is null
+            ? Array.Empty<string>()
+            : new[]
+            {
+                $"{matrixEntry.TaskClass}|{matrixEntry.RouteClass}|{matrixEntry.CapabilityState}|{matrixEntry.EvidenceSupportLevel}"
+            };
+        var linkedProofArtifacts = (matrixEntry?.LinkedProofArtifactPaths ?? Array.Empty<string>())
+            .Concat(policyEntry?.LinkedEvidencePaths ?? Array.Empty<string>())
+            .Where(BuilderArtifactPathExists)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var routeSelectionReason = BuildBuilderRouteExplanationReason(
+            intake,
+            handoff,
+            policyEntry,
+            matrixEntry,
+            defaultRouteDecision,
+            launchDefaultDecision);
+        var summary = string.IsNullOrWhiteSpace(selectedRoute)
+            ? $"No builder route explanation is available because the current request has not resolved a prepared route. {routeSelectionReason}"
+            : $"Route {selectedRoute} was chosen for {FirstNonEmpty(intake.NormalizedTaskClass, "unclassified_request")}. {routeSelectionReason}";
+        return new BuilderRouteExplanation(
+            requestId,
+            intake.NormalizedTaskClass,
+            selectedRoute,
+            alternateRoutes,
+            routeSelectionReason,
+            linkedCapabilityEntries,
+            linkedProofArtifacts,
+            summary,
+            BuilderRouteExplanationPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static BuilderModelDecisionExplanation BuildBuilderModelDecisionExplanation(
+        string repoRoot,
+        BuilderConversationIntake intake,
+        BuilderModelDecision modelDecision,
+        BuilderModelEscalationPolicyDecision escalationPolicyDecision,
+        BuilderModelCapabilityMatrix capabilityMatrix,
+        BuilderModelRoutingPolicy routingPolicy)
+    {
+        var policyEntry = FindBuilderModelRoutingPolicyEntry(routingPolicy, intake.NormalizedTaskClass);
+        var matrixEntry = FindBuilderModelCapabilityMatrixEntry(capabilityMatrix, intake.NormalizedTaskClass);
+        var requestId = FirstNonEmpty(
+            modelDecision.RequestId,
+            intake.ObservedUtc <= DateTimeOffset.MinValue ? string.Empty : BuildBuilderConversationIntakeId(intake));
+        var splitFirstReasoning = BuildBuilderSplitFirstReasoning(modelDecision, escalationPolicyDecision, policyEntry);
+        var linkedArtifactPaths = modelDecision.LinkedArtifactPaths
+            .Concat(policyEntry?.LinkedEvidencePaths ?? Array.Empty<string>())
+            .Concat(matrixEntry?.LinkedProofArtifactPaths ?? Array.Empty<string>())
+            .Where(BuilderArtifactPathExists)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var capabilitySummary = matrixEntry?.Summary ?? "No builder model capability entry recorded.";
+        var routingRulesSummary = policyEntry?.Summary ?? "No builder routing rules entry recorded.";
+        var summary = string.IsNullOrWhiteSpace(modelDecision.SelectedModelTier)
+            ? "No builder model decision explanation is available because no current model decision was recorded."
+            : $"{modelDecision.SelectedModelTier} ({FirstNonEmpty(modelDecision.SelectedModelId, "not recorded")}) was selected for {FirstNonEmpty(intake.NormalizedTaskClass, modelDecision.NormalizedTaskClass, "unclassified_request")}. {splitFirstReasoning} Escalation state={FirstNonEmpty(escalationPolicyDecision.FinalDecisionState, "not_recorded")}.";
+        return new BuilderModelDecisionExplanation(
+            requestId,
+            modelDecision.SelectedModelTier,
+            modelDecision.SelectedModelId,
+            capabilitySummary,
+            routingRulesSummary,
+            escalationPolicyDecision.FinalDecisionState,
+            splitFirstReasoning,
+            modelDecision.StrongerTierRecommendationState,
+            modelDecision.EvidenceSupportLevel,
+            linkedArtifactPaths,
+            summary,
+            BuilderModelDecisionExplanationPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static BuilderFailureAnalysis BuildBuilderFailureAnalysis(
+        string repoRoot,
+        BuilderConversationIntake intake,
+        BuilderConversationHandoff handoff,
+        BuilderConversationExecutionSession session,
+        BuilderPatchReviewOutcome patchReviewOutcome,
+        BuilderPatchApplyDecision patchApplyDecision,
+        PreparedBuilderExecutionResult? result)
+    {
+        var linkedArtifactPaths = new[]
+            {
+                intake.ArtifactPath,
+                handoff.ArtifactPath,
+                session.ArtifactPath,
+                patchReviewOutcome.ArtifactPath,
+                patchApplyDecision.ArtifactPath,
+                result?.ArtifactPath ?? string.Empty
+            }
+            .Where(BuilderArtifactPathExists)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+        string failureStageId;
+        string failureStageLabel;
+        string failureClassification;
+        string failureReason;
+        string possibleRemediationPath;
+
+        if (string.Equals(patchApplyDecision.FinalizationState, "blocked_by_file_rejection", StringComparison.Ordinal))
+        {
+            failureStageId = FirstNonEmpty(session.CurrentStageId, "awaiting_operator_review");
+            failureStageLabel = FirstNonEmpty(session.CurrentStageLabel, "Awaiting operator review");
+            failureClassification = "blocked_by_file_rejection";
+            failureReason = FirstNonEmpty(patchApplyDecision.Summary, "Finalization is blocked because at least one file was rejected.");
+            possibleRemediationPath = "Revise or approve the rejected files before finalizing the patch.";
+        }
+        else if (string.Equals(patchApplyDecision.FinalizationState, "blocked_by_revision_request", StringComparison.Ordinal))
+        {
+            failureStageId = FirstNonEmpty(session.CurrentStageId, "awaiting_operator_review");
+            failureStageLabel = FirstNonEmpty(session.CurrentStageLabel, "Awaiting operator review");
+            failureClassification = "blocked_by_revision_request";
+            failureReason = FirstNonEmpty(patchApplyDecision.Summary, "Finalization is blocked because a revision request is still active.");
+            possibleRemediationPath = "Complete the requested revision, then rerun file review before finalizing.";
+        }
+        else if (string.Equals(patchReviewOutcome.ReviewDecisionState, "rejected", StringComparison.Ordinal))
+        {
+            failureStageId = FirstNonEmpty(session.CurrentStageId, "awaiting_operator_review");
+            failureStageLabel = FirstNonEmpty(session.CurrentStageLabel, "Awaiting operator review");
+            failureClassification = "patch_rejected";
+            failureReason = FirstNonEmpty(patchReviewOutcome.Summary, "Operator rejected the candidate patch.");
+            possibleRemediationPath = "Create a bounded revision or reroute using the current patch review evidence.";
+        }
+        else if (string.Equals(patchReviewOutcome.ReviewDecisionState, "revise_requested", StringComparison.Ordinal))
+        {
+            failureStageId = FirstNonEmpty(session.CurrentStageId, "awaiting_operator_review");
+            failureStageLabel = FirstNonEmpty(session.CurrentStageLabel, "Awaiting operator review");
+            failureClassification = "revision_requested";
+            failureReason = FirstNonEmpty(patchReviewOutcome.Summary, "Operator requested a bounded revision.");
+            possibleRemediationPath = "Revise the candidate changes and return to patch review with the recorded file evidence.";
+        }
+        else if (string.Equals(patchReviewOutcome.ReviewDecisionState, "reroute_requested", StringComparison.Ordinal))
+        {
+            failureStageId = FirstNonEmpty(session.CurrentStageId, "awaiting_operator_review");
+            failureStageLabel = FirstNonEmpty(session.CurrentStageLabel, "Awaiting operator review");
+            failureClassification = "reroute_requested";
+            failureReason = FirstNonEmpty(patchReviewOutcome.Summary, "Operator requested a different route.");
+            possibleRemediationPath = "Prepare the requested reroute and re-enter the execution session with the current evidence trail.";
+        }
+        else if (string.Equals(session.SessionState, "failed_into_followup", StringComparison.Ordinal))
+        {
+            failureStageId = FirstNonEmpty(session.CurrentStageId, "validation_run");
+            failureStageLabel = FirstNonEmpty(session.CurrentStageLabel, "Validation run");
+            failureClassification = result?.FinalRouteOutcomeClassification switch
+            {
+                "launched_and_failed_out_of_scope" => "execution_failed_out_of_scope",
+                "launched_and_failed_followup_created" => "execution_failed_into_followup",
+                _ => "execution_failed_into_followup"
+            };
+            failureReason = FirstNonEmpty(result?.Summary, session.Summary, "Builder execution failed and entered follow-up.");
+            possibleRemediationPath = string.Equals(result?.FinalRouteOutcomeClassification, "launched_and_failed_out_of_scope", StringComparison.Ordinal)
+                ? "Reduce scope or select a route/model tier with evidence for the requested task class."
+                : "Review the linked follow-up or repair artifacts and rerun the bounded request.";
+        }
+        else if (handoff.LaunchReadinessState.StartsWith("launch_blocked_", StringComparison.Ordinal))
+        {
+            failureStageId = "conversation_handoff";
+            failureStageLabel = "Conversation handoff";
+            failureClassification = handoff.LaunchReadinessState;
+            failureReason = FirstNonEmpty(handoff.BlockReason, handoff.Summary, "Builder conversation handoff is blocked.");
+            possibleRemediationPath = DetermineBuilderLaunchBlockRemediation(handoff.LaunchReadinessState, failureReason);
+        }
+        else if (intake.LaunchReadinessState.StartsWith("launch_blocked_", StringComparison.Ordinal))
+        {
+            failureStageId = "conversation_preview";
+            failureStageLabel = "Conversation preview";
+            failureClassification = intake.LaunchReadinessState;
+            failureReason = FirstNonEmpty(intake.BlockReason, intake.Summary, "Builder conversation preview is blocked.");
+            possibleRemediationPath = DetermineBuilderLaunchBlockRemediation(intake.LaunchReadinessState, failureReason);
+        }
+        else
+        {
+            failureStageId = FirstNonEmpty(session.CurrentStageId, "not_started");
+            failureStageLabel = FirstNonEmpty(session.CurrentStageLabel, "Not started");
+            failureClassification = "no_failure_recorded";
+            failureReason = "No current builder failure is recorded for the latest request state.";
+            possibleRemediationPath = "No remediation is required for the current builder state.";
+        }
+
+        var summary = string.Equals(failureClassification, "no_failure_recorded", StringComparison.Ordinal)
+            ? $"{failureReason} Stage={failureStageLabel}."
+            : $"{failureClassification} at {failureStageLabel}: {failureReason} Remediation: {possibleRemediationPath}";
+        return new BuilderFailureAnalysis(
+            session.SessionId,
+            failureStageId,
+            failureStageLabel,
+            failureClassification,
+            failureReason,
+            linkedArtifactPaths,
+            possibleRemediationPath,
+            summary,
+            BuilderFailureAnalysisPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static IReadOnlyList<string> BuildBuilderAlternateRoutesConsidered(
+        string selectedRoute,
+        BuilderModelRoutingPolicyEntry? policyEntry,
+        BuilderDefaultRouteDecision? defaultRouteDecision,
+        BuilderLaunchDefaultDecision? launchDefaultDecision)
+    {
+        var routes = new[]
+            {
+                policyEntry?.FallbackPath ?? string.Empty,
+                policyEntry?.RouteClass ?? string.Empty,
+                defaultRouteDecision?.ChosenDefaultRoute ?? string.Empty,
+                launchDefaultDecision?.ConfirmedDefaultRoute ?? string.Empty
+            }
+            .Concat(GetBuilderRouteFamilyAlternates(selectedRoute))
+            .Where(route => !string.IsNullOrWhiteSpace(route) &&
+                            !string.Equals(route, selectedRoute, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(route => route, StringComparer.Ordinal)
+            .ToArray();
+        return routes;
+    }
+
+    private static IReadOnlyList<string> GetBuilderRouteFamilyAlternates(string selectedRoute)
+        => selectedRoute switch
+        {
+            "direct_low_floor_route" => new[] { "split_first_low_floor_route", "low_floor_with_repair_loop_route" },
+            "split_first_low_floor_route" => new[] { "direct_low_floor_route", "low_floor_with_repair_loop_route" },
+            "low_floor_with_repair_loop_route" => new[] { "direct_low_floor_route", "split_first_low_floor_route" },
+            "stronger_tier_recommended_route" => new[] { "split_first_low_floor_route", "direct_low_floor_route" },
+            "task_out_of_scope_route" => new[] { "split_first_low_floor_route", "stronger_tier_recommended_route" },
+            _ => Array.Empty<string>()
+        };
+
+    private static string BuildBuilderRouteExplanationReason(
+        BuilderConversationIntake intake,
+        BuilderConversationHandoff handoff,
+        BuilderModelRoutingPolicyEntry? policyEntry,
+        BuilderModelCapabilityMatrixEntry? matrixEntry,
+        BuilderDefaultRouteDecision? defaultRouteDecision,
+        BuilderLaunchDefaultDecision? launchDefaultDecision)
+    {
+        var parts = new List<string>();
+        if (string.Equals(handoff.OperatorDecisionState, "override_route", StringComparison.Ordinal))
+        {
+            parts.Add($"Operator override selected {handoff.SelectedRoute}.");
+        }
+        else if (!string.IsNullOrWhiteSpace(intake.RouteSourceState))
+        {
+            parts.Add($"Route source={intake.RouteSourceState}.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(policyEntry?.Summary))
+        {
+            parts.Add(policyEntry.Summary);
+        }
+
+        if (!string.IsNullOrWhiteSpace(matrixEntry?.Summary))
+        {
+            parts.Add(matrixEntry.Summary);
+        }
+
+        if (!string.IsNullOrWhiteSpace(launchDefaultDecision?.Summary))
+        {
+            parts.Add(launchDefaultDecision.Summary);
+        }
+        else if (!string.IsNullOrWhiteSpace(defaultRouteDecision?.Summary))
+        {
+            parts.Add(defaultRouteDecision.Summary);
+        }
+
+        if (!string.IsNullOrWhiteSpace(handoff.BlockReason))
+        {
+            parts.Add($"Block reason: {handoff.BlockReason}");
+        }
+        else if (!string.IsNullOrWhiteSpace(intake.BlockReason))
+        {
+            parts.Add($"Block reason: {intake.BlockReason}");
+        }
+
+        return string.Join(" ", parts.Where(part => !string.IsNullOrWhiteSpace(part))).Trim();
+    }
+
+    private static string BuildBuilderSplitFirstReasoning(
+        BuilderModelDecision modelDecision,
+        BuilderModelEscalationPolicyDecision escalationPolicyDecision,
+        BuilderModelRoutingPolicyEntry? policyEntry)
+    {
+        if (modelDecision.SplitFirstKeepsLowFloorViable ||
+            string.Equals(escalationPolicyDecision.FinalDecisionState, "low_floor_via_split_first", StringComparison.Ordinal))
+        {
+            return "Split-first keeps the low-floor route viable for this task class.";
+        }
+
+        if (policyEntry?.SplitFirstRequired == true)
+        {
+            return "Split-first is required before the selected model tier can be used safely.";
+        }
+
+        if (string.Equals(modelDecision.CapabilityState, "low_floor_direct_supported", StringComparison.Ordinal))
+        {
+            return "Split-first is not required because current proof keeps this task class inside the direct low-floor lane.";
+        }
+
+        if (string.Equals(modelDecision.CapabilityState, "low_floor_supported_with_repair_loop", StringComparison.Ordinal))
+        {
+            return "Split-first is not the deciding factor here; the low-floor lane remains bounded only with repair-loop recovery.";
+        }
+
+        return "Split-first does not currently keep the low-floor route viable for this task class.";
+    }
+
+    private static string DetermineBuilderLaunchBlockRemediation(string launchReadinessState, string failureReason)
+        => launchReadinessState switch
+        {
+            "launch_blocked_model_policy" when failureReason.Contains("stronger", StringComparison.OrdinalIgnoreCase) =>
+                "Use the stronger tier when it becomes available, or keep the request split-first only when proof explicitly supports that lane.",
+            "launch_blocked_model_policy" =>
+                "Refresh the recorded model routing evidence and keep the request inside a proven lane before launching again.",
+            "launch_blocked_weak_match" =>
+                "Clarify the request or use an explicit operator override only after reviewing the weak repo match evidence.",
+            "launch_blocked_capability" =>
+                "Use a repo-supported stack/toolchain or refresh capability evidence before preparing the route again.",
+            "launch_blocked_route" =>
+                "Refresh the current route decision artifacts and confirm a prepared route before launch.",
+            _ => "Review the linked builder artifacts, correct the blocking condition, and retry the bounded request."
+        };
+
+    private static string BuildBuilderOperatorDiagnosticSummaryMarkdown(
+        BuilderConversationIntake intake,
+        BuilderConversationHandoff handoff,
+        BuilderConversationExecutionSession session,
+        PreparedBuilderExecutionResult? result,
+        BuilderRouteExplanation routeExplanation,
+        BuilderModelDecisionExplanation modelDecisionExplanation,
+        BuilderFailureAnalysis failureAnalysis)
+    {
+        var finalOutcome = FirstNonEmpty(
+            result?.FinalRouteOutcomeClassification,
+            session.SessionState,
+            handoff.LaunchReadinessState,
+            intake.LaunchReadinessState,
+            "not_recorded");
+        var splitState = intake.SplitFirstRequired || modelDecisionExplanation.SplitFirstReasoning.Contains("keeps the low-floor route viable", StringComparison.OrdinalIgnoreCase)
+            ? "required_or_used"
+            : "not_required";
+        var strongerTierState = FirstNonEmpty(
+            modelDecisionExplanation.StrongerTierRecommendationState,
+            intake.StrongerTierDisposition,
+            "not_recorded");
+        var blockSummary = string.Equals(failureAnalysis.FailureClassification, "no_failure_recorded", StringComparison.Ordinal)
+            ? "No current block conditions are recorded."
+            : failureAnalysis.FailureReason;
+
+        return string.Join(
+            System.Environment.NewLine,
+            new[]
+            {
+                "# Builder Operator Diagnostic Summary",
+                string.Empty,
+                $"- Request: {FirstNonEmpty(intake.RawRequestText, handoff.RawRequestText, "Not recorded")}",
+                $"- Task class: {FirstNonEmpty(intake.NormalizedTaskClass, handoff.NormalizedTaskClass, "not_recorded")}",
+                $"- Route: {FirstNonEmpty(routeExplanation.SelectedRoute, intake.SelectedRoute, handoff.SelectedRoute, "not_recorded")}",
+                $"- Model tier: {FirstNonEmpty(modelDecisionExplanation.ModelTierSelected, "not_recorded")}",
+                $"- Split-first: {splitState}",
+                $"- Stronger tier: {strongerTierState}",
+                $"- Block conditions: {blockSummary}",
+                $"- Final execution outcome: {finalOutcome}",
+                string.Empty,
+                "## Route Explanation",
+                routeExplanation.Summary,
+                string.Empty,
+                "## Model Decision Explanation",
+                modelDecisionExplanation.Summary,
+                string.Empty,
+                "## Failure Analysis",
+                failureAnalysis.Summary
+            });
+    }
+
+    private static BuilderToolchainCapabilityRegistry BuildBuilderToolchainCapabilityRegistry(
+        string repoRoot,
+        BuilderRepoToolchainPolicySnapshot policy,
+        IReadOnlyList<BuilderToolchainCapabilityObservation> observations,
+        BuilderToolchainCapabilityRegistry priorRegistry)
+    {
+        var observedUtc = observations.Count == 0
+            ? DateTimeOffset.UtcNow
+            : observations.Max(entry => entry.ObservedUtc);
+        var observationMap = observations
+            .GroupBy(entry => entry.ToolId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(entry => entry.ObservedUtc).First(), StringComparer.Ordinal);
+        foreach (var toolId in GetBuilderToolchainCandidateIds())
+        {
+            if (!observationMap.ContainsKey(toolId))
+            {
+                observationMap[toolId] = new BuilderToolchainCapabilityObservation(
+                    toolId,
+                    GetBuilderToolchainCategory(toolId),
+                    string.Empty,
+                    string.Empty,
+                    false,
+                    false,
+                    "not_found",
+                    $"{toolId} is not installed or not discoverable on PATH.",
+                    observedUtc);
+            }
+        }
+
+        observationMap["dotnet_wpf_desktop"] = BuildBuilderWpfDesktopObservation(
+            policy,
+            observationMap["dotnet"],
+            observedUtc);
+
+        var entries = observationMap.Values
+            .Select(observation =>
+            {
+                var supportedByRepo = IsBuilderToolchainSupportedByRepo(observation.ToolId, policy);
+                var preferredByRepo = IsBuilderToolchainPreferredByRepo(observation.ToolId, policy);
+                var usabilityState = DetermineBuilderToolchainUsabilityState(observation, supportedByRepo, preferredByRepo);
+                var blockedReason = BuildBuilderToolchainBlockedReason(observation, supportedByRepo);
+                return new BuilderToolchainCapabilityRegistryEntry(
+                    observation.ToolId,
+                    observation.ToolCategory,
+                    observation.DiscoveredPath,
+                    observation.Version,
+                    observation.Installed,
+                    observation.Callable,
+                    supportedByRepo,
+                    preferredByRepo,
+                    supportedByRepo
+                        ? preferredByRepo ? "preferred_for_repo" : "supported_for_repo"
+                        : "not_supported_for_repo",
+                    usabilityState,
+                    blockedReason,
+                    BuildBuilderToolchainRegistryEntrySummary(observation, usabilityState, blockedReason),
+                    observation.ObservedUtc);
+            })
+            .OrderBy(entry => entry.ToolId, StringComparer.Ordinal)
+            .ToArray();
+
+        var changedToolIds = new SortedSet<string>(StringComparer.Ordinal);
+        var changeSummaries = new List<string>();
+        foreach (var entry in entries)
+        {
+            var previous = priorRegistry.Entries.FirstOrDefault(candidate => string.Equals(candidate.ToolId, entry.ToolId, StringComparison.Ordinal));
+            if (previous is null)
+            {
+                if (priorRegistry.ObservedUtc > DateTimeOffset.MinValue)
+                {
+                    changedToolIds.Add(entry.ToolId);
+                    changeSummaries.Add($"{entry.ToolId} was newly observed during capability refresh.");
+                }
+
+                continue;
+            }
+
+            if (!string.Equals(previous.Version, entry.Version, StringComparison.Ordinal))
+            {
+                changedToolIds.Add(entry.ToolId);
+                changeSummaries.Add($"{entry.ToolId} version changed from {FirstNonEmpty(previous.Version, "not_recorded")} to {FirstNonEmpty(entry.Version, "not_recorded")}.");
+            }
+
+            if (previous.Callable != entry.Callable)
+            {
+                changedToolIds.Add(entry.ToolId);
+                changeSummaries.Add($"{entry.ToolId} callable state changed from {previous.Callable} to {entry.Callable}.");
+            }
+
+            if (previous.Installed != entry.Installed)
+            {
+                changedToolIds.Add(entry.ToolId);
+                changeSummaries.Add($"{entry.ToolId} installed state changed from {previous.Installed} to {entry.Installed}.");
+            }
+
+            if (!string.Equals(previous.DiscoveredPath, entry.DiscoveredPath, StringComparison.Ordinal))
+            {
+                changedToolIds.Add(entry.ToolId);
+                changeSummaries.Add($"{entry.ToolId} path changed from {FirstNonEmpty(previous.DiscoveredPath, "not_recorded")} to {FirstNonEmpty(entry.DiscoveredPath, "not_recorded")}.");
+            }
+        }
+
+        var driftState = priorRegistry.ObservedUtc <= DateTimeOffset.MinValue
+            ? "initial_scan"
+            : changeSummaries.Count > 0
+                ? "changed"
+                : "unchanged";
+        return new BuilderToolchainCapabilityRegistry(
+            policy.PreferredStackId,
+            policy.PreferredStackLabel,
+            entries,
+            "completed",
+            driftState,
+            changedToolIds.ToArray(),
+            changeSummaries.ToArray(),
+            BuildBuilderToolchainCapabilitySummary(policy, entries, driftState),
+            BuilderToolchainCapabilityRegistryPathForRepo(repoRoot),
+            observedUtc);
+    }
+
+    private static BuilderToolchainCapabilityHistory BuildBuilderToolchainCapabilityHistory(
+        BuilderToolchainCapabilityHistory priorHistory,
+        BuilderToolchainCapabilityRegistry current)
+    {
+        var retentionCount = Math.Max(priorHistory.RetentionCount, 12);
+        var currentEntry = new BuilderToolchainCapabilityHistoryEntry(
+            current.PreferredStackId,
+            current.PreferredStackLabel,
+            current.RefreshState,
+            current.DriftState,
+            current.ChangedToolIds,
+            current.ChangeSummaries,
+            current.Summary,
+            current.ArtifactPath,
+            current.ObservedUtc);
+        var entries = priorHistory.Entries
+            .Where(entry => entry.ObservedUtc != currentEntry.ObservedUtc)
+            .Concat(new[] { currentEntry })
+            .OrderByDescending(entry => entry.ObservedUtc)
+            .ThenByDescending(entry => entry.PreferredStackId, StringComparer.Ordinal)
+            .Take(retentionCount)
+            .ToArray();
+        var summary = entries.Length == 0
+            ? "No toolchain capability refresh history recorded."
+            : current.ChangeSummaries.Count == 0
+                ? "Latest capability refresh found no drift."
+                : $"Latest capability refresh changed {current.ChangedToolIds.Count} toolchain observation(s).";
+
+        return new BuilderToolchainCapabilityHistory(
+            retentionCount,
+            entries,
+            summary,
+            Path.Combine(Path.GetDirectoryName(current.ArtifactPath) ?? string.Empty, "builder_toolchain_capability_history.json"),
+            current.ObservedUtc);
+    }
+
+    private static BuilderLanguageEligibility BuildBuilderLanguageEligibility(
+        string repoRoot,
+        BuilderRepoToolchainPolicySnapshot policy,
+        BuilderToolchainCapabilityRegistry registry)
+    {
+        var entries = GetBuilderLanguageStackDefinitions()
+            .Select(definition =>
+            {
+                var supportedByRepo = IsBuilderLanguageSupportedByRepo(definition.StackId, policy);
+                var preferredByRepo = IsBuilderLanguagePreferredByRepo(definition.StackId, policy);
+                var ready = IsBuilderLanguageReady(definition.StackId, registry);
+                var anyInstalled = definition.RequiredToolIds.Any(toolId => IsBuilderToolchainInstalled(registry, toolId));
+                var eligibilityState = supportedByRepo
+                    ? ready
+                        ? preferredByRepo ? "ready_and_preferred" : "ready_but_not_preferred"
+                        : "unavailable"
+                    : anyInstalled
+                        ? "installed_but_disallowed"
+                        : "unsupported_for_repo";
+                var blockedReason = eligibilityState switch
+                {
+                    "unavailable" => $"Required toolchain is unavailable: {definition.ToolchainRequirementSummary}",
+                    "installed_but_disallowed" => $"{definition.StackLabel} is installed on the machine but blocked by repo policy.",
+                    "unsupported_for_repo" => $"{definition.StackLabel} is not supported by repo policy.",
+                    _ => string.Empty
+                };
+                return new BuilderLanguageEligibilityEntry(
+                    definition.StackId,
+                    definition.StackLabel,
+                    eligibilityState,
+                    supportedByRepo,
+                    preferredByRepo,
+                    definition.RequiredToolIds,
+                    definition.ToolchainRequirementSummary,
+                    blockedReason,
+                    BuildBuilderLanguageEligibilityEntrySummary(definition, eligibilityState, blockedReason));
+            })
+            .OrderBy(entry => entry.StackId, StringComparer.Ordinal)
+            .ToArray();
+
+        return new BuilderLanguageEligibility(
+            policy.PreferredStackId,
+            policy.PreferredStackLabel,
+            entries,
+            BuildBuilderLanguageEligibilitySummary(entries, policy),
+            BuilderLanguageEligibilityPathForRepo(repoRoot),
+            registry.ObservedUtc);
+    }
+
+    private static string BuildBuilderLanguageEligibilitySummaryMarkdown(BuilderLanguageEligibility eligibility)
+    {
+        var preferred = eligibility.Entries.Where(entry => string.Equals(entry.EligibilityState, "ready_and_preferred", StringComparison.Ordinal)).ToArray();
+        var readyNotPreferred = eligibility.Entries.Where(entry => string.Equals(entry.EligibilityState, "ready_but_not_preferred", StringComparison.Ordinal)).ToArray();
+        var blocked = eligibility.Entries.Where(entry =>
+                string.Equals(entry.EligibilityState, "installed_but_disallowed", StringComparison.Ordinal) ||
+                string.Equals(entry.EligibilityState, "unsupported_for_repo", StringComparison.Ordinal) ||
+                string.Equals(entry.EligibilityState, "unavailable", StringComparison.Ordinal))
+            .ToArray();
+        var builder = new StringBuilder();
+        builder.AppendLine("# Builder Language Eligibility");
+        builder.AppendLine();
+        builder.AppendLine($"Default build stack: {FirstNonEmpty(eligibility.PreferredStackLabel, "not recorded")}");
+        builder.AppendLine();
+        builder.AppendLine("Available and preferred:");
+        foreach (var entry in preferred)
+        {
+            builder.AppendLine($"- {entry.StackLabel}: {entry.Summary}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("Available but not preferred:");
+        foreach (var entry in readyNotPreferred)
+        {
+            builder.AppendLine($"- {entry.StackLabel}: {entry.Summary}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("Blocked or unsupported:");
+        foreach (var entry in blocked)
+        {
+            builder.AppendLine($"- {entry.StackLabel}: {entry.Summary}");
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static BuilderRepoKnowledgeIndex BuildBuilderRepoKnowledgeIndex(
+        string repoRoot,
+        BuilderToolchainCapabilityRegistry capabilityRegistry,
+        BuilderRepoKnowledgeIndex priorIndex)
+    {
+        var policy = BuildBuilderRepoToolchainPolicySnapshot(repoRoot);
+        var observedUtc = DateTimeOffset.UtcNow;
+        var solutionPaths = Directory.Exists(repoRoot)
+            ? Directory.GetFiles(repoRoot, "*.sln", SearchOption.TopDirectoryOnly)
+                .Select(path => NormalizeBuilderRepoRelativePath(repoRoot, path))
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToArray()
+            : Array.Empty<string>();
+        var keyDirectories = Directory.Exists(repoRoot)
+            ? Directory.GetDirectories(repoRoot)
+                .Select(path => NormalizeBuilderRepoRelativePath(repoRoot, path))
+                .Where(path =>
+                    !string.IsNullOrWhiteSpace(path) &&
+                    !string.Equals(path, ".git", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(path, ".codex", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(path, "bin", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(path, "obj", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToArray()
+            : Array.Empty<string>();
+        var parsedProjects = DiscoverBuilderRepoProjects(repoRoot);
+        var projectsByRelativePath = parsedProjects.ToDictionary(entry => entry.RelativePath, StringComparer.Ordinal);
+        var projectEntries = parsedProjects
+            .Select(project =>
+            {
+                var relatedTests = BuildBuilderRepoRelatedTestLinks(project, parsedProjects);
+                var relatedUiSurfaces = BuildBuilderRepoKnowledgeLinksForPattern(
+                    repoRoot,
+                    project.AbsolutePath,
+                    "*.xaml",
+                    path => "direct_observed",
+                    path => $"{Path.GetFileName(path)} is directly observed in the project UI surface set.");
+                var relatedServices = BuildBuilderRepoKnowledgeLinksForPattern(
+                    repoRoot,
+                    project.AbsolutePath,
+                    "*Service*.cs",
+                    path => "direct_observed",
+                    path => $"{Path.GetFileName(path)} is directly observed in the project services.");
+                var relatedViewModels = BuildBuilderRepoKnowledgeLinksForPattern(
+                    repoRoot,
+                    project.AbsolutePath,
+                    "*ViewModel*.cs",
+                    path => "direct_observed",
+                    path => $"{Path.GetFileName(path)} is directly observed in the project view-model set.");
+                var relatedBuilderFiles = Directory.Exists(Path.GetDirectoryName(project.AbsolutePath) ?? string.Empty)
+                    ? Directory.GetFiles(Path.GetDirectoryName(project.AbsolutePath)!, "*.cs", SearchOption.AllDirectories)
+                        .Where(path => path.Contains($"{Path.DirectorySeparatorChar}Builder{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+                        .Select(path => new BuilderRepoKnowledgeLinkedItem(
+                            NormalizeBuilderRepoRelativePath(repoRoot, path),
+                            "direct_observed",
+                            $"{Path.GetFileName(path)} is directly observed in the builder area."))
+                        .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+                        .ToArray()
+                    : Array.Empty<BuilderRepoKnowledgeLinkedItem>();
+                var relatedProjectIds = project.ProjectReferencePaths
+                    .Where(path => projectsByRelativePath.ContainsKey(path))
+                    .Select(path => projectsByRelativePath[path].ProjectId)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(path => path, StringComparer.Ordinal)
+                    .ToArray();
+                var featureAreaLabels = BuildBuilderRepoProjectFeatureAreas(
+                    project,
+                    relatedUiSurfaces,
+                    relatedServices,
+                    relatedViewModels,
+                    relatedBuilderFiles,
+                    relatedTests);
+                var featureSummary = $"{project.ProjectName} is a {project.ProjectType.Replace('_', ' ')} using {project.InferredStackLabel}. UI surfaces={relatedUiSurfaces.Length}, view-models={relatedViewModels.Length}, services={relatedServices.Length}, builder files={relatedBuilderFiles.Length}, tests={relatedTests.Length}.";
+                return new BuilderRepoKnowledgeProjectEntry(
+                    project.ProjectId,
+                    project.ProjectName,
+                    project.RelativePath,
+                    project.ProjectType,
+                    project.TargetFrameworks,
+                    project.InferredStackLabel,
+                    "C#",
+                    featureAreaLabels,
+                    relatedTests,
+                    relatedUiSurfaces,
+                    relatedServices,
+                    relatedViewModels,
+                    relatedBuilderFiles,
+                    relatedProjectIds,
+                    featureSummary,
+                    observedUtc);
+            })
+            .OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)
+            .ThenBy(entry => entry.ProjectId, StringComparer.Ordinal)
+            .ToArray();
+        var ownershipSummaries = BuildBuilderRepoOwnershipSummaries(projectEntries);
+        var linkedArtifactPaths = BuildBuilderConversationAuthoritativeArtifactPaths(repoRoot)
+            .Concat(new[]
+            {
+                capabilityRegistry.ArtifactPath,
+                BuilderLanguageEligibilityPathForRepo(repoRoot)
+            })
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var provisionalIndex = new BuilderRepoKnowledgeIndex(
+            policy.PreferredStackId,
+            policy.PreferredStackLabel,
+            solutionPaths,
+            keyDirectories,
+            projectEntries,
+            ownershipSummaries,
+            linkedArtifactPaths,
+            "completed",
+            "unchanged",
+            Array.Empty<string>(),
+            string.Empty,
+            BuilderRepoKnowledgeIndexPathForRepo(repoRoot),
+            observedUtc);
+        var drift = BuildBuilderRepoKnowledgeDrift(priorIndex, provisionalIndex);
+        var changedProjectIds = drift is null
+            ? Array.Empty<string>()
+            : drift.AddedProjectIds
+                .Concat(drift.RemovedProjectIds)
+                .Concat(drift.ChangedProjectIds)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+        var driftState = priorIndex.ObservedUtc <= DateTimeOffset.MinValue
+            ? "initial_scan"
+            : changedProjectIds.Length > 0
+                ? "changed"
+                : "unchanged";
+        return provisionalIndex with
+        {
+            DriftState = driftState,
+            ChangedProjectIds = changedProjectIds,
+            Summary = BuildBuilderRepoKnowledgeSummary(projectEntries, keyDirectories, policy, driftState)
+        };
+    }
+
+    private static BuilderRepoKnowledgeHistory BuildBuilderRepoKnowledgeHistory(
+        BuilderRepoKnowledgeHistory priorHistory,
+        BuilderRepoKnowledgeIndex current)
+    {
+        var retentionCount = Math.Max(priorHistory.RetentionCount, 12);
+        var currentEntry = new BuilderRepoKnowledgeHistoryEntry(
+            current.PreferredStackId,
+            current.DriftState,
+            current.ChangedProjectIds,
+            current.ProjectEntries.Count,
+            current.Summary,
+            current.ArtifactPath,
+            current.ObservedUtc);
+        var entries = priorHistory.Entries
+            .Where(entry => entry.ObservedUtc != currentEntry.ObservedUtc)
+            .Concat(new[] { currentEntry })
+            .OrderByDescending(entry => entry.ObservedUtc)
+            .ThenByDescending(entry => entry.ProjectCount)
+            .Take(retentionCount)
+            .ToArray();
+        var summary = current.DriftState switch
+        {
+            "changed" => $"Latest repo knowledge refresh changed {current.ChangedProjectIds.Count} project definition(s).",
+            "initial_scan" => "Initial repo knowledge refresh completed.",
+            _ => "Latest repo knowledge refresh found no structural drift."
+        };
+        return new BuilderRepoKnowledgeHistory(
+            retentionCount,
+            entries,
+            summary,
+            Path.Combine(Path.GetDirectoryName(current.ArtifactPath) ?? string.Empty, "builder_repo_knowledge_history.json"),
+            current.ObservedUtc);
+    }
+
+    private static BuilderRepoKnowledgeDrift? BuildBuilderRepoKnowledgeDrift(
+        BuilderRepoKnowledgeIndex priorIndex,
+        BuilderRepoKnowledgeIndex currentIndex)
+    {
+        if (priorIndex.ObservedUtc <= DateTimeOffset.MinValue)
+        {
+            return null;
+        }
+
+        var priorSignatures = BuildBuilderRepoKnowledgeSignatureMap(priorIndex.ProjectEntries);
+        var currentSignatures = BuildBuilderRepoKnowledgeSignatureMap(currentIndex.ProjectEntries);
+        var added = currentSignatures.Keys.Except(priorSignatures.Keys, StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var removed = priorSignatures.Keys.Except(currentSignatures.Keys, StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var changed = currentSignatures.Keys
+            .Intersect(priorSignatures.Keys, StringComparer.Ordinal)
+            .Where(id => !string.Equals(currentSignatures[id], priorSignatures[id], StringComparison.Ordinal))
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+        if (added.Length == 0 && removed.Length == 0 && changed.Length == 0)
+        {
+            return null;
+        }
+
+        var parts = new List<string>();
+        if (added.Length > 0) parts.Add($"added: {string.Join(", ", added)}");
+        if (removed.Length > 0) parts.Add($"removed: {string.Join(", ", removed)}");
+        if (changed.Length > 0) parts.Add($"changed: {string.Join(", ", changed)}");
+
+        return new BuilderRepoKnowledgeDrift(
+            added,
+            removed,
+            changed,
+            $"Repo structure drift detected with {string.Join("; ", parts)}.",
+            Path.Combine(Path.GetDirectoryName(currentIndex.ArtifactPath) ?? string.Empty, "builder_repo_knowledge_drift.json"),
+            currentIndex.ObservedUtc);
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildBuilderRepoKnowledgeSignatureMap(IReadOnlyList<BuilderRepoKnowledgeProjectEntry> entries)
+        => entries
+            .GroupBy(entry => entry.ProjectId, StringComparer.Ordinal)
+            .SelectMany(group =>
+                group.Count() == 1
+                    ? group.Select(entry => new KeyValuePair<string, string>(entry.ProjectId, ComputeBuilderRepoKnowledgeProjectSignature(entry)))
+                    : group.Select(entry => new KeyValuePair<string, string>($"{entry.ProjectId} ({entry.RelativePath})", ComputeBuilderRepoKnowledgeProjectSignature(entry))))
+            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+
+    private static string BuildBuilderRepoKnowledgeSummaryMarkdown(BuilderRepoKnowledgeIndex index)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("# Builder Repo Knowledge");
+        builder.AppendLine();
+        builder.AppendLine($"Preferred working stack: {FirstNonEmpty(index.PreferredStackLabel, "not recorded")}");
+        builder.AppendLine($"Refresh state: {index.RefreshState} / {index.DriftState}");
+        builder.AppendLine();
+        builder.AppendLine("Projects:");
+        foreach (var entry in index.ProjectEntries)
+        {
+            builder.AppendLine($"- {entry.ProjectName}: {entry.FeatureSummary}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("Major areas:");
+        foreach (var summary in index.FileOwnershipSummaries.Take(8))
+        {
+            builder.AppendLine($"- {summary.RelativePath}: {summary.Summary}");
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static IReadOnlyList<BuilderParsedRepoProject> DiscoverBuilderRepoProjects(string repoRoot)
+        => Directory.Exists(repoRoot)
+            ? Directory.GetFiles(repoRoot, "*.csproj", SearchOption.AllDirectories)
+                .Where(path =>
+                    !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) &&
+                    !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+                .Select(path => ParseBuilderRepoProject(repoRoot, path))
+                .GroupBy(project => project.ProjectId, StringComparer.Ordinal)
+                .SelectMany(group =>
+                    group.Count() == 1
+                        ? group
+                        : group.Select(project => project with
+                        {
+                            ProjectId = $"{project.ProjectName}__{Path.ChangeExtension(project.RelativePath, null)?.Replace(Path.DirectorySeparatorChar, '_').Replace(Path.AltDirectorySeparatorChar, '_')}"
+                        }))
+                .OrderBy(project => project.RelativePath, StringComparer.Ordinal)
+                .ToArray()
+            : Array.Empty<BuilderParsedRepoProject>();
+
+    private static BuilderParsedRepoProject ParseBuilderRepoProject(string repoRoot, string projectPath)
+    {
+        var text = File.ReadAllText(projectPath);
+        var targetFrameworks = System.Text.RegularExpressions.Regex.Matches(
+                text,
+                @"<TargetFrameworks?>(?<value>[^<]+)</TargetFrameworks?>",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .SelectMany(match => match.Groups["value"].Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var isTestProject = text.Contains("<IsTestProject>true</IsTestProject>", StringComparison.OrdinalIgnoreCase) ||
+                            projectPath.Contains(".Tests", StringComparison.OrdinalIgnoreCase);
+        var useWpf = text.Contains("<UseWPF>true</UseWPF>", StringComparison.OrdinalIgnoreCase);
+        var relativePath = NormalizeBuilderRepoRelativePath(repoRoot, projectPath);
+        var projectReferencePaths = System.Text.RegularExpressions.Regex.Matches(
+                text,
+                "<ProjectReference\\s+Include=\"(?<value>[^\"]+)\"",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Select(match => match.Groups["value"].Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value =>
+            {
+                var absolute = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(projectPath) ?? repoRoot, value));
+                return NormalizeBuilderRepoRelativePath(repoRoot, absolute);
+            })
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var projectName = Path.GetFileNameWithoutExtension(projectPath);
+        return new BuilderParsedRepoProject(
+            projectName,
+            projectName,
+            projectPath,
+            relativePath,
+            DetermineBuilderRepoProjectType(relativePath, useWpf, isTestProject),
+            DetermineBuilderRepoProjectStackLabel(useWpf, targetFrameworks),
+            targetFrameworks,
+            useWpf,
+            isTestProject,
+            projectReferencePaths);
+    }
+
+    private static string DetermineBuilderRepoProjectType(string relativePath, bool useWpf, bool isTestProject)
+    {
+        if (isTestProject)
+        {
+            return "test_project";
+        }
+
+        if (useWpf)
+        {
+            return "wpf_desktop_app";
+        }
+
+        if (relativePath.Contains($"{Path.DirectorySeparatorChar}Runtime{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+        {
+            return "runtime_library";
+        }
+
+        if (relativePath.Contains($"{Path.DirectorySeparatorChar}Builder{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+        {
+            return "builder_library";
+        }
+
+        if (relativePath.StartsWith($"ui{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ui_project";
+        }
+
+        return "library";
+    }
+
+    private static string DetermineBuilderRepoProjectStackLabel(bool useWpf, IReadOnlyList<string> targetFrameworks)
+    {
+        if (useWpf)
+        {
+            return "WPF/Desktop .NET";
+        }
+
+        if (targetFrameworks.Any(framework => framework.Contains("windows", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ".NET Desktop";
+        }
+
+        return ".NET / C#";
+    }
+
+    private static IReadOnlyList<string> BuildBuilderRepoProjectFeatureAreas(
+        BuilderParsedRepoProject project,
+        IReadOnlyList<BuilderRepoKnowledgeLinkedItem> uiSurfaces,
+        IReadOnlyList<BuilderRepoKnowledgeLinkedItem> services,
+        IReadOnlyList<BuilderRepoKnowledgeLinkedItem> viewModels,
+        IReadOnlyList<BuilderRepoKnowledgeLinkedItem> builderFiles,
+        IReadOnlyList<BuilderRepoKnowledgeLinkedItem> tests)
+    {
+        var labels = new SortedSet<string>(StringComparer.Ordinal);
+        if (builderFiles.Count > 0) labels.Add("Builder");
+        if (uiSurfaces.Count > 0) labels.Add("XamlSurfaces");
+        if (viewModels.Count > 0) labels.Add("ViewModels");
+        if (services.Count > 0) labels.Add("Services");
+        if (tests.Count > 0 || project.IsTestProject) labels.Add("Tests");
+        if (project.RelativePath.Contains($"{Path.DirectorySeparatorChar}Runtime{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)) labels.Add("Runtime");
+        if (project.RelativePath.StartsWith($"ui{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)) labels.Add("UI");
+        return labels.ToArray();
+    }
+
+    private static BuilderRepoKnowledgeLinkedItem[] BuildBuilderRepoKnowledgeLinksForPattern(
+        string repoRoot,
+        string projectPath,
+        string pattern,
+        Func<string, string> linkageState,
+        Func<string, string> summary)
+    {
+        var directory = Path.GetDirectoryName(projectPath);
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        {
+            return Array.Empty<BuilderRepoKnowledgeLinkedItem>();
+        }
+
+        return Directory.GetFiles(directory, pattern, SearchOption.AllDirectories)
+            .Where(path =>
+                !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) &&
+                !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Select(path => new BuilderRepoKnowledgeLinkedItem(
+                NormalizeBuilderRepoRelativePath(repoRoot, path),
+                linkageState(path),
+                summary(path)))
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static BuilderRepoKnowledgeLinkedItem[] BuildBuilderRepoRelatedTestLinks(
+        BuilderParsedRepoProject project,
+        IReadOnlyList<BuilderParsedRepoProject> allProjects)
+        => allProjects
+            .Where(candidate => candidate.IsTestProject && !string.Equals(candidate.ProjectId, project.ProjectId, StringComparison.Ordinal))
+            .Select(candidate =>
+            {
+                var direct = candidate.ProjectReferencePaths.Contains(project.RelativePath, StringComparer.Ordinal);
+                var inferred = !direct &&
+                               (candidate.ProjectName.Contains(project.ProjectName, StringComparison.OrdinalIgnoreCase) ||
+                                project.ProjectName.Contains(candidate.ProjectName.Replace(".Tests", string.Empty, StringComparison.OrdinalIgnoreCase), StringComparison.OrdinalIgnoreCase));
+                if (!direct && !inferred)
+                {
+                    return null;
+                }
+
+                return new BuilderRepoKnowledgeLinkedItem(
+                    candidate.RelativePath,
+                    direct ? "direct_observed" : "inferred",
+                    direct
+                        ? $"{candidate.ProjectName} references {project.ProjectName}."
+                        : $"{candidate.ProjectName} is inferred to cover {project.ProjectName} by naming pattern.");
+            })
+            .Where(item => item is not null)
+            .Select(item => item!)
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+
+    private static BuilderRepoKnowledgeOwnershipSummary[] BuildBuilderRepoOwnershipSummaries(
+        IReadOnlyList<BuilderRepoKnowledgeProjectEntry> projectEntries)
+    {
+        var summaries = new List<BuilderRepoKnowledgeOwnershipSummary>();
+        foreach (var entry in projectEntries)
+        {
+            var projectDirectory = Path.GetDirectoryName(entry.RelativePath) ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(projectDirectory))
+            {
+                summaries.Add(new BuilderRepoKnowledgeOwnershipSummary(
+                    projectDirectory,
+                    entry.ProjectId,
+                    entry.ProjectName,
+                    "direct_observed",
+                    $"{projectDirectory} is directly owned by {entry.ProjectName}."));
+            }
+
+            if (entry.RelatedBuilderFiles.Count > 0)
+            {
+                summaries.Add(new BuilderRepoKnowledgeOwnershipSummary(
+                    Path.Combine(projectDirectory, "Builder"),
+                    entry.ProjectId,
+                    entry.ProjectName,
+                    "direct_observed",
+                    $"{entry.ProjectName} directly owns the builder area."));
+            }
+
+            if (entry.RelatedViewModels.Count > 0)
+            {
+                summaries.Add(new BuilderRepoKnowledgeOwnershipSummary(
+                    Path.Combine(projectDirectory, "ViewModels"),
+                    entry.ProjectId,
+                    entry.ProjectName,
+                    "direct_observed",
+                    $"{entry.ProjectName} directly owns the view-model area."));
+            }
+
+            if (entry.RelatedServices.Count > 0)
+            {
+                summaries.Add(new BuilderRepoKnowledgeOwnershipSummary(
+                    Path.Combine(projectDirectory, "Services"),
+                    entry.ProjectId,
+                    entry.ProjectName,
+                    "direct_observed",
+                    $"{entry.ProjectName} directly owns the service area."));
+            }
+        }
+
+        return summaries
+            .Where(summary => !string.IsNullOrWhiteSpace(summary.RelativePath))
+            .GroupBy(summary => summary.RelativePath, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(summary => summary.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string NormalizeBuilderRepoRelativePath(string repoRoot, string path)
+        => Path.GetRelativePath(repoRoot, path);
+
+    private static string BuildBuilderRepoKnowledgeSummary(
+        IReadOnlyList<BuilderRepoKnowledgeProjectEntry> projectEntries,
+        IReadOnlyList<string> keyDirectories,
+        BuilderRepoToolchainPolicySnapshot policy,
+        string driftState)
+    {
+        var projectSummary = projectEntries.Count == 0 ? "no projects detected" : string.Join(", ", projectEntries.Take(4).Select(entry => entry.ProjectName));
+        var directorySummary = keyDirectories.Count == 0 ? "none" : string.Join(", ", keyDirectories.Take(4));
+        return $"Repo is primarily {FirstNonEmpty(policy.PreferredStackLabel, "not classified")}. Projects: {projectSummary}. Key directories: {directorySummary}. Refresh completed with {driftState}.";
+    }
+
+    private static string ComputeBuilderRepoKnowledgeProjectSignature(BuilderRepoKnowledgeProjectEntry entry)
+        => string.Join(
+            "|",
+            entry.RelativePath,
+            entry.ProjectType,
+            string.Join(",", entry.TargetFrameworks),
+            entry.InferredStackLabel,
+            entry.RelatedTests.Count,
+            entry.RelatedUiSurfaces.Count,
+            entry.RelatedServices.Count,
+            entry.RelatedViewModels.Count,
+            entry.RelatedBuilderFiles.Count,
+            entry.FeatureSummary);
+
+    private static string NormalizeBuilderConversationTaskClass(string rawRequestText)
+    {
+        var request = rawRequestText?.ToLowerInvariant() ?? string.Empty;
+        if (request.Contains("fix", StringComparison.Ordinal) ||
+            request.Contains("error", StringComparison.Ordinal) ||
+            request.Contains("compile", StringComparison.Ordinal))
+        {
+            return "compile_fix";
+        }
+
+        if (request.Contains("test", StringComparison.Ordinal) ||
+            request.Contains("coverage", StringComparison.Ordinal) ||
+            request.Contains("assert", StringComparison.Ordinal))
+        {
+            return "test_extension";
+        }
+
+        return "bounded_refactor";
+    }
+
+    private static string ResolveBuilderConversationImpliedStackId(string rawRequestText, BuilderRepoKnowledgeIndex knowledgeIndex)
+    {
+        var request = rawRequestText?.ToLowerInvariant() ?? string.Empty;
+        if (request.Contains("javascript", StringComparison.Ordinal) ||
+            request.Contains("typescript", StringComparison.Ordinal) ||
+            request.Contains("node", StringComparison.Ordinal))
+        {
+            return "javascript_typescript";
+        }
+
+        if (request.Contains("python", StringComparison.Ordinal))
+        {
+            return "python";
+        }
+
+        if (request.Contains("java", StringComparison.Ordinal))
+        {
+            return "java";
+        }
+
+        if (request.Contains("c++", StringComparison.Ordinal) ||
+            request.Contains("cpp", StringComparison.Ordinal) ||
+            request.Contains("cmake", StringComparison.Ordinal))
+        {
+            return "cpp_native";
+        }
+
+        if (request.Contains("wpf", StringComparison.Ordinal) ||
+            request.Contains("xaml", StringComparison.Ordinal) ||
+            request.Contains("viewmodel", StringComparison.Ordinal) ||
+            request.Contains("mainwindow", StringComparison.Ordinal) ||
+            request.Contains("ui", StringComparison.Ordinal))
+        {
+            return "wpf_desktop_dotnet";
+        }
+
+        return FirstNonEmpty(knowledgeIndex.PreferredStackId, "csharp_dotnet");
+    }
+
+    private static BuilderRepoRetrievalContext BuildBuilderRepoRetrievalContext(
+        string repoRoot,
+        BuilderRepoKnowledgeIndex knowledgeIndex,
+        string rawRequestText,
+        string normalizedTaskClass,
+        string impliedStackId,
+        string impliedStackLabel)
+    {
+        var normalizedRawRequestText = rawRequestText ?? string.Empty;
+        var tokens = System.Text.RegularExpressions.Regex.Split(normalizedRawRequestText, @"[^a-zA-Z0-9\.\+#]+")
+            .Select(token => token.Trim().ToLowerInvariant())
+            .Where(token =>
+                !string.IsNullOrWhiteSpace(token) &&
+                token.Length >= 3 &&
+                token is not "the" and not "thing" and not "with" and not "that" and not "this" and not "into" and not "from" and not "then")
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var requestLower = normalizedRawRequestText.ToLowerInvariant();
+        var scoredProjects = knowledgeIndex.ProjectEntries
+            .Select(entry => new
+            {
+                Entry = entry,
+                Score = ScoreBuilderRepoKnowledgeProject(entry, tokens, requestLower, impliedStackLabel)
+            })
+            .Where(result => result.Score > 0)
+            .OrderByDescending(result => result.Score)
+            .ThenBy(result => result.Entry.ProjectId, StringComparer.Ordinal)
+            .ToArray();
+        var topScore = scoredProjects.FirstOrDefault()?.Score ?? 0;
+        var confidenceState = topScore switch
+        {
+            >= 8 => "strong_match",
+            >= 4 => "plausible_match",
+            >= 1 => "weak_match_needs_operator_review",
+            _ => "no_clear_match"
+        };
+        var matchedProjects = scoredProjects.Take(3).Select(result => result.Entry).ToArray();
+        var matchedProjectIds = matchedProjects.Select(entry => entry.ProjectId).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var matchedTests = matchedProjects.SelectMany(entry => CollectBuilderRepoMatchedLinkedPaths(entry.RelatedTests, tokens, requestLower)).Distinct(StringComparer.Ordinal).OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        var matchedUiSurfaces = matchedProjects.SelectMany(entry => CollectBuilderRepoMatchedLinkedPaths(entry.RelatedUiSurfaces, tokens, requestLower)).Distinct(StringComparer.Ordinal).OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        var matchedServices = matchedProjects.SelectMany(entry => CollectBuilderRepoMatchedLinkedPaths(entry.RelatedServices, tokens, requestLower)).Distinct(StringComparer.Ordinal).OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        var matchedViewModels = matchedProjects.SelectMany(entry => CollectBuilderRepoMatchedLinkedPaths(entry.RelatedViewModels, tokens, requestLower)).Distinct(StringComparer.Ordinal).OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        var matchedFiles = matchedProjects
+            .SelectMany(entry => CollectBuilderRepoMatchedLinkedPaths(entry.RelatedBuilderFiles, tokens, requestLower))
+            .Concat(matchedUiSurfaces)
+            .Concat(matchedServices)
+            .Concat(matchedViewModels)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var consultedArtifacts = BuildBuilderConversationAuthoritativeArtifactPaths(repoRoot)
+            .Concat(new[] { knowledgeIndex.ArtifactPath })
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var summary = confidenceState switch
+        {
+            "strong_match" => $"Strong repo match for {impliedStackLabel}. Projects={FirstNonEmpty(string.Join(", ", matchedProjectIds), "none")}.",
+            "plausible_match" => $"Plausible repo match for {impliedStackLabel}. Projects={FirstNonEmpty(string.Join(", ", matchedProjectIds), "none")}.",
+            "weak_match_needs_operator_review" => $"Weak repo match for {impliedStackLabel}; operator review is required before launch.",
+            _ => $"No clear repo match for {impliedStackLabel}; operator review is required before launch."
+        };
+        return new BuilderRepoRetrievalContext(
+            normalizedRawRequestText,
+            normalizedTaskClass,
+            impliedStackId,
+            impliedStackLabel,
+            confidenceState,
+            matchedProjectIds,
+            matchedFiles,
+            matchedTests,
+            matchedUiSurfaces,
+            matchedServices,
+            matchedViewModels,
+            string.Equals(impliedStackId, knowledgeIndex.PreferredStackId, StringComparison.Ordinal)
+                ? "preferred_stack_aligned"
+                : "non_preferred_stack_requested",
+            consultedArtifacts,
+            summary,
+            BuilderRepoRetrievalContextPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static int ScoreBuilderRepoKnowledgeProject(
+        BuilderRepoKnowledgeProjectEntry entry,
+        IReadOnlyList<string> tokens,
+        string requestLower,
+        string impliedStackLabel)
+    {
+        var score = 0;
+        if (!string.IsNullOrWhiteSpace(entry.ProjectName) &&
+            requestLower.Contains(entry.ProjectName.ToLowerInvariant(), StringComparison.Ordinal))
+        {
+            score += 8;
+        }
+
+        foreach (var token in tokens)
+        {
+            if (entry.ProjectName.Contains(token, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 4;
+            }
+
+            if (entry.RelativePath.Contains(token, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 2;
+            }
+
+            if (entry.FeatureAreaLabels.Any(label => label.Contains(token, StringComparison.OrdinalIgnoreCase)))
+            {
+                score += 3;
+            }
+        }
+
+        if (entry.InferredStackLabel.Contains(impliedStackLabel, StringComparison.OrdinalIgnoreCase) ||
+            impliedStackLabel.Contains(entry.InferredStackLabel, StringComparison.OrdinalIgnoreCase))
+        {
+            score += 1;
+        }
+
+        score += entry.RelatedUiSurfaces.Count(item => requestLower.Contains(Path.GetFileName(item.RelativePath).ToLowerInvariant(), StringComparison.Ordinal)) * 6;
+        score += entry.RelatedViewModels.Count(item => requestLower.Contains(Path.GetFileNameWithoutExtension(item.RelativePath).ToLowerInvariant(), StringComparison.Ordinal)) * 6;
+        score += entry.RelatedServices.Count(item => requestLower.Contains(Path.GetFileNameWithoutExtension(item.RelativePath).ToLowerInvariant(), StringComparison.Ordinal)) * 5;
+        score += entry.RelatedBuilderFiles.Count(item => requestLower.Contains(Path.GetFileNameWithoutExtension(item.RelativePath).ToLowerInvariant(), StringComparison.Ordinal) ||
+                                                          requestLower.Contains("builder", StringComparison.Ordinal)) * 2;
+        return score;
+    }
+
+    private static IReadOnlyList<string> CollectBuilderRepoMatchedLinkedPaths(
+        IReadOnlyList<BuilderRepoKnowledgeLinkedItem> items,
+        IReadOnlyList<string> tokens,
+        string requestLower)
+        => items
+            .Where(item =>
+                requestLower.Contains(Path.GetFileName(item.RelativePath).ToLowerInvariant(), StringComparison.Ordinal) ||
+                requestLower.Contains(Path.GetFileNameWithoutExtension(item.RelativePath).ToLowerInvariant(), StringComparison.Ordinal) ||
+                tokens.Any(token => item.RelativePath.Contains(token, StringComparison.OrdinalIgnoreCase)))
+            .Select(item => item.RelativePath)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+    private static string DetermineBuilderConversationCapabilityRoutingState(
+        BuilderLanguageEligibility languageEligibility,
+        string impliedStackId)
+    {
+        var entry = languageEligibility.Entries.FirstOrDefault(candidate => string.Equals(candidate.StackId, impliedStackId, StringComparison.Ordinal));
+        return DetermineBuilderCapabilityRoutingState(impliedStackId, impliedStackId, entry?.EligibilityState ?? "unsupported_for_repo");
+    }
+
+    private static string BuildBuilderConversationCapabilitySummary(
+        BuilderLanguageEligibility languageEligibility,
+        string impliedStackId,
+        string capabilityRoutingState)
+    {
+        var entry = languageEligibility.Entries.FirstOrDefault(candidate => string.Equals(candidate.StackId, impliedStackId, StringComparison.Ordinal));
+        return entry is null
+            ? "No capability decision recorded for the implied stack."
+            : capabilityRoutingState switch
+            {
+                "route_blocked_missing_toolchain" => entry.BlockedReason,
+                "route_blocked_repo_policy" => entry.BlockedReason,
+                _ => entry.Summary
+            };
+    }
+
+    private static IReadOnlyList<string> GetBuilderModelTaskClassCandidates(string normalizedTaskClass)
+        => normalizedTaskClass switch
+        {
+            "compile_fix" => new[] { "compile_fix", "compile_fix_edit" },
+            "bounded_refactor" => new[] { "bounded_refactor", "ui_feature_addition", "service_feature_addition" },
+            _ => new[] { normalizedTaskClass }
+        };
+
+    private static BuilderModelRoutingPolicyEntry? FindBuilderModelRoutingPolicyEntry(
+        BuilderModelRoutingPolicy policy,
+        string normalizedTaskClass)
+    {
+        var candidates = GetBuilderModelTaskClassCandidates(normalizedTaskClass);
+        return policy.Entries
+            .OrderBy(entry => entry.TaskClass, StringComparer.Ordinal)
+            .ThenBy(entry => entry.ProofScope, StringComparer.Ordinal)
+            .ThenBy(entry => entry.TargetId, StringComparer.Ordinal)
+            .FirstOrDefault(entry => candidates.Contains(entry.TaskClass, StringComparer.Ordinal));
+    }
+
+    private static BuilderModelCapabilityMatrixEntry? FindBuilderModelCapabilityMatrixEntry(
+        BuilderModelCapabilityMatrix matrix,
+        string normalizedTaskClass)
+    {
+        var candidates = GetBuilderModelTaskClassCandidates(normalizedTaskClass);
+        return matrix.Entries
+            .OrderBy(entry => entry.TaskClass, StringComparer.Ordinal)
+            .ThenBy(entry => entry.ProofScope, StringComparer.Ordinal)
+            .ThenBy(entry => entry.TargetId, StringComparer.Ordinal)
+            .FirstOrDefault(entry => candidates.Contains(entry.TaskClass, StringComparer.Ordinal));
+    }
+
+    private static BuilderModelRoutingStabilityEntry? FindBuilderModelRoutingStabilityEntry(
+        BuilderModelRoutingStability stability,
+        string normalizedTaskClass)
+    {
+        var candidates = GetBuilderModelTaskClassCandidates(normalizedTaskClass);
+        return stability.Entries
+            .OrderBy(entry => entry.TaskClass, StringComparer.Ordinal)
+            .FirstOrDefault(entry => candidates.Contains(entry.TaskClass, StringComparer.Ordinal));
+    }
+
+    private static BuilderModelDecision BuildBuilderModelDecision(
+        string repoRoot,
+        string requestId,
+        BuilderConversationIntake intake,
+        BuilderModelCapabilityMatrix matrix,
+        BuilderModelRoutingPolicy routingPolicy,
+        BuilderModelRoutingStability stability)
+    {
+        var policyEntry = FindBuilderModelRoutingPolicyEntry(routingPolicy, intake.NormalizedTaskClass);
+        var matrixEntry = FindBuilderModelCapabilityMatrixEntry(matrix, intake.NormalizedTaskClass);
+        var stabilityEntry = FindBuilderModelRoutingStabilityEntry(stability, intake.NormalizedTaskClass);
+        var strongerTierAvailability = LoadLatestBuilderStrongerTierAvailability(repoRoot);
+        var selectedModelTier = FirstNonEmpty(policyEntry?.PreferredModelTier, "low_floor_model_tier");
+        var selectedModelId = string.Equals(selectedModelTier, "stronger_builder_tier", StringComparison.Ordinal)
+            ? FirstNonEmpty(strongerTierAvailability?.ConfiguredStrongerTierId, routingPolicy.PreferredStrongerModelId, "unavailable")
+            : BuilderProofFloorModelId;
+        var capabilityState = matrixEntry?.CapabilityState ?? "not_yet_proven";
+        var decisionReason = FirstNonEmpty(
+            policyEntry?.Summary,
+            matrixEntry?.Summary,
+            stabilityEntry?.Summary,
+            "No explicit model routing evidence was recorded.");
+        var linkedArtifactPaths = new[]
+        {
+            routingPolicy.ArtifactPath,
+            routingPolicy.SummaryArtifactPath,
+            matrix.ArtifactPath,
+            stability.ArtifactPath,
+            strongerTierAvailability?.ArtifactPath ?? string.Empty,
+            intake.ArtifactPath
+        }
+            .Concat(policyEntry?.LinkedEvidencePaths ?? Array.Empty<string>())
+            .Concat(matrixEntry?.LinkedProofArtifactPaths ?? Array.Empty<string>())
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var summary = $"{intake.NormalizedTaskClass} selects {selectedModelTier} ({selectedModelId}) with capability {capabilityState}. {decisionReason}";
+        return new BuilderModelDecision(
+            requestId,
+            intake.RawRequestText,
+            intake.NormalizedTaskClass,
+            selectedModelTier,
+            selectedModelId,
+            capabilityState,
+            matrixEntry?.StrongerTierRecommendationState ?? "not_needed",
+            matrixEntry?.StrongerTierRequirementState ?? "not_required",
+            matrixEntry?.SplitFirstRequired ?? false,
+            stabilityEntry?.StabilityState ?? "provisional",
+            decisionReason,
+            linkedArtifactPaths,
+            summary,
+            BuilderModelDecisionPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static BuilderModelEscalationPolicyDecision BuildBuilderModelEscalationPolicyDecision(
+        string repoRoot,
+        BuilderModelDecision modelDecision)
+    {
+        var strongerTierAvailability = LoadLatestBuilderStrongerTierAvailability(repoRoot);
+        var splitFirstViabilityState = modelDecision.SplitFirstKeepsLowFloorViable ? "viable" : "not_viable";
+        var strongerTierAvailabilityState = strongerTierAvailability?.AvailabilityState ?? "unknown";
+        string finalDecisionState;
+        string blockReason;
+        if (string.Equals(modelDecision.CapabilityState, "not_yet_proven", StringComparison.Ordinal))
+        {
+            finalDecisionState = "not_yet_proven";
+            blockReason = "No model capability proof currently supports this task class.";
+        }
+        else if (string.Equals(modelDecision.StrongerTierRequirementState, "required", StringComparison.Ordinal) &&
+                 !string.Equals(strongerTierAvailabilityState, "available", StringComparison.Ordinal))
+        {
+            finalDecisionState = "blocked_required_stronger_tier_unavailable";
+            blockReason = FirstNonEmpty(
+                strongerTierAvailability?.Summary,
+                "A stronger builder tier is required for this task class, but no supported stronger tier is currently available.");
+        }
+        else if (string.Equals(modelDecision.StrongerTierRequirementState, "required", StringComparison.Ordinal))
+        {
+            finalDecisionState = "stronger_tier_required";
+            blockReason = string.Empty;
+        }
+        else if (string.Equals(modelDecision.StrongerTierRecommendationState, "recommended", StringComparison.Ordinal))
+        {
+            finalDecisionState = string.Equals(strongerTierAvailabilityState, "available", StringComparison.Ordinal)
+                ? "stronger_tier_recommended"
+                : "stronger_tier_recommended_but_unavailable";
+            blockReason = string.Empty;
+        }
+        else
+        {
+            finalDecisionState = modelDecision.CapabilityState switch
+            {
+                "low_floor_split_first_supported" => "low_floor_via_split_first",
+                "low_floor_supported_with_repair_loop" => "low_floor_with_repair_loop",
+                _ => "low_floor_direct"
+            };
+            blockReason = string.Empty;
+        }
+
+        var linkedArtifactPaths = new[]
+        {
+            modelDecision.ArtifactPath,
+            strongerTierAvailability?.ArtifactPath ?? string.Empty
+        }
+            .Concat(modelDecision.LinkedArtifactPaths)
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var summary = string.IsNullOrWhiteSpace(blockReason)
+            ? $"{modelDecision.NormalizedTaskClass} resolved to {finalDecisionState}. Stronger-tier state={strongerTierAvailabilityState}."
+            : $"{modelDecision.NormalizedTaskClass} is blocked: {blockReason}";
+        return new BuilderModelEscalationPolicyDecision(
+            modelDecision.RequestId,
+            modelDecision.NormalizedTaskClass,
+            modelDecision.CapabilityState,
+            modelDecision.StrongerTierRecommendationState,
+            splitFirstViabilityState,
+            strongerTierAvailabilityState,
+            finalDecisionState,
+            blockReason,
+            linkedArtifactPaths,
+            summary,
+            BuilderModelEscalationPolicyDecisionPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static string DetermineBuilderConversationLaunchReadinessState(
+        string retrievalConfidenceState,
+        string capabilityRoutingState,
+        string selectedRoute,
+        BuilderModelEscalationPolicyDecision escalationPolicyDecision)
+    {
+        if (string.Equals(escalationPolicyDecision.FinalDecisionState, "blocked_required_stronger_tier_unavailable", StringComparison.Ordinal) ||
+            string.Equals(escalationPolicyDecision.FinalDecisionState, "not_yet_proven", StringComparison.Ordinal))
+        {
+            return "launch_blocked_model_policy";
+        }
+
+        if (string.Equals(capabilityRoutingState, "route_blocked_missing_toolchain", StringComparison.Ordinal) ||
+            string.Equals(capabilityRoutingState, "route_blocked_repo_policy", StringComparison.Ordinal))
+        {
+            return "launch_blocked_capability";
+        }
+
+        if (string.Equals(retrievalConfidenceState, "weak_match_needs_operator_review", StringComparison.Ordinal) ||
+            string.Equals(retrievalConfidenceState, "no_clear_match", StringComparison.Ordinal))
+        {
+            return "launch_blocked_weak_match";
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedRoute))
+        {
+            return "launch_blocked_route";
+        }
+
+        return IsBuilderPreparedRouteSupported(selectedRoute)
+            ? "ready_for_operator_approval"
+            : "launch_blocked_model_policy";
+    }
+
+    private static string BuildBuilderConversationBlockReason(
+        BuilderRepoRetrievalContext retrieval,
+        BuilderLanguageEligibility languageEligibility,
+        string impliedStackId,
+        string capabilityRoutingState,
+        string launchReadinessState,
+        string selectedRoute,
+        BuilderModelEscalationPolicyDecision escalationPolicyDecision)
+    {
+        var entry = languageEligibility.Entries.FirstOrDefault(candidate => string.Equals(candidate.StackId, impliedStackId, StringComparison.Ordinal));
+        if (string.Equals(launchReadinessState, "launch_blocked_model_policy", StringComparison.Ordinal))
+        {
+            return FirstNonEmpty(
+                escalationPolicyDecision.BlockReason,
+                escalationPolicyDecision.Summary,
+                "Builder conversation is blocked by model routing policy.");
+        }
+
+        if (string.Equals(launchReadinessState, "launch_blocked_capability", StringComparison.Ordinal))
+        {
+            return entry?.BlockedReason ?? "Builder conversation is blocked by capability state.";
+        }
+
+        if (string.Equals(launchReadinessState, "launch_blocked_weak_match", StringComparison.Ordinal))
+        {
+            return $"Builder conversation retrieval is {retrieval.RetrievalConfidenceState}; explicit operator override is required before launch.";
+        }
+
+        if (string.Equals(launchReadinessState, "launch_blocked_route", StringComparison.Ordinal))
+        {
+            return string.IsNullOrWhiteSpace(selectedRoute)
+                ? "Builder conversation could not resolve a prepared route from current authoritative artifacts."
+                : $"Builder conversation route {selectedRoute} still requires operator review before launch.";
+        }
+
+        return string.Empty;
+    }
+
+    private static IReadOnlyList<string> BuildBuilderConversationAuthoritativeArtifactPaths(string repoRoot)
+        => new[]
+        {
+            BuilderRouteCurrentStateIndexPathForRepo(repoRoot),
+            BuilderRouteStateContinuityPathForRepo(repoRoot),
+            BuilderModelCapabilityMatrixPathForRepo(repoRoot),
+            BuilderModelRoutingPolicyPathForRepo(repoRoot),
+            BuilderModelRoutingStabilityPathForRepo(repoRoot),
+            BuilderModelDecisionPathForRepo(repoRoot),
+            BuilderModelEscalationPolicyDecisionPathForRepo(repoRoot),
+            BuilderToolchainCapabilityRegistryPathForRepo(repoRoot),
+            BuilderLanguageEligibilityPathForRepo(repoRoot),
+            TryResolveBuilderRouteArtifactPathFromCurrentStateIndex(repoRoot, "builder_default_route_decision"),
+            TryResolveBuilderRouteArtifactPathFromCurrentStateIndex(repoRoot, "builder_launch_default_decision"),
+            TryResolveBuilderRouteArtifactPathFromCurrentStateIndex(repoRoot, "builder_route_override_evidence"),
+            TryResolveBuilderRouteArtifactPathFromCurrentStateIndex(repoRoot, "builder_route_reconfirmation")
+        }
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+    private static string BuildBuilderConversationIntakeSummary(
+        string rawRequestText,
+        string normalizedTaskClass,
+        string impliedStackLabel,
+        BuilderRepoRetrievalContext retrieval,
+        string capabilitySummary,
+        string modelDecisionSummary,
+        string selectedRoute,
+        string routeSourceState,
+        string launchReadinessState,
+        string blockReason)
+    {
+        var builder = new StringBuilder();
+        builder.Append($"Conversation request \"{FirstNonEmpty(rawRequestText, "not recorded")}\" normalized to {normalizedTaskClass}. ");
+        builder.Append($"Implied stack: {impliedStackLabel}. ");
+        builder.Append($"{retrieval.Summary} ");
+        builder.Append($"{capabilitySummary} ");
+        if (!string.IsNullOrWhiteSpace(modelDecisionSummary))
+        {
+            builder.Append($"{modelDecisionSummary} ");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedRoute))
+        {
+            builder.Append($"Selected route: {selectedRoute} from {routeSourceState}. ");
+        }
+
+        builder.Append(string.IsNullOrWhiteSpace(blockReason) ? $"Launch state: {launchReadinessState}." : blockReason);
+        return builder.ToString().Trim();
+    }
+
+    private static string BuildBuilderConversationHandoffSummary(
+        BuilderConversationIntake intake,
+        string operatorDecisionState,
+        string selectedRoute,
+        string launchReadinessState,
+        string blockReason,
+        string overrideReason)
+    {
+        if (!string.IsNullOrWhiteSpace(blockReason))
+        {
+            return $"{operatorDecisionState} left the builder conversation blocked: {blockReason}";
+        }
+
+        if (string.Equals(operatorDecisionState, "override_route", StringComparison.Ordinal))
+        {
+            return $"{operatorDecisionState} selected {selectedRoute}. {FirstNonEmpty(overrideReason, "No override reason recorded.")}";
+        }
+
+        return $"{operatorDecisionState} kept route {selectedRoute} ready with launch state {launchReadinessState}.";
+    }
+
+    private static string BuildBuilderConversationIntakeId(BuilderConversationIntake intake)
+        => $"conversation-intake-{intake.ObservedUtc.UtcDateTime:yyyyMMddHHmmssfff}-{SanitizeBuilderProofToken(FirstNonEmpty(intake.NormalizedTaskClass, "unknown"))}";
+
+    private static string BuildBuilderConversationHandoffId(BuilderConversationHandoff handoff)
+        => $"conversation-handoff-{handoff.ObservedUtc.UtcDateTime:yyyyMMddHHmmssfff}-{SanitizeBuilderProofToken(FirstNonEmpty(handoff.SelectedRoute, handoff.OperatorDecisionState, "unknown"))}";
+
+    private static string BuildBuilderConversationExecutionSessionId(BuilderConversationHandoff handoff)
+        => $"conversation-session-{handoff.ObservedUtc.UtcDateTime:yyyyMMddHHmmssfff}-{SanitizeBuilderProofToken(FirstNonEmpty(handoff.SelectedRoute, "unknown"))}";
+
+    private static string WriteBuilderStarterStateManifest(string targetFolder)
+    {
+        var manifestPath = Path.Combine(targetFolder, "starter_state_manifest.json");
+        var snapshot = CaptureBuilderReviewableTargetSnapshot(targetFolder, Path.Combine(targetFolder, "starter_state"));
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true }));
+        return manifestPath;
+    }
+
+    private static IReadOnlyList<BuilderReviewableFileSnapshotEntry> CaptureBuilderReviewableTargetSnapshot(string rootFolder, string? snapshotRoot = null)
+        => Directory.Exists(rootFolder)
+            ? Directory.GetFiles(rootFolder, "*", SearchOption.AllDirectories)
+                .Where(path => IsBuilderReviewableTargetFile(rootFolder, path))
+                .Select(path =>
+                {
+                    var relativePath = NormalizeBuilderRepoRelativePath(rootFolder, path);
+                    var snapshotPath = string.Empty;
+                    if (!string.IsNullOrWhiteSpace(snapshotRoot))
+                    {
+                        snapshotPath = Path.Combine(snapshotRoot, relativePath);
+                        Directory.CreateDirectory(Path.GetDirectoryName(snapshotPath)!);
+                        File.Copy(path, snapshotPath, overwrite: true);
+                    }
+
+                    return new BuilderReviewableFileSnapshotEntry(
+                        relativePath,
+                        ComputeBuilderFileHash(path),
+                        new FileInfo(path).Length,
+                        snapshotPath);
+                })
+                .OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)
+                .ToArray()
+            : Array.Empty<BuilderReviewableFileSnapshotEntry>();
+
+    private static IReadOnlyList<BuilderReviewableFileSnapshotEntry> LoadBuilderReviewableTargetSnapshot(string manifestPath)
+        => TryLoadBuilderProofArtifact(
+            manifestPath,
+            Array.Empty<BuilderReviewableFileSnapshotEntry>());
+
+    private static bool IsBuilderReviewableTargetFile(string rootFolder, string filePath)
+    {
+        var relativePath = NormalizeBuilderRepoRelativePath(rootFolder, filePath);
+        if (relativePath.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) ||
+            relativePath.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var fileName = Path.GetFileName(filePath);
+        if (string.Equals(fileName, "starter_state_manifest.json", StringComparison.OrdinalIgnoreCase) ||
+            filePath.Contains($"{Path.DirectorySeparatorChar}starter_state{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".log", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var extension = Path.GetExtension(filePath);
+        return string.Equals(extension, ".cs", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(extension, ".csproj", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(extension, ".xaml", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(extension, ".json", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(extension, ".md", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(extension, ".txt", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ComputeBuilderFileHash(string filePath)
+    {
+        using var stream = File.OpenRead(filePath);
+        using var sha = SHA256.Create();
+        return Convert.ToHexString(sha.ComputeHash(stream));
+    }
+
+    private static BuilderPatchReview BuildBuilderPatchReview(
+        string repoRoot,
+        string sessionId,
+        string intakeId,
+        string handoffId,
+        BuilderConversationIntake intake,
+        BuilderConversationHandoff handoff,
+        BuilderExecutionPrep? prep,
+        PreparedBuilderExecutionResult result)
+    {
+        var changedFiles = BuildBuilderPatchReviewChangedFiles(result);
+        var validationSummary = BuildBuilderConversationValidationSummary(result);
+        var reviewReadinessState = changedFiles.Count > 0
+            ? "ready_for_operator_review"
+            : result.LinkedArtifactPaths.Any(path => !string.IsNullOrWhiteSpace(path) && path.Contains("followup", StringComparison.OrdinalIgnoreCase))
+                ? "followup_only"
+                : "blocked_no_candidate_changes";
+        var linkedArtifactPaths = BuildBuilderConversationAuthoritativeArtifactPaths(repoRoot)
+            .Concat(new[]
+            {
+                intake.ArtifactPath,
+                handoff.ArtifactPath,
+                prep?.ArtifactPath ?? string.Empty,
+                result.ArtifactPath,
+                result.FollowupIntakePath,
+                result.FollowupPlanPath,
+                result.RepairPrepBundlePath,
+                result.RepairBundlePath,
+                result.FollowupExecutionOutcomePath
+            })
+            .Concat(result.LinkedArtifactPaths)
+            .Where(BuilderArtifactPathExists)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var summary = changedFiles.Count > 0
+            ? $"Patch review found {changedFiles.Count} changed file candidate(s) on route {handoff.SelectedRoute}. {validationSummary}"
+            : $"Patch review found no candidate file changes on route {handoff.SelectedRoute}. {validationSummary}";
+        return new BuilderPatchReview(
+            sessionId,
+            intakeId,
+            handoffId,
+            handoff.SelectedRoute,
+            intake.ImpliedStackId,
+            intake.ImpliedStackLabel,
+            validationSummary,
+            reviewReadinessState,
+            changedFiles,
+            linkedArtifactPaths,
+            summary,
+            BuilderPatchReviewPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static BuilderPatchDiffReview BuildBuilderPatchDiffReview(
+        string repoRoot,
+        BuilderConversationExecutionSession session,
+        BuilderPatchReview patchReview,
+        PreparedBuilderExecutionResult? result,
+        BuilderFileReviewDecision? priorFileReviewDecision = null)
+    {
+        var observedUtc = DateTimeOffset.UtcNow;
+        var decisionMap = (priorFileReviewDecision?.Entries ?? Array.Empty<BuilderFileReviewDecisionEntry>())
+            .ToDictionary(entry => entry.RelativePath, entry => entry, StringComparer.Ordinal);
+        var fileEntries = BuildBuilderPatchDiffReviewFileEntries(result, patchReview, decisionMap, observedUtc);
+        var overallFileReviewState = DetermineBuilderPatchOverallFileReviewState(fileEntries);
+        var linkedArtifactPaths = session.LinkedArtifactPaths
+            .Concat(patchReview.LinkedArtifactPaths)
+            .Concat(new[] { session.ArtifactPath, patchReview.ArtifactPath, result?.ArtifactPath ?? string.Empty })
+            .Where(BuilderArtifactPathExists)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        return new BuilderPatchDiffReview(
+            session.SessionId,
+            patchReview.SessionId,
+            patchReview.ArtifactPath,
+            overallFileReviewState,
+            patchReview.ReviewReadinessState,
+            fileEntries,
+            linkedArtifactPaths,
+            BuildBuilderPatchDiffReviewSummary(fileEntries, patchReview.ReviewReadinessState),
+            BuilderPatchDiffReviewPathForRepo(repoRoot),
+            observedUtc);
+    }
+
+    private static IReadOnlyList<BuilderPatchDiffReviewFileEntry> BuildBuilderPatchDiffReviewFileEntries(
+        PreparedBuilderExecutionResult? result,
+        BuilderPatchReview patchReview,
+        IReadOnlyDictionary<string, BuilderFileReviewDecisionEntry> decisionMap,
+        DateTimeOffset observedUtc)
+    {
+        var baselineMap = string.IsNullOrWhiteSpace(result?.StarterStateManifestPath)
+            ? new Dictionary<string, BuilderReviewableFileSnapshotEntry>(StringComparer.Ordinal)
+            : LoadBuilderReviewableTargetSnapshot(result.StarterStateManifestPath)
+                .ToDictionary(entry => entry.RelativePath, entry => entry, StringComparer.Ordinal);
+        return patchReview.ChangedFiles
+            .OrderBy(file => file.Path, StringComparer.Ordinal)
+            .Select(file =>
+            {
+                decisionMap.TryGetValue(file.Path, out var decision);
+                baselineMap.TryGetValue(file.Path, out var baselineEntry);
+                var currentPath = string.IsNullOrWhiteSpace(result?.SourceWorkingFolderPath)
+                    ? string.Empty
+                    : Path.Combine(result.SourceWorkingFolderPath, file.Path);
+                var baselineText = baselineEntry is null || string.IsNullOrWhiteSpace(baselineEntry.SnapshotPath) || !File.Exists(baselineEntry.SnapshotPath)
+                    ? string.Empty
+                    : SafeReadBuilderTextFile(baselineEntry.SnapshotPath);
+                var currentText = string.IsNullOrWhiteSpace(currentPath) || !File.Exists(currentPath)
+                    ? string.Empty
+                    : SafeReadBuilderTextFile(currentPath);
+                var patchPreviewText = BuildBuilderPatchPreviewText(file.ChangeKind, baselineText, currentText, file.Path);
+                var diffSummary = !string.IsNullOrWhiteSpace(patchPreviewText)
+                    ? $"{file.ChangeSummary} Diff preview recorded."
+                    : $"{file.ChangeSummary} No bounded diff preview was available.";
+                return new BuilderPatchDiffReviewFileEntry(
+                    file.Path,
+                    file.FileCategory,
+                    file.ChangeKind,
+                    diffSummary,
+                    patchPreviewText,
+                    decision?.ApprovalState ?? "pending_review",
+                    decision?.RejectionReason ?? string.Empty,
+                    observedUtc);
+            })
+            .ToArray();
+    }
+
+    private static string SafeReadBuilderTextFile(string filePath)
+    {
+        try
+        {
+            return File.ReadAllText(filePath);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string BuildBuilderPatchPreviewText(string changeKind, string baselineText, string currentText, string relativePath)
+    {
+        var builder = new StringBuilder();
+        builder.Append("@@ ").Append(relativePath).AppendLine();
+        var baselineLines = SplitBuilderPatchLines(baselineText);
+        var currentLines = SplitBuilderPatchLines(currentText);
+        if (string.Equals(changeKind, "created", StringComparison.Ordinal))
+        {
+            foreach (var line in currentLines.Take(8))
+            {
+                builder.Append("+").AppendLine(line);
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
+        if (string.Equals(changeKind, "removed", StringComparison.Ordinal))
+        {
+            foreach (var line in baselineLines.Take(8))
+            {
+                builder.Append("-").AppendLine(line);
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
+        var maxLines = Math.Max(baselineLines.Length, currentLines.Length);
+        var emitted = 0;
+        for (var index = 0; index < maxLines && emitted < 12; index++)
+        {
+            var before = index < baselineLines.Length ? baselineLines[index] : null;
+            var after = index < currentLines.Length ? currentLines[index] : null;
+            if (string.Equals(before, after, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (before is not null)
+            {
+                builder.Append("-").AppendLine(before);
+                emitted++;
+            }
+
+            if (after is not null && emitted < 12)
+            {
+                builder.Append("+").AppendLine(after);
+                emitted++;
+            }
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string[] SplitBuilderPatchLines(string text)
+        => string.IsNullOrEmpty(text)
+            ? Array.Empty<string>()
+            : text.Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .Split('\n');
+
+    private static string DetermineBuilderPatchOverallFileReviewState(IReadOnlyList<BuilderPatchDiffReviewFileEntry> fileEntries)
+    {
+        if (fileEntries.Count == 0)
+        {
+            return "all_files_pending";
+        }
+
+        if (fileEntries.Any(entry => string.Equals(entry.ApprovalState, "rejected", StringComparison.Ordinal)))
+        {
+            return "rejected_file_present";
+        }
+
+        if (fileEntries.Any(entry => string.Equals(entry.ApprovalState, "needs_revision", StringComparison.Ordinal)))
+        {
+            return "needs_revision_before_apply";
+        }
+
+        if (fileEntries.All(entry => string.Equals(entry.ApprovalState, "approved", StringComparison.Ordinal)))
+        {
+            return "ready_to_apply";
+        }
+
+        if (fileEntries.Any(entry => string.Equals(entry.ApprovalState, "approved", StringComparison.Ordinal)))
+        {
+            return "partially_approved";
+        }
+
+        return "all_files_pending";
+    }
+
+    private static string BuildBuilderPatchDiffReviewSummary(
+        IReadOnlyList<BuilderPatchDiffReviewFileEntry> fileEntries,
+        string reviewReadinessState)
+        => fileEntries.Count == 0
+            ? $"Patch diff review has no file entries. Readiness={reviewReadinessState}."
+            : $"Patch diff review tracks {fileEntries.Count} file(s). Overall state={DetermineBuilderPatchOverallFileReviewState(fileEntries)}. Readiness={reviewReadinessState}.";
+
+    private static BuilderFileReviewDecision BuildBuilderFileReviewDecision(
+        string repoRoot,
+        BuilderPatchDiffReview patchDiffReview,
+        IReadOnlyList<BuilderFileReviewDecisionEntry> entries,
+        DateTimeOffset observedUtc)
+    {
+        var summary = entries.Count == 0
+            ? "No builder file review decisions recorded."
+            : $"File review decisions recorded for {entries.Count} file(s). Overall state={patchDiffReview.OverallFileReviewState}.";
+        return new BuilderFileReviewDecision(
+            patchDiffReview.SessionId,
+            patchDiffReview.SourcePatchReviewId,
+            patchDiffReview.OverallFileReviewState,
+            entries,
+            patchDiffReview.LinkedArtifactPaths,
+            summary,
+            BuilderFileReviewDecisionPathForRepo(repoRoot),
+            observedUtc);
+    }
+
+    private static BuilderPatchApplyDecision BuildBuilderPatchApplyDecision(
+        string repoRoot,
+        BuilderConversationExecutionSession session,
+        BuilderPatchDiffReview patchDiffReview,
+        BuilderFileReviewDecision fileReviewDecision,
+        BuilderPatchReviewOutcome? patchReviewOutcome)
+    {
+        var blockReasons = new List<string>();
+        var finalizationState = "not_ready_to_apply";
+        var applyEligibilityState = "not_ready";
+        if (!string.Equals(session.SessionState, "awaiting_patch_review", StringComparison.Ordinal) &&
+            !string.Equals(session.SessionState, "accepted_for_completion", StringComparison.Ordinal))
+        {
+            blockReasons.Add($"Execution session state {session.SessionState} is not eligible for patch finalization.");
+        }
+
+        switch (patchDiffReview.OverallFileReviewState)
+        {
+            case "ready_to_apply":
+                if (blockReasons.Count == 0)
+                {
+                    applyEligibilityState = "ready";
+                    finalizationState = string.Equals(patchReviewOutcome?.ReviewDecisionState, "accepted", StringComparison.Ordinal)
+                        ? "applied_with_operator_approval"
+                        : "ready_to_apply";
+                }
+
+                break;
+            case "rejected_file_present":
+                applyEligibilityState = "blocked";
+                finalizationState = "blocked_by_file_rejection";
+                blockReasons.AddRange(patchDiffReview.FileEntries
+                    .Where(entry => string.Equals(entry.ApprovalState, "rejected", StringComparison.Ordinal))
+                    .Select(entry => $"{entry.RelativePath}: {FirstNonEmpty(entry.RejectionReason, "file was rejected.")}"));
+                break;
+            case "needs_revision_before_apply":
+                applyEligibilityState = "blocked";
+                finalizationState = "blocked_by_revision_request";
+                blockReasons.AddRange(patchDiffReview.FileEntries
+                    .Where(entry => string.Equals(entry.ApprovalState, "needs_revision", StringComparison.Ordinal))
+                    .Select(entry => $"{entry.RelativePath}: {FirstNonEmpty(entry.RejectionReason, "file needs revision before apply.")}"));
+                break;
+            default:
+                applyEligibilityState = "not_ready";
+                finalizationState = "not_ready_to_apply";
+                blockReasons.Add("Not all changed files are approved.");
+                break;
+        }
+
+        var linkedArtifactPaths = patchDiffReview.LinkedArtifactPaths
+            .Concat(fileReviewDecision.LinkedArtifactPaths)
+            .Concat(new[]
+            {
+                session.ArtifactPath,
+                patchDiffReview.ArtifactPath,
+                fileReviewDecision.ArtifactPath,
+                patchReviewOutcome?.ArtifactPath ?? string.Empty
+            })
+            .Where(BuilderArtifactPathExists)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var summary = finalizationState switch
+        {
+            "applied_with_operator_approval" => "Approved patch was applied with explicit operator approval.",
+            "ready_to_apply" => "Patch is ready to apply after file-level approval.",
+            "blocked_by_file_rejection" => $"Patch apply is blocked by rejected files. {string.Join(" ", blockReasons)}".Trim(),
+            "blocked_by_revision_request" => $"Patch apply is blocked by file revision requests. {string.Join(" ", blockReasons)}".Trim(),
+            _ => $"Patch apply is not ready. {string.Join(" ", blockReasons)}".Trim()
+        };
+        return new BuilderPatchApplyDecision(
+            session.SessionId,
+            patchDiffReview.OverallFileReviewState,
+            applyEligibilityState,
+            blockReasons,
+            finalizationState,
+            linkedArtifactPaths,
+            summary,
+            BuilderPatchApplyDecisionPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static void WriteBuilderPatchReviewGovernanceArtifacts(
+        string repoRoot,
+        BuilderPatchDiffReview patchDiffReview,
+        BuilderFileReviewDecision fileReviewDecision,
+        BuilderPatchApplyDecision patchApplyDecision)
+    {
+        File.WriteAllText(
+            BuilderPatchDiffReviewPathForRepo(repoRoot),
+            JsonSerializer.Serialize(patchDiffReview, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(
+            BuilderFileReviewDecisionPathForRepo(repoRoot),
+            JsonSerializer.Serialize(fileReviewDecision, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(
+            BuilderPatchApplyDecisionPathForRepo(repoRoot),
+            JsonSerializer.Serialize(patchApplyDecision, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static BuilderPatchSnapshot EnsureBuilderPatchSnapshot(
+        string repoRoot,
+        BuilderConversationExecutionSession session,
+        BuilderPatchDiffReview patchDiffReview,
+        BuilderFileReviewDecision fileReviewDecision,
+        BuilderPatchApplyDecision patchApplyDecision,
+        BuilderPatchReviewOutcome patchReviewOutcome,
+        PreparedBuilderExecutionResult? result)
+    {
+        var existingSnapshot = LoadBuilderPatchSnapshot(repoRoot);
+        if (existingSnapshot.ApprovedFiles.Count > 0 &&
+            string.Equals(existingSnapshot.ExecutionSessionId, session.SessionId, StringComparison.Ordinal) &&
+            string.Equals(existingSnapshot.OperatorApprovalState, "applied_with_operator_approval", StringComparison.Ordinal))
+        {
+            return existingSnapshot;
+        }
+
+        if (!string.Equals(patchApplyDecision.FinalizationState, "applied_with_operator_approval", StringComparison.Ordinal) ||
+            patchDiffReview.FileEntries.Count == 0)
+        {
+            return existingSnapshot;
+        }
+
+        var snapshot = BuildBuilderPatchSnapshot(
+            repoRoot,
+            session,
+            patchDiffReview,
+            fileReviewDecision,
+            patchApplyDecision,
+            patchReviewOutcome,
+            result);
+        WriteBuilderPatchSnapshotArtifacts(repoRoot, snapshot);
+        return snapshot;
+    }
+
+    private static BuilderPatchSnapshot BuildBuilderPatchSnapshot(
+        string repoRoot,
+        BuilderConversationExecutionSession session,
+        BuilderPatchDiffReview patchDiffReview,
+        BuilderFileReviewDecision fileReviewDecision,
+        BuilderPatchApplyDecision patchApplyDecision,
+        BuilderPatchReviewOutcome patchReviewOutcome,
+        PreparedBuilderExecutionResult? result)
+    {
+        var baselineMap = string.IsNullOrWhiteSpace(result?.StarterStateManifestPath)
+            ? new Dictionary<string, BuilderReviewableFileSnapshotEntry>(StringComparer.Ordinal)
+            : LoadBuilderReviewableTargetSnapshot(result.StarterStateManifestPath)
+                .ToDictionary(entry => entry.RelativePath, entry => entry, StringComparer.Ordinal);
+        var decisionMap = fileReviewDecision.Entries.ToDictionary(entry => entry.RelativePath, entry => entry, StringComparer.Ordinal);
+        var approvedFiles = patchDiffReview.FileEntries
+            .Where(entry => string.Equals(entry.ApprovalState, "approved", StringComparison.Ordinal))
+            .OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)
+            .Select(entry =>
+            {
+                decisionMap.TryGetValue(entry.RelativePath, out var decision);
+                return new BuilderPatchSnapshotFileEntry(
+                    entry.RelativePath,
+                    NormalizeBuilderPatchChangeType(entry.ChangeKind),
+                    ResolveBuilderPatchSnapshotFileChecksum(repoRoot, result, entry, baselineMap),
+                    entry.ApprovalState,
+                    decision?.ObservedUtc ?? patchApplyDecision.ObservedUtc);
+            })
+            .ToArray();
+        var approvedUtc = approvedFiles.Length == 0
+            ? patchApplyDecision.ObservedUtc
+            : approvedFiles.Max(file => file.ApprovedUtc);
+        var snapshotId = BuildBuilderPatchSnapshotId(session);
+        var linkedArtifactPaths = BuildBuilderConversationAuthoritativeArtifactPaths(repoRoot)
+            .Concat(new[]
+            {
+                session.ArtifactPath,
+                patchDiffReview.ArtifactPath,
+                fileReviewDecision.ArtifactPath,
+                patchApplyDecision.ArtifactPath,
+                patchReviewOutcome.ArtifactPath,
+                result?.ArtifactPath ?? string.Empty
+            })
+            .Where(BuilderArtifactPathExists)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        return new BuilderPatchSnapshot(
+            snapshotId,
+            session.SessionId,
+            BuildBuilderPatchDiffReviewId(patchDiffReview),
+            session.SelectedRoute,
+            session.StackId,
+            patchApplyDecision.FinalizationState,
+            approvedFiles,
+            linkedArtifactPaths,
+            $"Approved patch snapshot {snapshotId} recorded {approvedFiles.Length} file(s) for route {session.SelectedRoute}.",
+            BuilderPatchSnapshotPathForRepo(repoRoot),
+            approvedUtc,
+            DateTimeOffset.UtcNow);
+    }
+
+    private static string ResolveBuilderPatchSnapshotFileChecksum(
+        string repoRoot,
+        PreparedBuilderExecutionResult? result,
+        BuilderPatchDiffReviewFileEntry entry,
+        IReadOnlyDictionary<string, BuilderReviewableFileSnapshotEntry> baselineMap)
+    {
+        var normalizedChangeType = NormalizeBuilderPatchChangeType(entry.ChangeKind);
+        if (string.Equals(normalizedChangeType, "deleted", StringComparison.Ordinal))
+        {
+            if (baselineMap.TryGetValue(entry.RelativePath, out var baseline) &&
+                !string.IsNullOrWhiteSpace(baseline.ContentHash))
+            {
+                return baseline.ContentHash;
+            }
+
+            return string.Empty;
+        }
+
+        var currentPath = ResolveBuilderCurrentFilePath(repoRoot, result, entry.RelativePath);
+        if (!string.IsNullOrWhiteSpace(currentPath) && File.Exists(currentPath))
+        {
+            return ComputeBuilderFileHash(currentPath);
+        }
+
+        if (baselineMap.TryGetValue(entry.RelativePath, out var fallback) &&
+            !string.IsNullOrWhiteSpace(fallback.SnapshotPath) &&
+            File.Exists(fallback.SnapshotPath))
+        {
+            return ComputeBuilderFileHash(fallback.SnapshotPath);
+        }
+
+        return string.Empty;
+    }
+
+    private static string ResolveBuilderCurrentFilePath(
+        string repoRoot,
+        PreparedBuilderExecutionResult? result,
+        string relativePath)
+    {
+        if (!string.IsNullOrWhiteSpace(result?.SourceWorkingFolderPath))
+        {
+            var workingPath = Path.Combine(result.SourceWorkingFolderPath, relativePath);
+            if (File.Exists(workingPath))
+            {
+                return workingPath;
+            }
+        }
+
+        var repoPath = Path.Combine(repoRoot, relativePath);
+        return File.Exists(repoPath) ? repoPath : string.Empty;
+    }
+
+    private static void WriteBuilderPatchSnapshotArtifacts(
+        string repoRoot,
+        BuilderPatchSnapshot snapshot,
+        BuilderPatchExport? export = null)
+    {
+        if (snapshot.ApprovedFiles.Count == 0)
+        {
+            return;
+        }
+
+        File.WriteAllText(
+            BuilderPatchSnapshotPathForRepo(repoRoot),
+            JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true }));
+        var history = BuildBuilderPatchSnapshotHistory(repoRoot, LoadBuilderPatchSnapshotHistory(repoRoot), snapshot, export);
+        File.WriteAllText(
+            BuilderPatchSnapshotHistoryPathForRepo(repoRoot),
+            JsonSerializer.Serialize(history, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static BuilderPatchSnapshotHistory BuildBuilderPatchSnapshotHistory(
+        string repoRoot,
+        BuilderPatchSnapshotHistory priorHistory,
+        BuilderPatchSnapshot snapshot,
+        BuilderPatchExport? export)
+    {
+        const int retentionCount = 12;
+        var priorEntry = priorHistory.Entries.FirstOrDefault(entry => string.Equals(entry.SnapshotId, snapshot.SnapshotId, StringComparison.Ordinal));
+        var observedUtc = export?.ExportedUtc ?? snapshot.ObservedUtc;
+        var currentEntry = new BuilderPatchSnapshotHistoryEntry(
+            snapshot.SnapshotId,
+            snapshot.ExecutionSessionId,
+            snapshot.OperatorApprovalState,
+            FirstNonEmpty(export?.BundleFilePath, priorEntry?.ExportBundlePath, string.Empty),
+            snapshot.ArtifactPath,
+            snapshot.Summary,
+            observedUtc);
+        var entries = new[] { currentEntry }
+            .Concat(priorHistory.Entries.Where(entry => !string.Equals(entry.SnapshotId, snapshot.SnapshotId, StringComparison.Ordinal)))
+            .OrderByDescending(entry => entry.ObservedUtc)
+            .ThenByDescending(entry => entry.SnapshotId, StringComparer.Ordinal)
+            .Take(retentionCount)
+            .ToArray();
+        var summary = string.IsNullOrWhiteSpace(currentEntry.ExportBundlePath)
+            ? $"Latest approved patch snapshot is {snapshot.SnapshotId}."
+            : $"Latest approved patch snapshot is {snapshot.SnapshotId} with export bundle {Path.GetFileName(currentEntry.ExportBundlePath)}.";
+        return new BuilderPatchSnapshotHistory(
+            retentionCount,
+            entries,
+            summary,
+            BuilderPatchSnapshotHistoryPathForRepo(repoRoot),
+            observedUtc);
+    }
+
+    private static BuilderGitHandoffReadiness BuildBuilderGitHandoffReadiness(
+        string repoRoot,
+        BuilderGitReadinessObservation observation)
+    {
+        var summary = observation.ReadinessClassification switch
+        {
+            "ready_for_optional_git_handoff" => $"Git handoff is ready on branch {FirstNonEmpty(observation.BranchName, "unknown")} with a clean working tree.",
+            "blocked_git_missing_repo" => "Git handoff is unavailable because no Git repository was detected.",
+            "blocked_git_dirty_tree" => $"Git handoff is blocked on branch {FirstNonEmpty(observation.BranchName, "unknown")} because the working tree is dirty.",
+            _ => FirstNonEmpty(
+                observation.BlockReasons.FirstOrDefault(),
+                "Git handoff readiness could not be verified safely.")
+        };
+        return new BuilderGitHandoffReadiness(
+            observation.RepoDetected,
+            observation.BranchName,
+            observation.WorkingTreeStateKnown,
+            observation.WorkingTreeClean,
+            observation.AheadBehindState,
+            observation.ReadinessClassification,
+            observation.BlockReasons
+                .Where(reason => !string.IsNullOrWhiteSpace(reason))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(reason => reason, StringComparer.Ordinal)
+                .ToArray(),
+            summary,
+            BuilderGitHandoffReadinessPathForRepo(repoRoot),
+            observation.ObservedUtc);
+    }
+
+    private static BuilderManualApplyGuidance BuildBuilderManualApplyGuidance(
+        string repoRoot,
+        BuilderPatchSnapshot snapshot,
+        BuilderPatchExport export,
+        BuilderGitHandoffReadiness gitReadiness)
+    {
+        var approvedFiles = snapshot.ApprovedFiles
+            .Select(file => file.RelativePath)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var warnings = gitReadiness.BlockReasons
+            .Where(reason => !string.IsNullOrWhiteSpace(reason))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(reason => reason, StringComparer.Ordinal)
+            .ToArray();
+        return new BuilderManualApplyGuidance(
+            snapshot.SnapshotId,
+            export.BundleFilePath,
+            approvedFiles,
+            BuildBuilderManualApplySteps(repoRoot, export, snapshot),
+            warnings,
+            $"Manual apply guidance prepared for {approvedFiles.Length} approved file(s) using {Path.GetFileName(export.BundleFilePath)}.",
+            BuilderManualApplyGuidancePathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static IReadOnlyList<string> BuildBuilderManualApplySteps(
+        string repoRoot,
+        BuilderPatchExport export,
+        BuilderPatchSnapshot snapshot)
+        => new[]
+        {
+            $"Inspect the approved patch bundle at {export.BundleFilePath}.",
+            $"Review the approved snapshot artifact at {snapshot.ArtifactPath}.",
+            "Apply the unified diff manually with your preferred patch tool or copy the approved changes file-by-file.",
+            $"If you later record the change in source control, use the proposal in {BuilderCommitProposalPathForRepo(repoRoot)} as guidance only."
+        };
+
+    private static BuilderGitCommitHandoff BuildBuilderGitCommitHandoff(
+        string repoRoot,
+        BuilderPatchSnapshot snapshot,
+        BuilderCommitProposal proposal,
+        BuilderGitHandoffReadiness gitReadiness)
+    {
+        var approvedFiles = snapshot.ApprovedFiles
+            .Select(file => file.RelativePath)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        return new BuilderGitCommitHandoff(
+            snapshot.SnapshotId,
+            proposal.ProposedCommitMessage,
+            approvedFiles,
+            gitReadiness.BranchName,
+            gitReadiness.ReadinessClassification,
+            gitReadiness.BlockReasons,
+            BuildBuilderGitCommitNextStepGuidance(gitReadiness),
+            gitReadiness.ReadinessClassification switch
+            {
+                "ready_for_optional_git_handoff" => $"Git commit handoff is prepared for branch {FirstNonEmpty(gitReadiness.BranchName, "unknown")}.",
+                _ => $"Git commit handoff is blocked: {FirstNonEmpty(gitReadiness.BlockReasons.FirstOrDefault(), "Git readiness is unavailable.")}"
+            },
+            BuilderGitCommitHandoffPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static IReadOnlyList<string> BuildBuilderGitCommitNextStepGuidance(BuilderGitHandoffReadiness gitReadiness)
+        => string.Equals(gitReadiness.ReadinessClassification, "ready_for_optional_git_handoff", StringComparison.Ordinal)
+            ? new[]
+            {
+                "Review the working tree and confirm only the approved files are part of the intended handoff.",
+                "Stage the approved files manually if you want a Git commit.",
+                "Use the prepared commit proposal text without modification unless you intentionally need a different commit summary."
+            }
+            : new[]
+            {
+                "Use the patch bundle and manual apply guidance instead of a Git handoff.",
+                FirstNonEmpty(gitReadiness.BlockReasons.FirstOrDefault(), "Git handoff is blocked until readiness is verified.")
+            };
+
+    private static string DetermineBuilderOutputHandoffReadinessState(
+        BuilderPatchExport export,
+        BuilderGitHandoffReadiness gitReadiness)
+    {
+        if (string.IsNullOrWhiteSpace(export.BundleFilePath) || !File.Exists(export.BundleFilePath))
+        {
+            return "ready_for_export_only";
+        }
+
+        return gitReadiness.ReadinessClassification switch
+        {
+            "ready_for_optional_git_handoff" => "ready_for_optional_git_handoff",
+            "blocked_git_missing_repo" => "ready_for_manual_apply",
+            "blocked_git_dirty_tree" => "ready_for_manual_apply",
+            "blocked_git_unknown_state" => "ready_for_manual_apply",
+            _ => "ready_for_manual_apply"
+        };
+    }
+
+    private static string BuildBuilderOutputHandoffSummary(
+        BuilderPatchSnapshot snapshot,
+        BuilderPatchExport export,
+        BuilderGitHandoffReadiness gitReadiness)
+    {
+        return string.Equals(gitReadiness.ReadinessClassification, "ready_for_optional_git_handoff", StringComparison.Ordinal)
+            ? $"Approved output handoff for snapshot {snapshot.SnapshotId} covers {snapshot.ApprovedFiles.Count} file(s). Bundle={Path.GetFileName(export.BundleFilePath)}. Git handoff is available on branch {FirstNonEmpty(gitReadiness.BranchName, "unknown")}."
+            : $"Approved output handoff for snapshot {snapshot.SnapshotId} covers {snapshot.ApprovedFiles.Count} file(s). Bundle={Path.GetFileName(export.BundleFilePath)}. Ready for manual apply. Git handoff is blocked: {FirstNonEmpty(gitReadiness.BlockReasons.FirstOrDefault(), gitReadiness.Summary)}";
+    }
+
+    private static string BuildBuilderOutputHandoffSummaryMarkdown(
+        BuilderOutputHandoff handoff,
+        BuilderManualApplyGuidance manualApplyGuidance)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("# Builder Output Handoff");
+        builder.AppendLine();
+        builder.AppendLine($"Snapshot: {FirstNonEmpty(handoff.SnapshotId, "not recorded")}");
+        builder.AppendLine($"Approved files: {handoff.ApprovedFiles.Count}");
+        builder.AppendLine($"Patch bundle: {FirstNonEmpty(handoff.PatchBundlePath, "not recorded")}");
+        builder.AppendLine($"Git readiness: {FirstNonEmpty(handoff.OptionalGitReadinessState, "not recorded")}");
+        if (handoff.BlockReasons.Count > 0)
+        {
+            builder.AppendLine($"Git block reason: {handoff.BlockReasons[0]}");
+        }
+
+        builder.AppendLine("Next actions:");
+        foreach (var step in manualApplyGuidance.ApplySteps)
+        {
+            builder.AppendLine($"- {step}");
+        }
+
+        return builder.ToString().TrimEnd() + System.Environment.NewLine;
+    }
+
+    private static BuilderOutputHandoffHistory BuildBuilderOutputHandoffHistory(
+        string repoRoot,
+        BuilderOutputHandoffHistory priorHistory,
+        BuilderOutputHandoff handoff)
+    {
+        const int retentionCount = 12;
+        var currentEntry = new BuilderOutputHandoffHistoryEntry(
+            handoff.SnapshotId,
+            handoff.ExecutionSessionId,
+            handoff.HandoffReadinessState,
+            handoff.ManualApplyGuidancePath,
+            handoff.OptionalGitReadinessState,
+            handoff.GitCommitHandoffPath,
+            handoff.ArtifactPath,
+            handoff.Summary,
+            handoff.ObservedUtc);
+        var entries = new[] { currentEntry }
+            .Concat(priorHistory.Entries.Where(entry => !string.Equals(entry.SnapshotId, handoff.SnapshotId, StringComparison.Ordinal)))
+            .OrderByDescending(entry => entry.ObservedUtc)
+            .ThenByDescending(entry => entry.SnapshotId, StringComparer.Ordinal)
+            .Take(retentionCount)
+            .ToArray();
+        return new BuilderOutputHandoffHistory(
+            retentionCount,
+            entries,
+            $"Latest builder output handoff is {FirstNonEmpty(handoff.SnapshotId, "not recorded")} with state {handoff.HandoffReadinessState}.",
+            BuilderOutputHandoffHistoryPathForRepo(repoRoot),
+            handoff.ObservedUtc);
+    }
+
+    private static string BuildBuilderCommitProposalMessage(
+        BuilderPatchSnapshot snapshot,
+        BuilderPatchDiffReview patchDiffReview)
+    {
+        var summary = string.Join(
+            "; ",
+            patchDiffReview.FileEntries
+                .Where(entry => snapshot.ApprovedFiles.Any(file => string.Equals(file.RelativePath, entry.RelativePath, StringComparison.Ordinal)))
+                .OrderBy(entry => entry.RelativePath, StringComparer.Ordinal)
+                .Select(entry => $"{entry.RelativePath} ({NormalizeBuilderPatchChangeType(entry.ChangeKind)})"));
+        return string.Join(
+            System.Environment.NewLine,
+            new[]
+            {
+                "Shoots Builder Accepted Patch",
+                $"Route: {snapshot.RouteId}",
+                $"Stack: {snapshot.StackId}",
+                $"Session: {snapshot.ExecutionSessionId}",
+                $"Files: {snapshot.ApprovedFiles.Count}",
+                $"Summary: {FirstNonEmpty(summary, "No approved file summary recorded.")}"
+            });
+    }
+
+    private static string BuildBuilderPatchBundleText(
+        string repoRoot,
+        BuilderPatchSnapshot snapshot,
+        BuilderPatchDiffReview patchDiffReview,
+        PreparedBuilderExecutionResult? result)
+    {
+        var baselineMap = string.IsNullOrWhiteSpace(result?.StarterStateManifestPath)
+            ? new Dictionary<string, BuilderReviewableFileSnapshotEntry>(StringComparer.Ordinal)
+            : LoadBuilderReviewableTargetSnapshot(result.StarterStateManifestPath)
+                .ToDictionary(entry => entry.RelativePath, entry => entry, StringComparer.Ordinal);
+        var patchEntryMap = patchDiffReview.FileEntries.ToDictionary(entry => entry.RelativePath, entry => entry, StringComparer.Ordinal);
+        var sections = snapshot.ApprovedFiles
+            .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
+            .Select(file =>
+            {
+                patchEntryMap.TryGetValue(file.RelativePath, out var patchEntry);
+                baselineMap.TryGetValue(file.RelativePath, out var baselineEntry);
+                var baselineText = baselineEntry is null || string.IsNullOrWhiteSpace(baselineEntry.SnapshotPath) || !File.Exists(baselineEntry.SnapshotPath)
+                    ? string.Empty
+                    : SafeReadBuilderTextFile(baselineEntry.SnapshotPath);
+                var currentPath = ResolveBuilderCurrentFilePath(repoRoot, result, file.RelativePath);
+                var currentText = string.IsNullOrWhiteSpace(currentPath) || !File.Exists(currentPath)
+                    ? string.Empty
+                    : SafeReadBuilderTextFile(currentPath);
+                return BuildBuilderPatchBundleSection(
+                    file.RelativePath,
+                    patchEntry?.ChangeKind ?? file.ChangeType,
+                    baselineText,
+                    currentText,
+                    patchEntry?.PatchPreviewText ?? string.Empty);
+            })
+            .Where(section => !string.IsNullOrWhiteSpace(section))
+            .ToArray();
+        return sections.Length == 0
+            ? string.Empty
+            : string.Join(System.Environment.NewLine + System.Environment.NewLine, sections) + System.Environment.NewLine;
+    }
+
+    private static string BuildBuilderPatchBundleSection(
+        string relativePath,
+        string changeKind,
+        string baselineText,
+        string currentText,
+        string fallbackPreviewText)
+    {
+        var normalizedPath = NormalizeBuilderPatchBundlePath(relativePath);
+        var normalizedChangeType = NormalizeBuilderPatchChangeType(changeKind);
+        if (string.Equals(normalizedChangeType, "created", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(currentText))
+        {
+            return BuildBuilderUnifiedDiffSection("/dev/null", $"b/{normalizedPath}", Array.Empty<string>(), SplitBuilderPatchLines(currentText));
+        }
+
+        if (string.Equals(normalizedChangeType, "deleted", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(baselineText))
+        {
+            return BuildBuilderUnifiedDiffSection($"a/{normalizedPath}", "/dev/null", SplitBuilderPatchLines(baselineText), Array.Empty<string>());
+        }
+
+        if (!string.IsNullOrWhiteSpace(baselineText) || !string.IsNullOrWhiteSpace(currentText))
+        {
+            return BuildBuilderUnifiedDiffSection($"a/{normalizedPath}", $"b/{normalizedPath}", SplitBuilderPatchLines(baselineText), SplitBuilderPatchLines(currentText));
+        }
+
+        if (string.IsNullOrWhiteSpace(fallbackPreviewText))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine($"--- a/{normalizedPath}");
+        builder.AppendLine($"+++ b/{normalizedPath}");
+        var preview = fallbackPreviewText.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd();
+        if (!preview.StartsWith("@@", StringComparison.Ordinal))
+        {
+            builder.Append("@@ ").Append(normalizedPath).AppendLine();
+        }
+
+        builder.Append(preview);
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string BuildBuilderUnifiedDiffSection(
+        string beforePath,
+        string afterPath,
+        IReadOnlyList<string> beforeLines,
+        IReadOnlyList<string> afterLines)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine($"--- {beforePath}");
+        builder.AppendLine($"+++ {afterPath}");
+        builder.AppendLine($"@@ -1,{beforeLines.Count} +1,{afterLines.Count} @@");
+        foreach (var line in beforeLines)
+        {
+            builder.Append('-').AppendLine(line);
+        }
+
+        foreach (var line in afterLines)
+        {
+            builder.Append('+').AppendLine(line);
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string NormalizeBuilderPatchBundlePath(string relativePath)
+        => relativePath.Replace(Path.DirectorySeparatorChar, '/');
+
+    private static string NormalizeBuilderPatchChangeType(string changeKind)
+        => string.Equals(changeKind, "removed", StringComparison.Ordinal)
+            ? "deleted"
+            : FirstNonEmpty(changeKind, "modified");
+
+    private static string BuildBuilderPatchSnapshotId(BuilderConversationExecutionSession session)
+        => $"patch-snapshot-{SanitizeBuilderProofToken(FirstNonEmpty(session.SessionId, "unknown"))}";
+
+    private static string BuildBuilderPatchDiffReviewId(BuilderPatchDiffReview patchDiffReview)
+        => $"patch-diff-review-{SanitizeBuilderProofToken(FirstNonEmpty(patchDiffReview.SessionId, patchDiffReview.SourcePatchReviewId, "unknown"))}";
+
+    private static IReadOnlyList<BuilderPatchReviewChangedFile> BuildBuilderPatchReviewChangedFiles(PreparedBuilderExecutionResult result)
+    {
+        if (string.IsNullOrWhiteSpace(result.SourceWorkingFolderPath) ||
+            !Directory.Exists(result.SourceWorkingFolderPath))
+        {
+            return Array.Empty<BuilderPatchReviewChangedFile>();
+        }
+
+        var baseline = string.IsNullOrWhiteSpace(result.StarterStateManifestPath)
+            ? Array.Empty<BuilderReviewableFileSnapshotEntry>()
+            : LoadBuilderReviewableTargetSnapshot(result.StarterStateManifestPath);
+        var current = CaptureBuilderReviewableTargetSnapshot(result.SourceWorkingFolderPath);
+        var baselineMap = baseline.ToDictionary(entry => entry.RelativePath, entry => entry, StringComparer.Ordinal);
+        var currentMap = current.ToDictionary(entry => entry.RelativePath, entry => entry, StringComparer.Ordinal);
+        var allPaths = baselineMap.Keys
+            .Union(currentMap.Keys, StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var changedFiles = new List<BuilderPatchReviewChangedFile>(allPaths.Length);
+        foreach (var path in allPaths)
+        {
+            baselineMap.TryGetValue(path, out var baselineEntry);
+            currentMap.TryGetValue(path, out var currentEntry);
+            var changeKind = baselineEntry is null
+                ? "created"
+                : currentEntry is null
+                    ? "removed"
+                    : string.Equals(baselineEntry.ContentHash, currentEntry.ContentHash, StringComparison.Ordinal)
+                        ? "unchanged"
+                        : "modified";
+            if (string.Equals(changeKind, "unchanged", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var fileCategory = ClassifyBuilderPatchReviewFileCategory(path);
+            changedFiles.Add(new BuilderPatchReviewChangedFile(
+                path,
+                fileCategory,
+                changeKind,
+                BuildBuilderPatchReviewChangeSummary(path, fileCategory, changeKind),
+                true));
+        }
+
+        return changedFiles;
+    }
+
+    private static string ClassifyBuilderPatchReviewFileCategory(string relativePath)
+    {
+        var fileName = Path.GetFileName(relativePath);
+        if (string.Equals(Path.GetExtension(relativePath), ".csproj", StringComparison.OrdinalIgnoreCase))
+        {
+            return "project_file";
+        }
+
+        if (string.Equals(Path.GetExtension(relativePath), ".xaml", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ui_markup";
+        }
+
+        if (fileName.Contains("ViewModel", StringComparison.OrdinalIgnoreCase))
+        {
+            return "view_model";
+        }
+
+        if (relativePath.Contains($"{Path.DirectorySeparatorChar}Services{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+        {
+            return "service";
+        }
+
+        if (relativePath.Contains($"{Path.DirectorySeparatorChar}Builder{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+        {
+            return "builder_logic";
+        }
+
+        if (relativePath.Contains("Tests", StringComparison.OrdinalIgnoreCase))
+        {
+            return "test_file";
+        }
+
+        return "source_file";
+    }
+
+    private static string BuildBuilderPatchReviewChangeSummary(string relativePath, string fileCategory, string changeKind)
+        => changeKind switch
+        {
+            "created" => $"{relativePath} is newly created as bounded {fileCategory.Replace('_', ' ')} evidence.",
+            "removed" => $"{relativePath} was removed as part of the bounded {fileCategory.Replace('_', ' ')} route.",
+            _ => $"{relativePath} was modified to satisfy the bounded {fileCategory.Replace('_', ' ')} route."
+        };
+
+    private static string BuildBuilderConversationValidationSummary(PreparedBuilderExecutionResult? result)
+    {
+        if (result is null)
+        {
+            return "No validation summary recorded.";
+        }
+
+        var builder = new StringBuilder();
+        builder.Append($"Build={FirstNonEmpty(result.BuildResult, "not_recorded")}. ");
+        builder.Append($"Test={FirstNonEmpty(result.TestResult, "not_recorded")}. ");
+        builder.Append($"Outcome={FirstNonEmpty(result.FinalRouteOutcomeClassification, "not_recorded")}.");
+        if (!string.IsNullOrWhiteSpace(result.FollowupState) &&
+            !string.Equals(result.FollowupState, "not_needed", StringComparison.Ordinal))
+        {
+            builder.Append($" Follow-up={result.FollowupState}.");
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static BuilderConversationExecutionSession BuildBuilderConversationExecutionSession(
+        string repoRoot,
+        string sessionId,
+        string intakeId,
+        string handoffId,
+        BuilderConversationIntake intake,
+        BuilderConversationHandoff handoff,
+        BuilderExecutionPrep? prep,
+        PreparedBuilderExecutionLaunch? launch,
+        PreparedBuilderExecutionResult? result,
+        BuilderPatchReview? patchReview,
+        BuilderPatchReviewOutcome? patchReviewOutcome,
+        string sessionState,
+        string currentStageId,
+        string currentStageLabel,
+        string reviewState,
+        string validationSummary,
+        string reviewNote)
+    {
+        var changedFiles = patchReview?.ChangedFiles ?? Array.Empty<BuilderPatchReviewChangedFile>();
+        var linkedArtifactPaths = BuildBuilderConversationAuthoritativeArtifactPaths(repoRoot)
+            .Concat(new[]
+            {
+                intake.ArtifactPath,
+                handoff.ArtifactPath,
+                prep?.ArtifactPath ?? string.Empty,
+                launch?.ArtifactPath ?? string.Empty,
+                result?.ArtifactPath ?? string.Empty,
+                patchReview?.ArtifactPath ?? string.Empty,
+                patchReviewOutcome?.ArtifactPath ?? string.Empty
+            })
+            .Concat(result?.LinkedArtifactPaths ?? Array.Empty<string>())
+            .Where(BuilderArtifactPathExists)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var stages = BuildBuilderConversationExecutionStages(
+            intake,
+            handoff,
+            sessionState,
+            currentStageId,
+            validationSummary,
+            changedFiles,
+            patchReviewOutcome,
+            launch,
+            result);
+        var summary = BuildBuilderConversationExecutionSessionSummary(
+            handoff.SelectedRoute,
+            sessionState,
+            validationSummary,
+            changedFiles.Count,
+            patchReviewOutcome,
+            reviewNote);
+        return new BuilderConversationExecutionSession(
+            sessionId,
+            FirstNonEmpty(intakeId, BuildBuilderConversationIntakeId(intake)),
+            FirstNonEmpty(handoffId, BuildBuilderConversationHandoffId(handoff)),
+            intake.RawRequestText,
+            intake.NormalizedTaskClass,
+            handoff.SelectedRoute,
+            intake.ImpliedStackId,
+            intake.ImpliedStackLabel,
+            FirstNonEmpty(prep?.CapabilitySummary, intake.CapabilitySummary),
+            sessionState,
+            currentStageId,
+            currentStageLabel,
+            reviewState,
+            validationSummary,
+            prep?.ArtifactPath ?? string.Empty,
+            launch?.ArtifactPath ?? string.Empty,
+            result?.ArtifactPath ?? string.Empty,
+            patchReview?.ArtifactPath ?? string.Empty,
+            patchReviewOutcome?.ArtifactPath ?? string.Empty,
+            changedFiles,
+            stages,
+            linkedArtifactPaths,
+            summary,
+            BuilderConversationExecutionSessionPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static IReadOnlyList<BuilderConversationExecutionStage> BuildBuilderConversationExecutionStages(
+        BuilderConversationIntake intake,
+        BuilderConversationHandoff handoff,
+        string sessionState,
+        string currentStageId,
+        string validationSummary,
+        IReadOnlyList<BuilderPatchReviewChangedFile> changedFiles,
+        BuilderPatchReviewOutcome? patchReviewOutcome,
+        PreparedBuilderExecutionLaunch? launch,
+        PreparedBuilderExecutionResult? result)
+    {
+        var awaitingState = patchReviewOutcome is null
+            ? string.Equals(sessionState, "awaiting_patch_review", StringComparison.Ordinal)
+                ? "active"
+                : string.Equals(sessionState, "executing", StringComparison.Ordinal)
+                    ? "pending"
+                    : "blocked"
+            : "completed";
+        var completedState = patchReviewOutcome is not null && string.Equals(patchReviewOutcome.ReviewDecisionState, "accepted", StringComparison.Ordinal)
+            ? "completed"
+            : "pending";
+        return new[]
+        {
+            new BuilderConversationExecutionStage("repo_retrieval_confirmed", "Repo retrieval confirmed", "completed", intake.RetrievalSummary, Array.Empty<string>()),
+            new BuilderConversationExecutionStage("route_prepared", "Route prepared", "completed", handoff.Summary, Array.Empty<string>()),
+            new BuilderConversationExecutionStage("builder_launched", "Builder launched", string.Equals(currentStageId, "builder_launched", StringComparison.Ordinal) && string.Equals(sessionState, "executing", StringComparison.Ordinal) ? "active" : launch is null && result is null ? "pending" : "completed", launch?.Summary ?? "Prepared builder launch is pending.", Array.Empty<string>()),
+            new BuilderConversationExecutionStage("files_changed", "Files changed", changedFiles.Count > 0 ? "completed" : result is null ? "pending" : "blocked", changedFiles.Count > 0 ? $"{changedFiles.Count} reviewable candidate file(s) were detected." : "No reviewable candidate file changes were detected.", changedFiles.Select(file => file.Path).ToArray()),
+            new BuilderConversationExecutionStage("validation_run", "Validation run", result is null ? "pending" : "completed", validationSummary, result?.LinkedArtifactPaths ?? Array.Empty<string>()),
+            new BuilderConversationExecutionStage("awaiting_operator_review", "Awaiting operator review", awaitingState, patchReviewOutcome?.Summary ?? "Operator review is required before completion.", Array.Empty<string>()),
+            new BuilderConversationExecutionStage("completed", "Completed", completedState, patchReviewOutcome?.Summary ?? "Builder conversation completion is pending operator review.", Array.Empty<string>())
+        };
+    }
+
+    private static string BuildBuilderConversationExecutionSessionSummary(
+        string selectedRoute,
+        string sessionState,
+        string validationSummary,
+        int changedFileCount,
+        BuilderPatchReviewOutcome? patchReviewOutcome,
+        string reviewNote)
+        => sessionState switch
+        {
+            "executing" => $"Builder conversation execution is running route {selectedRoute}.",
+            "awaiting_patch_review" => $"Route {selectedRoute} finished with {changedFileCount} candidate change(s) and is awaiting patch review. {validationSummary}",
+            "accepted_for_completion" => $"Route {selectedRoute} was accepted for completion. {FirstNonEmpty(patchReviewOutcome?.Summary, validationSummary)}",
+            "rejected_for_revision" => $"Route {selectedRoute} was rejected for revision. {FirstNonEmpty(reviewNote, patchReviewOutcome?.Summary, validationSummary)}",
+            "rerouted" => $"Route {selectedRoute} was rerouted during patch review. {FirstNonEmpty(patchReviewOutcome?.Summary, reviewNote, validationSummary)}",
+            "failed_into_followup" => $"Route {selectedRoute} moved into follow-up handling. {FirstNonEmpty(patchReviewOutcome?.Summary, validationSummary)}",
+            _ => $"No builder conversation execution session recorded for route {selectedRoute}."
+        };
+
+    private static string DetermineBuilderConversationReviewSessionState(
+        string reviewDecisionState,
+        PreparedBuilderExecutionResult? result)
+        => reviewDecisionState switch
+        {
+            "accepted" => "accepted_for_completion",
+            "reroute_requested" => "rerouted",
+            "rejected" when HasBuilderConversationFollowupArtifacts(result) => "failed_into_followup",
+            "rejected" => "rejected_for_revision",
+            "revise_requested" => "rejected_for_revision",
+            _ => "awaiting_patch_review"
+        };
+
+    private static bool HasBuilderConversationFollowupArtifacts(PreparedBuilderExecutionResult? result)
+        => result is not null &&
+           (!string.IsNullOrWhiteSpace(result.FollowupIntakePath) ||
+            !string.IsNullOrWhiteSpace(result.FollowupPlanPath) ||
+            !string.IsNullOrWhiteSpace(result.RepairPrepBundlePath) ||
+            !string.IsNullOrWhiteSpace(result.RepairBundlePath) ||
+            !string.IsNullOrWhiteSpace(result.FollowupExecutionOutcomePath));
+
+    private static IReadOnlyList<string> BuildBuilderConversationReviewLinkedArtifactPaths(
+        string repoRoot,
+        BuilderConversationExecutionSession session,
+        BuilderPatchReview patchReview,
+        PreparedBuilderExecutionResult? result,
+        BuilderConversationHandoff handoff)
+        => BuildBuilderConversationAuthoritativeArtifactPaths(repoRoot)
+            .Concat(session.LinkedArtifactPaths)
+            .Concat(patchReview.LinkedArtifactPaths)
+            .Concat(new[]
+            {
+                handoff.ArtifactPath,
+                BuilderPatchReviewPathForRepo(repoRoot),
+                BuilderConversationExecutionSessionPathForRepo(repoRoot),
+                result?.ArtifactPath ?? string.Empty,
+                result?.FollowupIntakePath ?? string.Empty,
+                result?.FollowupPlanPath ?? string.Empty,
+                result?.RepairPrepBundlePath ?? string.Empty,
+                result?.RepairBundlePath ?? string.Empty,
+                result?.FollowupExecutionOutcomePath ?? string.Empty
+            })
+            .Where(BuilderArtifactPathExists)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+    private static string BuildBuilderPatchReviewOutcomeSummary(
+        string reviewDecisionState,
+        string sessionState,
+        string reviewNote,
+        string rerouteRoute,
+        PreparedBuilderExecutionResult? result)
+    {
+        var validationSummary = BuildBuilderConversationValidationSummary(result);
+        return reviewDecisionState switch
+        {
+            "accepted" => $"Operator accepted the candidate changes for completion. {validationSummary}",
+            "rejected" => $"Operator rejected the candidate changes. {FirstNonEmpty(reviewNote, validationSummary)}",
+            "revise_requested" => $"Operator requested revision before completion. {FirstNonEmpty(reviewNote, validationSummary)}",
+            "reroute_requested" => $"Operator requested reroute to {FirstNonEmpty(rerouteRoute, "an override route")}. {FirstNonEmpty(reviewNote, validationSummary)}",
+            _ => $"Builder patch review is still pending. Session state={sessionState}."
+        };
+    }
+
+    private static void WriteBuilderConversationExecutionSessionArtifacts(
+        string repoRoot,
+        BuilderConversationExecutionSession session,
+        BuilderPatchReview? patchReview,
+        BuilderPatchReviewOutcome? patchReviewOutcome = null)
+    {
+        File.WriteAllText(
+            BuilderConversationExecutionSessionPathForRepo(repoRoot),
+            JsonSerializer.Serialize(session, new JsonSerializerOptions { WriteIndented = true }));
+
+        var history = BuildBuilderConversationExecutionHistory(
+            LoadBuilderConversationExecutionHistory(repoRoot),
+            session);
+        File.WriteAllText(
+            BuilderConversationExecutionHistoryPathForRepo(repoRoot),
+            JsonSerializer.Serialize(history, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(
+            BuilderConversationReviewSummaryPathForRepo(repoRoot),
+            BuildBuilderConversationReviewSummaryMarkdown(session, patchReview, patchReviewOutcome));
+    }
+
+    private static BuilderConversationExecutionHistory BuildBuilderConversationExecutionHistory(
+        BuilderConversationExecutionHistory priorHistory,
+        BuilderConversationExecutionSession session)
+    {
+        const int retentionCount = 12;
+        var newestEntry = new BuilderConversationExecutionHistoryEntry(
+            session.SessionId,
+            session.RawRequestText,
+            session.SelectedRoute,
+            session.SessionState,
+            session.ReviewState,
+            session.ArtifactPath,
+            session.Summary,
+            session.ObservedUtc);
+        var entries = new[] { newestEntry }
+            .Concat(priorHistory.Entries.Where(entry => !string.Equals(entry.SessionId, session.SessionId, StringComparison.Ordinal)))
+            .OrderByDescending(entry => entry.ObservedUtc)
+            .ThenByDescending(entry => entry.SessionId, StringComparer.Ordinal)
+            .Take(retentionCount)
+            .ToArray();
+        var summary = $"Latest builder conversation session state is {session.SessionState} on route {session.SelectedRoute}.";
+        return new BuilderConversationExecutionHistory(
+            retentionCount,
+            entries,
+            summary,
+            Path.Combine(Path.GetDirectoryName(session.ArtifactPath) ?? string.Empty, "builder_conversation_execution_history.json"),
+            session.ObservedUtc);
+    }
+
+    private static string BuildBuilderConversationReviewSummaryMarkdown(
+        BuilderConversationExecutionSession session,
+        BuilderPatchReview? patchReview,
+        BuilderPatchReviewOutcome? patchReviewOutcome)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("# Builder Conversation Review Summary");
+        builder.AppendLine();
+        builder.AppendLine($"Session state: {session.SessionState}");
+        builder.AppendLine($"Route: {FirstNonEmpty(session.SelectedRoute, "not recorded")}");
+        builder.AppendLine($"Review state: {FirstNonEmpty(patchReviewOutcome?.ReviewState, session.ReviewState, "not recorded")}");
+        builder.AppendLine($"Validation: {session.ValidationSummary}");
+        if (patchReview is not null)
+        {
+            builder.AppendLine($"Changed files: {patchReview.ChangedFiles.Count}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine(session.Summary);
+        if (patchReviewOutcome is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine(patchReviewOutcome.Summary);
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static BuilderRepoToolchainPolicySnapshot BuildBuilderRepoToolchainPolicySnapshot(string repoRoot)
+    {
+        var csprojPaths = Directory.Exists(repoRoot)
+            ? Directory.GetFiles(repoRoot, "*.csproj", SearchOption.AllDirectories)
+                .Where(path =>
+                    !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) &&
+                    !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+                .ToArray()
+            : Array.Empty<string>();
+        var hasDotNetProjects = csprojPaths.Length > 0;
+        var hasWpfProjects = csprojPaths.Any(path =>
+        {
+            var text = File.ReadAllText(path);
+            return text.Contains("<UseWPF>true</UseWPF>", StringComparison.OrdinalIgnoreCase);
+        });
+
+        return new BuilderRepoToolchainPolicySnapshot(
+            hasDotNetProjects,
+            hasWpfProjects,
+            hasWpfProjects ? "wpf_desktop_dotnet" : hasDotNetProjects ? "csharp_dotnet" : string.Empty,
+            hasWpfProjects ? "WPF/Desktop .NET" : hasDotNetProjects ? "C# / .NET" : string.Empty,
+            hasWpfProjects
+                ? "Repo policy prefers WPF/Desktop .NET while allowing bounded C#/.NET work."
+                : hasDotNetProjects
+                    ? "Repo policy allows C#/.NET for this repository."
+                    : "No repo-level .NET policy was detected.");
+    }
+
+    private static BuilderToolchainCapabilityObservation BuildBuilderWpfDesktopObservation(
+        BuilderRepoToolchainPolicySnapshot policy,
+        BuilderToolchainCapabilityObservation dotnetObservation,
+        DateTimeOffset observedUtc)
+    {
+        var installed = dotnetObservation.Installed && policy.HasWpfProjects;
+        var callable = dotnetObservation.Callable && policy.HasWpfProjects && RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        var probeState = callable
+            ? "probe_succeeded"
+            : installed
+                ? "probe_failed"
+                : "not_found";
+        var message = callable
+            ? string.Empty
+            : !policy.HasWpfProjects
+                ? "Repo policy does not currently require WPF/Desktop .NET."
+                : !RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? "WPF/Desktop .NET builds require Windows."
+                    : FirstNonEmpty(dotnetObservation.ProbeMessage, "dotnet is not callable for WPF/Desktop .NET.");
+        return new BuilderToolchainCapabilityObservation(
+            "dotnet_wpf_desktop",
+            "desktop_capability",
+            dotnetObservation.DiscoveredPath,
+            dotnetObservation.Version,
+            installed,
+            callable,
+            probeState,
+            message,
+            observedUtc);
+    }
+
+    private static IReadOnlyList<string> GetBuilderToolchainCandidateIds()
+        => new[]
+        {
+            "cl",
+            "cmake",
+            "dotnet",
+            "dotnet_wpf_desktop",
+            "g++",
+            "gcc",
+            "java",
+            "msbuild",
+            "ninja",
+            "node",
+            "npm",
+            "pnpm",
+            "python",
+            "yarn",
+            "clang"
+        };
+
+    private static string GetBuilderToolchainCategory(string toolId)
+        => toolId switch
+        {
+            "cl" or "gcc" or "g++" or "clang" => "compiler",
+            "cmake" or "ninja" or "msbuild" => "build_tool",
+            "npm" or "pnpm" or "yarn" => "packaging_tool",
+            "dotnet" => "sdk",
+            "dotnet_wpf_desktop" => "desktop_capability",
+            _ => "runtime"
+        };
+
+    private static bool IsBuilderToolchainSupportedByRepo(string toolId, BuilderRepoToolchainPolicySnapshot policy)
+        => toolId switch
+        {
+            "dotnet" => policy.HasDotNetProjects,
+            "msbuild" => policy.HasDotNetProjects,
+            "dotnet_wpf_desktop" => policy.HasWpfProjects,
+            _ => false
+        };
+
+    private static bool IsBuilderToolchainPreferredByRepo(string toolId, BuilderRepoToolchainPolicySnapshot policy)
+        => toolId switch
+        {
+            "dotnet" => policy.HasDotNetProjects,
+            "dotnet_wpf_desktop" => policy.HasWpfProjects,
+            _ => false
+        };
+
+    private static string DetermineBuilderToolchainUsabilityState(
+        BuilderToolchainCapabilityObservation observation,
+        bool supportedByRepo,
+        bool preferredByRepo)
+    {
+        if (!observation.Installed)
+        {
+            return "not_installed";
+        }
+
+        if (!observation.Callable)
+        {
+            return "installed_but_not_callable";
+        }
+
+        if (!supportedByRepo)
+        {
+            return "callable_but_repo_blocked";
+        }
+
+        return preferredByRepo
+            ? "preferred_and_ready"
+            : "approved_but_not_preferred";
+    }
+
+    private static string BuildBuilderToolchainBlockedReason(
+        BuilderToolchainCapabilityObservation observation,
+        bool supportedByRepo)
+    {
+        if (!observation.Installed)
+        {
+            return FirstNonEmpty(observation.ProbeMessage, $"{observation.ToolId} is not installed.");
+        }
+
+        if (!observation.Callable)
+        {
+            return FirstNonEmpty(observation.ProbeMessage, $"{observation.ToolId} is installed but not callable.");
+        }
+
+        return supportedByRepo
+            ? string.Empty
+            : $"{observation.ToolId} is callable on this machine but not approved for this repo.";
+    }
+
+    private static string BuildBuilderToolchainRegistryEntrySummary(
+        BuilderToolchainCapabilityObservation observation,
+        string usabilityState,
+        string blockedReason)
+        => string.IsNullOrWhiteSpace(blockedReason)
+            ? $"{observation.ToolId} is {usabilityState.Replace('_', ' ')}."
+            : $"{observation.ToolId} is {usabilityState.Replace('_', ' ')}. {blockedReason}";
+
+    private static string BuildBuilderToolchainCapabilitySummary(
+        BuilderRepoToolchainPolicySnapshot policy,
+        IReadOnlyList<BuilderToolchainCapabilityRegistryEntry> entries,
+        string driftState)
+    {
+        var ready = entries
+            .Where(entry => string.Equals(entry.UsabilityState, "preferred_and_ready", StringComparison.Ordinal) ||
+                            string.Equals(entry.UsabilityState, "approved_but_not_preferred", StringComparison.Ordinal))
+            .Select(entry => entry.ToolId)
+            .OrderBy(entry => entry, StringComparer.Ordinal)
+            .ToArray();
+        var blocked = entries
+            .Where(entry => !string.Equals(entry.UsabilityState, "preferred_and_ready", StringComparison.Ordinal) &&
+                            !string.Equals(entry.UsabilityState, "approved_but_not_preferred", StringComparison.Ordinal))
+            .Select(entry => $"{entry.ToolId} ({FirstNonEmpty(entry.BlockedReason, entry.UsabilityState.Replace('_', ' '))})")
+            .Take(6)
+            .ToArray();
+        var readySummary = ready.Length == 0 ? "none" : string.Join(", ", ready);
+        var blockedSummary = blocked.Length == 0 ? "none" : string.Join("; ", blocked);
+        return $"Preferred stack: {FirstNonEmpty(policy.PreferredStackLabel, "not recorded")}. Ready toolchains: {readySummary}. Blocked toolchains: {blockedSummary}. Refresh completed with {driftState}.";
+    }
+
+    private static IReadOnlyList<BuilderLanguageStackDefinition> GetBuilderLanguageStackDefinitions()
+        => new[]
+        {
+            new BuilderLanguageStackDefinition("wpf_desktop_dotnet", "WPF/Desktop .NET", new[] { "dotnet", "dotnet_wpf_desktop" }, "dotnet SDK plus Windows WPF desktop capability"),
+            new BuilderLanguageStackDefinition("csharp_dotnet", "C# / .NET", new[] { "dotnet" }, "callable dotnet SDK"),
+            new BuilderLanguageStackDefinition("cpp_native", "C/C++", new[] { "cl", "gcc", "g++", "clang" }, "at least one callable native compiler"),
+            new BuilderLanguageStackDefinition("javascript_typescript", "JavaScript/TypeScript", new[] { "node", "npm" }, "callable node runtime with an approved package tool"),
+            new BuilderLanguageStackDefinition("python", "Python", new[] { "python" }, "callable python runtime"),
+            new BuilderLanguageStackDefinition("java", "Java", new[] { "java" }, "callable java runtime")
+        };
+
+    private static bool IsBuilderLanguageSupportedByRepo(string stackId, BuilderRepoToolchainPolicySnapshot policy)
+        => stackId switch
+        {
+            "wpf_desktop_dotnet" => policy.HasWpfProjects,
+            "csharp_dotnet" => policy.HasDotNetProjects,
+            _ => false
+        };
+
+    private static bool IsBuilderLanguagePreferredByRepo(string stackId, BuilderRepoToolchainPolicySnapshot policy)
+        => stackId switch
+        {
+            "wpf_desktop_dotnet" => policy.HasWpfProjects,
+            "csharp_dotnet" => policy.HasDotNetProjects && !policy.HasWpfProjects,
+            _ => false
+        };
+
+    private static bool IsBuilderLanguageReady(string stackId, BuilderToolchainCapabilityRegistry registry)
+        => stackId switch
+        {
+            "cpp_native" => new[] { "cl", "gcc", "g++", "clang" }.Any(toolId => IsBuilderToolchainCallable(registry, toolId)),
+            "javascript_typescript" => IsBuilderToolchainCallable(registry, "node") &&
+                                      new[] { "npm", "pnpm", "yarn" }.Any(toolId => IsBuilderToolchainCallable(registry, toolId)),
+            _ => GetBuilderLanguageStackDefinitions()
+                .First(definition => string.Equals(definition.StackId, stackId, StringComparison.Ordinal))
+                .RequiredToolIds.All(toolId => IsBuilderToolchainCallable(registry, toolId))
+        };
+
+    private static string BuildBuilderLanguageEligibilityEntrySummary(
+        BuilderLanguageStackDefinition definition,
+        string eligibilityState,
+        string blockedReason)
+        => string.IsNullOrWhiteSpace(blockedReason)
+            ? $"{definition.StackLabel} is {eligibilityState.Replace('_', ' ')}."
+            : $"{definition.StackLabel} is {eligibilityState.Replace('_', ' ')}. {blockedReason}";
+
+    private static string BuildBuilderLanguageEligibilitySummary(
+        IReadOnlyList<BuilderLanguageEligibilityEntry> entries,
+        BuilderRepoToolchainPolicySnapshot policy)
+    {
+        var defaultEntry = entries.FirstOrDefault(entry => string.Equals(entry.EligibilityState, "ready_and_preferred", StringComparison.Ordinal));
+        var readyButNotPreferred = entries
+            .Where(entry => string.Equals(entry.EligibilityState, "ready_but_not_preferred", StringComparison.Ordinal))
+            .Select(entry => entry.StackLabel)
+            .ToArray();
+        var blocked = entries
+            .Where(entry =>
+                string.Equals(entry.EligibilityState, "installed_but_disallowed", StringComparison.Ordinal) ||
+                string.Equals(entry.EligibilityState, "unsupported_for_repo", StringComparison.Ordinal) ||
+                string.Equals(entry.EligibilityState, "unavailable", StringComparison.Ordinal))
+            .Select(entry => $"{entry.StackLabel} ({entry.EligibilityState.Replace('_', ' ')})")
+            .ToArray();
+        return $"{FirstNonEmpty(defaultEntry?.StackLabel, policy.PreferredStackLabel)} is the default builder stack. Available but not preferred: {FirstNonEmpty(string.Join(", ", readyButNotPreferred), "none")}. Blocked or unsupported: {FirstNonEmpty(string.Join(", ", blocked), "none")}.";
+    }
+
+    private static bool IsBuilderToolchainInstalled(BuilderToolchainCapabilityRegistry registry, string toolId)
+        => registry.Entries.Any(entry => string.Equals(entry.ToolId, toolId, StringComparison.Ordinal) && entry.Installed);
+
+    private static bool IsBuilderToolchainCallable(BuilderToolchainCapabilityRegistry registry, string toolId)
+        => registry.Entries.Any(entry => string.Equals(entry.ToolId, toolId, StringComparison.Ordinal) && entry.Callable);
+
+    private void RefreshBuilderRouteContinuityArtifacts(string repoRoot)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(BuilderProofRootForRepo(repoRoot));
+        var continuity = BuildBuilderRouteStateContinuity(repoRoot, LoadBuilderRouteStateContinuity(repoRoot));
+        File.WriteAllText(
+            BuilderRouteStateContinuityPathForRepo(repoRoot),
+            JsonSerializer.Serialize(continuity, new JsonSerializerOptions { WriteIndented = true }));
+
+        var currentStateIndex = BuildBuilderRouteCurrentStateIndex(repoRoot, continuity);
+        File.WriteAllText(
+            BuilderRouteCurrentStateIndexPathForRepo(repoRoot),
+            JsonSerializer.Serialize(currentStateIndex, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static BuilderRouteStateContinuity BuildBuilderRouteStateContinuity(
+        string repoRoot,
+        BuilderRouteStateContinuity priorContinuity)
+    {
+        var mergedEntries = priorContinuity.Entries
+            .ToDictionary(entry => entry.SourceProofRunId, StringComparer.Ordinal);
+        foreach (var group in LoadBuilderProofHistory(repoRoot).Entries
+                     .GroupBy(entry => new { entry.RunId, entry.RunFolder, entry.CompletedUtc }))
+        {
+            var snapshot = LoadBuilderRouteContinuitySnapshot(group.Key.RunId, group.Key.RunFolder, group.Key.CompletedUtc);
+            if (snapshot is null)
+            {
+                continue;
+            }
+
+            mergedEntries[snapshot.SourceProofRunId] = new BuilderRouteStateContinuityEntry(
+                snapshot.SourceProofRunId,
+                snapshot.SourceRunFolder,
+                snapshot.TaskClass,
+                snapshot.DefaultRoute,
+                snapshot.PreparedRoute,
+                snapshot.RouteSourceState,
+                snapshot.CurrentReadinessState,
+                snapshot.ContradictionAttributionState,
+                snapshot.ReconfirmationState,
+                snapshot.DefaultRouteSuspended,
+                snapshot.ContinuityState,
+                0,
+                0,
+                snapshot.AvailableArtifacts,
+                snapshot.Summary,
+                snapshot.ObservedUtc);
+        }
+
+        var entries = new List<BuilderRouteStateContinuityEntry>();
+        var overrideCycleCount = 0;
+        var reconfirmationCycleCount = 0;
+        var previousReconfirmed = false;
+        foreach (var entry in mergedEntries.Values
+                     .OrderBy(candidate => candidate.ObservedUtc)
+                     .ThenBy(candidate => candidate.SourceProofRunId, StringComparer.Ordinal))
+        {
+            if (IsBuilderRouteOverrideContradictionCycle(entry))
+            {
+                overrideCycleCount++;
+            }
+
+            var isReconfirmed = string.Equals(entry.ReconfirmationState, "reconfirmed_default_route", StringComparison.Ordinal);
+            if (isReconfirmed && !previousReconfirmed)
+            {
+                reconfirmationCycleCount++;
+            }
+
+            entries.Add(entry with
+            {
+                OverrideContradictionCycleCount = overrideCycleCount,
+                ReconfirmationCycleCount = reconfirmationCycleCount
+            });
+            previousReconfirmed = isReconfirmed;
+        }
+
+        var latestEntry = entries.LastOrDefault();
+        return new BuilderRouteStateContinuity(
+            latestEntry?.SourceProofRunId ?? string.Empty,
+            latestEntry?.SourceRunFolder ?? string.Empty,
+            latestEntry?.TaskClass ?? string.Empty,
+            latestEntry?.DefaultRoute ?? string.Empty,
+            latestEntry?.PreparedRoute ?? string.Empty,
+            latestEntry?.ContinuityState ?? string.Empty,
+            latestEntry?.DefaultRouteSuspended ?? false,
+            overrideCycleCount,
+            reconfirmationCycleCount,
+            entries.ToArray(),
+            BuildBuilderRouteStateContinuitySummary(latestEntry, overrideCycleCount, reconfirmationCycleCount),
+            BuilderRouteStateContinuityPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static BuilderRouteCurrentStateIndex BuildBuilderRouteCurrentStateIndex(
+        string repoRoot,
+        BuilderRouteStateContinuity continuity)
+    {
+        var latestEntry = continuity.Entries.LastOrDefault();
+        if (latestEntry is null)
+        {
+            return new BuilderRouteCurrentStateIndex(
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                false,
+                0,
+                0,
+                Array.Empty<BuilderRouteCurrentStateArtifactIndexEntry>(),
+                "No builder route current-state index recorded.",
+                BuilderRouteCurrentStateIndexPathForRepo(repoRoot),
+                DateTimeOffset.UtcNow);
+        }
+
+        var orderedEntries = continuity.Entries
+            .OrderByDescending(entry => entry.ObservedUtc)
+            .ThenByDescending(entry => entry.SourceProofRunId, StringComparer.Ordinal)
+            .ToArray();
+        var artifactEntries = new List<BuilderRouteCurrentStateArtifactIndexEntry>();
+        foreach (var artifactKind in GetBuilderRouteCurrentStateArtifactKinds())
+        {
+            var reference = orderedEntries
+                .Select(entry => new
+                {
+                    Entry = entry,
+                    Artifact = entry.AvailableArtifacts.FirstOrDefault(candidate =>
+                        string.Equals(candidate.ArtifactKind, artifactKind, StringComparison.Ordinal) &&
+                        !string.IsNullOrWhiteSpace(candidate.ArtifactPath) &&
+                        File.Exists(candidate.ArtifactPath))
+                })
+                .FirstOrDefault(candidate => candidate.Artifact is not null);
+            if (reference?.Artifact is null)
+            {
+                continue;
+            }
+
+            artifactEntries.Add(new BuilderRouteCurrentStateArtifactIndexEntry(
+                artifactKind,
+                reference.Artifact.SourceProofRunId,
+                reference.Artifact.SourceRunFolder,
+                reference.Artifact.ArtifactPath,
+                string.Equals(reference.Artifact.SourceProofRunId, latestEntry.SourceProofRunId, StringComparison.Ordinal)
+                    ? "latest_run"
+                    : "continuity_carried_forward"));
+        }
+
+        return new BuilderRouteCurrentStateIndex(
+            latestEntry.SourceProofRunId,
+            latestEntry.SourceRunFolder,
+            latestEntry.TaskClass,
+            latestEntry.DefaultRoute,
+            latestEntry.PreparedRoute,
+            latestEntry.CurrentReadinessState,
+            latestEntry.ReconfirmationState,
+            latestEntry.DefaultRouteSuspended,
+            continuity.OverrideContradictionCycleCount,
+            continuity.ReconfirmationCycleCount,
+            artifactEntries,
+            BuildBuilderRouteCurrentStateIndexSummary(latestEntry, artifactEntries),
+            BuilderRouteCurrentStateIndexPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static BuilderRouteContinuitySnapshot? LoadBuilderRouteContinuitySnapshot(
+        string runId,
+        string runFolder,
+        DateTimeOffset observedUtc)
+    {
+        var proofRun = LoadBuilderProofRun(runFolder);
+        var intake = LoadBuilderRequestIntake(runFolder);
+        var prep = LoadBuilderExecutionPrep(runFolder);
+        var readinessGate = LoadBuilderReadinessGate(runFolder);
+        var defaultRouteDecision = LoadBuilderDefaultRouteDecision(runFolder);
+        var launchDecision = LoadBuilderLaunchDefaultDecision(runFolder);
+        var overrideEvidence = LoadBuilderRouteOverrideEvidence(runFolder);
+        var reconfirmation = LoadBuilderRouteReconfirmation(runFolder);
+        var recovery = LoadBuilderDefaultRouteRecovery(runFolder);
+
+        var taskClass = FirstNonEmpty(
+            intake?.NormalizedTaskClass,
+            defaultRouteDecision?.TaskClass,
+            reconfirmation?.TaskClass,
+            recovery?.TaskClass);
+        var defaultRoute = FirstNonEmpty(
+            defaultRouteDecision?.ChosenDefaultRoute,
+            reconfirmation?.PriorConfirmedDefaultRoute,
+            recovery?.SuspendedRoute,
+            prep?.SelectedRoute);
+        var preparedRoute = FirstNonEmpty(
+            prep?.SelectedRoute,
+            launchDecision?.ActualLaunchRoute,
+            defaultRoute);
+        if (proofRun is null &&
+            string.IsNullOrWhiteSpace(taskClass) &&
+            string.IsNullOrWhiteSpace(defaultRoute) &&
+            string.IsNullOrWhiteSpace(preparedRoute))
+        {
+            return null;
+        }
+
+        var contradictionAttributionState = FirstNonEmpty(
+            reconfirmation?.ContradictionAttributionState,
+            recovery?.ContradictionAttributionState,
+            readinessGate?.ContradictionAttributionState);
+        var reconfirmationState = FirstNonEmpty(
+            reconfirmation?.CurrentReconfirmationState,
+            recovery?.DefaultRouteRestored == true ? "reconfirmed_default_route" : string.Empty,
+            defaultRouteDecision?.DefaultRouteSuspended == true ? "default_still_suspended" : "not_required");
+        var currentReadinessState = readinessGate?.CurrentReadinessGateState ?? "not_recorded";
+        var routeSourceState = FirstNonEmpty(
+            defaultRouteDecision?.RouteSourceState,
+            intake?.RouteSourceState,
+            launchDecision?.RouteSourceState);
+        var recoveryIndicatesSuspended =
+            string.Equals(reconfirmationState, "default_still_suspended", StringComparison.Ordinal) ||
+            string.Equals(recovery?.RecoveryState, "default_still_suspended", StringComparison.Ordinal);
+        var defaultRouteSuspended = defaultRouteDecision?.DefaultRouteSuspended
+                                    ?? readinessGate?.DefaultRouteSuspended
+                                    ?? recoveryIndicatesSuspended;
+        var continuityState = DetermineBuilderRouteContinuityState(
+            routeSourceState,
+            defaultRouteSuspended,
+            reconfirmationState,
+            contradictionAttributionState,
+            launchDecision?.OperatorDecisionState,
+            overrideEvidence?.OverrideOutcomeComparisonState);
+        var availableArtifacts = CollectBuilderRouteContinuityArtifacts(runId, runFolder);
+        return new BuilderRouteContinuitySnapshot(
+            runId,
+            runFolder,
+            taskClass,
+            defaultRoute,
+            preparedRoute,
+            routeSourceState,
+            currentReadinessState,
+            contradictionAttributionState,
+            reconfirmationState,
+            defaultRouteSuspended,
+            continuityState,
+            availableArtifacts,
+            BuildBuilderRouteContinuityEntrySummary(
+                taskClass,
+                defaultRoute,
+                preparedRoute,
+                continuityState,
+                currentReadinessState,
+                availableArtifacts.Count),
+            observedUtc);
+    }
+
+    private static string DetermineBuilderRouteContinuityState(
+        string routeSourceState,
+        bool defaultRouteSuspended,
+        string reconfirmationState,
+        string contradictionAttributionState,
+        string? operatorDecisionState,
+        string? overrideOutcomeComparisonState)
+    {
+        if (string.Equals(reconfirmationState, "reconfirmed_default_route", StringComparison.Ordinal))
+        {
+            return "reconfirmed_default_route";
+        }
+
+        if (defaultRouteSuspended)
+        {
+            return contradictionAttributionState switch
+            {
+                "override_route_failure" => "override_contradiction_suspended",
+                "default_route_failure" => "default_contradiction_suspended",
+                _ => "route_suspended_pending_reconfirmation"
+            };
+        }
+
+        if (string.Equals(operatorDecisionState, "operator_override_selected", StringComparison.Ordinal))
+        {
+            return string.Equals(overrideOutcomeComparisonState, "regressed_outcome", StringComparison.Ordinal)
+                ? "override_contradiction_recorded"
+                : "override_route_active";
+        }
+
+        return routeSourceState switch
+        {
+            "defaulted_by_confirmed_policy" => "confirmed_default_active",
+            "suggested" => "suggested_default_active",
+            _ => "route_state_observed"
+        };
+    }
+
+    private static IReadOnlyList<BuilderRouteArtifactReference> CollectBuilderRouteContinuityArtifacts(string runId, string runFolder)
+    {
+        var artifacts = new List<BuilderRouteArtifactReference>();
+        TryAddBuilderRouteArtifactReference(artifacts, "builder_readiness_gate", runId, runFolder, BuilderReadinessGatePath(runFolder));
+        TryAddBuilderRouteArtifactReference(artifacts, "builder_confirmed_task_classes", runId, runFolder, BuilderConfirmedTaskClassesPath(runFolder));
+        TryAddBuilderRouteArtifactReference(artifacts, "builder_default_route_decision", runId, runFolder, BuilderDefaultRouteDecisionPath(runFolder));
+        TryAddBuilderRouteArtifactReference(artifacts, "builder_launch_default_decision", runId, runFolder, BuilderLaunchDefaultDecisionPath(runFolder));
+        TryAddBuilderRouteArtifactReference(artifacts, "builder_route_override_evidence", runId, runFolder, BuilderRouteOverrideEvidencePath(runFolder));
+        TryAddBuilderRouteArtifactReference(artifacts, "builder_policy_review_candidates", runId, runFolder, BuilderPolicyReviewCandidatesPath(runFolder));
+        TryAddBuilderRouteArtifactReference(artifacts, "builder_route_reconfirmation", runId, runFolder, BuilderRouteReconfirmationPath(runFolder));
+        TryAddBuilderRouteArtifactReference(artifacts, "builder_default_route_recovery", runId, runFolder, BuilderDefaultRouteRecoveryPath(runFolder));
+        TryAddBuilderRouteArtifactReference(artifacts, "builder_readiness_contradictions", runId, runFolder, BuilderReadinessContradictionsPath(runFolder));
+        TryAddBuilderRouteArtifactReference(artifacts, "builder_route_stability_summary", runId, runFolder, BuilderRouteStabilitySummaryPath(runFolder));
+        return artifacts;
+    }
+
+    private static void TryAddBuilderRouteArtifactReference(
+        ICollection<BuilderRouteArtifactReference> artifacts,
+        string artifactKind,
+        string runId,
+        string runFolder,
+        string artifactPath)
+    {
+        if (!string.IsNullOrWhiteSpace(artifactPath) && File.Exists(artifactPath))
+        {
+            artifacts.Add(new BuilderRouteArtifactReference(artifactKind, runId, runFolder, artifactPath));
+        }
+    }
+
+    private static IReadOnlyList<string> GetBuilderRouteCurrentStateArtifactKinds()
+        => new[]
+        {
+            "builder_readiness_gate",
+            "builder_confirmed_task_classes",
+            "builder_default_route_decision",
+            "builder_launch_default_decision",
+            "builder_route_override_evidence",
+            "builder_policy_review_candidates",
+            "builder_route_reconfirmation",
+            "builder_default_route_recovery",
+            "builder_readiness_contradictions",
+            "builder_route_stability_summary"
+        };
+
+    private static bool IsBuilderRouteOverrideContradictionCycle(BuilderRouteStateContinuityEntry entry)
+        => string.Equals(entry.ContinuityState, "override_contradiction_suspended", StringComparison.Ordinal) &&
+           HasBuilderRouteArtifact(entry, "builder_launch_default_decision") &&
+           HasBuilderRouteArtifact(entry, "builder_route_override_evidence");
+
+    private static bool HasBuilderRouteArtifact(BuilderRouteStateContinuityEntry entry, string artifactKind)
+        => entry.AvailableArtifacts.Any(candidate => string.Equals(candidate.ArtifactKind, artifactKind, StringComparison.Ordinal));
+
+    private static string BuildBuilderRouteContinuityEntrySummary(
+        string taskClass,
+        string defaultRoute,
+        string preparedRoute,
+        string continuityState,
+        string currentReadinessState,
+        int artifactCount)
+        => $"{FirstNonEmpty(taskClass, "builder route")} stayed in {continuityState} with default={FirstNonEmpty(defaultRoute, "not_recorded")} and prep={FirstNonEmpty(preparedRoute, "not_recorded")}. Readiness={FirstNonEmpty(currentReadinessState, "not_recorded")}. Artifacts={artifactCount}.";
+
+    private static string BuildBuilderRouteStateContinuitySummary(
+        BuilderRouteStateContinuityEntry? latestEntry,
+        int overrideCycleCount,
+        int reconfirmationCycleCount)
+        => latestEntry is null
+            ? "No builder route continuity recorded."
+            : $"Builder route continuity is {latestEntry.ContinuityState} for {FirstNonEmpty(latestEntry.TaskClass, "the current task class")}. Default={FirstNonEmpty(latestEntry.DefaultRoute, "not_recorded")}. Override cycles={overrideCycleCount}. Reconfirmation cycles={reconfirmationCycleCount}.";
+
+    private static string BuildBuilderRouteCurrentStateIndexSummary(
+        BuilderRouteStateContinuityEntry latestEntry,
+        IReadOnlyList<BuilderRouteCurrentStateArtifactIndexEntry> entries)
+    {
+        var carriedForwardCount = entries.Count(entry => string.Equals(entry.ResolutionState, "continuity_carried_forward", StringComparison.Ordinal));
+        var latestRunCount = entries.Count(entry => string.Equals(entry.ResolutionState, "latest_run", StringComparison.Ordinal));
+        return $"Authoritative builder route artifacts index {FirstNonEmpty(latestEntry.TaskClass, "the current task class")} on {FirstNonEmpty(latestEntry.DefaultRoute, "not_recorded")}. Carried forward {carriedForwardCount} artifact(s); latest run supplies {latestRunCount}. Reconfirmation={FirstNonEmpty(latestEntry.ReconfirmationState, "not_required")}.";
     }
 
     private static BuilderReadinessGate BuildBuilderReadinessGate(
@@ -7780,7 +13293,9 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             existingResult,
             operatorDecisionState,
             currentReadinessState,
-            defaultRouteSuspended);
+            defaultRouteSuspended,
+            effectivePrep.CapabilityRoutingState,
+            effectivePrep.CapabilityBlockReason);
         var linkedArtifactPaths = intake.LinkedEvidencePaths
             .Concat(effectivePrep.LinkedArtifactPaths)
             .Concat(defaultRouteDecision?.LinkedArtifactPaths ?? Array.Empty<string>())
@@ -8486,6 +14001,152 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             DateTimeOffset.UtcNow);
     }
 
+    private static BuilderCapabilityBlockDecision BuildBuilderCapabilityBlockDecision(
+        string runFolder,
+        BuilderRequestPolicyDecision requestDecision,
+        BuilderDefaultRouteDecision defaultRouteDecision,
+        BuilderToolchainCapabilityRegistry capabilityRegistry,
+        BuilderLanguageEligibility languageEligibility)
+    {
+        var requestedStackId = ResolveBuilderRequestedStackId(requestDecision);
+        var effectiveStackId = ResolveBuilderEffectiveStackId(requestDecision, requestedStackId, capabilityRegistry.PreferredStackId);
+        var requestedStackLabel = ResolveBuilderStackLabel(requestedStackId);
+        var effectiveStackLabel = ResolveBuilderStackLabel(effectiveStackId);
+        var eligibilityEntry = languageEligibility.Entries.FirstOrDefault(entry =>
+            string.Equals(entry.StackId, effectiveStackId, StringComparison.Ordinal));
+        var eligibilityState = eligibilityEntry?.EligibilityState ?? "unsupported_for_repo";
+        var routingDecisionState = DetermineBuilderCapabilityRoutingState(
+            requestedStackId,
+            effectiveStackId,
+            eligibilityState);
+        var blockReason = routingDecisionState switch
+        {
+            "route_blocked_missing_toolchain" => eligibilityEntry?.BlockedReason ?? $"Required toolchain is unavailable for {effectiveStackLabel}.",
+            "route_blocked_repo_policy" => eligibilityEntry?.BlockedReason ?? $"{effectiveStackLabel} is blocked by repo policy.",
+            _ => string.Empty
+        };
+        var summary = routingDecisionState switch
+        {
+            "route_redirected_to_preferred_stack" => $"Builder request implied {requestedStackLabel} and was redirected to preferred stack {effectiveStackLabel}.",
+            "route_allowed_but_not_preferred" => $"Builder request implied {effectiveStackLabel} and is allowed, but not preferred for this repo.",
+            "route_blocked_missing_toolchain" => $"Builder request implied {effectiveStackLabel} and is route blocked because the required toolchain is unavailable.",
+            "route_blocked_repo_policy" => $"Builder request implied {effectiveStackLabel} and is route blocked by repo policy.",
+            _ => $"Builder request implied {effectiveStackLabel} and is allowed for this repo."
+        };
+        var linkedArtifactPaths = new[]
+        {
+            capabilityRegistry.ArtifactPath,
+            languageEligibility.ArtifactPath
+        }
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return new BuilderCapabilityBlockDecision(
+            requestDecision.SourceProofRunId,
+            requestDecision.TaskClass,
+            requestDecision.ProofScope,
+            requestedStackId,
+            requestedStackLabel,
+            effectiveStackId,
+            effectiveStackLabel,
+            eligibilityEntry?.ToolchainRequirementSummary ?? BuildBuilderToolchainRequirementSummary(effectiveStackId),
+            eligibilityState switch
+            {
+                "ready_and_preferred" => "preferred_and_ready",
+                "ready_but_not_preferred" => "approved_but_not_preferred",
+                "unavailable" => "missing_required_toolchain",
+                "installed_but_disallowed" => "callable_but_repo_blocked",
+                _ => "unsupported_for_repo"
+            },
+            eligibilityState,
+            routingDecisionState,
+            routingDecisionState is "route_allowed" or "route_allowed_but_not_preferred" or "route_redirected_to_preferred_stack"
+                ? defaultRouteDecision.ChosenDefaultRoute
+                : string.Empty,
+            routingDecisionState is "route_allowed" or "route_allowed_but_not_preferred" or "route_redirected_to_preferred_stack"
+                ? effectiveStackId
+                : string.Empty,
+            blockReason,
+            linkedArtifactPaths,
+            summary,
+            ShouldPersistBuilderCapabilityBlockDecision(routingDecisionState) ? BuilderCapabilityBlockDecisionPath(runFolder) : string.Empty,
+            DateTimeOffset.UtcNow);
+    }
+
+    private static bool ShouldPersistBuilderCapabilityBlockDecision(BuilderCapabilityBlockDecision decision)
+        => ShouldPersistBuilderCapabilityBlockDecision(decision.RoutingDecisionState);
+
+    private static bool ShouldPersistBuilderCapabilityBlockDecision(string routingDecisionState)
+        => !string.Equals(routingDecisionState, "route_allowed", StringComparison.Ordinal);
+
+    private static string ResolveBuilderRequestedStackId(BuilderRequestPolicyDecision requestDecision)
+    {
+        var composite = $"{requestDecision.ProofScope}|{requestDecision.TaskClass}|{requestDecision.TargetId}".ToLowerInvariant();
+        if (composite.Contains("wpf", StringComparison.Ordinal))
+        {
+            return "csharp_dotnet";
+        }
+
+        if (composite.Contains("javascript", StringComparison.Ordinal) ||
+            composite.Contains("typescript", StringComparison.Ordinal) ||
+            composite.Contains("node", StringComparison.Ordinal))
+        {
+            return "javascript_typescript";
+        }
+
+        if (composite.Contains("python", StringComparison.Ordinal))
+        {
+            return "python";
+        }
+
+        if (composite.Contains("java", StringComparison.Ordinal))
+        {
+            return "java";
+        }
+
+        if (composite.Contains("c++", StringComparison.Ordinal) ||
+            composite.Contains("cpp", StringComparison.Ordinal) ||
+            composite.Contains("native", StringComparison.Ordinal) ||
+            composite.Contains("cmake", StringComparison.Ordinal))
+        {
+            return "cpp_native";
+        }
+
+        return "csharp_dotnet";
+    }
+
+    private static string ResolveBuilderEffectiveStackId(
+        BuilderRequestPolicyDecision requestDecision,
+        string requestedStackId,
+        string preferredStackId)
+        => string.Equals(requestDecision.ProofScope, "wpf_app", StringComparison.Ordinal) &&
+           string.Equals(requestedStackId, "csharp_dotnet", StringComparison.Ordinal)
+            ? "wpf_desktop_dotnet"
+            : requestedStackId;
+
+    private static string ResolveBuilderStackLabel(string stackId)
+        => GetBuilderLanguageStackDefinitions()
+            .FirstOrDefault(entry => string.Equals(entry.StackId, stackId, StringComparison.Ordinal))
+            ?.StackLabel ?? stackId;
+
+    private static string BuildBuilderToolchainRequirementSummary(string stackId)
+        => GetBuilderLanguageStackDefinitions()
+            .FirstOrDefault(entry => string.Equals(entry.StackId, stackId, StringComparison.Ordinal))
+            ?.ToolchainRequirementSummary ?? "No toolchain requirement recorded.";
+
+    private static string DetermineBuilderCapabilityRoutingState(
+        string requestedStackId,
+        string effectiveStackId,
+        string eligibilityState)
+        => eligibilityState switch
+        {
+            "unavailable" => "route_blocked_missing_toolchain",
+            "installed_but_disallowed" or "unsupported_for_repo" => "route_blocked_repo_policy",
+            "ready_and_preferred" when !string.Equals(requestedStackId, effectiveStackId, StringComparison.Ordinal) => "route_redirected_to_preferred_stack",
+            "ready_but_not_preferred" => "route_allowed_but_not_preferred",
+            _ => "route_allowed"
+        };
+
     private static BuilderRequestIntake BuildBuilderRequestIntake(
         string runFolder,
         BuilderRequestPolicyDecision requestDecision,
@@ -8494,7 +14155,8 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
         BuilderSplitFirstPlan? splitPlan,
         BuilderTieredRoutingPolicy? tieredRoutingPolicy,
         BuilderSplitFirstOutcome? splitOutcome,
-        BuilderDefaultRouteDecision defaultRouteDecision)
+        BuilderDefaultRouteDecision defaultRouteDecision,
+        BuilderCapabilityBlockDecision capabilityDecision)
     {
         var requestId = $"{requestDecision.SourceProofRunId}-{requestDecision.TargetId}-intake";
         var intakeState = DetermineBuilderRequestIntakeState(requestDecision);
@@ -8506,6 +14168,7 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
                 requestDecision.ArtifactPath,
                 stability.ArtifactPath,
                 defaultRouteDecision.ArtifactPath,
+                capabilityDecision.ArtifactPath,
                 splitPlan?.ArtifactPath ?? string.Empty,
                 tieredRoutingPolicy?.ArtifactPath ?? string.Empty,
                 splitOutcome?.ArtifactPath ?? string.Empty
@@ -8513,7 +14176,7 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var summary = $"{requestDecision.TargetLabel} is {intakeState}. {normalizationState} Route source={defaultRouteDecision.RouteSourceState}. Support={stability.SupportLevel}. {strongerTierRole}";
+        var summary = $"{requestDecision.TargetLabel} is {intakeState}. {normalizationState} Route source={defaultRouteDecision.RouteSourceState}. Support={stability.SupportLevel}. {strongerTierRole} {capabilityDecision.Summary}";
 
         return new BuilderRequestIntake(
             requestId,
@@ -8540,7 +14203,15 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             DateTimeOffset.UtcNow,
             defaultRouteDecision.RouteSourceState,
             defaultRouteDecision.OperatorOverrideState,
-            defaultRouteDecision.ReasonSummary);
+            defaultRouteDecision.ReasonSummary,
+            capabilityDecision.RequestedStackId,
+            capabilityDecision.EffectiveStackId,
+            capabilityDecision.EffectiveStackLabel,
+            capabilityDecision.EligibilityState,
+            capabilityDecision.RoutingDecisionState,
+            capabilityDecision.BlockReason,
+            capabilityDecision.Summary,
+            capabilityDecision.ArtifactPath);
     }
 
     private static BuilderRequestIntakeHistory BuildBuilderRequestIntakeHistory(
@@ -8581,7 +14252,8 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
         BuilderSplitFirstPlan? splitPlan,
         BuilderTieredRoutingPolicy? tieredRoutingPolicy,
         BuilderSplitFirstOutcome? splitOutcome,
-        BuilderDefaultRouteDecision defaultRouteDecision)
+        BuilderDefaultRouteDecision defaultRouteDecision,
+        BuilderCapabilityBlockDecision capabilityDecision)
     {
         var selectedRoute = DetermineBuilderExecutionPrepRoute(intake);
         var splitPlanRequired = string.Equals(intake.IntakeClassificationState, "ready_for_split_first_low_floor", StringComparison.Ordinal);
@@ -8611,6 +14283,7 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
                 requestDecision.ArtifactPath,
                 stability.ArtifactPath,
                 defaultRouteDecision.ArtifactPath,
+                capabilityDecision.ArtifactPath,
                 splitPlan?.ArtifactPath ?? string.Empty,
                 tieredRoutingPolicy?.ArtifactPath ?? string.Empty,
                 splitOutcome?.ArtifactPath ?? string.Empty
@@ -8618,7 +14291,7 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var summary = BuildBuilderExecutionPrepSummary(intake, selectedRoute, rerunRepairExpectationLevel, routingPlan, splitPlanRequired, defaultRouteDecision);
+        var summary = BuildBuilderExecutionPrepSummary(intake, selectedRoute, rerunRepairExpectationLevel, routingPlan, splitPlanRequired, defaultRouteDecision, capabilityDecision);
 
         return new BuilderExecutionPrep(
             intake.RequestId,
@@ -8647,7 +14320,15 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             DateTimeOffset.UtcNow,
             defaultRouteDecision.RouteSourceState,
             defaultRouteDecision.OperatorOverrideState,
-            defaultRouteDecision.ReasonSummary);
+            defaultRouteDecision.ReasonSummary,
+            capabilityDecision.RequestedStackId,
+            capabilityDecision.EffectiveStackId,
+            capabilityDecision.EffectiveStackLabel,
+            capabilityDecision.EligibilityState,
+            capabilityDecision.RoutingDecisionState,
+            capabilityDecision.BlockReason,
+            capabilityDecision.Summary,
+            capabilityDecision.ArtifactPath);
     }
 
     private static BuilderExecutionPrepHistory BuildBuilderExecutionPrepHistory(
@@ -8902,7 +14583,8 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
         string rerunRepairExpectationLevel,
         BuilderModelRoutingPlan routingPlan,
         bool splitPlanRequired,
-        BuilderDefaultRouteDecision defaultRouteDecision)
+        BuilderDefaultRouteDecision defaultRouteDecision,
+        BuilderCapabilityBlockDecision capabilityDecision)
     {
         var splitText = splitPlanRequired
             ? "Split-first prep is required before execution."
@@ -8914,7 +14596,7 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             "task_out_of_scope" => $"The current floor is out of scope because {routingPlan.ReasonForEscalation.TrimEnd('.').ToLowerInvariant()}.",
             _ => "The current model remains acceptable for the selected bounded route."
         };
-        return $"{intake.TargetLabel} is prepared on route {selectedRoute}. Route source={defaultRouteDecision.RouteSourceState}. Repair/rerun expectation={rerunRepairExpectationLevel}. {splitText} {escalationText}";
+        return $"{intake.TargetLabel} is prepared on route {selectedRoute}. Route source={defaultRouteDecision.RouteSourceState}. Repair/rerun expectation={rerunRepairExpectationLevel}. Capability={capabilityDecision.RoutingDecisionState}. {splitText} {escalationText}";
     }
 
     private static string BuildBuilderExecutionPrepId(string sourceIntakeId)
@@ -8975,7 +14657,9 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
         PreparedBuilderExecutionResult? existingResult,
         string operatorDecisionState,
         string currentReadinessState,
-        bool defaultRouteSuspended)
+        bool defaultRouteSuspended,
+        string capabilityRoutingState,
+        string capabilityBlockReason)
     {
         if (!string.Equals(intake.FreshnessState, "current", StringComparison.Ordinal))
         {
@@ -8992,6 +14676,16 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             string.Equals(existingResult.SourceExecutionPrepId, BuildBuilderExecutionPrepId(intake.RequestId), StringComparison.Ordinal))
         {
             return ("blocked_already_launched", "Prepared launch is blocked because the current execution prep already has a recorded route result.");
+        }
+
+        if (string.Equals(capabilityRoutingState, "route_blocked_missing_toolchain", StringComparison.Ordinal))
+        {
+            return ("blocked_missing_toolchain", FirstNonEmpty(capabilityBlockReason, "Prepared launch is blocked because the required repo toolchain is unavailable."));
+        }
+
+        if (string.Equals(capabilityRoutingState, "route_blocked_repo_policy", StringComparison.Ordinal))
+        {
+            return ("blocked_repo_policy", FirstNonEmpty(capabilityBlockReason, "Prepared launch is blocked by repo toolchain policy."));
         }
 
         if (string.Equals(operatorDecisionState, "accepted_default_route", StringComparison.Ordinal))
@@ -9084,10 +14778,12 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
                 .Concat(new[] { intake.ArtifactPath, prep.ArtifactPath, launch.ArtifactPath })
                 .Where(BuilderArtifactPathExists)
                 .Distinct(StringComparer.Ordinal)
-                .ToArray(),
+            .ToArray(),
             summary,
             BuilderExecutionResultPath(runFolder),
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            string.Empty);
     }
 
     private static PreparedBuilderExecutionResult BuildBuilderExecutionResultFromProofCase(
@@ -9140,7 +14836,9 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             linkedArtifactPaths,
             summary,
             BuilderExecutionResultPath(runFolder),
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            caseResult.TargetFolder,
+            caseResult.StarterStateManifestPath);
     }
 
     private static PreparedBuilderExecutionResult BuildBuilderExecutionResultFromSplitOutcome(
@@ -9192,7 +14890,9 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             linkedArtifactPaths,
             summary,
             BuilderExecutionResultPath(runFolder),
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            splitOutcome.SplitTargetFolderPath,
+            splitOutcome.SplitStarterStateManifestPath);
     }
 
     private static string DetermineBuilderExecutionResultClassification(BuilderProofCaseResult caseResult)
@@ -10003,6 +15703,423 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
             _ => "The current proof does not require stronger-tier escalation for this bounded request."
         };
 
+    private static BuilderModelRoutingStability BuildBuilderModelRoutingStability(
+        string repoRoot,
+        BuilderDefaultPolicy currentPolicy)
+    {
+        var history = LoadBuilderDefaultPolicyHistory(repoRoot);
+        var entries = currentPolicy.TaskClassEntries
+            .OrderBy(entry => entry.TaskClass, StringComparer.Ordinal)
+            .ThenBy(entry => entry.ProofScope, StringComparer.Ordinal)
+            .ThenBy(entry => entry.TargetId, StringComparer.Ordinal)
+            .Select(entry =>
+            {
+                var matchingEntries = history.Entries
+                    .SelectMany(historyEntry => historyEntry.TaskClassEntries.Select(taskEntry => new
+                    {
+                        historyEntry.ArtifactPath,
+                        historyEntry.ObservedUtc,
+                        TaskEntry = taskEntry
+                    }))
+                    .Where(candidate =>
+                        string.Equals(candidate.TaskEntry.ProofScope, entry.ProofScope, StringComparison.Ordinal) &&
+                        string.Equals(candidate.TaskEntry.TaskClass, entry.TaskClass, StringComparison.Ordinal))
+                    .OrderByDescending(candidate => candidate.ObservedUtc)
+                    .ThenByDescending(candidate => candidate.ArtifactPath, StringComparer.Ordinal)
+                    .ToArray();
+                var supporting = matchingEntries
+                    .Where(candidate => string.Equals(candidate.TaskEntry.PolicyState, entry.PolicyState, StringComparison.Ordinal))
+                    .ToArray();
+                var contradictions = matchingEntries
+                    .Where(candidate => !string.Equals(candidate.TaskEntry.PolicyState, entry.PolicyState, StringComparison.Ordinal))
+                    .ToArray();
+                var stabilityState = contradictions.Length > 0
+                    ? "contradicted"
+                    : supporting.Length >= 3
+                        ? "stable"
+                        : supporting.Length >= 2
+                            ? "corroborated"
+                            : "provisional";
+                var corroboratingArtifacts = supporting
+                    .Select(candidate => candidate.ArtifactPath)
+                    .Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Distinct(StringComparer.Ordinal)
+                    .Take(3)
+                    .ToArray();
+                var summary = $"{entry.TaskClass} is {stabilityState} for {entry.PolicyState} across {supporting.Length} supporting policy snapshot(s) with {contradictions.Length} contradiction(s).";
+                return new BuilderModelRoutingStabilityEntry(
+                    entry.TaskClass,
+                    entry.PolicyState,
+                    stabilityState,
+                    supporting.Length,
+                    contradictions.Length,
+                    corroboratingArtifacts,
+                    summary);
+            })
+            .ToArray();
+        var stableCount = entries.Count(entry => string.Equals(entry.StabilityState, "stable", StringComparison.Ordinal));
+        var corroboratedCount = entries.Count(entry => string.Equals(entry.StabilityState, "corroborated", StringComparison.Ordinal));
+        var provisionalCount = entries.Count(entry => string.Equals(entry.StabilityState, "provisional", StringComparison.Ordinal));
+        var contradictedCount = entries.Count(entry => string.Equals(entry.StabilityState, "contradicted", StringComparison.Ordinal));
+        var summary = $"Model routing stability: stable={stableCount}, corroborated={corroboratedCount}, provisional={provisionalCount}, contradicted={contradictedCount}.";
+        return new BuilderModelRoutingStability(
+            currentPolicy.SourceProofRunId,
+            currentPolicy.CurrentModelId,
+            entries,
+            summary,
+            BuilderModelRoutingStabilityPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static BuilderModelCapabilityMatrix BuildBuilderModelCapabilityMatrix(
+        string repoRoot,
+        BuilderDefaultPolicy defaultPolicy,
+        BuilderModelRoutingStability stability)
+    {
+        var stabilityByTaskClass = stability.Entries
+            .GroupBy(entry => entry.TaskClass, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var entries = defaultPolicy.TaskClassEntries
+            .OrderBy(entry => entry.TaskClass, StringComparer.Ordinal)
+            .ThenBy(entry => entry.ProofScope, StringComparer.Ordinal)
+            .ThenBy(entry => entry.TargetId, StringComparer.Ordinal)
+            .Select(entry =>
+            {
+                stabilityByTaskClass.TryGetValue(entry.TaskClass, out var stabilityEntry);
+                var capabilityState = DetermineBuilderModelCapabilityState(entry.PolicyState);
+                var routeClass = DetermineBuilderModelRouteClass(entry.PolicyState);
+                var strongerTierRecommendationState = DetermineBuilderModelRecommendationState(entry.PolicyState);
+                var strongerTierRequirementState = DetermineBuilderModelRequirementState(entry.PolicyState);
+                var evidenceSupportLevel = stabilityEntry?.StabilityState ?? "provisional";
+                var linkedArtifacts = entry.LinkedEvidencePaths
+                    .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                var summary = BuildBuilderModelCapabilityMatrixEntrySummary(
+                    entry.TargetLabel,
+                    capabilityState,
+                    strongerTierRecommendationState,
+                    strongerTierRequirementState,
+                    evidenceSupportLevel);
+                return new BuilderModelCapabilityMatrixEntry(
+                    entry.TaskClass,
+                    entry.ProofScope,
+                    entry.TargetId,
+                    entry.TargetLabel,
+                    entry.PolicyState,
+                    routeClass,
+                    capabilityState,
+                    DetermineBuilderSupportedLowFloorState(entry.PolicyState),
+                    DetermineBuilderRepairLoopAcceptability(entry.PolicyState),
+                    string.Equals(entry.PolicyState, "split_first_low_floor", StringComparison.Ordinal),
+                    string.Equals(entry.PolicyState, "split_first_low_floor", StringComparison.Ordinal) ? "required" : "not_required",
+                    strongerTierRecommendationState,
+                    strongerTierRequirementState,
+                    evidenceSupportLevel,
+                    linkedArtifacts,
+                    summary);
+            })
+            .ToArray();
+        return new BuilderModelCapabilityMatrix(
+            defaultPolicy.SourceProofRunId,
+            defaultPolicy.CurrentModelId,
+            "low_floor_model_tier",
+            "stronger_builder_tier",
+            entries,
+            BuildBuilderModelCapabilityMatrixSummary(entries),
+            BuilderModelCapabilityMatrixPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static BuilderModelRoutingPolicy BuildBuilderModelRoutingPolicyArtifact(
+        string repoRoot,
+        BuilderDefaultPolicy defaultPolicy,
+        BuilderModelCapabilityMatrix matrix)
+    {
+        var strongerTierAvailability = LoadLatestBuilderStrongerTierAvailability(repoRoot);
+        var preferredStrongerModelId = FirstNonEmpty(
+            strongerTierAvailability?.ConfiguredStrongerTierId,
+            strongerTierAvailability?.PreferredStrongerModelId,
+            "stronger_builder_tier");
+        var entries = matrix.Entries
+            .OrderBy(entry => entry.TaskClass, StringComparer.Ordinal)
+            .ThenBy(entry => entry.ProofScope, StringComparer.Ordinal)
+            .ThenBy(entry => entry.TargetId, StringComparer.Ordinal)
+            .Select(entry =>
+            {
+                var preferredModelTier = DetermineBuilderPreferredModelTier(entry.PolicyState);
+                var summary = BuildBuilderModelRoutingPolicyEntrySummary(entry);
+                return new BuilderModelRoutingPolicyEntry(
+                    entry.TaskClass,
+                    entry.ProofScope,
+                    entry.TargetId,
+                    entry.TargetLabel,
+                    entry.PolicyState,
+                    entry.RouteClass,
+                    preferredModelTier,
+                    DetermineBuilderAllowedModelTiers(entry.PolicyState),
+                    DetermineBuilderFallbackPath(entry.PolicyState),
+                    entry.SplitFirstRequired,
+                    entry.RepairLoopAcceptability,
+                    entry.StrongerTierRecommendationState,
+                    entry.StrongerTierRequirementState,
+                    BuildBuilderModelEscalationTrigger(entry),
+                    !string.Equals(entry.PolicyState, "stronger_tier_required", StringComparison.Ordinal),
+                    entry.EvidenceSupportLevel,
+                    entry.LinkedProofArtifactPaths,
+                    summary);
+            })
+            .ToArray();
+        return new BuilderModelRoutingPolicy(
+            defaultPolicy.SourceProofRunId,
+            defaultPolicy.CurrentModelId,
+            "low_floor_model_tier",
+            preferredStrongerModelId,
+            entries,
+            BuildBuilderModelRoutingPolicySummary(entries, strongerTierAvailability),
+            BuilderModelRoutingPolicyPathForRepo(repoRoot),
+            BuilderModelRoutingPolicySummaryPathForRepo(repoRoot),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static BuilderModelRoutingPolicyHistory BuildBuilderModelRoutingPolicyHistory(
+        BuilderModelRoutingPolicyHistory priorHistory,
+        BuilderModelRoutingPolicy priorPolicy,
+        BuilderModelRoutingPolicy currentPolicy)
+    {
+        var retentionCount = Math.Max(priorHistory.RetentionCount, 20);
+        var priorEntries = priorPolicy.Entries
+            .GroupBy(entry => entry.TaskClass, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var newEntries = currentPolicy.Entries
+            .Select(entry =>
+            {
+                priorEntries.TryGetValue(entry.TaskClass, out var priorEntry);
+                var priorPolicyState = priorEntry?.PolicyState ?? "not_recorded";
+                var changed = priorEntry is null ||
+                              !string.Equals(priorEntry.PolicyState, entry.PolicyState, StringComparison.Ordinal) ||
+                              !string.Equals(priorEntry.PreferredModelTier, entry.PreferredModelTier, StringComparison.Ordinal) ||
+                              !string.Equals(priorEntry.EvidenceSupportLevel, entry.EvidenceSupportLevel, StringComparison.Ordinal);
+                if (!changed)
+                {
+                    return null;
+                }
+
+                var evidenceChangeSummary = priorEntry is null
+                    ? $"Initialized {entry.TaskClass} at {entry.PolicyState} with support {entry.EvidenceSupportLevel}."
+                    : $"{entry.TaskClass} moved from {priorEntry.PolicyState} to {entry.PolicyState}; support {priorEntry.EvidenceSupportLevel} -> {entry.EvidenceSupportLevel}.";
+                return new BuilderModelRoutingPolicyHistoryEntry(
+                    entry.TaskClass,
+                    priorPolicyState,
+                    entry.PolicyState,
+                    evidenceChangeSummary,
+                    currentPolicy.ArtifactPath,
+                    currentPolicy.ObservedUtc);
+            })
+            .Where(entry => entry is not null)
+            .Cast<BuilderModelRoutingPolicyHistoryEntry>()
+            .ToArray();
+        var entries = priorHistory.Entries
+            .Where(existing => !newEntries.Any(candidate =>
+                string.Equals(candidate.TaskClass, existing.TaskClass, StringComparison.Ordinal) &&
+                candidate.ObservedUtc.Equals(existing.ObservedUtc)))
+            .Concat(newEntries)
+            .OrderByDescending(entry => entry.ObservedUtc)
+            .ThenBy(entry => entry.TaskClass, StringComparer.Ordinal)
+            .Take(retentionCount)
+            .ToArray();
+        var summary = newEntries.Length == 0
+            ? "No builder model routing policy changes were recorded."
+            : $"Recorded {newEntries.Length} builder model routing policy change(s).";
+        return new BuilderModelRoutingPolicyHistory(
+            retentionCount,
+            entries,
+            summary,
+            FirstNonEmpty(
+                priorHistory.ArtifactPath,
+                Path.Combine(Path.GetDirectoryName(currentPolicy.ArtifactPath) ?? string.Empty, "builder_model_routing_policy_history.json")),
+            currentPolicy.ObservedUtc);
+    }
+
+    private static string BuildBuilderModelRoutingPolicySummaryMarkdown(BuilderModelRoutingPolicy policy)
+    {
+        var direct = policy.Entries
+            .Where(entry => string.Equals(entry.PolicyState, "direct_low_floor", StringComparison.Ordinal))
+            .Select(entry => entry.TaskClass)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(taskClass => taskClass, StringComparer.Ordinal)
+            .ToArray();
+        var splitFirst = policy.Entries
+            .Where(entry => string.Equals(entry.PolicyState, "split_first_low_floor", StringComparison.Ordinal))
+            .Select(entry => entry.TaskClass)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(taskClass => taskClass, StringComparer.Ordinal)
+            .ToArray();
+        var repairLoop = policy.Entries
+            .Where(entry => string.Equals(entry.PolicyState, "low_floor_with_repair_loop_expected", StringComparison.Ordinal))
+            .Select(entry => entry.TaskClass)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(taskClass => taskClass, StringComparer.Ordinal)
+            .ToArray();
+        var recommended = policy.Entries
+            .Where(entry => string.Equals(entry.PolicyState, "stronger_tier_recommended", StringComparison.Ordinal) ||
+                            string.Equals(entry.PolicyState, "stronger_tier_optional", StringComparison.Ordinal))
+            .Select(entry => entry.TaskClass)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(taskClass => taskClass, StringComparer.Ordinal)
+            .ToArray();
+        var required = policy.Entries
+            .Where(entry => string.Equals(entry.PolicyState, "stronger_tier_required", StringComparison.Ordinal))
+            .Select(entry => entry.TaskClass)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(taskClass => taskClass, StringComparer.Ordinal)
+            .ToArray();
+        var builder = new StringBuilder();
+        builder.AppendLine("# Builder Model Routing Policy");
+        builder.AppendLine();
+        builder.AppendLine($"- Low-floor direct: {(direct.Length == 0 ? "none recorded" : string.Join(", ", direct))}");
+        builder.AppendLine($"- Low-floor split-first: {(splitFirst.Length == 0 ? "none recorded" : string.Join(", ", splitFirst))}");
+        builder.AppendLine($"- Low-floor with repair loop: {(repairLoop.Length == 0 ? "none recorded" : string.Join(", ", repairLoop))}");
+        builder.AppendLine($"- Stronger tier recommended or optional: {(recommended.Length == 0 ? "none recorded" : string.Join(", ", recommended))}");
+        builder.AppendLine($"- Stronger tier required: {(required.Length == 0 ? "none recorded" : string.Join(", ", required))}");
+        builder.AppendLine();
+        builder.AppendLine(policy.Summary);
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string DetermineBuilderModelCapabilityState(string policyState)
+        => policyState switch
+        {
+            "direct_low_floor" or "stronger_tier_optional" => "low_floor_direct_supported",
+            "split_first_low_floor" => "low_floor_split_first_supported",
+            "low_floor_with_repair_loop_expected" => "low_floor_supported_with_repair_loop",
+            "stronger_tier_recommended" => "stronger_tier_recommended",
+            "stronger_tier_required" => "stronger_tier_required",
+            _ => "not_yet_proven"
+        };
+
+    private static string DetermineBuilderSupportedLowFloorState(string policyState)
+        => policyState switch
+        {
+            "direct_low_floor" => "supported",
+            "split_first_low_floor" => "supported_after_split_first",
+            "low_floor_with_repair_loop_expected" => "supported_with_repair_loop",
+            "stronger_tier_optional" => "supported_optional_cleaner_stronger_tier",
+            "stronger_tier_recommended" => "supported_but_not_preferred",
+            "stronger_tier_required" => "not_supported",
+            _ => "not_yet_proven"
+        };
+
+    private static string DetermineBuilderRepairLoopAcceptability(string policyState)
+        => policyState switch
+        {
+            "low_floor_with_repair_loop_expected" => "accepted_if_bounded",
+            "stronger_tier_recommended" => "possible_but_costly",
+            "stronger_tier_required" => "not_acceptable",
+            _ => "not_expected"
+        };
+
+    private static string DetermineBuilderModelRecommendationState(string policyState)
+        => policyState switch
+        {
+            "stronger_tier_optional" => "optional_for_cleaner_success",
+            "stronger_tier_recommended" => "recommended",
+            "stronger_tier_required" => "required",
+            _ => "not_needed"
+        };
+
+    private static string DetermineBuilderModelRequirementState(string policyState)
+        => string.Equals(policyState, "stronger_tier_required", StringComparison.Ordinal)
+            ? "required"
+            : string.Equals(policyState, "stronger_tier_recommended", StringComparison.Ordinal)
+                ? "recommended"
+                : "not_required";
+
+    private static string DetermineBuilderModelRouteClass(string policyState)
+        => policyState switch
+        {
+            "direct_low_floor" => "direct_low_floor_route",
+            "split_first_low_floor" => "split_first_low_floor_route",
+            "low_floor_with_repair_loop_expected" => "low_floor_with_repair_loop_route",
+            "stronger_tier_optional" => "current_model_with_optional_stronger_tier_route",
+            "stronger_tier_recommended" => "stronger_tier_recommended_route",
+            "stronger_tier_required" => "task_out_of_scope_route",
+            _ => "task_out_of_scope_route"
+        };
+
+    private static string DetermineBuilderPreferredModelTier(string policyState)
+        => policyState switch
+        {
+            "stronger_tier_recommended" or "stronger_tier_required" => "stronger_builder_tier",
+            _ => "low_floor_model_tier"
+        };
+
+    private static IReadOnlyList<string> DetermineBuilderAllowedModelTiers(string policyState)
+        => policyState switch
+        {
+            "stronger_tier_required" => new[] { "stronger_builder_tier" },
+            "stronger_tier_recommended" or "stronger_tier_optional" => new[] { "low_floor_model_tier", "stronger_builder_tier" },
+            _ => new[] { "low_floor_model_tier" }
+        };
+
+    private static string DetermineBuilderFallbackPath(string policyState)
+        => policyState switch
+        {
+            "split_first_low_floor" => "split_first_low_floor_route",
+            "low_floor_with_repair_loop_expected" => "low_floor_with_repair_loop_route",
+            "stronger_tier_optional" => "current_model_with_optional_stronger_tier_route",
+            "stronger_tier_recommended" => "direct_low_floor_route_with_operator_acknowledged_repair_burden",
+            "stronger_tier_required" => "blocked_until_supported_stronger_tier_is_available",
+            _ => "direct_low_floor_route"
+        };
+
+    private static string BuildBuilderModelEscalationTrigger(BuilderModelCapabilityMatrixEntry entry)
+        => entry.PolicyState switch
+        {
+            "split_first_low_floor" => "split-first proof kept the low-floor path viable",
+            "low_floor_with_repair_loop_expected" => "proof required repair-loop recovery inside the bounded scope",
+            "stronger_tier_optional" => "comparative proof showed the stronger tier as optional cleaner speed",
+            "stronger_tier_recommended" => "comparative proof showed a cleaner stronger-tier path",
+            "stronger_tier_required" => "proof recorded the task outside the low-floor envelope",
+            _ => "proof kept the task inside the direct low-floor lane"
+        };
+
+    private static string BuildBuilderModelCapabilityMatrixEntrySummary(
+        string targetLabel,
+        string capabilityState,
+        string strongerTierRecommendationState,
+        string strongerTierRequirementState,
+        string evidenceSupportLevel)
+        => $"{targetLabel} is {capabilityState}. Stronger tier recommendation={strongerTierRecommendationState}. Requirement={strongerTierRequirementState}. Evidence={evidenceSupportLevel}.";
+
+    private static string BuildBuilderModelCapabilityMatrixSummary(
+        IReadOnlyList<BuilderModelCapabilityMatrixEntry> entries)
+    {
+        var direct = entries.Count(entry => string.Equals(entry.CapabilityState, "low_floor_direct_supported", StringComparison.Ordinal));
+        var split = entries.Count(entry => string.Equals(entry.CapabilityState, "low_floor_split_first_supported", StringComparison.Ordinal));
+        var repair = entries.Count(entry => string.Equals(entry.CapabilityState, "low_floor_supported_with_repair_loop", StringComparison.Ordinal));
+        var recommended = entries.Count(entry => string.Equals(entry.CapabilityState, "stronger_tier_recommended", StringComparison.Ordinal));
+        var required = entries.Count(entry => string.Equals(entry.CapabilityState, "stronger_tier_required", StringComparison.Ordinal));
+        return $"Builder model capability matrix: direct={direct}, split-first={split}, repair-loop={repair}, stronger-tier recommended={recommended}, stronger-tier required={required}.";
+    }
+
+    private static string BuildBuilderModelRoutingPolicyEntrySummary(BuilderModelCapabilityMatrixEntry entry)
+        => $"{entry.TaskClass} prefers {DetermineBuilderPreferredModelTier(entry.PolicyState)} on route {entry.RouteClass}. Fallback={DetermineBuilderFallbackPath(entry.PolicyState)}. Evidence={entry.EvidenceSupportLevel}.";
+
+    private static string BuildBuilderModelRoutingPolicySummary(
+        IReadOnlyList<BuilderModelRoutingPolicyEntry> entries,
+        BuilderStrongerTierAvailability? strongerTierAvailability)
+    {
+        var direct = entries.Count(entry => string.Equals(entry.PolicyState, "direct_low_floor", StringComparison.Ordinal));
+        var splitFirst = entries.Count(entry => string.Equals(entry.PolicyState, "split_first_low_floor", StringComparison.Ordinal));
+        var repairLoop = entries.Count(entry => string.Equals(entry.PolicyState, "low_floor_with_repair_loop_expected", StringComparison.Ordinal));
+        var recommended = entries.Count(entry => string.Equals(entry.PolicyState, "stronger_tier_optional", StringComparison.Ordinal) ||
+                                                 string.Equals(entry.PolicyState, "stronger_tier_recommended", StringComparison.Ordinal));
+        var required = entries.Count(entry => string.Equals(entry.PolicyState, "stronger_tier_required", StringComparison.Ordinal));
+        var strongerTierState = strongerTierAvailability?.AvailabilityState ?? "unknown";
+        return $"Builder model routing policy keeps {direct} task class(es) on direct low floor, {splitFirst} on split-first low floor, {repairLoop} with repair-loop expectation, {recommended} with stronger-tier recommendation, and {required} requiring stronger tier. Stronger-tier availability={strongerTierState}.";
+    }
+
     private static string BuildBuilderRequestComplexitySummary(BuilderProofComplexityDimensions dimensions)
         => $"Complexity stays bounded at files={dimensions.FileCountTouched}, projects={dimensions.ProjectCountTouched}, dependency_changes={dimensions.DependencyReferenceChangeCount}, test_changes={dimensions.TestChangesRequired.ToString().ToLowerInvariant()}, new_files={dimensions.NewFileCreationCount}, prompt_ambiguity={dimensions.PromptAmbiguity}.";
 
@@ -10069,6 +16186,124 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
         return "unavailable";
     }
 
+    private static string ResolveBuilderGitDirectory(string repoRoot)
+    {
+        var gitPath = Path.Combine(repoRoot, ".git");
+        if (Directory.Exists(gitPath))
+        {
+            return gitPath;
+        }
+
+        if (!File.Exists(gitPath))
+        {
+            return string.Empty;
+        }
+
+        var contents = File.ReadAllText(gitPath).Trim();
+        if (!contents.StartsWith("gitdir:", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        var gitDirectory = contents["gitdir:".Length..].Trim();
+        return Path.IsPathRooted(gitDirectory)
+            ? gitDirectory
+            : Path.GetFullPath(Path.Combine(repoRoot, gitDirectory));
+    }
+
+    private static string ReadBuilderGitBranchName(string gitDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(gitDirectory))
+        {
+            return string.Empty;
+        }
+
+        var headPath = Path.Combine(gitDirectory, "HEAD");
+        if (!File.Exists(headPath))
+        {
+            return string.Empty;
+        }
+
+        var head = File.ReadAllText(headPath).Trim();
+        if (string.IsNullOrWhiteSpace(head))
+        {
+            return string.Empty;
+        }
+
+        if (!head.StartsWith("ref:", StringComparison.OrdinalIgnoreCase))
+        {
+            return "detached_head";
+        }
+
+        var reference = head["ref:".Length..].Trim();
+        var branchName = reference.Replace('\\', '/');
+        const string headsPrefix = "refs/heads/";
+        return branchName.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase)
+            ? branchName[headsPrefix.Length..]
+            : branchName;
+    }
+
+    private sealed class DefaultBuilderGitReadinessProbe : IBuilderGitReadinessProbe
+    {
+        public BuilderGitReadinessObservation Probe(string repoRoot)
+        {
+            var observedUtc = DateTimeOffset.UtcNow;
+            if (string.IsNullOrWhiteSpace(repoRoot) || !Directory.Exists(repoRoot))
+            {
+                return new BuilderGitReadinessObservation(
+                    false,
+                    string.Empty,
+                    false,
+                    false,
+                    "unknown",
+                    "blocked_git_missing_repo",
+                    new[] { "No Git repository was detected for the approved patch handoff." },
+                    observedUtc);
+            }
+
+            try
+            {
+                var normalizedRepoRoot = Path.GetFullPath(repoRoot);
+                var gitDirectory = ResolveBuilderGitDirectory(normalizedRepoRoot);
+                if (string.IsNullOrWhiteSpace(gitDirectory) || !Directory.Exists(gitDirectory))
+                {
+                    return new BuilderGitReadinessObservation(
+                        false,
+                        string.Empty,
+                        false,
+                        false,
+                        "unknown",
+                        "blocked_git_missing_repo",
+                        new[] { "No Git repository was detected for the approved patch handoff." },
+                        observedUtc);
+                }
+
+                var fallbackBranchName = ReadBuilderGitBranchName(gitDirectory);
+                return new BuilderGitReadinessObservation(
+                    true,
+                    fallbackBranchName,
+                    false,
+                    false,
+                    "unknown",
+                    "blocked_git_unknown_state",
+                    new[] { "Git repository detected, but working tree cleanliness could not be verified safely from repo files alone." },
+                    observedUtc);
+            }
+            catch (Exception ex)
+            {
+                return new BuilderGitReadinessObservation(
+                    true,
+                    string.Empty,
+                    false,
+                    false,
+                    "unknown",
+                    "blocked_git_unknown_state",
+                    new[] { FirstNonEmpty(ex.Message, "Git readiness probe failed while reading repository state.") },
+                    observedUtc);
+            }
+        }
+    }
+
     private sealed record EnvironmentCapture(string Hash, string Path);
 
     private sealed record RunStageBuilder(string StageName, string Detail, DateTimeOffset StartedUtc);
@@ -10080,6 +16315,53 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
         string PathSnapshot,
         string WorkingDirectory,
         DateTimeOffset CapturedUtc);
+
+    private sealed record BuilderRouteContinuitySnapshot(
+        string SourceProofRunId,
+        string SourceRunFolder,
+        string TaskClass,
+        string DefaultRoute,
+        string PreparedRoute,
+        string RouteSourceState,
+        string CurrentReadinessState,
+        string ContradictionAttributionState,
+        string ReconfirmationState,
+        bool DefaultRouteSuspended,
+        string ContinuityState,
+        IReadOnlyList<BuilderRouteArtifactReference> AvailableArtifacts,
+        string Summary,
+        DateTimeOffset ObservedUtc);
+
+    private sealed record BuilderRepoToolchainPolicySnapshot(
+        bool HasDotNetProjects,
+        bool HasWpfProjects,
+        string PreferredStackId,
+        string PreferredStackLabel,
+        string Summary);
+
+    private sealed record BuilderLanguageStackDefinition(
+        string StackId,
+        string StackLabel,
+        IReadOnlyList<string> RequiredToolIds,
+        string ToolchainRequirementSummary);
+
+    private sealed record BuilderParsedRepoProject(
+        string ProjectId,
+        string ProjectName,
+        string AbsolutePath,
+        string RelativePath,
+        string ProjectType,
+        string InferredStackLabel,
+        IReadOnlyList<string> TargetFrameworks,
+        bool UseWpf,
+        bool IsTestProject,
+        IReadOnlyList<string> ProjectReferencePaths);
+
+    private sealed record BuilderReviewableFileSnapshotEntry(
+        string RelativePath,
+        string ContentHash,
+        long FileLength,
+        string SnapshotPath);
 }
 
 public interface IBuilderProofCommandRunner
@@ -10447,7 +16729,8 @@ public sealed record BuilderProofCaseResult(
     BuilderProofComplexityDimensions ComplexityDimensions,
     string ProofScope,
     string TrustBand = "",
-    string RoutingRecommendationState = "");
+    string RoutingRecommendationState = "",
+    string StarterStateManifestPath = "");
 
 public sealed record BuilderProofMatrixDefinition(
     string ProofRunId,
@@ -10963,7 +17246,9 @@ public sealed record BuilderSplitFirstOutcome(
     IReadOnlyList<string> LinkedArtifactPaths,
     string Summary,
     string ArtifactPath,
-    DateTimeOffset RecordedUtc);
+    DateTimeOffset RecordedUtc,
+    string SplitTargetFolderPath = "",
+    string SplitStarterStateManifestPath = "");
 
 public sealed record BuilderRequestPolicyDecision(
     string SourceProofRunId,
@@ -11168,6 +17453,716 @@ public sealed record BuilderDefaultRouteRecovery(
     string ArtifactPath,
     DateTimeOffset ObservedUtc);
 
+public sealed record BuilderRouteArtifactReference(
+    string ArtifactKind,
+    string SourceProofRunId,
+    string SourceRunFolder,
+    string ArtifactPath);
+
+public sealed record BuilderRouteStateContinuityEntry(
+    string SourceProofRunId,
+    string SourceRunFolder,
+    string TaskClass,
+    string DefaultRoute,
+    string PreparedRoute,
+    string RouteSourceState,
+    string CurrentReadinessState,
+    string ContradictionAttributionState,
+    string ReconfirmationState,
+    bool DefaultRouteSuspended,
+    string ContinuityState,
+    int OverrideContradictionCycleCount,
+    int ReconfirmationCycleCount,
+    IReadOnlyList<BuilderRouteArtifactReference> AvailableArtifacts,
+    string Summary,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderRouteStateContinuity(
+    string LatestProofRunId,
+    string LatestRunFolder,
+    string CurrentTaskClass,
+    string CurrentDefaultRoute,
+    string CurrentPreparedRoute,
+    string CurrentContinuityState,
+    bool DefaultRouteSuspended,
+    int OverrideContradictionCycleCount,
+    int ReconfirmationCycleCount,
+    IReadOnlyList<BuilderRouteStateContinuityEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderRouteCurrentStateArtifactIndexEntry(
+    string ArtifactKind,
+    string SourceProofRunId,
+    string SourceRunFolder,
+    string ArtifactPath,
+    string ResolutionState);
+
+public sealed record BuilderRouteCurrentStateIndex(
+    string LatestProofRunId,
+    string LatestRunFolder,
+    string CurrentTaskClass,
+    string CurrentDefaultRoute,
+    string CurrentPreparedRoute,
+    string CurrentReadinessState,
+    string CurrentReconfirmationState,
+    bool DefaultRouteSuspended,
+    int OverrideContradictionCycleCount,
+    int ReconfirmationCycleCount,
+    IReadOnlyList<BuilderRouteCurrentStateArtifactIndexEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderModelCapabilityMatrixEntry(
+    string TaskClass,
+    string ProofScope,
+    string TargetId,
+    string TargetLabel,
+    string PolicyState,
+    string RouteClass,
+    string CapabilityState,
+    string SupportedLowFloorState,
+    string RepairLoopAcceptability,
+    bool SplitFirstRequired,
+    string SplitFirstRequirementState,
+    string StrongerTierRecommendationState,
+    string StrongerTierRequirementState,
+    string EvidenceSupportLevel,
+    IReadOnlyList<string> LinkedProofArtifactPaths,
+    string Summary);
+
+public sealed record BuilderModelCapabilityMatrix(
+    string SourceProofRunId,
+    string CurrentModelId,
+    string PreferredLowFloorModelTier,
+    string PreferredStrongerModelTier,
+    IReadOnlyList<BuilderModelCapabilityMatrixEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderModelRoutingPolicyEntry(
+    string TaskClass,
+    string ProofScope,
+    string TargetId,
+    string TargetLabel,
+    string PolicyState,
+    string RouteClass,
+    string PreferredModelTier,
+    IReadOnlyList<string> AllowedModelTiers,
+    string FallbackPath,
+    bool SplitFirstRequired,
+    string RepairLoopExpectation,
+    string StrongerTierRecommendationState,
+    string StrongerTierRequirementState,
+    string EscalationTrigger,
+    bool OperatorOverrideAllowed,
+    string EvidenceSupportLevel,
+    IReadOnlyList<string> LinkedEvidencePaths,
+    string Summary);
+
+public sealed record BuilderModelRoutingPolicy(
+    string SourceProofRunId,
+    string CurrentModelId,
+    string PreferredLowFloorModelTier,
+    string PreferredStrongerModelId,
+    IReadOnlyList<BuilderModelRoutingPolicyEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    string SummaryArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderModelRoutingPolicyHistoryEntry(
+    string TaskClass,
+    string PriorPolicyState,
+    string NewPolicyState,
+    string EvidenceChangeSummary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderModelRoutingPolicyHistory(
+    int RetentionCount,
+    IReadOnlyList<BuilderModelRoutingPolicyHistoryEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderModelRoutingStabilityEntry(
+    string TaskClass,
+    string CurrentPolicyState,
+    string StabilityState,
+    int SupportingRunCount,
+    int ContradictionCount,
+    IReadOnlyList<string> CorroboratingArtifacts,
+    string Summary);
+
+public sealed record BuilderModelRoutingStability(
+    string SourceProofRunId,
+    string CurrentModelId,
+    IReadOnlyList<BuilderModelRoutingStabilityEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderModelDecision(
+    string RequestId,
+    string RawRequestText,
+    string NormalizedTaskClass,
+    string SelectedModelTier,
+    string SelectedModelId,
+    string CapabilityState,
+    string StrongerTierRecommendationState,
+    string StrongerTierRequirementState,
+    bool SplitFirstKeepsLowFloorViable,
+    string EvidenceSupportLevel,
+    string DecisionReason,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderModelEscalationPolicyDecision(
+    string RequestId,
+    string TaskClass,
+    string LowFloorSuitabilityState,
+    string StrongerTierRecommendationState,
+    string SplitFirstViabilityState,
+    string StrongerTierAvailabilityState,
+    string FinalDecisionState,
+    string BlockReason,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderRouteExplanation(
+    string RequestId,
+    string TaskClass,
+    string SelectedRoute,
+    IReadOnlyList<string> AlternateRoutesConsidered,
+    string RouteSelectionReason,
+    IReadOnlyList<string> LinkedCapabilityMatrixEntries,
+    IReadOnlyList<string> LinkedProofArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderModelDecisionExplanation(
+    string RequestId,
+    string ModelTierSelected,
+    string ModelIdSelected,
+    string CapabilityMatrixEntrySummary,
+    string RoutingRulesEntrySummary,
+    string EscalationState,
+    string SplitFirstReasoning,
+    string StrongerTierRecommendationState,
+    string EvidenceSupportLevel,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderFailureAnalysis(
+    string ExecutionSessionId,
+    string FailureStageId,
+    string FailureStageLabel,
+    string FailureClassification,
+    string FailureReason,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string PossibleRemediationPath,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderToolchainCapabilityRegistryEntry(
+    string ToolId,
+    string ToolCategory,
+    string DiscoveredPath,
+    string Version,
+    bool Installed,
+    bool Callable,
+    bool SupportedByRepo,
+    bool PreferredByRepo,
+    string RepoSupportState,
+    string UsabilityState,
+    string BlockedReason,
+    string Summary,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderToolchainCapabilityRegistry(
+    string PreferredStackId,
+    string PreferredStackLabel,
+    IReadOnlyList<BuilderToolchainCapabilityRegistryEntry> Entries,
+    string RefreshState,
+    string DriftState,
+    IReadOnlyList<string> ChangedToolIds,
+    IReadOnlyList<string> ChangeSummaries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderToolchainCapabilityHistoryEntry(
+    string PreferredStackId,
+    string PreferredStackLabel,
+    string RefreshState,
+    string DriftState,
+    IReadOnlyList<string> ChangedToolIds,
+    IReadOnlyList<string> ChangeSummaries,
+    string Summary,
+    string RegistryArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderToolchainCapabilityHistory(
+    int RetentionCount,
+    IReadOnlyList<BuilderToolchainCapabilityHistoryEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderLanguageEligibilityEntry(
+    string StackId,
+    string StackLabel,
+    string EligibilityState,
+    bool SupportedByRepo,
+    bool PreferredByRepo,
+    IReadOnlyList<string> RequiredToolIds,
+    string ToolchainRequirementSummary,
+    string BlockedReason,
+    string Summary);
+
+public sealed record BuilderLanguageEligibility(
+    string PreferredStackId,
+    string PreferredStackLabel,
+    IReadOnlyList<BuilderLanguageEligibilityEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderRepoKnowledgeLinkedItem(
+    string RelativePath,
+    string LinkageState,
+    string Summary);
+
+public sealed record BuilderRepoKnowledgeProjectEntry(
+    string ProjectId,
+    string ProjectName,
+    string RelativePath,
+    string ProjectType,
+    IReadOnlyList<string> TargetFrameworks,
+    string InferredStackLabel,
+    string PrimaryLanguage,
+    IReadOnlyList<string> FeatureAreaLabels,
+    IReadOnlyList<BuilderRepoKnowledgeLinkedItem> RelatedTests,
+    IReadOnlyList<BuilderRepoKnowledgeLinkedItem> RelatedUiSurfaces,
+    IReadOnlyList<BuilderRepoKnowledgeLinkedItem> RelatedServices,
+    IReadOnlyList<BuilderRepoKnowledgeLinkedItem> RelatedViewModels,
+    IReadOnlyList<BuilderRepoKnowledgeLinkedItem> RelatedBuilderFiles,
+    IReadOnlyList<string> RelatedProjectIds,
+    string FeatureSummary,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderRepoKnowledgeOwnershipSummary(
+    string RelativePath,
+    string OwnerProjectId,
+    string OwnerProjectName,
+    string OwnershipState,
+    string Summary);
+
+public sealed record BuilderRepoKnowledgeIndex(
+    string PreferredStackId,
+    string PreferredStackLabel,
+    IReadOnlyList<string> SolutionPaths,
+    IReadOnlyList<string> KeyDirectories,
+    IReadOnlyList<BuilderRepoKnowledgeProjectEntry> ProjectEntries,
+    IReadOnlyList<BuilderRepoKnowledgeOwnershipSummary> FileOwnershipSummaries,
+    IReadOnlyList<string> LinkedAuthoritativeArtifactPaths,
+    string RefreshState,
+    string DriftState,
+    IReadOnlyList<string> ChangedProjectIds,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderRepoKnowledgeHistoryEntry(
+    string PreferredStackId,
+    string DriftState,
+    IReadOnlyList<string> ChangedProjectIds,
+    int ProjectCount,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderRepoKnowledgeHistory(
+    int RetentionCount,
+    IReadOnlyList<BuilderRepoKnowledgeHistoryEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderRepoKnowledgeDrift(
+    IReadOnlyList<string> AddedProjectIds,
+    IReadOnlyList<string> RemovedProjectIds,
+    IReadOnlyList<string> ChangedProjectIds,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderRepoRetrievalContext(
+    string RawRequestText,
+    string NormalizedTaskClass,
+    string ImpliedStackId,
+    string ImpliedStackLabel,
+    string RetrievalConfidenceState,
+    IReadOnlyList<string> MatchedProjectIds,
+    IReadOnlyList<string> MatchedFiles,
+    IReadOnlyList<string> MatchedTests,
+    IReadOnlyList<string> MatchedUiSurfaces,
+    IReadOnlyList<string> MatchedServices,
+    IReadOnlyList<string> MatchedViewModels,
+    string StackMatchState,
+    IReadOnlyList<string> AuthoritativeArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderConversationIntake(
+    string RawRequestText,
+    string NormalizedTaskClass,
+    string ImpliedStackId,
+    string ImpliedStackLabel,
+    string RetrievalConfidenceState,
+    string RetrievalSummary,
+    string CapabilityRoutingState,
+    string CapabilitySummary,
+    string SelectedRoute,
+    string RouteSourceState,
+    bool SplitFirstRequired,
+    string StrongerTierDisposition,
+    string OperatorDecisionState,
+    string LaunchReadinessState,
+    string BlockReason,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderConversationHandoff(
+    string RawRequestText,
+    string NormalizedTaskClass,
+    string RetrievalConfidenceState,
+    string CapabilityRoutingState,
+    string SelectedRoute,
+    string RouteSourceState,
+    string OperatorDecisionState,
+    string LaunchReadinessState,
+    string BlockReason,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderPatchReviewChangedFile(
+    string Path,
+    string FileCategory,
+    string ChangeKind,
+    string ChangeSummary,
+    bool ReviewReady);
+
+public sealed record BuilderConversationExecutionStage(
+    string StageId,
+    string StageLabel,
+    string StageState,
+    string Detail,
+    IReadOnlyList<string> LinkedArtifactPaths);
+
+public sealed record BuilderConversationExecutionSession(
+    string SessionId,
+    string SourceConversationIntakeId,
+    string SourceConversationHandoffId,
+    string RawRequestText,
+    string NormalizedTaskClass,
+    string SelectedRoute,
+    string StackId,
+    string StackLabel,
+    string ToolchainContextSummary,
+    string SessionState,
+    string CurrentStageId,
+    string CurrentStageLabel,
+    string ReviewState,
+    string ValidationSummary,
+    string SourceExecutionPrepPath,
+    string LaunchArtifactPath,
+    string ResultArtifactPath,
+    string PatchReviewPath,
+    string PatchReviewOutcomePath,
+    IReadOnlyList<BuilderPatchReviewChangedFile> ChangedFiles,
+    IReadOnlyList<BuilderConversationExecutionStage> Stages,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderPatchReview(
+    string SessionId,
+    string SourceConversationIntakeId,
+    string SourceConversationHandoffId,
+    string RouteUsed,
+    string StackId,
+    string StackLabel,
+    string ValidationSummary,
+    string ReviewReadinessState,
+    IReadOnlyList<BuilderPatchReviewChangedFile> ChangedFiles,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderPatchReviewOutcome(
+    string SessionId,
+    string ReviewDecisionState,
+    string SessionState,
+    string ReviewState,
+    string ReviewNote,
+    string RerouteRoute,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderPatchDiffReviewFileEntry(
+    string RelativePath,
+    string FileCategory,
+    string ChangeKind,
+    string DiffSummary,
+    string PatchPreviewText,
+    string ApprovalState,
+    string RejectionReason,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderPatchDiffReview(
+    string SessionId,
+    string SourcePatchReviewId,
+    string SourcePatchReviewPath,
+    string OverallFileReviewState,
+    string ReviewReadinessState,
+    IReadOnlyList<BuilderPatchDiffReviewFileEntry> FileEntries,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderFileReviewDecisionEntry(
+    string RelativePath,
+    string ApprovalState,
+    string OperatorDecisionSource,
+    string RejectionReason,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderFileReviewDecision(
+    string SessionId,
+    string SourcePatchDiffReviewId,
+    string OverallFileReviewState,
+    IReadOnlyList<BuilderFileReviewDecisionEntry> Entries,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderPatchApplyDecision(
+    string SessionId,
+    string OverallFileApprovalState,
+    string ApplyEligibilityState,
+    IReadOnlyList<string> BlockReasons,
+    string FinalizationState,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderPatchSnapshotFileEntry(
+    string RelativePath,
+    string ChangeType,
+    string Checksum,
+    string ApprovalState,
+    DateTimeOffset ApprovedUtc);
+
+public sealed record BuilderPatchSnapshot(
+    string SnapshotId,
+    string ExecutionSessionId,
+    string PatchDiffReviewId,
+    string RouteId,
+    string StackId,
+    string OperatorApprovalState,
+    IReadOnlyList<BuilderPatchSnapshotFileEntry> ApprovedFiles,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ApprovedUtc,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderCommitProposal(
+    string SnapshotId,
+    string ExecutionSessionId,
+    string ProposedCommitMessage,
+    IReadOnlyList<string> ChangedFiles,
+    string DiffSummary,
+    string RepoPath,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderPatchExport(
+    string SnapshotId,
+    string BundleFilePath,
+    DateTimeOffset ExportedUtc,
+    int FileCount,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderPatchSnapshotHistoryEntry(
+    string SnapshotId,
+    string SessionId,
+    string ApprovalResult,
+    string ExportBundlePath,
+    string ArtifactPath,
+    string Summary,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderPatchSnapshotHistory(
+    int RetentionCount,
+    IReadOnlyList<BuilderPatchSnapshotHistoryEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderGitReadinessObservation(
+    bool RepoDetected,
+    string BranchName,
+    bool WorkingTreeStateKnown,
+    bool WorkingTreeClean,
+    string AheadBehindState,
+    string ReadinessClassification,
+    IReadOnlyList<string> BlockReasons,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderGitHandoffReadiness(
+    bool RepoDetected,
+    string BranchName,
+    bool WorkingTreeStateKnown,
+    bool WorkingTreeClean,
+    string AheadBehindState,
+    string ReadinessClassification,
+    IReadOnlyList<string> BlockReasons,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderManualApplyGuidance(
+    string SnapshotId,
+    string PatchBundlePath,
+    IReadOnlyList<string> ApprovedFiles,
+    IReadOnlyList<string> ApplySteps,
+    IReadOnlyList<string> Warnings,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderGitCommitHandoff(
+    string SnapshotId,
+    string ProposedCommitMessage,
+    IReadOnlyList<string> ApprovedFiles,
+    string BranchName,
+    string ReadinessClassification,
+    IReadOnlyList<string> BlockReasons,
+    IReadOnlyList<string> NextStepGuidance,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderOutputHandoff(
+    string SnapshotId,
+    string ExecutionSessionId,
+    IReadOnlyList<string> ApprovedFiles,
+    string PatchBundlePath,
+    string CommitProposalPath,
+    string ExportMetadataPath,
+    string ManualApplyGuidancePath,
+    string GitReadinessArtifactPath,
+    string GitCommitHandoffPath,
+    string HandoffReadinessState,
+    string OptionalGitReadinessState,
+    IReadOnlyList<string> BlockReasons,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderOutputHandoffHistoryEntry(
+    string SnapshotId,
+    string SessionId,
+    string ExportState,
+    string ManualApplyGuidancePath,
+    string GitReadinessState,
+    string GitCommitHandoffPath,
+    string ArtifactPath,
+    string Summary,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderOutputHandoffHistory(
+    int RetentionCount,
+    IReadOnlyList<BuilderOutputHandoffHistoryEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderConversationExecutionHistoryEntry(
+    string SessionId,
+    string RawRequestText,
+    string SelectedRoute,
+    string SessionState,
+    string ReviewState,
+    string ArtifactPath,
+    string Summary,
+    DateTimeOffset ObservedUtc);
+
+public sealed record BuilderConversationExecutionHistory(
+    int RetentionCount,
+    IReadOnlyList<BuilderConversationExecutionHistoryEntry> Entries,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
+public interface IBuilderGitReadinessProbe
+{
+    BuilderGitReadinessObservation Probe(string repoRoot);
+}
+
+public sealed record BuilderCapabilityBlockDecision(
+    string SourceProofRunId,
+    string TaskClass,
+    string ProofScope,
+    string RequestedStackId,
+    string RequestedStackLabel,
+    string EffectiveStackId,
+    string EffectiveStackLabel,
+    string ToolchainRequirement,
+    string CapabilityState,
+    string EligibilityState,
+    string RoutingDecisionState,
+    string RecommendedRoute,
+    string RecommendedStackId,
+    string BlockReason,
+    IReadOnlyList<string> LinkedArtifactPaths,
+    string Summary,
+    string ArtifactPath,
+    DateTimeOffset ObservedUtc);
+
 public sealed record BuilderRequestIntake(
     string RequestId,
     string SourceProofRunId,
@@ -11193,7 +18188,15 @@ public sealed record BuilderRequestIntake(
     DateTimeOffset ObservedUtc,
     string RouteSourceState = "suggested",
     string OperatorOverrideState = "override_available_no_override",
-    string DefaultRouteReason = "");
+    string DefaultRouteReason = "",
+    string RequestedStackId = "",
+    string EffectiveStackId = "",
+    string EffectiveStackLabel = "",
+    string LanguageEligibilityState = "not_recorded",
+    string CapabilityRoutingState = "route_allowed",
+    string CapabilityBlockReason = "",
+    string CapabilitySummary = "",
+    string CapabilityBlockDecisionPath = "");
 
 public sealed record BuilderRequestIntakeHistoryEntry(
     string RequestId,
@@ -11237,7 +18240,15 @@ public sealed record BuilderExecutionPrep(
     DateTimeOffset ObservedUtc,
     string RouteSourceState = "suggested",
     string OperatorOverrideState = "override_available_no_override",
-    string DefaultRouteReason = "");
+    string DefaultRouteReason = "",
+    string RequestedStackId = "",
+    string EffectiveStackId = "",
+    string EffectiveStackLabel = "",
+    string LanguageEligibilityState = "not_recorded",
+    string CapabilityRoutingState = "route_allowed",
+    string CapabilityBlockReason = "",
+    string CapabilitySummary = "",
+    string CapabilityBlockDecisionPath = "");
 
 public sealed record BuilderExecutionPrepHistoryEntry(
     string SourceIntakeId,
@@ -11293,7 +18304,9 @@ public sealed record PreparedBuilderExecutionResult(
     IReadOnlyList<string> LinkedArtifactPaths,
     string Summary,
     string ArtifactPath,
-    DateTimeOffset RecordedUtc);
+    DateTimeOffset RecordedUtc,
+    string SourceWorkingFolderPath = "",
+    string StarterStateManifestPath = "");
 
 public sealed record BuilderReadinessGate(
     string SourceProofRunId,

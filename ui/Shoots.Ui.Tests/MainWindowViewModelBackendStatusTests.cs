@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -3347,6 +3348,561 @@ public sealed class MainWindowViewModelBackendStatusTests
     }
 
     [Fact]
+    public async Task Builder_route_current_state_surface_uses_repo_level_authoritative_paths_after_newer_proof_run()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(repoRoot, provider: "ollama");
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(repoRoot, provider: "ollama");
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(repoRoot, provider: "ollama");
+
+            var overrideRun = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+            await builderService.LaunchPreparedBuilderRouteAsync(
+                repoRoot,
+                provider: "ollama",
+                routeOverride: "direct_low_floor_route",
+                overrideReason: "Authoritative VM path test.");
+
+            var latestProofOnlyRun = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.False(vm.HasBuilderLaunchPath);
+            Assert.False(vm.HasBuilderResultPath);
+            Assert.True(vm.HasBuilderLaunchDefaultDecisionPath);
+            Assert.True(vm.HasBuilderRouteOverridePath);
+            Assert.True(vm.HasBuilderRouteReviewPath);
+            Assert.True(vm.HasBuilderRouteReconfirmationPath);
+            Assert.True(vm.HasBuilderRouteContinuitySummary);
+            Assert.True(vm.HasBuilderRouteContinuityPath);
+            Assert.True(vm.HasBuilderRouteCurrentStateIndexSummary);
+            Assert.True(vm.HasBuilderRouteCurrentStateIndexPath);
+            Assert.Contains("carried forward", vm.BuilderRouteCurrentStateIndexSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("override", vm.BuilderRouteContinuitySummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(BuilderExecutionService.BuilderLaunchDefaultDecisionPath(overrideRun.RunFolder), vm.BuilderLaunchDefaultDecisionPath);
+            Assert.Equal(BuilderExecutionService.BuilderRouteOverrideEvidencePath(overrideRun.RunFolder), vm.BuilderRouteOverridePath);
+            Assert.Equal(BuilderExecutionService.BuilderPolicyReviewCandidatesPath(overrideRun.RunFolder), vm.BuilderRouteReviewPath);
+            Assert.Equal(BuilderExecutionService.BuilderRouteReconfirmationPath(latestProofOnlyRun.RunFolder), vm.BuilderRouteReconfirmationPath);
+
+            Assert.True(vm.OpenBuilderRouteContinuityCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderRouteCurrentStateIndexCommand.CanExecute(null));
+
+            await vm.OpenBuilderRouteContinuityCommand.ExecuteAsync();
+            await vm.OpenBuilderRouteCurrentStateIndexCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderRouteStateContinuityPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderRouteCurrentStateIndexPathForRepo(repoRoot), shell.OpenedPaths);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_toolchain_readiness_surface_shows_capability_refresh_and_block_state()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            SeedBuilderRepoLanguagePolicyFiles(repoRoot);
+            var builderService = CreateBuilderExecutionService(
+                new SuccessfulBuilderProofCommandRunner(),
+                capabilityScanner: new ScriptedBuilderToolchainCapabilityScanner(
+                    new BuilderToolchainCapabilityObservation(
+                        "dotnet",
+                        "sdk",
+                        string.Empty,
+                        string.Empty,
+                        false,
+                        false,
+                        "not_found",
+                        "dotnet is not installed.",
+                        DateTimeOffset.Parse("2026-03-13T18:00:00+00:00", CultureInfo.InvariantCulture)),
+                    new BuilderToolchainCapabilityObservation(
+                        "node",
+                        "runtime",
+                        @"C:\tools\node\node.exe",
+                        "22.5.1",
+                        true,
+                        true,
+                        "probe_succeeded",
+                        string.Empty,
+                        DateTimeOffset.Parse("2026-03-13T18:00:00+00:00", CultureInfo.InvariantCulture))));
+
+            var latestRun = await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.True(vm.HasBuilderToolchainReadinessSummary);
+            Assert.True(vm.HasBuilderLanguageEligibilitySummary);
+            Assert.True(vm.HasBuilderCapabilityRoutingSummary);
+            Assert.True(vm.HasBuilderCapabilityBlockDecisionPath);
+            Assert.Contains("WPF/Desktop .NET", vm.BuilderToolchainReadinessSummary, StringComparison.Ordinal);
+            Assert.Contains("dotnet", vm.BuilderToolchainReadinessSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("blocked", vm.BuilderLanguageEligibilitySummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("route blocked", vm.BuilderCapabilityRoutingSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("toolchain", vm.BuilderPreparedLaunchDisabledReason, StringComparison.OrdinalIgnoreCase);
+
+            Assert.True(vm.OpenBuilderToolchainCapabilityRegistryCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderLanguageEligibilityCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderCapabilityBlockDecisionCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderToolchainReadinessSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderLanguageEligibilitySummaryCommand.CanExecute(null));
+
+            await vm.OpenBuilderToolchainCapabilityRegistryCommand.ExecuteAsync();
+            await vm.OpenBuilderLanguageEligibilityCommand.ExecuteAsync();
+            await vm.OpenBuilderCapabilityBlockDecisionCommand.ExecuteAsync();
+            await vm.CopyBuilderToolchainReadinessSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderLanguageEligibilitySummaryCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderToolchainCapabilityRegistryPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderLanguageEligibilityPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderCapabilityBlockDecisionPath(latestRun.RunFolder), shell.OpenedPaths);
+            Assert.Contains("WPF/Desktop .NET", shell.CopiedTexts[0], StringComparison.Ordinal);
+            Assert.Contains("default", shell.CopiedTexts[1], StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_repo_knowledge_surface_shows_summary_and_helpers()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            SeedBuilderRepoKnowledgeFiles(repoRoot);
+            var builderService = CreateBuilderExecutionService();
+            builderService.RefreshBuilderCapabilityArtifacts(repoRoot);
+            builderService.RefreshBuilderRepoKnowledgeArtifacts(repoRoot);
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.True(vm.HasBuilderRepoKnowledgeSummary);
+            Assert.True(vm.HasBuilderRepoKnowledgeIndexPath);
+            Assert.True(vm.HasBuilderRepoKnowledgeSummaryPath);
+            Assert.Contains("WPF/Desktop .NET", vm.BuilderRepoKnowledgeSummary, StringComparison.Ordinal);
+            Assert.Contains("builder", vm.BuilderRepoKnowledgeSummary, StringComparison.OrdinalIgnoreCase);
+
+            await vm.OpenBuilderRepoKnowledgeIndexCommand.ExecuteAsync();
+            await vm.OpenBuilderRepoKnowledgeSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderRepoKnowledgeSummaryCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderRepoKnowledgeIndexPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderRepoKnowledgeSummaryPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains("WPF/Desktop .NET", shell.CopiedTexts[0], StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_conversation_surface_shows_preview_handoff_and_weak_match_guardrail()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            SeedBuilderRepoKnowledgeFiles(repoRoot);
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            vm.BuilderConversationRequestText = "Do the thing.";
+            await vm.PreviewBuilderConversationCommand.ExecuteAsync();
+
+            Assert.True(vm.HasBuilderConversationTaskSummary);
+            Assert.True(vm.HasBuilderConversationRepoMatchSummary);
+            Assert.True(vm.HasBuilderConversationRouteSummary);
+            Assert.True(vm.HasBuilderConversationIntakePath);
+            Assert.Contains("weak", vm.BuilderConversationRepoMatchSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("operator", vm.BuilderPreparedLaunchDisabledReason, StringComparison.OrdinalIgnoreCase);
+
+            vm.BuilderConversationSelectedOverrideRoute = "direct_low_floor_route";
+            await vm.OverrideBuilderConversationCommand.ExecuteAsync();
+
+            Assert.True(vm.HasBuilderConversationHandoffPath);
+            Assert.DoesNotContain("weak", vm.BuilderPreparedLaunchDisabledReason, StringComparison.OrdinalIgnoreCase);
+
+            await vm.OpenBuilderRepoRetrievalContextCommand.ExecuteAsync();
+            await vm.OpenBuilderConversationIntakeCommand.ExecuteAsync();
+            await vm.OpenBuilderConversationHandoffCommand.ExecuteAsync();
+            await vm.CopyBuilderConversationRouteSummaryCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderRepoRetrievalContextPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderConversationIntakePathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderConversationHandoffPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains("route", shell.CopiedTexts[0], StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_conversation_execution_surface_shows_session_patch_review_and_acceptance()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            SeedBuilderRepoKnowledgeFiles(repoRoot);
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            vm.BuilderConversationRequestText = "Update MainWindow.xaml and MainWindowViewModel for the builder conversation preview in the WPF UI.";
+            await vm.PreviewBuilderConversationCommand.ExecuteAsync();
+            await vm.AcceptBuilderConversationCommand.ExecuteAsync();
+            await vm.ExecuteBuilderConversationSessionCommand.ExecuteAsync();
+
+            Assert.True(vm.HasBuilderConversationExecutionSessionSummary);
+            Assert.True(vm.HasBuilderConversationPatchReviewSummary);
+            Assert.True(vm.HasBuilderConversationReviewStateSummary);
+            Assert.True(vm.HasBuilderConversationExecutionSessionPath);
+            Assert.True(vm.HasBuilderConversationPatchReviewPath);
+            Assert.Contains("awaiting", vm.BuilderConversationExecutionSessionSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("changed", vm.BuilderConversationPatchReviewSummary, StringComparison.OrdinalIgnoreCase);
+
+            await vm.AcceptBuilderConversationPatchReviewCommand.ExecuteAsync();
+
+            Assert.True(vm.HasBuilderConversationPatchReviewOutcomePath);
+            Assert.Contains("accepted", vm.BuilderConversationReviewStateSummary, StringComparison.OrdinalIgnoreCase);
+
+            await vm.OpenBuilderConversationExecutionSessionCommand.ExecuteAsync();
+            await vm.OpenBuilderPatchReviewCommand.ExecuteAsync();
+            await vm.OpenBuilderPatchReviewOutcomeCommand.ExecuteAsync();
+            await vm.CopyBuilderConversationSessionSummaryCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderConversationExecutionSessionPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderPatchReviewPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderPatchReviewOutcomePathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains("route", shell.CopiedTexts[0], StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_conversation_execution_surface_routes_revision_requests_into_review_state()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            SeedBuilderRepoKnowledgeFiles(repoRoot);
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: new RecordingWorkspaceShellService(),
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            vm.BuilderConversationRequestText = "Update MainWindow.xaml and MainWindowViewModel for the builder conversation preview in the WPF UI.";
+            await vm.PreviewBuilderConversationCommand.ExecuteAsync();
+            await vm.AcceptBuilderConversationCommand.ExecuteAsync();
+            await vm.ExecuteBuilderConversationSessionCommand.ExecuteAsync();
+            await vm.RequestBuilderConversationRevisionCommand.ExecuteAsync();
+
+            Assert.Contains("revision", vm.BuilderConversationReviewStateSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("rejected", vm.BuilderConversationExecutionSessionSummary, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_patch_diff_review_surface_shows_file_approval_and_finalize_state()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            SeedBuilderRepoKnowledgeFiles(repoRoot);
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+
+            await builderService.RunBuilderProofMatrixAsync(repoRoot, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+            await builderService.RunBuilderComparativeProofAsync(repoRoot, provider: "ollama");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            vm.BuilderConversationRequestText = "Update MainWindow.xaml and MainWindowViewModel for the builder conversation preview in the WPF UI.";
+            await vm.PreviewBuilderConversationCommand.ExecuteAsync();
+            await vm.AcceptBuilderConversationCommand.ExecuteAsync();
+            await vm.ExecuteBuilderConversationSessionCommand.ExecuteAsync();
+
+            Assert.True(vm.HasBuilderPatchDiffReviewSummary);
+            Assert.True(vm.HasBuilderPatchApplySummary);
+            Assert.True(vm.HasBuilderPatchDiffReviewPath);
+            Assert.NotEmpty(vm.BuilderPatchDiffFiles);
+
+            vm.SelectedBuilderPatchDiffFilePath = vm.BuilderPatchDiffFiles[0].RelativePath;
+            await vm.ApproveSelectedBuilderPatchFileCommand.ExecuteAsync();
+            await vm.FinalizeBuilderConversationPatchCommand.ExecuteAsync();
+
+            Assert.True(vm.HasBuilderPatchApplyDecisionPath);
+            Assert.Contains("applied", vm.BuilderPatchApplySummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("approved", vm.BuilderSelectedPatchDiffStateSummary, StringComparison.OrdinalIgnoreCase);
+
+            await vm.OpenBuilderPatchDiffReviewCommand.ExecuteAsync();
+            await vm.CopyBuilderPatchDiffReviewSummaryCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderPatchDiffReviewPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains("review", shell.CopiedTexts[0], StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_patch_diff_review_surface_blocks_finalize_when_rejected_file_exists()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            SeedSyntheticBuilderPatchDiffReviewArtifacts(repoRoot);
+            var builderService = CreateBuilderExecutionService();
+
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: new RecordingWorkspaceShellService(),
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.Equal(2, vm.BuilderPatchDiffFiles.Count);
+
+            vm.SelectedBuilderPatchDiffFilePath = Path.Combine("ui", "Shoots.Ui", "MainWindow.xaml");
+            await vm.ApproveSelectedBuilderPatchFileCommand.ExecuteAsync();
+            vm.SelectedBuilderPatchDiffFilePath = Path.Combine("ui", "Shoots.Ui", "ViewModels", "MainWindowViewModel.cs");
+            await vm.RejectSelectedBuilderPatchFileCommand.ExecuteAsync();
+            await vm.FinalizeBuilderConversationPatchCommand.ExecuteAsync();
+
+            Assert.Contains("blocked", vm.BuilderPatchApplySummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("rejected", vm.BuilderSelectedPatchDiffStateSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.False(vm.HasBuilderConversationPatchReviewOutcomePath);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_patch_packaging_surface_shows_snapshot_commit_and_export_state()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            SeedSyntheticBuilderPatchDiffReviewArtifacts(repoRoot);
+            var builderService = CreateBuilderExecutionService();
+            var shell = new RecordingWorkspaceShellService();
+
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            await vm.ApproveAllBuilderPatchFilesCommand.ExecuteAsync();
+            await vm.FinalizeBuilderConversationPatchCommand.ExecuteAsync();
+            await vm.PrepareBuilderCommitCommand.ExecuteAsync();
+            await vm.ExportBuilderPatchBundleCommand.ExecuteAsync();
+
+            Assert.True(vm.HasBuilderPatchSnapshotSummary);
+            Assert.True(vm.HasBuilderCommitProposalSummary);
+            Assert.True(vm.HasBuilderPatchExportSummary);
+            Assert.True(vm.HasBuilderPatchSnapshotPath);
+            Assert.True(vm.HasBuilderCommitProposalPath);
+            Assert.True(vm.HasBuilderPatchExportPath);
+            Assert.True(vm.HasBuilderPatchBundlePath);
+            Assert.Equal(2, vm.BuilderPatchSnapshotFiles.Count);
+            Assert.Contains("snapshot", vm.BuilderPatchSnapshotSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Shoots Builder Accepted Patch", vm.BuilderCommitProposalMessage, StringComparison.Ordinal);
+
+            await vm.OpenBuilderPatchSnapshotCommand.ExecuteAsync();
+            await vm.CopyBuilderCommitMessageCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderPatchSnapshotPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains("Route: split_first_low_floor_route", shell.CopiedTexts[0], StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_output_handoff_surface_shows_manual_apply_and_git_block_state()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            SeedSyntheticBuilderPatchDiffReviewArtifacts(repoRoot);
+            var builderService = CreateBuilderExecutionService(
+                gitReadinessProbe: new ScriptedBuilderGitReadinessProbe(
+                    new BuilderGitReadinessObservation(
+                        true,
+                        "feature/dirty-tree",
+                        true,
+                        false,
+                        "unknown",
+                        "blocked_git_dirty_tree",
+                        new[] { "Git working tree is dirty and should be reviewed before using the commit handoff." },
+                        DateTimeOffset.Parse("2026-03-14T09:30:00+00:00", CultureInfo.InvariantCulture))));
+            var shell = new RecordingWorkspaceShellService();
+
+            builderService.ApproveAllBuilderPatchFiles(repoRoot);
+            builderService.FinalizeBuilderApprovedPatch(repoRoot);
+            builderService.PrepareBuilderOutputHandoff(repoRoot);
+
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.True(vm.HasBuilderOutputHandoffSummary);
+            Assert.True(vm.HasBuilderManualApplySummary);
+            Assert.True(vm.HasBuilderGitHandoffReadinessSummary);
+            Assert.True(vm.HasBuilderGitCommitHandoffSummary);
+            Assert.True(vm.HasBuilderOutputHandoffPath);
+            Assert.True(vm.HasBuilderManualApplyGuidancePath);
+            Assert.True(vm.HasBuilderGitHandoffReadinessPath);
+            Assert.True(vm.HasBuilderGitCommitHandoffPath);
+            Assert.Contains("manual apply", vm.BuilderOutputHandoffSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("dirty", vm.BuilderGitHandoffReadinessSummary, StringComparison.OrdinalIgnoreCase);
+
+            await vm.OpenBuilderOutputHandoffCommand.ExecuteAsync();
+            await vm.OpenBuilderManualApplyGuidanceCommand.ExecuteAsync();
+            await vm.OpenBuilderGitHandoffReadinessCommand.ExecuteAsync();
+            await vm.OpenBuilderGitCommitHandoffCommand.ExecuteAsync();
+            await vm.CopyBuilderManualApplyStepsCommand.ExecuteAsync();
+            await vm.CopyBuilderOutputHandoffSummaryCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderOutputHandoffPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderManualApplyGuidancePathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderGitHandoffReadinessPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderGitCommitHandoffPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(shell.CopiedTexts, text => text.Contains("Inspect the approved patch bundle", StringComparison.Ordinal));
+            Assert.Contains(shell.CopiedTexts, text => text.Contains("Git handoff is blocked", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Builder_readiness_gate_surface_shows_confirmed_route_and_opens_expected_artifacts()
     {
         var repoRoot = CreateValidationRepoRoot();
@@ -3603,6 +4159,134 @@ public sealed class MainWindowViewModelBackendStatusTests
         }
     }
 
+    [Fact]
+    public async Task Builder_model_routing_surface_shows_policy_decision_and_helpers()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            await PrepareSyntheticBuilderModelRoutingProofAsync(
+                repoRoot,
+                builderService,
+                "bounded_refactor",
+                "split_first_low_floor",
+                "bounded-refactor",
+                "Bounded refactor");
+            builderService.PreviewBuilderConversationIntake(
+                repoRoot,
+                "Update MainWindow.xaml and MainWindowViewModel for the builder conversation preview in the WPF UI.");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.True(vm.HasBuilderModelCapabilityMatrixSummary);
+            Assert.True(vm.HasBuilderModelRoutingRulesSummary);
+            Assert.True(vm.HasBuilderModelRoutingStabilitySummary);
+            Assert.True(vm.HasBuilderCurrentModelDecisionSummary);
+            Assert.True(vm.HasBuilderModelEscalationDecisionSummaryText);
+            Assert.Contains("split-first", vm.BuilderModelCapabilityMatrixSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Low-floor split-first", vm.BuilderModelRoutingRulesSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("low_floor_model_tier", vm.BuilderCurrentModelDecisionSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("low_floor_via_split_first", vm.BuilderModelEscalationDecisionSummaryText, StringComparison.OrdinalIgnoreCase);
+
+            Assert.True(vm.OpenBuilderModelCapabilityMatrixCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderModelRoutingRulesCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderCurrentModelDecisionCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderModelEscalationDecisionArtifactCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderModelRoutingRulesSummaryCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderCurrentModelDecisionSummaryCommand.CanExecute(null));
+
+            await vm.OpenBuilderModelCapabilityMatrixCommand.ExecuteAsync();
+            await vm.OpenBuilderModelRoutingRulesCommand.ExecuteAsync();
+            await vm.OpenBuilderCurrentModelDecisionCommand.ExecuteAsync();
+            await vm.OpenBuilderModelEscalationDecisionArtifactCommand.ExecuteAsync();
+            await vm.CopyBuilderModelRoutingRulesSummaryCommand.ExecuteAsync();
+            await vm.CopyBuilderCurrentModelDecisionSummaryCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderModelCapabilityMatrixPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderModelRoutingPolicyPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderModelDecisionPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderModelEscalationPolicyDecisionPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains("Low-floor split-first", shell.CopiedTexts[0], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("low_floor_model_tier", shell.CopiedTexts[1], StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Builder_diagnostic_surface_shows_route_model_and_failure_explanations()
+    {
+        var repoRoot = CreateValidationRepoRoot();
+
+        try
+        {
+            var builderService = CreateBuilderExecutionService(new SuccessfulBuilderProofCommandRunner());
+            await PrepareSyntheticBuilderModelRoutingProofAsync(
+                repoRoot,
+                builderService,
+                "bounded_refactor",
+                "stronger_tier_required",
+                "bounded-refactor",
+                "Bounded refactor",
+                strongerTierAvailabilityState: "unavailable");
+            builderService.PreviewBuilderConversationIntake(
+                repoRoot,
+                "Update MainWindow.xaml and MainWindowViewModel for the builder conversation preview in the WPF UI.");
+
+            var shell = new RecordingWorkspaceShellService();
+            var vm = BuildViewModel(
+                new FixedBackendProbeService(
+                    new BackendStatus(BackendKind.Ollama, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:11434", null),
+                    new BackendStatus(BackendKind.Qdrant, true, null, "ok", System.DateTimeOffset.UtcNow, "http://localhost:6333", null)),
+                new FixedOllamaClient(new OllamaTagsResult(true, new[] { "llama3" }, null, "ok")),
+                workspaceShell: shell,
+                validationRunnerService: new ValidationRunnerService(repoRoot),
+                validationSettingsStore: new InMemoryValidationSettingsStore(),
+                builderExecutionService: builderService);
+
+            Assert.True(vm.HasBuilderRouteExplanationSummary);
+            Assert.True(vm.HasBuilderModelDecisionExplanationSummary);
+            Assert.True(vm.HasBuilderFailureAnalysisSummary);
+            Assert.True(vm.HasBuilderOperatorDiagnosticSummary);
+            Assert.Contains("task_out_of_scope_route", vm.BuilderRouteExplanationSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("stronger_builder_tier", vm.BuilderModelDecisionExplanationSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("launch_blocked_model_policy", vm.BuilderFailureAnalysisSummary, StringComparison.OrdinalIgnoreCase);
+
+            Assert.True(vm.OpenBuilderRouteExplanationCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderModelDecisionExplanationCommand.CanExecute(null));
+            Assert.True(vm.OpenBuilderFailureAnalysisCommand.CanExecute(null));
+            Assert.True(vm.CopyBuilderDiagnosticSummaryCommand.CanExecute(null));
+
+            await vm.OpenBuilderRouteExplanationCommand.ExecuteAsync();
+            await vm.OpenBuilderModelDecisionExplanationCommand.ExecuteAsync();
+            await vm.OpenBuilderFailureAnalysisCommand.ExecuteAsync();
+            await vm.CopyBuilderDiagnosticSummaryCommand.ExecuteAsync();
+
+            Assert.Contains(BuilderExecutionService.BuilderRouteExplanationPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderModelDecisionExplanationPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains(BuilderExecutionService.BuilderFailureAnalysisPathForRepo(repoRoot), shell.OpenedPaths);
+            Assert.Contains("Builder Operator Diagnostic Summary", shell.CopiedTexts[0], StringComparison.Ordinal);
+            Assert.Contains("Final execution outcome", shell.CopiedTexts[0], StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(repoRoot, recursive: true);
+        }
+    }
+
     private static object? InvokePrivate(object target, string methodName, params object?[] args)
     {
         var method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -3633,13 +4317,169 @@ public sealed class MainWindowViewModelBackendStatusTests
         throw new DirectoryNotFoundException("Could not locate Shoots.sln from test base directory.");
     }
 
+    private static async Task<BuilderProofRun> PrepareSyntheticBuilderModelRoutingProofAsync(
+        string root,
+        BuilderExecutionService service,
+        string taskClass,
+        string policyState,
+        string targetId,
+        string targetLabel,
+        string strongerTierAvailabilityState = "available")
+    {
+        SeedBuilderRepoKnowledgeFiles(root);
+        var run = await service.RunBuilderProofMatrixAsync(root, BuilderExecutionService.BuilderProofFloorModelId, "ollama");
+        WriteSyntheticBuilderDefaultPolicy(root, run, taskClass, policyState, targetId, targetLabel);
+        WriteSyntheticBuilderStrongerTierAvailability(run, strongerTierAvailabilityState);
+        service.RefreshBuilderModelRoutingArtifacts(root);
+        return run;
+    }
+
+    private static void WriteSyntheticBuilderDefaultPolicy(
+        string root,
+        BuilderProofRun run,
+        string taskClass,
+        string policyState,
+        string targetId,
+        string targetLabel)
+    {
+        var observedUtc = DateTimeOffset.Parse("2026-03-14T18:30:00+00:00", CultureInfo.InvariantCulture);
+        var complexity = new BuilderProofComplexityDimensions(
+            FileCountTouched: 2,
+            ProjectCountTouched: 1,
+            DependencyReferenceChangeCount: 0,
+            TestChangesRequired: string.Equals(taskClass, "test_extension", StringComparison.Ordinal),
+            NewFileCreationCount: 0,
+            PromptAmbiguity: "low");
+        var evidencePaths = new[] { BuilderExecutionService.BuilderProofRunArtifactPath(run.RunFolder) };
+        var entry = new BuilderDefaultPolicyTaskClassEntry(
+            "wpf_app",
+            targetId,
+            targetLabel,
+            taskClass,
+            complexity,
+            policyState,
+            string.Equals(policyState, "stronger_tier_required", StringComparison.Ordinal) ? "partial_implementation_gap" : string.Empty,
+            $"Synthetic default policy for {taskClass} set to {policyState}.",
+            new[] { $"Synthetic model routing evidence for {taskClass}={policyState}." },
+            evidencePaths);
+        var policy = new BuilderDefaultPolicy(
+            run.ProofRunId,
+            BuilderExecutionService.BuilderProofFloorModelId,
+            string.Equals(policyState, "direct_low_floor", StringComparison.Ordinal) ? new[] { taskClass } : Array.Empty<string>(),
+            string.Equals(policyState, "split_first_low_floor", StringComparison.Ordinal) ? new[] { taskClass } : Array.Empty<string>(),
+            string.Equals(policyState, "low_floor_with_repair_loop_expected", StringComparison.Ordinal) ? new[] { taskClass } : Array.Empty<string>(),
+            string.Equals(policyState, "stronger_tier_optional", StringComparison.Ordinal) ? new[] { taskClass } : Array.Empty<string>(),
+            string.Equals(policyState, "stronger_tier_recommended", StringComparison.Ordinal) ? new[] { taskClass } : Array.Empty<string>(),
+            string.Equals(policyState, "stronger_tier_required", StringComparison.Ordinal) ? new[] { taskClass } : Array.Empty<string>(),
+            new[] { entry },
+            evidencePaths,
+            $"Synthetic default policy keeps {taskClass} at {policyState}.",
+            BuilderExecutionService.BuilderDefaultPolicyPath(run.RunFolder),
+            observedUtc);
+        File.WriteAllText(
+            BuilderExecutionService.BuilderDefaultPolicyPath(run.RunFolder),
+            JsonSerializer.Serialize(policy, new JsonSerializerOptions { WriteIndented = true }));
+
+        var history = new BuilderDefaultPolicyHistory(
+            20,
+            new[]
+            {
+                new BuilderDefaultPolicyHistoryEntry(
+                    policy.SourceProofRunId,
+                    policy.CurrentModelId,
+                    policy.Summary,
+                    policy.ArtifactPath,
+                    policy.ObservedUtc,
+                    policy.TaskClassEntries)
+            });
+        File.WriteAllText(
+            BuilderExecutionService.BuilderDefaultPolicyHistoryPathForRepo(root),
+            JsonSerializer.Serialize(history, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static void WriteSyntheticBuilderStrongerTierAvailability(BuilderProofRun run, string availabilityState)
+    {
+        var available = string.Equals(availabilityState, "available", StringComparison.Ordinal);
+        var availability = new BuilderStrongerTierAvailability(
+            BuilderExecutionService.BuilderProofFloorModelId,
+            "stronger_builder_tier",
+            "qwen2.5:7b-instruct",
+            available ? "qwen2.5:7b-instruct" : string.Empty,
+            availabilityState,
+            available
+                ? "qwen2.5:7b-instruct is available for bounded comparative proof."
+                : "No stronger-tier model matching the bounded builder candidate list is currently available in Ollama.",
+            "ollama",
+            "http://localhost:11434",
+            string.Empty,
+            available
+                ? new[] { BuilderExecutionService.BuilderProofFloorModelId, "qwen2.5:7b-instruct" }
+                : new[] { BuilderExecutionService.BuilderProofFloorModelId },
+            available
+                ? "Resolved qwen2.5:7b-instruct from the bounded stronger-tier candidate set."
+                : "No stronger-tier model matching the bounded builder candidate list is currently available in Ollama.",
+            Array.Empty<string>(),
+            available
+                ? "qwen2.5:7b-instruct is available for bounded comparative proof."
+                : "No stronger-tier model matching the bounded builder candidate list is currently available in Ollama.",
+            BuilderExecutionService.BuilderStrongerTierAvailabilityPath(run.RunFolder),
+            DateTimeOffset.Parse("2026-03-14T18:31:00+00:00", CultureInfo.InvariantCulture));
+        File.WriteAllText(
+            BuilderExecutionService.BuilderStrongerTierAvailabilityPath(run.RunFolder),
+            JsonSerializer.Serialize(availability, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
     private static BuilderExecutionService CreateBuilderExecutionService(
         IBuilderProofCommandRunner? runner = null,
-        IBuilderStrongerTierResolver? resolver = null)
+        IBuilderStrongerTierResolver? resolver = null,
+        IBuilderToolchainCapabilityScanner? capabilityScanner = null,
+        IBuilderGitReadinessProbe? gitReadinessProbe = null)
     {
         var registry = new ToolRegistry("etc/ui.tools.catalog.json");
         var runtimeBridge = new RuntimeBridgeLocal(new ToolExecutionService(registry));
-        return new BuilderExecutionService(runtimeBridge, new ArtifactManager(), registry, runner, resolver ?? new AvailableBuilderStrongerTierResolver());
+        return new BuilderExecutionService(
+            runtimeBridge,
+            new ArtifactManager(),
+            registry,
+            runner,
+            resolver ?? new AvailableBuilderStrongerTierResolver(),
+            capabilityScanner ?? CreateDefaultBuilderToolchainCapabilityScanner(),
+            gitReadinessProbe ?? new ScriptedBuilderGitReadinessProbe(
+                new BuilderGitReadinessObservation(
+                    false,
+                    string.Empty,
+                    false,
+                    false,
+                    "unknown",
+                    "blocked_git_missing_repo",
+                    new[] { "No Git repository was detected for the approved patch handoff." },
+                    DateTimeOffset.Parse("2026-03-14T08:30:00+00:00", CultureInfo.InvariantCulture))));
+    }
+
+    private static IBuilderToolchainCapabilityScanner CreateDefaultBuilderToolchainCapabilityScanner()
+    {
+        var observedUtc = DateTimeOffset.Parse("2026-03-13T18:00:00+00:00", CultureInfo.InvariantCulture);
+        return new ScriptedBuilderToolchainCapabilityScanner(
+            new BuilderToolchainCapabilityObservation(
+                "dotnet",
+                "sdk",
+                @"C:\tools\dotnet\dotnet.exe",
+                "8.0.204",
+                true,
+                true,
+                "probe_succeeded",
+                string.Empty,
+                observedUtc),
+            new BuilderToolchainCapabilityObservation(
+                "msbuild",
+                "build_tool",
+                @"C:\tools\msbuild\MSBuild.exe",
+                "17.10.1",
+                true,
+                true,
+                "probe_succeeded",
+                string.Empty,
+                observedUtc));
     }
 
     private static MainWindowViewModel BuildViewModel(
@@ -3776,6 +4616,261 @@ public sealed class MainWindowViewModelBackendStatusTests
             {
                 new ValidationStageResult("build_ui", "Building UI", "passed", "Build succeeded.", Path.Combine(outputFolder, "01-build-ui.log"), 0, 25)
             });
+    }
+
+    private static void SeedBuilderRepoLanguagePolicyFiles(string root)
+    {
+        Directory.CreateDirectory(Path.Combine(root, "ui", "Shoots.Ui"));
+        Directory.CreateDirectory(Path.Combine(root, "ui", "Shoots.Ui.Tests"));
+        File.WriteAllText(
+            Path.Combine(root, "ui", "Shoots.Ui", "Shoots.Ui.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net8.0-windows</TargetFramework>
+                <UseWPF>true</UseWPF>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(root, "ui", "Shoots.Ui.Tests", "Shoots.Ui.Tests.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net8.0-windows</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+    }
+
+    private static void SeedBuilderRepoKnowledgeFiles(string root)
+    {
+        SeedBuilderRepoLanguagePolicyFiles(root);
+
+        File.WriteAllText(
+            Path.Combine(root, "ui", "Shoots.Ui.Tests", "Shoots.Ui.Tests.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net8.0-windows</TargetFramework>
+                <IsTestProject>true</IsTestProject>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="..\Shoots.Ui\Shoots.Ui.csproj" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        Directory.CreateDirectory(Path.Combine(root, "ui", "Shoots.Ui", "Builder"));
+        Directory.CreateDirectory(Path.Combine(root, "ui", "Shoots.Ui", "ViewModels"));
+        Directory.CreateDirectory(Path.Combine(root, "ui", "Shoots.Ui", "Services"));
+        Directory.CreateDirectory(Path.Combine(root, "src", "Runtime", "Shoots.Runtime.Core"));
+        Directory.CreateDirectory(Path.Combine(root, "src", "Runtime", "Shoots.Runtime.Tests"));
+
+        File.WriteAllText(
+            Path.Combine(root, "ui", "Shoots.Ui", "MainWindow.xaml"),
+            """
+            <Window x:Class="Shoots.UI.MainWindow"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" />
+            """);
+        File.WriteAllText(
+            Path.Combine(root, "ui", "Shoots.Ui", "ViewModels", "MainWindowViewModel.cs"),
+            "namespace Shoots.UI.ViewModels; public sealed class MainWindowViewModel { }");
+        File.WriteAllText(
+            Path.Combine(root, "ui", "Shoots.Ui", "Builder", "BuilderExecutionService.cs"),
+            "namespace Shoots.UI.Builder; public sealed class BuilderExecutionService { }");
+        File.WriteAllText(
+            Path.Combine(root, "ui", "Shoots.Ui", "Services", "ValidationRunnerService.cs"),
+            "namespace Shoots.UI.Services; public sealed class ValidationRunnerService { }");
+        File.WriteAllText(
+            Path.Combine(root, "ui", "Shoots.Ui.Tests", "MainWindowViewModelBackendStatusTests.cs"),
+            "namespace Shoots.UI.Tests; public sealed class MainWindowViewModelBackendStatusTests { }");
+
+        File.WriteAllText(
+            Path.Combine(root, "src", "Runtime", "Shoots.Runtime.Core", "Shoots.Runtime.Core.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net8.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(root, "src", "Runtime", "Shoots.Runtime.Core", "RuntimeLoop.cs"),
+            "namespace Shoots.Runtime.Core; public sealed class RuntimeLoop { }");
+        File.WriteAllText(
+            Path.Combine(root, "src", "Runtime", "Shoots.Runtime.Tests", "Shoots.Runtime.Tests.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net8.0</TargetFramework>
+                <IsTestProject>true</IsTestProject>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="..\Shoots.Runtime.Core\Shoots.Runtime.Core.csproj" />
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(root, "src", "Runtime", "Shoots.Runtime.Tests", "RuntimeLoopTests.cs"),
+            "namespace Shoots.Runtime.Tests; public sealed class RuntimeLoopTests { }");
+    }
+
+    private static void SeedSyntheticBuilderPatchDiffReviewArtifacts(string root)
+    {
+        SeedBuilderRepoKnowledgeFiles(root);
+        Directory.CreateDirectory(BuilderExecutionService.BuilderProofRootForRepo(root));
+
+        var now = DateTimeOffset.Parse("2026-03-14T03:00:00+00:00", System.Globalization.CultureInfo.InvariantCulture);
+        var intake = new BuilderConversationIntake(
+            "Update MainWindow.xaml and MainWindowViewModel for the builder conversation preview in the WPF UI.",
+            "bounded_refactor",
+            "wpf_desktop_dotnet",
+            "WPF/Desktop .NET",
+            "strong_match",
+            "Repo retrieval matched the WPF UI surfaces strongly.",
+            "route_allowed",
+            "Capability review allows the preferred WPF/Desktop .NET stack.",
+            "split_first_low_floor_route",
+            "default_route_policy",
+            true,
+            "optional",
+            "accept_suggested_route",
+            "ready_for_launch",
+            string.Empty,
+            Array.Empty<string>(),
+            "Conversation intake is ready for launch.",
+            BuilderExecutionService.BuilderConversationIntakePathForRepo(root),
+            now);
+        File.WriteAllText(
+            BuilderExecutionService.BuilderConversationIntakePathForRepo(root),
+            System.Text.Json.JsonSerializer.Serialize(intake, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+        var handoff = new BuilderConversationHandoff(
+            intake.RawRequestText,
+            intake.NormalizedTaskClass,
+            intake.RetrievalConfidenceState,
+            intake.CapabilityRoutingState,
+            intake.SelectedRoute,
+            intake.RouteSourceState,
+            intake.OperatorDecisionState,
+            intake.LaunchReadinessState,
+            intake.BlockReason,
+            new[] { intake.ArtifactPath },
+            "Conversation handoff is ready for execution.",
+            BuilderExecutionService.BuilderConversationHandoffPathForRepo(root),
+            now);
+        File.WriteAllText(
+            BuilderExecutionService.BuilderConversationHandoffPathForRepo(root),
+            System.Text.Json.JsonSerializer.Serialize(handoff, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+        var changedFiles = new[]
+        {
+            new BuilderPatchReviewChangedFile(
+                Path.Combine("ui", "Shoots.Ui", "MainWindow.xaml"),
+                "ui_markup",
+                "modified",
+                "MainWindow.xaml was modified to satisfy the bounded ui markup route.",
+                true),
+            new BuilderPatchReviewChangedFile(
+                Path.Combine("ui", "Shoots.Ui", "ViewModels", "MainWindowViewModel.cs"),
+                "view_model",
+                "modified",
+                "MainWindowViewModel.cs was modified to satisfy the bounded view model route.",
+                true)
+        };
+
+        var session = new BuilderConversationExecutionSession(
+            "session-1",
+            "intake-1",
+            "handoff-1",
+            intake.RawRequestText,
+            intake.NormalizedTaskClass,
+            intake.SelectedRoute,
+            intake.ImpliedStackId,
+            intake.ImpliedStackLabel,
+            intake.CapabilitySummary,
+            "awaiting_patch_review",
+            "awaiting_operator_review",
+            "Awaiting operator review",
+            "pending_operator_review",
+            "Build=passed. Test=passed. Outcome=launched_and_passed.",
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            BuilderExecutionService.BuilderPatchReviewPathForRepo(root),
+            string.Empty,
+            changedFiles,
+            new[]
+            {
+                new BuilderConversationExecutionStage(
+                    "awaiting_operator_review",
+                    "Awaiting operator review",
+                    "active",
+                    "Candidate changes are ready for operator review.",
+                    Array.Empty<string>())
+            },
+            new[] { BuilderExecutionService.BuilderConversationHandoffPathForRepo(root) },
+            "Execution session is awaiting patch review.",
+            BuilderExecutionService.BuilderConversationExecutionSessionPathForRepo(root),
+            now);
+        File.WriteAllText(
+            BuilderExecutionService.BuilderConversationExecutionSessionPathForRepo(root),
+            System.Text.Json.JsonSerializer.Serialize(session, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+        var patchReview = new BuilderPatchReview(
+            session.SessionId,
+            intake.ArtifactPath,
+            handoff.ArtifactPath,
+            intake.SelectedRoute,
+            intake.ImpliedStackId,
+            intake.ImpliedStackLabel,
+            session.ValidationSummary,
+            "ready_for_operator_review",
+            changedFiles,
+            new[] { session.ArtifactPath, handoff.ArtifactPath },
+            "Patch review found 2 changed file candidate(s) on route split_first_low_floor_route.",
+            BuilderExecutionService.BuilderPatchReviewPathForRepo(root),
+            now);
+        File.WriteAllText(
+            BuilderExecutionService.BuilderPatchReviewPathForRepo(root),
+            System.Text.Json.JsonSerializer.Serialize(patchReview, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+        var patchDiffReview = new BuilderPatchDiffReview(
+            session.SessionId,
+            patchReview.SessionId,
+            patchReview.ArtifactPath,
+            "all_files_pending",
+            "ready_for_operator_review",
+            new[]
+            {
+                new BuilderPatchDiffReviewFileEntry(
+                    Path.Combine("ui", "Shoots.Ui", "MainWindow.xaml"),
+                    "ui_markup",
+                    "modified",
+                    "Diff preview shows UI copy and layout changes.",
+                    "@@ MainWindow.xaml\n-<TextBlock Text=\"Old\" />\n+<TextBlock Text=\"New\" />",
+                    "pending_review",
+                    string.Empty,
+                    now),
+                new BuilderPatchDiffReviewFileEntry(
+                    Path.Combine("ui", "Shoots.Ui", "ViewModels", "MainWindowViewModel.cs"),
+                    "view_model",
+                    "modified",
+                    "Diff preview shows view-model state changes.",
+                    "@@ MainWindowViewModel.cs\n-private string _status = \"old\";\n+private string _status = \"new\";",
+                    "pending_review",
+                    string.Empty,
+                    now)
+            },
+            new[] { session.ArtifactPath, patchReview.ArtifactPath },
+            "Patch diff review is waiting on file-level approval.",
+            BuilderExecutionService.BuilderPatchDiffReviewPathForRepo(root),
+            now);
+        File.WriteAllText(
+            BuilderExecutionService.BuilderPatchDiffReviewPathForRepo(root),
+            System.Text.Json.JsonSerializer.Serialize(patchDiffReview, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     }
 
     private static async Task<(ValidationRunnerService Service, ValidationRunResult LatestResult)> SeedValidationHandoffArtifactsAsync(string repoRoot)
@@ -4371,6 +5466,30 @@ public sealed class MainWindowViewModelBackendStatusTests
             File.WriteAllText(logPath, string.Join(System.Environment.NewLine, lines));
             return Task.FromResult(new BuilderProofCommandExecutionResult(exitCode, lines));
         }
+    }
+
+    private sealed class ScriptedBuilderToolchainCapabilityScanner : IBuilderToolchainCapabilityScanner
+    {
+        private readonly BuilderToolchainCapabilityObservation[] _observations;
+
+        public ScriptedBuilderToolchainCapabilityScanner(params BuilderToolchainCapabilityObservation[] observations)
+        {
+            _observations = observations;
+        }
+
+        public IReadOnlyList<BuilderToolchainCapabilityObservation> Scan(string repoRoot) => _observations;
+    }
+
+    private sealed class ScriptedBuilderGitReadinessProbe : IBuilderGitReadinessProbe
+    {
+        private readonly BuilderGitReadinessObservation _observation;
+
+        public ScriptedBuilderGitReadinessProbe(BuilderGitReadinessObservation observation)
+        {
+            _observation = observation;
+        }
+
+        public BuilderGitReadinessObservation Probe(string repoRoot) => _observation;
     }
 
     private sealed class AvailableBuilderStrongerTierResolver : IBuilderStrongerTierResolver

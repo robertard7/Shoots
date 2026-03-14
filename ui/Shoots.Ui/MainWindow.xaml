@@ -770,6 +770,278 @@
                          Visibility="{Binding HasBuilderLaunchDefaultDecisionSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
               <TextBlock Margin="0,2,0,0"
                          Foreground="#FF6B7280"
+                         Text="{Binding BuilderRouteContinuitySummary}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderRouteContinuitySummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderRouteCurrentStateIndexSummary}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderRouteCurrentStateIndexSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderToolchainRefreshSummary}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderToolchainRefreshSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderToolchainReadinessSummary}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderToolchainReadinessSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderLanguageEligibilitySummary}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderLanguageEligibilitySummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderCapabilityRoutingSummary}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderCapabilityRoutingSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <Border Margin="0,8,0,0"
+                      Padding="10"
+                      Background="#FFF8FAFC"
+                      BorderBrush="#FFE5E7EB"
+                      BorderThickness="1"
+                      CornerRadius="6">
+                <StackPanel>
+                  <TextBlock FontWeight="SemiBold"
+                             Text="Repo Knowledge" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#FF6B7280"
+                             Text="{Binding BuilderRepoKnowledgeRefreshSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderRepoKnowledgeRefreshSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,4,0,0"
+                             Text="{Binding BuilderRepoKnowledgeSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderRepoKnowledgeSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </StackPanel>
+              </Border>
+              <Border Margin="0,8,0,0"
+                      Padding="10"
+                      Background="#FFFFFBEB"
+                      BorderBrush="#FCD34D"
+                      BorderThickness="1"
+                      CornerRadius="6">
+                <StackPanel>
+                  <TextBlock FontWeight="SemiBold"
+                             Text="Builder Conversation" />
+                  <TextBlock Margin="0,4,0,0"
+                             Foreground="#FF6B7280"
+                             Text="Plain-English request" />
+                  <TextBox Margin="0,2,0,0"
+                           MinHeight="72"
+                           AcceptsReturn="True"
+                           Text="{Binding BuilderConversationRequestText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                           TextWrapping="Wrap"
+                           VerticalScrollBarVisibility="Auto" />
+                  <TextBlock Margin="0,6,0,0"
+                             Foreground="#FF6B7280"
+                             Text="Override route (optional)" />
+                  <TextBox Margin="0,2,0,0"
+                           Text="{Binding BuilderConversationSelectedOverrideRoute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                  <TextBlock Margin="0,6,0,0"
+                             Foreground="#FF6B7280"
+                             Text="{Binding BuilderConversationTaskSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderConversationTaskSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#FF6B7280"
+                             Text="{Binding BuilderConversationRepoMatchSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderConversationRepoMatchSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderModelCapabilityMatrixSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderModelCapabilityMatrixSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderModelRoutingRulesSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderModelRoutingRulesSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderModelRoutingStabilitySummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderModelRoutingStabilitySummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderCurrentModelDecisionSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderCurrentModelDecisionSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderModelEscalationDecisionSummaryText}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderModelEscalationDecisionSummaryText, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <Border Margin="0,8,0,0"
+                          Padding="10"
+                          Background="#FFF8FAFC"
+                          BorderBrush="#CBD5E1"
+                          BorderThickness="1"
+                          CornerRadius="6">
+                    <StackPanel>
+                      <TextBlock FontWeight="SemiBold"
+                                 Text="Diagnostics" />
+                      <TextBlock Margin="0,4,0,0"
+                                 Foreground="#92400E"
+                                 Text="{Binding BuilderRouteExplanationSummary}"
+                                 TextWrapping="Wrap"
+                                 Visibility="{Binding HasBuilderRouteExplanationSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                      <TextBlock Margin="0,2,0,0"
+                                 Foreground="#92400E"
+                                 Text="{Binding BuilderModelDecisionExplanationSummary}"
+                                 TextWrapping="Wrap"
+                                 Visibility="{Binding HasBuilderModelDecisionExplanationSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                      <TextBlock Margin="0,2,0,0"
+                                 Foreground="#92400E"
+                                 Text="{Binding BuilderFailureAnalysisSummary}"
+                                 TextWrapping="Wrap"
+                                 Visibility="{Binding HasBuilderFailureAnalysisSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    </StackPanel>
+                  </Border>
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#FF6B7280"
+                             Text="{Binding BuilderConversationRouteSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderConversationRouteSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,4,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderConversationExecutionSessionSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderConversationExecutionSessionSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderConversationPatchReviewSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderConversationPatchReviewSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderConversationReviewStateSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderConversationReviewStateSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,4,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderPatchDiffReviewSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderPatchDiffReviewSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderPatchApplySummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderPatchApplySummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <ListBox Margin="0,6,0,0"
+                           MaxHeight="140"
+                           ItemsSource="{Binding BuilderPatchDiffFiles}"
+                           SelectedValue="{Binding SelectedBuilderPatchDiffFilePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                           SelectedValuePath="RelativePath"
+                           Visibility="{Binding HasBuilderPatchDiffReviewSummary, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <StackPanel Margin="0,2,0,2">
+                          <TextBlock FontFamily="Consolas"
+                                     FontSize="11"
+                                     Text="{Binding DisplayLabel}"
+                                     TextWrapping="Wrap" />
+                          <TextBlock Foreground="#FF6B7280"
+                                     Text="{Binding DiffSummary}"
+                                     TextWrapping="Wrap" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <TextBlock Margin="0,6,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderSelectedPatchDiffStateSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderSelectedPatchDiffStateSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             FontFamily="Consolas"
+                             FontSize="11"
+                             Foreground="#7C2D12"
+                             Text="{Binding BuilderSelectedPatchDiffPreview}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderSelectedPatchDiffPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,6,0,0"
+                             Foreground="#065F46"
+                             Text="{Binding BuilderPatchSnapshotSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderPatchSnapshotSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#065F46"
+                             Text="{Binding BuilderCommitProposalSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderCommitProposalSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#065F46"
+                             Text="{Binding BuilderPatchExportSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderPatchExportSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#065F46"
+                             Text="{Binding BuilderOutputHandoffSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderOutputHandoffSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#065F46"
+                             Text="{Binding BuilderManualApplySummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderManualApplySummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderGitHandoffReadinessSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderGitHandoffReadinessSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="#92400E"
+                             Text="{Binding BuilderGitCommitHandoffSummary}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderGitCommitHandoffSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             FontFamily="Consolas"
+                             FontSize="11"
+                             Foreground="#047857"
+                             Text="{Binding BuilderPatchSnapshotId, StringFormat=Snapshot: {0}}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderPatchSnapshotId, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <ListBox Margin="0,6,0,0"
+                           MaxHeight="120"
+                           ItemsSource="{Binding BuilderPatchSnapshotFiles}"
+                           Visibility="{Binding HasBuilderPatchSnapshotSummary, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <StackPanel Margin="0,2,0,2">
+                          <TextBlock FontFamily="Consolas"
+                                     FontSize="11"
+                                     Text="{Binding DisplayLabel}"
+                                     TextWrapping="Wrap" />
+                          <TextBlock Foreground="#065F46"
+                                     Text="{Binding Checksum}"
+                                     TextWrapping="Wrap" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <TextBlock Margin="0,6,0,0"
+                             FontFamily="Consolas"
+                             FontSize="11"
+                             Foreground="#047857"
+                             Text="{Binding BuilderCommitProposalMessage}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderCommitProposalMessage, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                  <TextBlock Margin="0,2,0,0"
+                             FontFamily="Consolas"
+                             FontSize="11"
+                             Foreground="#047857"
+                             Text="{Binding BuilderPatchBundlePath}"
+                             TextWrapping="Wrap"
+                             Visibility="{Binding HasBuilderPatchBundlePath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </StackPanel>
+              </Border>
+              <TextBlock Margin="0,2,0,0"
+                         Foreground="#FF6B7280"
                          Text="{Binding BuilderLaunchRouteModeSummary}"
                          TextWrapping="Wrap"
                          Visibility="{Binding HasBuilderLaunchRouteModeSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
@@ -1099,6 +1371,169 @@
                         Command="{Binding OpenBuilderLaunchDefaultDecisionCommand}"
                         IsEnabled="{Binding HasBuilderLaunchDefaultDecisionPath}" />
                 <Button Margin="8,0,0,0"
+                        Content="Open Route Continuity"
+                        Command="{Binding OpenBuilderRouteContinuityCommand}"
+                        IsEnabled="{Binding HasBuilderRouteContinuityPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Route Current-State Index"
+                        Command="{Binding OpenBuilderRouteCurrentStateIndexCommand}"
+                        IsEnabled="{Binding HasBuilderRouteCurrentStateIndexPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Model Capability Matrix"
+                        Command="{Binding OpenBuilderModelCapabilityMatrixCommand}"
+                        IsEnabled="{Binding HasBuilderModelCapabilityMatrixPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Model Routing Rules"
+                        Command="{Binding OpenBuilderModelRoutingRulesCommand}"
+                        IsEnabled="{Binding HasBuilderModelRoutingRulesPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Model Decision"
+                        Command="{Binding OpenBuilderCurrentModelDecisionCommand}"
+                        IsEnabled="{Binding HasBuilderCurrentModelDecisionPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Escalation Decision"
+                        Command="{Binding OpenBuilderModelEscalationDecisionArtifactCommand}"
+                        IsEnabled="{Binding HasBuilderModelEscalationDecisionArtifactPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Route Explanation"
+                        Command="{Binding OpenBuilderRouteExplanationCommand}"
+                        IsEnabled="{Binding HasBuilderRouteExplanationPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Model Explanation"
+                        Command="{Binding OpenBuilderModelDecisionExplanationCommand}"
+                        IsEnabled="{Binding HasBuilderModelDecisionExplanationPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Failure Analysis"
+                        Command="{Binding OpenBuilderFailureAnalysisCommand}"
+                        IsEnabled="{Binding HasBuilderFailureAnalysisPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Refresh Toolchain Readiness"
+                        Command="{Binding RefreshBuilderToolchainCapabilityCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Toolchain Registry"
+                        Command="{Binding OpenBuilderToolchainCapabilityRegistryCommand}"
+                        IsEnabled="{Binding HasBuilderToolchainCapabilityRegistryPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Language Eligibility"
+                        Command="{Binding OpenBuilderLanguageEligibilityCommand}"
+                        IsEnabled="{Binding HasBuilderLanguageEligibilityPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Capability Block"
+                        Command="{Binding OpenBuilderCapabilityBlockDecisionCommand}"
+                        IsEnabled="{Binding HasBuilderCapabilityBlockDecisionPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Refresh Repo Knowledge"
+                        Command="{Binding RefreshBuilderRepoKnowledgeCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Repo Knowledge Index"
+                        Command="{Binding OpenBuilderRepoKnowledgeIndexCommand}"
+                        IsEnabled="{Binding HasBuilderRepoKnowledgeIndexPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Repo Knowledge Summary"
+                        Command="{Binding OpenBuilderRepoKnowledgeSummaryCommand}"
+                        IsEnabled="{Binding HasBuilderRepoKnowledgeSummaryPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Preview Builder Conversation"
+                        Command="{Binding PreviewBuilderConversationCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Accept Suggested Route"
+                        Command="{Binding AcceptBuilderConversationCommand}"
+                        IsEnabled="{Binding HasBuilderConversationIntakePath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Override Conversation Route"
+                        Command="{Binding OverrideBuilderConversationCommand}"
+                        IsEnabled="{Binding HasBuilderConversationIntakePath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Cancel Conversation Handoff"
+                        Command="{Binding CancelBuilderConversationCommand}"
+                        IsEnabled="{Binding HasBuilderConversationIntakePath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Retrieval Context"
+                        Command="{Binding OpenBuilderRepoRetrievalContextCommand}"
+                        IsEnabled="{Binding HasBuilderConversationRetrievalContextPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Conversation Intake"
+                        Command="{Binding OpenBuilderConversationIntakeCommand}"
+                        IsEnabled="{Binding HasBuilderConversationIntakePath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Conversation Handoff"
+                        Command="{Binding OpenBuilderConversationHandoffCommand}"
+                        IsEnabled="{Binding HasBuilderConversationHandoffPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Execute Conversation Session"
+                        Command="{Binding ExecuteBuilderConversationSessionCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Accept Candidate Changes"
+                        Command="{Binding AcceptBuilderConversationPatchReviewCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Reject Candidate Changes"
+                        Command="{Binding RejectBuilderConversationPatchReviewCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Request Revision"
+                        Command="{Binding RequestBuilderConversationRevisionCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Request Reroute"
+                        Command="{Binding RequestBuilderConversationRerouteCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Execution Session"
+                        Command="{Binding OpenBuilderConversationExecutionSessionCommand}"
+                        IsEnabled="{Binding HasBuilderConversationExecutionSessionPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Patch Review"
+                        Command="{Binding OpenBuilderPatchReviewCommand}"
+                        IsEnabled="{Binding HasBuilderConversationPatchReviewPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Patch Review Outcome"
+                        Command="{Binding OpenBuilderPatchReviewOutcomeCommand}"
+                        IsEnabled="{Binding HasBuilderConversationPatchReviewOutcomePath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Approve Selected File"
+                        Command="{Binding ApproveSelectedBuilderPatchFileCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Reject Selected File"
+                        Command="{Binding RejectSelectedBuilderPatchFileCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Mark File Needs Revision"
+                        Command="{Binding MarkSelectedBuilderPatchFileNeedsRevisionCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Approve All Files"
+                        Command="{Binding ApproveAllBuilderPatchFilesCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Finalize Approved Patch"
+                        Command="{Binding FinalizeBuilderConversationPatchCommand}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Patch Diff Review"
+                        Command="{Binding OpenBuilderPatchDiffReviewCommand}"
+                        IsEnabled="{Binding HasBuilderPatchDiffReviewPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Prepare Commit"
+                        Command="{Binding PrepareBuilderCommitCommand}"
+                        IsEnabled="{Binding HasBuilderPatchSnapshotPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Export Patch Bundle"
+                        Command="{Binding ExportBuilderPatchBundleCommand}"
+                        IsEnabled="{Binding HasBuilderPatchSnapshotPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="View Snapshot Artifact"
+                        Command="{Binding OpenBuilderPatchSnapshotCommand}"
+                        IsEnabled="{Binding HasBuilderPatchSnapshotPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Output Handoff Artifact"
+                        Command="{Binding OpenBuilderOutputHandoffCommand}"
+                        IsEnabled="{Binding HasBuilderOutputHandoffPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Manual Apply Guidance"
+                        Command="{Binding OpenBuilderManualApplyGuidanceCommand}"
+                        IsEnabled="{Binding HasBuilderManualApplyGuidancePath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Git Handoff Readiness"
+                        Command="{Binding OpenBuilderGitHandoffReadinessCommand}"
+                        IsEnabled="{Binding HasBuilderGitHandoffReadinessPath}" />
+                <Button Margin="8,0,0,0"
+                        Content="Open Git Commit Handoff"
+                        Command="{Binding OpenBuilderGitCommitHandoffCommand}"
+                        IsEnabled="{Binding HasBuilderGitCommitHandoffPath}" />
+                <Button Margin="8,0,0,0"
                         Content="Open Route Override Evidence"
                         Command="{Binding OpenBuilderRouteOverrideEvidenceCommand}"
                         IsEnabled="{Binding HasBuilderRouteOverridePath}" />
@@ -1235,6 +1670,54 @@
                         Content="Copy Launch Default Summary"
                         Command="{Binding CopyBuilderLaunchDefaultSummaryCommand}"
                         IsEnabled="{Binding HasBuilderLaunchDefaultDecisionSummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Model Routing Summary"
+                        Command="{Binding CopyBuilderModelRoutingRulesSummaryCommand}"
+                        IsEnabled="{Binding HasBuilderModelRoutingRulesSummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Current Model Decision"
+                        Command="{Binding CopyBuilderCurrentModelDecisionSummaryCommand}"
+                        IsEnabled="{Binding HasBuilderCurrentModelDecisionSummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Diagnostic Summary"
+                        Command="{Binding CopyBuilderDiagnosticSummaryCommand}"
+                        IsEnabled="{Binding HasBuilderOperatorDiagnosticSummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Toolchain Summary"
+                        Command="{Binding CopyBuilderToolchainReadinessSummaryCommand}"
+                        IsEnabled="{Binding HasBuilderToolchainReadinessSummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Language Eligibility"
+                        Command="{Binding CopyBuilderLanguageEligibilitySummaryCommand}"
+                        IsEnabled="{Binding HasBuilderLanguageEligibilitySummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Repo Knowledge Summary"
+                        Command="{Binding CopyBuilderRepoKnowledgeSummaryCommand}"
+                        IsEnabled="{Binding HasBuilderRepoKnowledgeSummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Conversation Route Summary"
+                        Command="{Binding CopyBuilderConversationRouteSummaryCommand}"
+                        IsEnabled="{Binding HasBuilderConversationRouteSummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Conversation Session Summary"
+                        Command="{Binding CopyBuilderConversationSessionSummaryCommand}"
+                        IsEnabled="{Binding HasBuilderConversationExecutionSessionSummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Patch Diff Review Summary"
+                        Command="{Binding CopyBuilderPatchDiffReviewSummaryCommand}"
+                        IsEnabled="{Binding HasBuilderPatchDiffReviewSummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Commit Message"
+                        Command="{Binding CopyBuilderCommitMessageCommand}"
+                        IsEnabled="{Binding HasBuilderCommitProposalMessage}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Manual Apply Steps"
+                        Command="{Binding CopyBuilderManualApplyStepsCommand}"
+                        IsEnabled="{Binding HasBuilderManualApplySummary}" />
+                <Button Margin="8,0,0,0"
+                        Content="Copy Handoff Summary"
+                        Command="{Binding CopyBuilderOutputHandoffSummaryCommand}"
+                        IsEnabled="{Binding HasBuilderOutputHandoffSummary}" />
                 <Button Margin="8,0,0,0"
                         Content="Copy Route Override Summary"
                         Command="{Binding CopyBuilderRouteOverrideSummaryCommand}"
@@ -1445,6 +1928,244 @@
                          Text="{Binding BuilderDefaultRouteDecisionPath}"
                          TextWrapping="Wrap"
                          Visibility="{Binding HasBuilderDefaultRouteDecisionPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderRouteContinuityPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderRouteContinuityPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderRouteCurrentStateIndexPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderRouteCurrentStateIndexPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderModelCapabilityMatrixPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderModelCapabilityMatrixPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderModelRoutingRulesPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderModelRoutingRulesPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderModelRoutingStabilityPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderModelRoutingStabilityPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderCurrentModelDecisionPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderCurrentModelDecisionPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderModelEscalationDecisionArtifactPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderModelEscalationDecisionArtifactPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderRouteExplanationPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderRouteExplanationPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderModelDecisionExplanationPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderModelDecisionExplanationPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderFailureAnalysisPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderFailureAnalysisPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderOperatorDiagnosticSummaryPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderOperatorDiagnosticSummaryPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderToolchainCapabilityRegistryPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderToolchainCapabilityRegistryPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderLanguageEligibilityPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderLanguageEligibilityPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderCapabilityBlockDecisionPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderCapabilityBlockDecisionPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderRepoKnowledgeIndexPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderRepoKnowledgeIndexPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderRepoKnowledgeSummaryPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderRepoKnowledgeSummaryPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderConversationRetrievalContextPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderConversationRetrievalContextPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderConversationIntakePath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderConversationIntakePath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderConversationHandoffPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderConversationHandoffPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderConversationExecutionSessionPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderConversationExecutionSessionPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderConversationPatchReviewPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderConversationPatchReviewPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderConversationPatchReviewOutcomePath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderConversationPatchReviewOutcomePath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderPatchDiffReviewPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderPatchDiffReviewPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderFileReviewDecisionPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderFileReviewDecisionPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderPatchApplyDecisionPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderPatchApplyDecisionPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderPatchSnapshotPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderPatchSnapshotPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderCommitProposalPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderCommitProposalPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderPatchExportPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderPatchExportPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderPatchSnapshotHistoryPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderPatchSnapshotHistoryPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderOutputHandoffPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderOutputHandoffPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderManualApplyGuidancePath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderManualApplyGuidancePath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderGitHandoffReadinessPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderGitHandoffReadinessPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderGitCommitHandoffPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderGitCommitHandoffPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
+              <TextBlock Margin="0,2,0,0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Foreground="#FF6B7280"
+                         Text="{Binding BuilderOutputHandoffHistoryPath}"
+                         TextWrapping="Wrap"
+                         Visibility="{Binding HasBuilderOutputHandoffHistoryPath, Converter={StaticResource BooleanToVisibilityConverter}}" />
               <TextBlock Margin="0,2,0,0"
                          FontFamily="Consolas"
                          FontSize="11"
