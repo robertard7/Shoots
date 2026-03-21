@@ -81,6 +81,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
     private readonly LocalProjectService _localProjectService;
     private readonly IPlanner _planner;
     private readonly BuilderExecutionService _builderExecutionService;
+    private readonly IBuilderToolchainCapabilityScanner _builderToolchainCapabilityScanner;
     private readonly ObservableCollection<RunHistoryRow> _runHistory;
     private readonly ObservableCollection<string> _artifactFiles;
     private readonly ObservableCollection<ProofArtifactRow> _proofArtifacts;
@@ -3067,7 +3068,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         IPlanner? planner = null,
         BuilderExecutionService? builderExecutionService = null,
         bool autoRefreshBackends = true,
-        ISemanticReuseService? semanticReuseService = null)
+        ISemanticReuseService? semanticReuseService = null,
+        IBuilderToolchainCapabilityScanner? builderToolchainCapabilityScanner = null)
     {
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
         _hostExecutionService = new HostExecutionService(_commandService);
@@ -3097,6 +3099,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         _localProjectService = localProjectService ?? new LocalProjectService();
         _planner = planner ?? new RuntimePlanner(new DemoPlanner());
         _autoRefreshBackends = autoRefreshBackends;
+        _builderToolchainCapabilityScanner = builderToolchainCapabilityScanner ?? new DefaultBuilderToolchainCapabilityScanner();
         if (builderExecutionService is not null)
         {
             _builderExecutionService = builderExecutionService;
@@ -3147,6 +3150,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         InitializeChatIntakeSurface();
         InitializeReplaySurface();
         InitializeValidationSurface();
+        InitializeBuilderReviewWorkspaceSurface();
 
         Profiles = new ReadOnlyCollection<IEnvironmentProfile>(_environmentService.Profiles.ToList());
         SelectedProfile = Profiles.FirstOrDefault();
@@ -3157,6 +3161,26 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         _recentWorkspaces = new ObservableCollection<ProjectWorkspace>();
         RecentWorkspaces = new ReadOnlyObservableCollection<ProjectWorkspace>(_recentWorkspaces);
+        InitializeBuilderWorkspaceSurface();
+        InitializeBuilderCrossRepoSurface();
+        InitializeBuilderKnowledgeSurface();
+        InitializeBuilderRouteIntelligenceSurface();
+        InitializeBuilderRecoverySurface();
+        InitializeBuilderRecoverySimulationSurface();
+        InitializeBuilderRecoveryComparisonSurface();
+        InitializeBuilderExecutionReadinessSurface();
+        InitializeBuilderPreventativeGuardrailSurface();
+        InitializeBuilderAutoSuggestionSurface();
+        InitializeBuilderExternalReconSurface();
+        InitializeBuilderPatternLibrarySurface();
+        InitializeBuilderPatternPatchSurface();
+        InitializeBuilderSignalProfileSurface();
+        InitializeBuilderSignalCalibrationSurface();
+        InitializeBuilderTrustIndexSurface();
+        InitializeBuilderPredictiveDriftSurface();
+        InitializeBuilderDecisionJustificationSurface();
+        InitializeBuilderOperatorDecisionSurface();
+        InitializeBuilderExecutionAuditSurface();
 
         _blueprints = new ObservableCollection<BlueprintEntryViewModel>();
         Blueprints = new ReadOnlyObservableCollection<BlueprintEntryViewModel>(_blueprints);
@@ -3494,6 +3518,12 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             OnToolpackTierChanged();
             LoadAiPolicy();
             LoadProviderDiagnosticsHistory();
+            RefreshBuilderWorkspaceOptions();
+            LoadBuilderWorkspaceArtifacts();
+            LoadBuilderProofArtifacts();
+            LoadBuilderExternalReconArtifacts();
+            LoadBuilderPatternLibraryArtifacts();
+            LoadBuilderPatternPatchArtifacts();
             _ = RefreshAiHelpAsync();
             RaiseCommandCanExecute();
         }
@@ -4687,6 +4717,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private void SelectWorkspace(ProjectWorkspace workspace)
     {
+        _workspaceProvider.SetActiveWorkspace(workspace);
         ActiveWorkspace = workspace;
         if (!string.IsNullOrWhiteSpace(workspace.SelectedProviderKind))
         {
@@ -4922,8 +4953,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private string GetBuilderProofDisabledReason()
     {
-        if (!Directory.Exists(_validationRunnerService.RepoRoot) || !File.Exists(Path.Combine(_validationRunnerService.RepoRoot, "Shoots.sln")))
-            return "Builder proof is disabled because the Shoots repo root could not be resolved.";
+        var repoRoot = GetBuilderWorkspaceRepoRoot();
+        if (string.IsNullOrWhiteSpace(repoRoot) || !Directory.Exists(repoRoot) || !BuilderWorkspaceService.IsWorkspaceRootEligible(repoRoot))
+            return "Builder proof is disabled because the selected builder workspace could not be resolved.";
 
         if (IsOperationCompletionHoldActive)
             return "Builder proof is disabled while completion state is being displayed.";
@@ -4952,8 +4984,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private string GetBuilderComparativeProofDisabledReason()
     {
-        if (!Directory.Exists(_validationRunnerService.RepoRoot) || !File.Exists(Path.Combine(_validationRunnerService.RepoRoot, "Shoots.sln")))
-            return "Comparative proof is disabled because the Shoots repo root could not be resolved.";
+        var repoRoot = GetBuilderWorkspaceRepoRoot();
+        if (string.IsNullOrWhiteSpace(repoRoot) || !Directory.Exists(repoRoot) || !BuilderWorkspaceService.IsWorkspaceRootEligible(repoRoot))
+            return "Comparative proof is disabled because the selected builder workspace could not be resolved.";
 
         if (IsOperationCompletionHoldActive)
             return "Comparative proof is disabled while completion state is being displayed.";
@@ -5133,8 +5166,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
     private void LoadBuilderProofArtifacts()
     {
-        _latestBuilderProofRun = BuilderExecutionService.LoadLatestBuilderProofRun(_validationRunnerService.RepoRoot);
-        _latestBuilderModelFloorVerdict = BuilderExecutionService.LoadLatestBuilderModelFloorVerdict(_validationRunnerService.RepoRoot);
+        var repoRoot = GetBuilderWorkspaceRepoRoot();
+        _latestBuilderProofRun = BuilderExecutionService.LoadLatestBuilderProofRun(repoRoot);
+        _latestBuilderModelFloorVerdict = BuilderExecutionService.LoadLatestBuilderModelFloorVerdict(repoRoot);
         _latestBuilderExternalProofRun = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderExternalProofRun(_latestBuilderProofRun.RunFolder);
         _latestBuilderExternalFloorVerdict = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderExternalFloorVerdict(_latestBuilderProofRun.RunFolder);
         _latestBuilderFailurePatternSummary = _latestBuilderProofRun is null ? null : BuilderExecutionService.LoadBuilderProofFailurePatternSummary(_latestBuilderProofRun.RunFolder);
@@ -5303,7 +5337,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             _builderWeakSpotMitigationSummary = _latestBuilderTieredRoutingPolicy?.WeakSpotMitigationSummary ?? "No weak-spot mitigation summary recorded.";
             _builderDefaultPolicySummary = _latestBuilderDefaultPolicy?.Summary ?? "No default builder guidance recorded.";
             _builderDefaultPolicyPath = _latestBuilderDefaultPolicy?.ArtifactPath ?? string.Empty;
-            _builderDefaultPolicyHistoryPath = BuilderExecutionService.BuilderDefaultPolicyHistoryPathForRepo(_validationRunnerService.RepoRoot);
+            _builderDefaultPolicyHistoryPath = BuilderExecutionService.BuilderDefaultPolicyHistoryPathForRepo(repoRoot);
             _builderRequestPolicyDecisionSummary = _latestBuilderRequestPolicyDecision?.Summary ?? "No builder routing decision recorded.";
             _builderRequestPolicyDecisionPath = _latestBuilderRequestPolicyDecision?.ArtifactPath ?? string.Empty;
             _builderPolicyStabilitySummary = _latestBuilderPolicyStability?.Summary ?? "No builder guidance support recorded.";
@@ -5334,7 +5368,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             _builderExecutionResultPath = _latestBuilderExecutionResult?.ArtifactPath ?? string.Empty;
             _builderReadinessGateSummary = _latestBuilderReadinessGate?.Summary ?? "No builder readiness gate recorded.";
             _builderReadinessGatePath = _latestBuilderReadinessGate?.ArtifactPath ?? string.Empty;
-            _builderReadinessGateHistoryPath = BuilderExecutionService.BuilderReadinessGateHistoryPathForRepo(_validationRunnerService.RepoRoot);
+            _builderReadinessGateHistoryPath = BuilderExecutionService.BuilderReadinessGateHistoryPathForRepo(repoRoot);
             _builderRouteStabilitySummaryPath = _latestBuilderProofRun is null ? string.Empty : BuilderExecutionService.BuilderRouteStabilitySummaryPath(_latestBuilderProofRun.RunFolder);
             _builderRouteStabilitySummary = File.Exists(_builderRouteStabilitySummaryPath)
                 ? File.ReadAllText(_builderRouteStabilitySummaryPath)
@@ -5718,6 +5752,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         CopyBuilderDefaultRouteRecoverySummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderSplitExecutionSummaryCommand.RaiseCanExecuteChanged();
         CopyBuilderSplitComparativeClosureSummaryCommand.RaiseCanExecuteChanged();
+        LoadBuilderReviewWorkspaceArtifacts();
+        LoadBuilderCrossRepoArtifacts();
     }
 
     private static string BuildBuilderProofLatestTargetSummary(BuilderProofRun run)
@@ -7341,9 +7377,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
+            var repoRoot = GetBuilderWorkspaceRepoRoot();
+            RecordBuilderWorkspaceRouteResolution("builder-proof-matrix", "builder_proof_matrix");
             SetOperationStepState("Prepare proof matrix", "active", "Preparing bounded proof targets.");
             var run = await _builderExecutionService.RunBuilderProofMatrixAsync(
-                _validationRunnerService.RepoRoot,
+                repoRoot,
                 BuilderExecutionService.BuilderProofFloorModelId,
                 string.IsNullOrWhiteSpace(SelectedProviderMode) ? "ollama" : SelectedProviderMode,
                 narrate: evt =>
@@ -7370,6 +7408,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             SetOperationStepState("Write proof verdict", "completed", run.VerdictSummary);
             SetOperationStepState("Complete", "completed", run.FinalClassification);
             LoadBuilderProofArtifacts();
+            RecordBuilderProofDecision(
+                "run_builder_proof_matrix",
+                "builder_proof_matrix",
+                run.ProofRunId,
+                run.FinalClassification,
+                !string.Equals(run.FinalClassification, "failed", StringComparison.OrdinalIgnoreCase),
+                "route_failed",
+                new[]
+                {
+                    run.MatrixArtifactPath,
+                    run.RunArtifactPath,
+                    run.SummaryArtifactPath,
+                    run.VerdictArtifactPath,
+                    run.VerdictSummaryArtifactPath
+                },
+                run.CompletedUtc);
             CompleteOperationProgress(!string.Equals(run.FinalClassification, "failed", StringComparison.Ordinal), run.VerdictSummary);
         }
         catch (Exception ex)
@@ -7377,10 +7431,19 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             SetOperationStepState("Run proof targets", "failed", ex.Message);
             SetOperationStepState("Write proof verdict", "failed", "Builder proof did not complete.");
             CompleteOperationProgress(false, $"Builder proof failed: {ex.Message}");
+            RecordBuilderProofDecision(
+                "run_builder_proof_matrix",
+                "builder_proof_matrix",
+                string.Empty,
+                "failed",
+                false,
+                "route_failed",
+                new[] { BuilderExecutionService.BuilderProofRootForRepo(GetBuilderWorkspaceRepoRoot()) },
+                DateTimeOffset.UtcNow);
             RecordFailure(
                 "Builder proof matrix",
                 ex.ToString(),
-                BuilderExecutionService.BuilderProofRootForRepo(_validationRunnerService.RepoRoot),
+                BuilderExecutionService.BuilderProofRootForRepo(GetBuilderWorkspaceRepoRoot()),
                 "Inspect the builder proof logs and rerun the matrix in bounded scope.");
         }
     }
@@ -7409,9 +7472,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
+            var repoRoot = GetBuilderWorkspaceRepoRoot();
+            RecordBuilderWorkspaceRouteResolution("builder-comparative-proof", "builder_comparative_proof");
             SetOperationStepState("Resolve stronger tier", "active", "Resolving stronger-tier model availability.");
             var comparativeRun = await _builderExecutionService.RunBuilderComparativeProofAsync(
-                _validationRunnerService.RepoRoot,
+                repoRoot,
                 provider: string.IsNullOrWhiteSpace(SelectedProviderMode) ? "ollama" : SelectedProviderMode,
                 narrate: evt =>
                 {
@@ -7449,6 +7514,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             SetOperationStepState("Write comparative evidence", "completed", comparativeRun.Summary);
             SetOperationStepState("Complete", "completed", comparativeRun.ComparativeClassification);
             LoadBuilderProofArtifacts();
+            var comparativeSuccess = comparativeRun.ComparativeClassification.Contains("success", StringComparison.OrdinalIgnoreCase) ||
+                                     comparativeRun.ComparativeClassification.Contains("equal", StringComparison.OrdinalIgnoreCase) ||
+                                     comparativeRun.ComparativeClassification.Contains("closed_gap", StringComparison.OrdinalIgnoreCase);
+            RecordBuilderProofDecision(
+                "run_builder_comparative_proof",
+                "builder_comparative_proof",
+                comparativeRun.SourceProofRunId,
+                comparativeRun.ComparativeClassification,
+                comparativeSuccess,
+                "route_failed",
+                new[]
+                {
+                    comparativeRun.ArtifactPath,
+                    comparativeRun.SummaryArtifactPath
+                },
+                comparativeRun.ObservedUtc);
             CompleteOperationProgress(true, comparativeRun.Summary);
         }
         catch (Exception ex)
@@ -7457,10 +7538,19 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             SetOperationStepState("Run stronger-tier proof", "failed", "Comparative proof did not complete.");
             SetOperationStepState("Write comparative evidence", "failed", "Comparative proof artifacts were not written.");
             CompleteOperationProgress(false, $"Builder comparative proof failed: {ex.Message}");
+            RecordBuilderProofDecision(
+                "run_builder_comparative_proof",
+                "builder_comparative_proof",
+                string.Empty,
+                "failed",
+                false,
+                "route_failed",
+                new[] { BuilderExecutionService.BuilderProofRootForRepo(GetBuilderWorkspaceRepoRoot()) },
+                DateTimeOffset.UtcNow);
             RecordFailure(
                 "Builder comparative proof",
                 ex.ToString(),
-                BuilderExecutionService.BuilderProofRootForRepo(_validationRunnerService.RepoRoot),
+                BuilderExecutionService.BuilderProofRootForRepo(GetBuilderWorkspaceRepoRoot()),
                 "Inspect the stronger-tier availability artifact and rerun the bounded comparative proof.");
         }
     }
@@ -7518,9 +7608,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
+            var repoRoot = GetBuilderWorkspaceRepoRoot();
+            RecordBuilderWorkspaceRouteResolution(
+                string.IsNullOrWhiteSpace(routeOverride) ? "builder-prepared-route" : $"builder-prepared-route:{routeOverride}",
+                string.IsNullOrWhiteSpace(routeOverride) ? "prepared_route" : routeOverride);
             SetOperationStepState("Check launch readiness", "active", "Verifying current intake, prep, and route evidence.");
             var result = await _builderExecutionService.LaunchPreparedBuilderRouteAsync(
-                _validationRunnerService.RepoRoot,
+                repoRoot,
                 provider: string.IsNullOrWhiteSpace(SelectedProviderMode) ? "ollama" : SelectedProviderMode,
                 routeOverride: routeOverride,
                 overrideReason: overrideReason).ConfigureAwait(true);
@@ -7533,6 +7627,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
             var success = string.Equals(result.FinalRouteOutcomeClassification, "launched_and_passed", StringComparison.Ordinal) ||
                           string.Equals(result.FinalRouteOutcomeClassification, "launched_and_passed_with_repair", StringComparison.Ordinal);
+            RecordBuilderProofDecision(
+                string.IsNullOrWhiteSpace(routeOverride) ? "launch_prepared_route" : "launch_override_route",
+                result.ActualRouteUsed,
+                result.SourceLaunchId,
+                result.FinalRouteOutcomeClassification,
+                success,
+                "route_failed",
+                new[]
+                {
+                    result.ArtifactPath,
+                    result.FollowupPlanPath,
+                    result.RepairPrepBundlePath,
+                    result.RepairBundlePath,
+                    result.FollowupExecutionOutcomePath
+                },
+                result.RecordedUtc);
             CompleteOperationProgress(success, result.Summary);
             if (!success)
             {
@@ -7549,10 +7659,19 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             SetOperationStepState("Run prepared route", "failed", "Prepared builder route did not complete.");
             SetOperationStepState("Write route result", "failed", "Prepared builder route artifacts were not written.");
             CompleteOperationProgress(false, $"{operationName} failed: {ex.Message}");
+            RecordBuilderProofDecision(
+                string.IsNullOrWhiteSpace(routeOverride) ? "launch_prepared_route" : "launch_override_route",
+                string.IsNullOrWhiteSpace(routeOverride) ? "prepared_route" : routeOverride!,
+                string.Empty,
+                "failed",
+                false,
+                "route_failed",
+                new[] { BuilderExecutionService.BuilderProofRootForRepo(GetBuilderWorkspaceRepoRoot()) },
+                DateTimeOffset.UtcNow);
             RecordFailure(
                 string.IsNullOrWhiteSpace(routeOverride) ? "Prepared builder route" : "Prepared builder override route",
                 ex.ToString(),
-                BuilderExecutionService.BuilderProofRootForRepo(_validationRunnerService.RepoRoot),
+                BuilderExecutionService.BuilderProofRootForRepo(GetBuilderWorkspaceRepoRoot()),
                 "Inspect the prepared route launch artifact and rerun the bounded route only after the blocker is resolved.");
         }
     }
@@ -7577,19 +7696,43 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
         using var busy = EnterBusyScope("RunBuilderSplitStep");
         try
         {
+            var repoRoot = GetBuilderWorkspaceRepoRoot();
             SetOperationStepState("Load split-first plan", "active", "Loading the latest split-first execution state.");
             SetOperationStepState("Load split-first plan", "completed", "Loaded the latest split-first execution state.");
             SetOperationStepState(step.StepLabel, "active", step.Detail);
 
             if (string.Equals(step.ExecutionMode, "rerun_capable", StringComparison.Ordinal))
             {
+                RecordBuilderWorkspaceRouteResolution($"builder-split-step:{step.StepId}", "split_step_rerun");
                 var outcome = await _builderExecutionService.RunBuilderSplitStepRerunAsync(
-                    _validationRunnerService.RepoRoot,
+                    repoRoot,
                     provider: string.IsNullOrWhiteSpace(SelectedProviderMode) ? "ollama" : SelectedProviderMode,
                     stepId: step.StepId).ConfigureAwait(true);
                 SetOperationStepState(step.StepLabel, "completed", outcome.ClosureClassification);
                 SetOperationStepState("Complete", "completed", outcome.PracticalRouteSummary);
                 LoadBuilderProofArtifacts();
+                var splitSuccess = outcome.ClosureClassification.Contains("equal", StringComparison.OrdinalIgnoreCase) ||
+                                   outcome.ClosureClassification.Contains("closed_gap", StringComparison.OrdinalIgnoreCase) ||
+                                   outcome.SplitResultFinalClassification.Contains("passed", StringComparison.OrdinalIgnoreCase);
+                RecordBuilderProofDecision(
+                    "run_builder_split_step_rerun",
+                    "split_step_rerun",
+                    outcome.SourceProofRunId,
+                    outcome.ClosureClassification,
+                    splitSuccess,
+                    "route_failed",
+                    new[]
+                    {
+                        outcome.ArtifactPath,
+                        outcome.SplitPlanPath,
+                        outcome.SplitStepExecutionPath,
+                        outcome.ComparativeProofArtifactPath,
+                        outcome.SplitValidationResultPath,
+                        outcome.SplitFollowupPlanPath,
+                        outcome.SplitRepairPrepBundlePath,
+                        outcome.SplitFollowupExecutionOutcomePath
+                    },
+                    outcome.RecordedUtc);
                 CompleteOperationProgress(true, outcome.Summary);
                 return;
             }
@@ -7605,8 +7748,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             var completionState = string.Equals(step.ExecutionMode, "view_only", StringComparison.Ordinal)
                 ? "opened"
                 : "executed";
-            BuilderExecutionService.RecordBuilderSplitStepInteraction(
-                _validationRunnerService.RepoRoot,
+            RecordBuilderWorkspaceRouteResolution($"builder-split-step:{step.StepId}", "split_step_execution");
+            var execution = BuilderExecutionService.RecordBuilderSplitStepInteraction(
+                repoRoot,
                 _latestBuilderProofRun.RunFolder,
                 step.StepId,
                 completionState,
@@ -7617,16 +7761,40 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
             SetOperationStepState(step.StepLabel, "completed", step.Detail);
             SetOperationStepState("Complete", "completed", $"{step.StepLabel} completed.");
             LoadBuilderProofArtifacts();
+            RecordBuilderOperatorDecision(
+                "run_builder_split_step_execution",
+                "split_step_execution",
+                execution.SourceProofRunId,
+                "partial_success",
+                true,
+                string.Empty,
+                new[]
+                {
+                    execution.ArtifactPath,
+                    execution.SplitPlanPath,
+                    execution.ComparativeProofArtifactPath,
+                    targetPath
+                },
+                execution.RecordedUtc);
             CompleteOperationProgress(true, $"{step.StepLabel} completed.");
         }
         catch (Exception ex)
         {
             SetOperationStepState(step.StepLabel, "failed", ex.Message);
             CompleteOperationProgress(false, $"Split-step execution failed: {ex.Message}");
+            RecordBuilderProofDecision(
+                "run_builder_split_step_execution",
+                "split_step_execution",
+                _latestBuilderProofRun?.ProofRunId ?? string.Empty,
+                "failed",
+                false,
+                "route_failed",
+                new[] { _latestBuilderProofRun?.RunFolder ?? BuilderExecutionService.BuilderProofRootForRepo(GetBuilderWorkspaceRepoRoot()) },
+                DateTimeOffset.UtcNow);
             RecordFailure(
                 "Builder split-step execution",
                 ex.ToString(),
-                _latestBuilderProofRun.RunFolder,
+                _latestBuilderProofRun?.RunFolder ?? BuilderExecutionService.BuilderProofRootForRepo(GetBuilderWorkspaceRepoRoot()),
                 "Inspect the split-first execution artifact and retry the next bounded step.");
         }
     }
@@ -12061,6 +12229,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(HasWorkspaces));
         OnPropertyChanged(nameof(HasNoWorkspaces));
+        RefreshBuilderWorkspaceOptions();
     }
 
     public bool HasNoWorkspaces => _recentWorkspaces.Count == 0;

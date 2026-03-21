@@ -174,7 +174,7 @@ public sealed class DefaultBuilderToolchainCapabilityScanner : IBuilderToolchain
     private static string ResolveProbeDirectory(string repoRoot)
         => string.IsNullOrWhiteSpace(repoRoot)
             ? Path.Combine(Path.GetTempPath(), "Shoots", "builder-toolchain-probes")
-            : Path.Combine(repoRoot, ".codex", "validation-ui", "builder-proof", "toolchain-probes");
+            : Path.Combine(BuilderExecutionService.BuilderProofRootForRepo(repoRoot), "toolchain-probes");
 
     private static string ResolveOnPath(string commandName)
     {
