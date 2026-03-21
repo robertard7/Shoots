@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Phase 9 Validation Report
 
 - Timestamp (UTC): 2026-03-14T22:10:09.2615308+00:00
@@ -27,3 +28,13 @@
   - `powershell -File .\tools\smoke\windows\ui_smoke.ps1`: passed
   - `powershell -File .\tools\verify\windows_compile_runtime_integrity.ps1`: passed
   - `powershell -ExecutionPolicy Bypass -File .\scripts\validate_build.ps1`: passed (`VALIDATE_BUILD_OK=1`)
+=======
+﻿# Phase 9 Validation Report
+
+- Timestamp (UTC): 2026-03-21T01:11:22.5925555+00:00
+- Build: passed
+- Test: passed
+- Smoke: runner-stage
+- Integrity: runner-stage
+
+>>>>>>> dev/post-builder-core

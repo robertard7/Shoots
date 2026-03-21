@@ -578,7 +578,7 @@ private const int BuilderOverrideRecoveryRequiredPreparedLaunches = 1;
     }
 
     public static string BuilderProofRootForRepo(string repoRoot)
-        => Path.Combine(repoRoot, ".codex", "validation-ui", "builder-proof");
+        => BuilderWorkspaceService.BuilderProofRootForRepo(repoRoot);
 
     public static string BuilderProofRunsRootForRepo(string repoRoot)
         => Path.Combine(BuilderProofRootForRepo(repoRoot), "runs");
