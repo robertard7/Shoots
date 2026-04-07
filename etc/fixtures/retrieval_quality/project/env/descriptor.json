@@ -1,4 +1,0 @@
-{
-  "id": "host-local",
-  "capabilities": ["process", "retrieval.lexical", "filesystem", "verify"]
-}

@@ -1,8 +1,0 @@
-{
-  "project": "etc/fixtures/retrieval_quality/project",
-  "query": "host local environment",
-  "requiredTopN": 5,
-  "requiredPaths": [
-    "env/selected.json"
-  ]
-}

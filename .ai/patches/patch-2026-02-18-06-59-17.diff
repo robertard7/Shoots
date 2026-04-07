@@ -1,6 +1,0 @@
-diff --git a/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs b/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
---- a/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
-+++ b/src/Runtime/Shoots.Runtime.Core/RuntimeOrchestrator.cs
-@@
--// Law lock-in patch artifact placeholder.
-+// Law lock-in patch artifact placeholder.
